@@ -61,6 +61,6 @@ Never open an issue or pull request containing copyrighted game files, memory du
 
 ## License
 
-A license for the repository's original code and documentation will be selected during milestone M0. No license grant should be inferred for Rockstar, Take-Two, Microsoft, Xbox, or other third-party material and trademarks.
+Original MCLA-R code and documentation are available under the [MIT License](LICENSE). This license applies only to material owned by the MCLA-R contributors. It does not grant rights to game data, generated proprietary game code, Rockstar/Take-Two/Microsoft/Xbox material, ReXGlue, Xenia, XenonRecomp, or other third-party dependencies and trademarks.
 
 MCLA-R is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, Microsoft, Xbox, ReXGlue, XenonRecomp, or Xenia.

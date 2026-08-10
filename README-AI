@@ -368,7 +368,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-002** Initialize Git with `main` as the default branch. Verified on 2026-08-10; root task commit is `83a4bd2` and `origin` points to `https://github.com/2FED/RE-MCLA.git`.
 - [x] **M0-003** Add `.gitignore` entries for `private/`, `generated/`, build trees, SDK binaries, logs, dumps, caches, ISO/XEX/XEXP/RPF/BIK files, and package artifacts. Verified with tracked-source and prohibited-path fixtures on 2026-08-10.
 - [x] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature. Reviewed against the current project plan on 2026-08-10.
-- [ ] **M0-005** Select and add a license covering only original port code and scripts.
+- [x] **M0-005** Select and add a license covering only original port code and scripts. MIT selected on 2026-08-10 with third-party/game-content boundaries documented in README.
 - [ ] **M0-006** Add `VERSION` with initial four-part version.
 - [ ] **M0-007** Create the planned directory scaffold without copying proprietary files.
 - [ ] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow.
@@ -408,6 +408,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 - 2026-08-10 — Initial document checkpoint. Completed: M0-001 and M0-012. Health: `GREEN`. Evidence: repository `README-AI`; user-provided `gh auth status` output. Remaining estimate: 0.5–2 working days. Gate readiness: not ready. Next tasks: M0-002, M0-003. Scope change: live-ledger protocol and per-task acceptance register added.
 - 2026-08-10 — M0 checkpoint 2. Completed since prior checkpoint: M0-002 and M0-003. Health: `GREEN`. Evidence: commit `c51a579`, this M0-003 task commit, `main`/`origin` verification, and `git check-ignore` fixture audit. Risks: proprietary source was previously visible as untracked and is now covered by extension rules. Re-evaluated estimate: 0.5–2 working days. Gate readiness: not ready. Next tasks: M0-004, M0-005. Scope/criteria remain valid.
+- 2026-08-10 — M0 checkpoint 3. Completed since prior checkpoint: M0-004 and M0-005. Health: `GREEN`. Evidence: commits `cee7de8` and this M0-005 task commit; README content checks; MIT text and third-party boundary review. Risks: public wording must continue to distinguish original project code from copyrighted game and dependency material. Re-evaluated estimate: 0.5–2 working days. Gate readiness: not ready. Next tasks: M0-006, M0-007. Scope/criteria remain valid.
 
 ## 9. Milestone M1 — Reproducible toolchain and source ingestion
 
