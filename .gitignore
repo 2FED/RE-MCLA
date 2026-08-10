@@ -1,0 +1,68 @@
+# Private game data and extracted Xbox 360 content
+/private/
+/generated/
+*.iso
+*.dvd
+*.xex
+*.xexp
+*.rpf
+*.bik
+*.zar
+*.xsave
+*.xaccount
+
+# Build and package output
+/build/
+/out/
+/dist/
+/packages/
+/artifacts/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.obj
+*.o
+*.lib
+*.a
+*.dll
+*.exe
+*.pdb
+*.ilk
+
+# ReXGlue and generated caches
+/.cache/
+/.vs/
+/.idea/
+/.vscode/
+**/.cache/
+**/out/
+**/build/
+
+# Logs, traces, dumps, and local evidence
+*.log
+*.trace
+*.dmp
+*.mdmp
+*.core
+*.etl
+/logs/
+/traces/
+/captures/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.user
+*.suo
+
+# OS/editor temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.tmp
+*~
