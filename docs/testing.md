@@ -87,6 +87,15 @@ scripts\test-export-rexglue-force-inventory.ps1
 
 The one-shot force runner requires the immutable M2-008 rejection, a clean generated target, and the unchanged conservative manifest; it invokes exactly `rexglue --force codegen mcla_manifest.toml` into a separate private root. Its private manifest hashes every generated file. The exporter verifies that manifest against all current ignored outputs, inventories all validation/writer categories including explicit zero classes, and publishes a complete sanitized transcript. Tests require two deterministic exports and rejection of disabled-force metadata, unknown output, a changed generated count, and an outside output path.
 
+Current M2-010 finding-triage evidence gates:
+
+```powershell
+scripts\export-codegen-triage.ps1
+scripts\test-export-codegen-triage.ps1
+```
+
+The exporter cross-checks the immutable M2-009 transcript against a private 34-address Ghidra audit produced by `scripts/ghidra/AddressAudit.java`. It requires all seven branch pairs and all twenty vector-pack sites, verifies executable-section and boundary context, decodes every pack word as format 5/mask 3/shift 0, and emits one owner/category/severity/action row per unique finding. Tests require deterministic regeneration and reject a missing audit record, changed pack fields, mutated force evidence, and output outside `docs/evidence`.
+
 Planned test layers:
 
 1. host utility unit tests
