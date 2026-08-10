@@ -454,7 +454,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 ### Tasks
 
 - [x] **M1-001** Install or enable Clang/clang-cl 20+ for use with Visual Studio Build Tools. Pinned official WinGet LLVM 20.1.8 installed machine-wide; `clang-cl`, `lld-link`, `llvm-ar`, and a C++23 syntax-only compilation verified on 2026-08-10.
-- [ ] **M1-002** Make CMake 3.25+ and Ninja discoverable through deterministic scripts rather than relying on an interactive developer prompt.
+- [x] **M1-002** Make CMake 3.25+ and Ninja discoverable through deterministic scripts rather than relying on an interactive developer prompt. `scripts/Resolve-Toolchain.ps1` now uses `vswhere.exe`, validates CMake 3.25+, Ninja 1.10+, and clang-cl 20+, and can export their directories into the current dot-sourced PowerShell session.
 - [x] **M1-003** Install and verify `ast-grep`. Host installation `ast-grep 0.45.0` verified on 2026-08-10 at the WinGet package path; use `ast-grep`, not the deprecated `sg` alias.
 - [ ] **M1-004** Obtain ReXGlue v0.9.0 recursively and pin its exact commit/tag.
 - [ ] **M1-005** Build or install ReXGlue using the supported Windows preset.

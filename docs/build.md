@@ -20,6 +20,27 @@ Still required or unverified:
 - deterministic source verification/extraction scripts
 - pinned Xenia Canary baseline
 
-No build command is authoritative yet. Add commands here only after they pass in a fresh PowerShell session and are captured by the bootstrap workflow.
+## Deterministic toolchain discovery
+
+Run the resolver from any PowerShell working directory:
+
+```powershell
+& C:\BDU\MCLA-Recomp\scripts\Resolve-Toolchain.ps1
+```
+
+It uses the installed `vswhere.exe` to locate Visual Studio, resolves the bundled CMake and Ninja executables, resolves the standalone LLVM installation, and rejects unsupported versions. It does not install software or persist environment changes.
+
+To prepend the verified tool directories to `PATH` for the current PowerShell session, dot-source it:
+
+```powershell
+. C:\BDU\MCLA-Recomp\scripts\Resolve-Toolchain.ps1 -ExportPath
+cmake --version
+ninja --version
+clang-cl --version
+```
+
+Dot-sourcing is required because a child PowerShell process cannot modify its parent's environment. The eventual `bootstrap.ps1` will consume this resolver and validate the remaining project prerequisites.
+
+No project build command is authoritative yet. Add commands here only after they pass in a fresh PowerShell session and are captured by the bootstrap workflow.
 
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.
