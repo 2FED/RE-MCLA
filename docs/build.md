@@ -16,7 +16,7 @@ Current verified host components:
 
 Still required or unverified:
 
-- pinned ReXGlue v0.9.0 build/install
+- ReXGlue v0.9.0 build/install from the pinned source graph described in `docs/rexglue-sdk.md`
 - deterministic source verification/extraction scripts
 - pinned Xenia Canary baseline
 
