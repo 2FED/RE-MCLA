@@ -333,6 +333,25 @@ Run the smallest relevant test first, then broaden:
 8. Campaign regression matrix
 9. Clean-machine package test
 
+### 6.7 ast-grep workflow
+
+Use the non-deprecated `ast-grep` executable. The legacy `sg` alias may print a deprecation warning.
+
+From the repository root:
+
+```powershell
+ast-grep scan
+ast-grep test --skip-snapshot-tests
+```
+
+During rule development, inspect matches before adding a rewrite. Rewrites require a focused diff review and rule tests before normal project tests. Once a rule becomes release-enforcing, add and review snapshots where stable diagnostic locations add value.
+
+Current project rule:
+
+- `no-unsafe-strcpy`: rejects unbounded `strcpy` calls in C++ host code.
+
+Add reusable global utility rules under `utils/` only when duplication justifies them.
+
 ## 7. Milestone dependency map
 
 ```text
@@ -371,7 +390,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-005** Select and add a license covering only original port code and scripts. MIT selected on 2026-08-10 with third-party/game-content boundaries documented in README.
 - [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10; planned `0.1.0.0` remains gated on reproducible scaffold and feasibility tooling.
 - [x] **M0-007** Create the planned directory scaffold without copying proprietary files. Source, test, rule, documentation-evidence, CMake, script, and third-party roots created on 2026-08-10; private/generated roots remain local-only and ignored.
-- [ ] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow.
+- [x] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow. Initial C++ smoke rule and fixtures added and verified with ast-grep 0.45.0 on 2026-08-10.
 - [ ] **M0-009** Define initial structural rules after the C++ scaffold exists. Candidate rules: prevent direct guest-data filesystem access outside VFS adapters; enforce hook naming/address metadata; prevent unsafe C string APIs in host code.
 - [ ] **M0-010** Create `docs/architecture.md`, `docs/build.md`, `docs/testing.md`, and `docs/known-issues.md` skeletons.
 - [ ] **M0-011** Add a source-data policy describing files that must never enter Git or release archives.

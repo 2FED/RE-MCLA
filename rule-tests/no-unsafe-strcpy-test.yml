@@ -1,0 +1,7 @@
+id: no-unsafe-strcpy
+valid:
+  - memcpy(destination, source, size);
+  - strcpy_s(destination, destination_size, source);
+invalid:
+  - strcpy(destination, source);
+  - std::strcpy(destination, source);

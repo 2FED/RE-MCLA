@@ -1,0 +1,8 @@
+id: no-unsafe-strcpy
+language: Cpp
+severity: error
+message: Use a bounded string operation or a project-safe string abstraction instead of strcpy.
+rule:
+  any:
+    - pattern: strcpy($DESTINATION, $SOURCE)
+    - pattern: std::strcpy($DESTINATION, $SOURCE)
