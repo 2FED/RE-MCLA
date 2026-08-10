@@ -204,4 +204,6 @@ The configured Ninja graph must expose both `mcla` and `mcla_codegen`. Do not bu
 
 The immutable M2-008 first non-force gate was run through `scripts\run-rexglue-codegen-gate.ps1`. It completed all six analysis phases and returned exit code 1 for seven validation-stage `UnresolvedCall` findings without emitting `generated/default`. Its raw streams remain ignored; regenerate the reviewed public evidence with `scripts\export-rexglue-codegen-gate.ps1`. Do not remove or overwrite the private first-run root, rerun this one-shot gate, add `--force` to it, or use the M2-008 root for the separate M2-009 force inventory.
 
+M2-009 then ran the separate global-force command `rexglue --force codegen mcla_manifest.toml` through `scripts\run-rexglue-force-inventory.ps1`. It returned exit code 0 and emitted 64 ignored files (128,010,691 bytes) below `generated/default`; every output has a private size/SHA-256 manifest. Regenerate the sanitized inventory with `scripts\export-rexglue-force-inventory.ps1`. Never stage these generated files or reuse/overwrite either immutable evidence root.
+
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.

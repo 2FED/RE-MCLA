@@ -77,6 +77,16 @@ scripts\test-export-rexglue-codegen-gate.ps1
 
 The one-shot runner refuses an existing private evidence root or non-empty generated target, revalidates the manifest and conservative policy, invokes only `rexglue codegen mcla_manifest.toml`, and records both streams plus exit metadata privately. The exporter is fail-closed: it requires the immutable stream hashes, exact non-force command/exit classification, known line grammar, six analysis phases, and seven `UnresolvedCall` details before publishing the full path/thread-sanitized transcript. Export tests require deterministic regeneration and rejection of force-enabled metadata, an unknown log line, and an output outside `docs/evidence`.
 
+Current M2-009 force-inventory evidence gates:
+
+```powershell
+scripts\run-rexglue-force-inventory.ps1 -WhatIf
+scripts\export-rexglue-force-inventory.ps1
+scripts\test-export-rexglue-force-inventory.ps1
+```
+
+The one-shot force runner requires the immutable M2-008 rejection, a clean generated target, and the unchanged conservative manifest; it invokes exactly `rexglue --force codegen mcla_manifest.toml` into a separate private root. Its private manifest hashes every generated file. The exporter verifies that manifest against all current ignored outputs, inventories all validation/writer categories including explicit zero classes, and publishes a complete sanitized transcript. Tests require two deterministic exports and rejection of disabled-force metadata, unknown output, a changed generated count, and an outside output path.
+
 Planned test layers:
 
 1. host utility unit tests
