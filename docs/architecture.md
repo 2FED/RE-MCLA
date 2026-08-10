@@ -4,9 +4,19 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: repository foundation only. No runtime architecture has been implemented yet.
+Current state: the canonical ReXGlue v0.9.0 `mcla` application scaffold is implemented. It configures a C++23 host executable linked to `rex::runtime`; the executable cannot compile until M2 codegen creates the ignored guest-derived initialization header and sources.
 
-Planned boundaries:
+Implemented bootstrap boundary:
+
+- `CMakeLists.txt` owns the host target and invokes `rexglue_setup_target(mcla)`
+- `CMakePresets.json` provides the upstream host/architecture/configuration matrix
+- `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
+- `src/main.cpp` binds the generated module initialization to `MclaApp`
+- `src/mcla_app.h` is the project-owned lifecycle extension point
+- `generated/rexglue.cmake` is tracked non-proprietary SDK boilerplate
+- every other file below `generated/` remains ignored guest-derived output
+
+Planned subsystem boundaries:
 
 - generated guest PowerPC-to-C++ output remains local and untracked
 - ReXGlue supplies code generation and Xbox-derived runtime subsystems

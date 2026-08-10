@@ -1,6 +1,8 @@
 # Private game data and extracted Xbox 360 content
 /private/
-/generated/
+# ReXGlue's non-proprietary bootstrap is tracked; all guest-generated output is not.
+/generated/*
+!/generated/rexglue.cmake
 *.iso
 *.dvd
 *.xex

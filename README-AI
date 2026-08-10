@@ -200,7 +200,7 @@ MCLA-Recomp/
 ├── VERSION                    # four-part version, for example 0.1.0.0
 ├── CMakeLists.txt
 ├── CMakePresets.json
-├── mcla_config.toml           # ReXGlue codegen configuration
+├── mcla_manifest.toml         # ReXGlue v0.9.0 manifest-first codegen configuration
 ├── cmake/
 ├── docs/
 │   ├── architecture.md
@@ -210,7 +210,7 @@ MCLA-Recomp/
 │   ├── testing.md
 │   ├── known-issues.md
 │   └── evidence/              # sanitized milestone evidence only
-├── generated/                 # locally generated; normally ignored
+├── generated/                 # guest-generated output ignored; rexglue.cmake bootstrap tracked
 ├── private/                   # XEX/assets/logs; always ignored
 ├── rules/                     # ast-grep project rules
 ├── rule-tests/                # ast-grep rule fixtures/tests
@@ -534,8 +534,8 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M2-002** Record sanitized baseline metadata: module hash, title/media IDs, mounted paths, imported modules, kernel build expectations, and first fatal/warning events. The exact private snapshot is identified by SHA-256 while the tracked report contains only whitelisted metadata, placeholder mounts, complete warning-class counts, and zero fatal markers. Reproducible exporter and evidence: `scripts/export-xenia-baseline.ps1`, `docs/evidence/M2-002-xenia-runtime-metadata.md`.
 - [x] **M2-003** Capture baseline screenshots or video for intro, frontend, garage, daytime race, nighttime race, HUD, and pause menu; keep copyrighted raw captures private unless distribution is approved. Native 1280x720 Xenia F12 captures cover every required state, were visually reviewed and hash-indexed, and remain ignored/private. Evidence: `docs/evidence/M2-003-private-capture-index.md`.
 - [x] **M2-004** Record baseline save creation/load behavior and controller mapping. An isolated save changed across confirmed autosaves, survived normal exit, was enumerated and loaded by a clean verified resume, and returned the operator to saved progress. Both sticks, D-pad, triggers, bumpers, XYAB, Start, and Back/Select responded. Resume safety and evidence: `scripts/run-xenia-baseline.ps1`, `docs/evidence/M2-004-save-controller-reload.md`.
-- [ ] **M2-005** Scaffold the MCLA ReXGlue application with `rexglue init`.
-- [ ] **M2-006** Create `mcla_config.toml` pointing to the private XEX and generated output.
+- [x] **M2-005** Scaffold the MCLA ReXGlue application with `rexglue init`. ReXGlue v0.9.0 generated the canonical `mcla` CMake/C++23 application, preset matrix, manifest, and tracked non-proprietary `generated/rexglue.cmake` bootstrap; all guest-generated output remains ignored. Evidence: `docs/evidence/M2-005-rexglue-scaffold.md`.
+- [ ] **M2-006** Validate and harden the ReXGlue v0.9.0 `mcla_manifest.toml` (the current manifest-first replacement for the originally planned legacy `mcla_config.toml`) so it resolves only the approved private XEX/game root and ignored generated output.
 - [ ] **M2-007** Keep all codegen optimization flags disabled for the first successful analysis.
 - [ ] **M2-008** Run codegen without `--force` and retain the full sanitized validation report.
 - [ ] **M2-009** Run codegen with `--force` only to inventory unresolved calls, invalid regions, unsupported PPC instructions, jump-table failures, exception handlers, and oversized functions.

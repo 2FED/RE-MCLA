@@ -108,7 +108,7 @@ rexglue --version
 Test-Path (Join-Path $ReXGlueInstall 'lib\cmake\rexglue\rexglueConfig.cmake')
 ```
 
-Expected output is ReXGlue `0.9.0` and `True`. MCLA-R's later CMake presets will set this prefix themselves; until they exist, the session-local setup above is authoritative.
+Expected output is ReXGlue `0.9.0` and `True`. The application presets now exist; during M2 feasibility work they intentionally consume this session-local `CMAKE_PREFIX_PATH` so the configured SDK is explicit.
 
 The first clean build evidence is in `docs/evidence/M1-005-rexglue-build.md`. ReXGlue unit tests are not enabled by the stock preset and are not claimed by M1-005/M1-006; SDK-changing work must configure `REXGLUE_BUILD_TESTS=ON` and run the matching CTest preset.
 
@@ -192,6 +192,14 @@ The default run validates all pinned build, source, extraction, emulator, revers
 
 Use the named path parameters only when the private layout differs from the documented defaults or when testing a failure. Overrides do not disable version or hash validation. The verified positive and missing-tool transcripts are summarized in `docs/evidence/M1-015-bootstrap.md`.
 
-No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
+## Configure the MCLA application scaffold
+
+After initializing the compiler environment and `CMAKE_PREFIX_PATH` as above, configure the canonical scaffold with:
+
+```powershell
+cmake --preset win-amd64-debug
+```
+
+The configured Ninja graph must expose both `mcla` and `mcla_codegen`. Do not build `mcla` before codegen: its required `generated/default/mcla_init.h` and guest-derived sources are intentionally absent until the M2 analysis gate. `generated/rexglue.cmake` is the sole tracked file below `generated/`; all codegen output remains ignored.
 
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.

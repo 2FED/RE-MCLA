@@ -17,7 +17,7 @@ Purpose: prevent copyrighted game data, credentials, private machine data, and u
 ## Required storage boundaries
 
 - Put local game inputs and extracted data under ignored `private/` paths.
-- Put generated recompilation output under ignored `generated/` paths.
+- Put generated recompilation output under ignored `generated/` paths. The sole tracked exception is ReXGlue's non-proprietary `generated/rexglue.cmake` build bootstrap; guest-derived headers, sources, source lists, caches, and binaries remain ignored.
 - Put build and package output only in ignored build/artifact roots.
 - Keep raw logs, dumps, captures, and traces in ignored local directories.
 - Commit only sanitized evidence that is necessary to reproduce a result and safe to publish.
