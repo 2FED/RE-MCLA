@@ -35,3 +35,7 @@ The incremental non-force sequence reduced the original seven blockers to zero. 
 | `0x824B0DE8` | `0x824B0DF8` | `0x824B0CC0` | verified function chunk at parent PDATA end |
 
 `config/mcla_functions.toml` is the only analysis include. Manual switch-table, invalid-region, exception-handler, and setjmp/longjmp entries remain absent because M2-009/M2-011 found no corresponding failure. Two clean successful runs produced the same private generated manifest; see `docs/evidence/M2-012-manual-analysis-config.md`.
+
+## Import map handoff
+
+M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

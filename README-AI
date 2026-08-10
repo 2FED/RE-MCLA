@@ -544,7 +544,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M2-010** Classify every codegen finding as config fix, ReXGlue defect, project hook/stub, false positive, or unknown. All 27 unique findings have an explicit owner, severity, and next action: seven executable direct-branch boundary failures are MCLA-R config fixes (S1), while twenty valid `vpkd3d128` FLOAT16_4 mask=3/shift=0 sites expose a ReXGlue diagnostic/coverage defect (S2). No finding remains unknown. Reproducible private-address audit, exporter, tests, and evidence: `scripts/ghidra/AddressAudit.java`, `scripts/export-codegen-triage.ps1`, `docs/evidence/M2-010-codegen-triage.md`.
 - [x] **M2-011** Identify save/restore helpers, `setjmp`/`longjmp`, exception metadata, function chunks, and discontinuous control flow. Exact GPR/FPR/VMX save/restore bases are verified; `.pdata` contains 20,071 records and 34 exception-marked functions; no standard setjmp/longjmp body exists, so both overrides remain unset. All seven unresolved targets are bounded entries in PDATA gaps: one parent-chunk candidate, three computed-dispatch entries, one leaf, and two tail thunks. Reproducible audit/export/tests and notes: `scripts/ghidra/ControlFlowAudit.java`, `scripts/export-control-flow-audit.ps1`, `docs/evidence/M2-011-control-flow-metadata.md`, `docs/reverse-engineering.md`.
 - [x] **M2-012** Add manual `[functions]`, `[[switch_tables]]`, invalid-data regions, and exception-handler entries incrementally with an address rationale in `docs/reverse-engineering.md`. Eight evidence-bounded function entries (including one verified parent chunk and one follow-up entry exposed during iteration) reduce non-force `UnresolvedCall` counts from 7 to 0. Switch-table, invalid-region, exception-hint, and setjmp/longjmp override counts remain explicitly zero because no evidence justifies them. Two clean runs produced identical 64-file/128,031,984-byte private manifests. Evidence: `config/mcla_functions.toml`, `scripts/verify-analysis-config.ps1`, `scripts/run-rexglue-config-iteration.ps1`, `docs/evidence/M2-012-manual-analysis-config.md`.
-- [ ] **M2-013** Map import records to symbolic XAM/xboxkrnl exports and generate an import coverage table.
+- [x] **M2-013** Map import records to symbolic XAM/xboxkrnl exports and generate an import coverage table. All 503 XEX import records map to 257 known symbols (95 XAM, 162 xboxkrnl; 246 functions and 11 variables), with zero unknown ordinals. The accepted generated snapshot contains all 246 function thunks and 1,517 direct call sites across 240 functions; six functions are explicitly indirect-only and all variables are classified as data imports. Evidence: `scripts/export-import-coverage.ps1`, `scripts/test-export-import-coverage.ps1`, `docs/evidence/M2-013-import-coverage.md`.
 - [ ] **M2-014** Identify early startup calls and the minimum import/stub set required to reach the module entry point.
 - [ ] **M2-015** Compare known Complete Edition Xenia patch addresses against the local image, including skip intro, delta-time/60 FPS, motion blur, MSAA, and imposter-shadow patches. Do not enable enhancement patches yet.
 - [ ] **M2-016** Run ReXGlue codegen regression tests if the SDK or analyzer is modified.
@@ -1244,10 +1244,10 @@ Execute in this order unless a new blocker changes the plan:
 
 1. [x] Close M0 repository foundation and governance.
 2. [x] Close M1 reproducible toolchain and source ingestion at version `0.1.0.0`.
-3. [ ] Complete M2-001 through M2-004: capture the exact stock Xenia baseline.
-4. [ ] Complete M2-005 through M2-007: establish the real target scaffold/config with optimizations disabled.
-5. [ ] Run M2-008 non-force codegen before any `--force` inventory.
-6. [ ] Classify every codegen finding and produce the M2 feasibility report before implementing broad runtime behavior.
+3. [x] Complete M2-001 through M2-012: baseline, deterministic codegen, finding triage, and manual analysis configuration.
+4. [x] Complete M2-013: map all XAM/xboxkrnl import records and static reachability classes.
+5. [ ] Complete M2-014 through M2-016: startup dependency set, patch-address audit, and SDK regression coverage.
+6. [ ] Complete M2-017 and close M2 with an explicit feasibility decision before implementing broad runtime behavior.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

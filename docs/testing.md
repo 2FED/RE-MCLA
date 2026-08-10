@@ -118,6 +118,15 @@ scripts\test-export-manual-analysis-config.ps1
 
 The exact config validator accepts only the eight address/end/name records supported by M2-011/M2-012 evidence and requires the sole parent relation at `0x824B0DE8`. It rejects any unreviewed function, switch table, invalid region, exception hint, or jump override. The runner snapshots every manifest/config/log input and successful generated-file manifest under ignored private evidence. The exporter verifies all ten iterations, the discovered `0x822C9948` follow-up, zero final analysis errors, and two clean byte-identical 64-file manifests. The materializer reconstructs the immutable empty-include M2-009 generated snapshot and validates all 64 files against its retained size/SHA-256 manifest; historical M2-009/M2-011 exporters use that snapshot so later manual-analysis output cannot invalidate their regression tests.
 
+M2-013 import coverage gate:
+
+```powershell
+scripts\export-import-coverage.ps1
+scripts\test-export-import-coverage.ps1
+```
+
+The exporter accepts only the immutable M2-002 Xenia import audit and the byte-verified M2-012 generated snapshot. It maps all 503 XEX records to 257 library/ordinal symbols, verifies all 246 generated function thunk addresses, classifies 11 variable imports, and scans every generated translation unit for direct import calls. Its tests require deterministic output and reject a changed audit, changed generated manifest, or output outside `docs/evidence`.
+
 Planned test layers:
 
 1. host utility unit tests
