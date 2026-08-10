@@ -163,16 +163,20 @@ Known installed components:
 - Ninja `1.12.1` under the Visual Studio installation
 - Git `2.46.2`
 - Rust/Cargo installed
+- ast-grep `0.45.0`
+- ReXGlue SDK `0.9.0` pinned recursively at commit `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
+- XboxDev `extract-xiso` release `build-202505152050`
+- Xenia Canary `canary_experimental@7d8db5a2c`
+- Eclipse Temurin JDK `21.0.12+8`
+- Ghidra `12.0.4` with XEXLoaderWV `13.0.0`
+- RenderDoc `1.45.0`
 
-Known missing or unverified components:
+Known M2 unknowns:
 
-- ReXGlue SDK v0.9.0 installation
-- Xenia Canary baseline installation
-- XDVDFS extraction tool
-- Ghidra plus Xbox 360 XEX loader, or an equivalent disassembler
-- RenderDoc/PIX graphics debugging setup
-- `ast-grep` CLI
-- adequate free disk-space verification
+- target-XEX ReXGlue codegen feasibility and determinism
+- complete Xenia visual/save/controller baseline coverage
+- required manual function, switch-table, exception, and invalid-data overrides
+- minimum native runtime import/stub set
 
 Host GitHub CLI authentication was user-verified on 2026-08-10:
 
@@ -514,7 +518,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 **Goal:** prove that the exact XEX can be analyzed and converted, and quantify every blocker before substantial runtime implementation begins.
 
-**Status:** `READY — NOT STARTED`.
+**Status:** `IN PROGRESS — GREEN`.
 
 **Estimate:** 2–10 working days; extend only with an explicit feasibility review.
 
@@ -526,7 +530,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 ### Tasks
 
-- [ ] **M2-001** Run the unmodified Complete Edition in Xenia Canary at stock 30 FPS.
+- [x] **M2-001** Run the unmodified Complete Edition in Xenia Canary at stock 30 FPS. The pinned build loaded exact module hash `1984A3354B78CE19` with patches/title updates disabled and time scalar 1; a clean profile/save, intro route, and active HUD gameplay were observed in an isolated private session with no fatal/crash markers. Reproducible launcher and evidence: `scripts/run-xenia-baseline.ps1`, `docs/evidence/M2-001-stock-xenia-gameplay.md`.
 - [ ] **M2-002** Record sanitized baseline metadata: module hash, title/media IDs, mounted paths, imported modules, kernel build expectations, and first fatal/warning events.
 - [ ] **M2-003** Capture baseline screenshots or video for intro, frontend, garage, daytime race, nighttime race, HUD, and pause menu; keep copyrighted raw captures private unless distribution is approved.
 - [ ] **M2-004** Record baseline save creation/load behavior and controller mapping.
@@ -582,7 +586,7 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M2-001, M2-002.
+- 2026-08-11 — M2 checkpoint 1. Completed: M2-001 (1/17). Health: `GREEN`. Evidence: exact pinned Xenia build/module hash; isolated stock command line with patches/title updates disabled and time scalar 1; clean profile/save creation; private intro/cutscene/gameplay F12 captures; responsive five-minute D3D12/XAudio2 session with zero fatal/crash/device-lost markers; and reviewed `scripts/run-xenia-baseline.ps1` preflight/rejection tests. New risks: optional SDL controller database is absent and multiple FFB/import warnings are present, but neither blocked the tested route. Re-evaluated estimate: 2–10 working days. Gate readiness: not ready; no codegen evidence exists. Next tasks: M2-002 and M2-003. Scope/criteria remain valid. Evidence: `docs/evidence/M2-001-stock-xenia-gameplay.md`.
 
 ## 11. Milestone M3 — Clean native build and module boot
 

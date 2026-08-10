@@ -22,6 +22,14 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
 
 The gate must report all 12 prerequisites. Its normal route must pass 12/12, and a deliberately missing required-tool override must return nonzero after reporting the remaining checks. It includes full ISO and extracted-payload hashes.
 
+Current stock Xenia baseline preflight:
+
+```powershell
+scripts\run-xenia-baseline.ps1 -WhatIf
+```
+
+For a real run, omit `-WhatIf` or supply a new `-BaselinePath` below `private/`. The launcher verifies the exact Xenia/XEX hashes, refuses overwrite/outside/reparse destinations, isolates storage/content/cache/log paths, disables patches and title updates, and keeps `time_scalar=1`. M2-001 requires private evidence that the run reaches active gameplay, not merely module load.
+
 Planned test layers:
 
 1. host utility unit tests
