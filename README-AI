@@ -1,0 +1,1213 @@
+# MCLA-R — AI Working Context and Execution Plan
+
+## 1. Document purpose
+
+This file is the authoritative working context and milestone plan for **MCLA-R**, an unofficial native recompilation port of the Xbox 360 version of **Midnight Club: Los Angeles Complete Edition**.
+
+It is written for human contributors and AI agents. Update it whenever architecture, prerequisites, supported platforms, commands, milestone state, risks, or project conventions change materially.
+
+Status markers used in this document:
+
+- `[ ]` not started
+- `[-]` in progress
+- `[x]` complete and verified
+- `[!]` blocked; the task must include a blocker note
+- `[~]` intentionally deferred with an owner or destination milestone
+
+A checkbox is not complete until its stated verification evidence exists. Code existing locally is not sufficient by itself.
+
+### 1.1 Live task-ledger protocol
+
+The milestone checklists in this file are the project's source of truth. They must reflect actual repository state, not intended or remembered progress.
+
+- Update a task's marker in the same work session in which its state changes.
+- Add the evidence path or command result to the milestone checkpoint log before marking a task `[x]`.
+- Never mark a task complete based only on an unverified implementation claim.
+- When a task is blocked, mark it `[!]` and record the blocker, owner, next diagnostic action, and the condition that will unblock it.
+- When scope changes, update the task, its acceptance criterion, estimate, dependencies, and affected milestone gate together.
+- After every **two completed milestone tasks**, stop before completing a third and perform a milestone checkpoint review.
+- Also perform an immediate checkpoint after any S0/S1 defect, feasibility change, SDK/toolchain change, new external dependency, or estimate change greater than 25%.
+
+Every checkpoint must record:
+
+1. date and reviewer
+2. tasks completed since the previous checkpoint and their evidence
+3. current completion count and milestone health: `GREEN`, `YELLOW`, `RED`, or `BLOCKED`
+4. newly discovered risks, removed risks, and changed assumptions
+5. re-evaluated estimate and gate readiness
+6. the next two tasks to execute
+7. whether milestone scope or acceptance criteria need revision
+
+Checkpoint entries belong in the milestone's `Checkpoint log` subsection. If no checkpoint has occurred, retain the explicit `No checkpoint yet` entry.
+
+### 1.2 Per-task completion contract
+
+Each task has an individual criterion in the **Task acceptance criteria register**. A task is complete only when:
+
+- its unique criterion is satisfied
+- the stated evidence exists
+- the universal Definition of Done in section 6.3 is satisfied
+- any dependency task is complete
+
+If implementation reveals that a criterion is insufficient, revise it before marking the task complete. Do not weaken criteria merely to close a task.
+
+## 2. Project summary
+
+### 2.1 Objective
+
+Create a maintainable native Windows port of the Xbox 360 Complete Edition by statically recompiling the original PowerPC executable and supplying the required Xbox 360 runtime behavior through ReXGlue and project-specific hooks, patches, and stubs.
+
+Primary target:
+
+- Windows 10/11 x86-64
+- Direct3D 12 Xenos GPU backend
+- Xbox-compatible and SDL-supported controllers
+- original 30 FPS behavior until correctness is established
+- fully offline single-player operation
+
+Secondary targets, only after the primary target is stable:
+
+- Linux x86-64 with Vulkan
+- higher frame rates with correct delta-time behavior
+- ultrawide and modern resolution support
+- optional quality-of-life improvements
+
+### 2.2 Non-goals for the initial port
+
+- Connecting to Xbox Live or retired Rockstar services
+- Shipping copyrighted game assets, XEX files, RPF archives, Bink videos, or generated proprietary game code
+- Replacing the RAGE engine with a new engine
+- Rewriting all RPF formats or converting all assets to native PC formats
+- Supporting macOS, ARM64, multiplayer, or modding APIs before the single-player Windows port is stable
+- Enabling 60 FPS before stock 30 FPS gameplay is deterministic and validated
+
+### 2.3 Recommended technical foundation
+
+- **ReXGlue SDK v0.9.0**, pinned to an exact tag and commit, is the primary runtime and code-generation base.
+- **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
+- **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
+
+Do not silently track ReXGlue `main`. SDK upgrades are explicit changes with their own review, regression run, and documentation update.
+
+## 3. Source baseline and verified facts
+
+### 3.1 Source image
+
+Current private source:
+
+`C:\BDU\MCLA-Recomp\Midnight.Club.Los.Angeles.The.Complete.Edition.XBOX360\midmets4.iso`
+
+Verified metadata:
+
+| Property | Value |
+|---|---|
+| ISO size | `7,838,695,424` bytes |
+| ISO SHA-256 | `AFCAAE68593246B1F83328681B690E254A13C37DD2E8DC34AB0DEB6C0F471FDB` |
+| Disc descriptor | `LayerBreak=1913760` |
+| XDVDFS partition base | `0x0FD90000` |
+| Title ID | `545407F8` |
+| Media ID | `5940C9DB` |
+| Disc | `1/1` |
+| Edition | Complete Edition |
+
+### 3.2 Executable
+
+| Property | Value |
+|---|---|
+| File | `default.xex` |
+| Size | `9,252,864` bytes |
+| SHA-256 | `C386F4001FA569E6AD4B982F441F67412F00B3F47C166134555CD4B59854A432` |
+| Original executable name | `mc4_xenon_final.exe` |
+| Image base | `0x82000000` |
+| Entry point | `0x821322B8` |
+| Raw XEX version | `0x00000008` |
+| Encryption | enabled |
+| Compression | XEX basic compression |
+| Dynamic import libraries | `xam.xex`, `xboxkrnl.exe` |
+
+Static library metadata includes `XAPILIB`, `XBOXKRNL`, `LIBCMT`, `XAUD`, `XMP`, `D3D9`, `XGRAPHC`, `XONLINE`, `XHV`, and `XFFB`.
+
+The public Xenia Canary patch set for this edition declares module hash `1984A3354B78CE19`. That value must still be verified locally from a baseline Xenia log before being treated as evidence for this dump.
+
+### 3.3 Game data layout
+
+The disc contains 15 files plus `$SystemUpdate`. The game payload is primarily:
+
+- four RPF archives totaling about 5.99 GB
+- six Bink videos totaling about 561 MB
+- `default.xex`
+- NXE artwork and non-game update files
+
+Initial runtime design should mount and serve the original files through the guest VFS. Do not unpack or rewrite RPF archives unless a demonstrated runtime blocker requires it.
+
+### 3.4 Private-data rule
+
+The following must never be committed or included in public release archives:
+
+- ISO, DVD descriptor, extracted XEX, XEXP, RPF, BIK, save dumps, title updates, DLC packages
+- generated C++ that directly reproduces proprietary game code, unless legal review explicitly approves its distribution
+- Xenia logs containing local usernames or private filesystem paths without sanitization
+- crash dumps or traces containing copyrighted memory pages
+
+The repository must provide hash validation and local extraction/build instructions so users can supply their own legally obtained dump.
+
+## 4. Current environment
+
+Known installed components:
+
+- Visual Studio Build Tools 2022 `17.14`
+- MSVC `14.44`
+- Windows 11 SDK
+- CMake `3.31.6` under the Visual Studio installation
+- Ninja `1.12.1` under the Visual Studio installation
+- Git `2.46.2`
+- Rust/Cargo installed
+
+Known missing or unverified components:
+
+- Clang/clang-cl 20 or newer
+- ReXGlue SDK v0.9.0 installation
+- Xenia Canary baseline installation
+- XDVDFS extraction tool
+- Ghidra plus Xbox 360 XEX loader, or an equivalent disassembler
+- RenderDoc/PIX graphics debugging setup
+- `ast-grep` CLI
+- adequate free disk-space verification
+
+Host GitHub CLI authentication was user-verified on 2026-08-10:
+
+- account: `2FED`
+- active account: yes
+- Git protocol: HTTPS
+- scopes: `gist`, `read:org`, `repo`, `workflow`
+
+Sandboxed agent shells may not always inherit the Windows keyring session. Treat the host result as authoritative, but rerun `gh auth status` immediately before the first remote mutation.
+
+CMake and Ninja are not currently on the normal shell `PATH`; scripts must locate them deterministically or initialize the Visual Studio environment.
+
+## 5. Planned repository layout
+
+```text
+MCLA-Recomp/
+├── README-AI
+├── README.md
+├── AGENTS.md                  # optional project-specific stricter rules only
+├── LICENSE
+├── VERSION                    # four-part version, for example 0.1.0.0
+├── CMakeLists.txt
+├── CMakePresets.json
+├── mcla_config.toml           # ReXGlue codegen configuration
+├── cmake/
+├── docs/
+│   ├── architecture.md
+│   ├── build.md
+│   ├── compatibility.md
+│   ├── reverse-engineering.md
+│   ├── testing.md
+│   ├── known-issues.md
+│   └── evidence/              # sanitized milestone evidence only
+├── generated/                 # locally generated; normally ignored
+├── private/                   # XEX/assets/logs; always ignored
+├── rules/                     # ast-grep project rules
+├── rule-tests/                # ast-grep rule fixtures/tests
+├── utils/                     # reusable ast-grep helper rules when needed
+├── scripts/
+│   ├── bootstrap.ps1
+│   ├── verify-source.ps1
+│   ├── extract-game.ps1
+│   ├── codegen.ps1
+│   ├── build.ps1
+│   ├── test.ps1
+│   └── package.ps1
+├── src/
+│   ├── app/
+│   ├── hooks/
+│   ├── kernel/
+│   ├── patches/
+│   ├── platform/
+│   └── diagnostics/
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── smoke/
+└── third_party/
+    └── rexglue-sdk/           # pinned submodule or documented package
+```
+
+The exact layout may evolve during M0, but private and generated data separation is mandatory.
+
+## 6. Cross-cutting engineering rules
+
+### 6.1 Release workflow
+
+Use this sequence without skipping steps:
+
+1. Code
+2. Review code
+3. Run `ast-grep scan` when applicable
+4. Validate ast-grep rules with `ast-grep test`
+5. Run project tests
+6. Fix all release-blocking findings
+7. Bump the four-part version
+8. Update all relevant documentation
+9. Explicitly stage reviewed files
+10. Commit
+11. Push
+
+No commit or push is permitted before review and required tests pass.
+
+Project delivery cadence:
+
+- Close one task per commit. A task commit may be created only after that task's acceptance criterion, review, and relevant tests pass.
+- Do not combine unrelated completed task IDs in one commit. If two tasks are inseparable, revise the ledger and dependency rationale before implementation.
+- Recommended task commit subject: `task(Mx-nnn): concise outcome`.
+- Task commits remain local during an open milestone unless an explicit backup/collaboration push is approved.
+- After the final task needed by a milestone passes, perform the mandatory milestone review, update its checkpoint and gate decision, create a separate closure commit, then push all milestone commits.
+- Recommended closure commit subject: `milestone(Mx): close <milestone name>`.
+- A milestone is not closed merely because its implementation tasks are committed; the closure commit and successful push are required.
+- The repository bootstrap is the only ordering exception: Git must be initialized before the first task commit can exist. The first commit records M0-001; M0-002 is closed by a subsequent ledger/status commit after repository state is verified.
+
+### 6.2 Versioning
+
+Public versions use `major.minor.patch.hotfix`.
+
+- Major: intentionally incompatible change
+- Minor: new functionality or newly supported milestone capability
+- Patch: compatible fix, maintenance, refactor, or documentation release
+- Hotfix: urgent, narrow follow-up on the current patch line
+
+Initial recommended line:
+
+- `0.1.0.0`: reproducible project scaffold and feasibility tooling
+- `0.2.0.0`: clean codegen/native link
+- `0.3.0.0`: boot to frontend
+- `0.4.0.0`: first playable race
+- `0.5.0.0`: campaign-compatible alpha
+- `0.9.0.0`: release candidate line
+- `1.0.0.0`: validated public release
+
+These are planning markers, not automatic version bumps.
+
+### 6.3 Definition of Done for every task
+
+A task may be checked only when all applicable conditions are met:
+
+- implementation or document exists in its intended location
+- relevant code has been reviewed
+- warnings and failures are understood; none are silently ignored
+- tests appropriate to the risk have passed
+- evidence is recorded in a sanitized log, report, screenshot, test result, or reproducible command
+- README-AI and other affected documentation are updated
+- no proprietary or secret material is staged
+
+### 6.4 Definition of Done for every milestone
+
+A milestone closes only when:
+
+- every mandatory task is `[x]`
+- deferred tasks are explicitly marked `[~]` and assigned to a later milestone
+- there are no open severity-0 or severity-1 defects for the milestone scope
+- required tests pass from a clean build or clean documented environment
+- artifacts and verification evidence are reproducible
+- known limitations are documented
+- the milestone review records a clear `GO` decision for the next milestone
+
+### 6.5 Defect severity
+
+- **S0:** data loss, security issue, copyrighted data leakage, destructive installer behavior
+- **S1:** build failure, startup crash, progression blocker, persistent corruption, nondeterministic critical failure
+- **S2:** major graphics/audio/gameplay defect with a workaround or limited scope
+- **S3:** cosmetic defect, minor usability issue, non-blocking warning
+
+### 6.6 Testing hierarchy
+
+Run the smallest relevant test first, then broaden:
+
+1. Unit tests for host helpers, patching, path mapping, endian conversions, and config parsing
+2. ReXGlue PPC/codegen tests where SDK changes are involved
+3. Static analysis and ast-grep rules
+4. Headless or short startup smoke test
+5. Boot-to-menu test
+6. First-race deterministic route
+7. Save/load and multi-session test
+8. Campaign regression matrix
+9. Clean-machine package test
+
+## 7. Milestone dependency map
+
+```text
+M0 Repository foundation
+ └─ M1 Reproducible toolchain and source ingestion
+     └─ M2 Baseline and feasibility/codegen audit
+         └─ M3 Clean native build and module boot
+             └─ M4 Frontend/menu stability
+                 └─ M5 First playable race
+                     └─ M6 Core systems and repeatable gameplay
+                         └─ M7 Full campaign/content compatibility
+                             ├─ M8 Modern enhancements
+                             └─ M9 Release hardening and distribution
+```
+
+M8 may begin experimentally after M6, but no M8 feature may destabilize or delay M7 correctness work.
+
+## 8. Milestone M0 — Repository foundation and governance
+
+**Goal:** establish a safe, documented, reproducible repository before proprietary extraction or code generation begins.
+
+**Estimate:** 0.5–2 working days.
+
+### Prerequisites
+
+- Workspace access to `C:\BDU\MCLA-Recomp`
+- Global repository rules loaded
+- Source ISO remains unchanged
+
+### Tasks
+
+- [x] **M0-001** Create the authoritative `README-AI` milestone plan.
+- [ ] **M0-002** Initialize Git with `main` as the default branch.
+- [ ] **M0-003** Add `.gitignore` entries for `private/`, `generated/`, build trees, SDK binaries, logs, dumps, caches, ISO/XEX/XEXP/RPF/BIK files, and package artifacts.
+- [ ] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature.
+- [ ] **M0-005** Select and add a license covering only original port code and scripts.
+- [ ] **M0-006** Add `VERSION` with initial four-part version.
+- [ ] **M0-007** Create the planned directory scaffold without copying proprietary files.
+- [ ] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow.
+- [ ] **M0-009** Define initial structural rules after the C++ scaffold exists. Candidate rules: prevent direct guest-data filesystem access outside VFS adapters; enforce hook naming/address metadata; prevent unsafe C string APIs in host code.
+- [ ] **M0-010** Create `docs/architecture.md`, `docs/build.md`, `docs/testing.md`, and `docs/known-issues.md` skeletons.
+- [ ] **M0-011** Add a source-data policy describing files that must never enter Git or release archives.
+- [x] **M0-012** Verify GitHub CLI authentication before any remote operation. User-verified on the host on 2026-08-10 for account `2FED`; recheck immediately before the first remote mutation.
+- [ ] **M0-013** Decide repository visibility and remote destination; do not push until review and tests pass.
+
+### Deliverables
+
+- Git repository with safe ignore rules
+- documented project scope and architecture skeleton
+- four-part version file
+- ast-grep scaffold
+- no copyrighted game content in Git history
+
+### Verification evidence
+
+- `git status --ignored` demonstrates that test copies of prohibited extensions are ignored
+- secret/proprietary file scan reports no tracked content
+- `ast-grep scan` and `ast-grep test` execute successfully, even if the initial rule set is minimal
+- a fresh clone can display project documentation without private files
+
+### Exit criteria
+
+- Repository safety review passes.
+- No ISO/XEX/RPF/BIK content is tracked.
+- README-AI and README accurately describe the project.
+- GitHub remote work is possible but no release claim is made.
+
+### Gate
+
+`GO M1` only after private/generated content boundaries are enforced and verified.
+
+### Checkpoint log
+
+- 2026-08-10 — Initial document checkpoint. Completed: M0-001 and M0-012. Health: `GREEN`. Evidence: repository `README-AI`; user-provided `gh auth status` output. Remaining estimate: 0.5–2 working days. Gate readiness: not ready. Next tasks: M0-002, M0-003. Scope change: live-ledger protocol and per-task acceptance register added.
+
+## 9. Milestone M1 — Reproducible toolchain and source ingestion
+
+**Goal:** create a one-command, hash-validated local environment that extracts or locates the exact supported game dump without modifying the source ISO.
+
+**Estimate:** 1–4 working days.
+
+### Prerequisites
+
+- M0 closed
+- At least 30–50 GB free disk space confirmed
+- Visual Studio Build Tools and Windows SDK available
+
+### Tasks
+
+- [ ] **M1-001** Install or enable Clang/clang-cl 20+ in Visual Studio Build Tools.
+- [ ] **M1-002** Make CMake 3.25+ and Ninja discoverable through deterministic scripts rather than relying on an interactive developer prompt.
+- [ ] **M1-003** Install and verify `ast-grep`.
+- [ ] **M1-004** Obtain ReXGlue v0.9.0 recursively and pin its exact commit/tag.
+- [ ] **M1-005** Build or install ReXGlue using the supported Windows preset.
+- [ ] **M1-006** Record ReXGlue build commands, dependency versions, and local install discovery in `docs/build.md`.
+- [ ] **M1-007** Install a trusted XDVDFS extraction tool or implement a reviewed read-only extractor.
+- [ ] **M1-008** Implement `scripts/verify-source.ps1` to validate ISO size, SHA-256, Title ID, Media ID, `default.xex` size, and XEX SHA-256.
+- [ ] **M1-009** Implement `scripts/extract-game.ps1` with explicit source and destination paths, path containment checks, and no overwrite without confirmation.
+- [ ] **M1-010** Extract game data into `private/game/` and verify the expected 15-file payload.
+- [ ] **M1-011** Verify RPF and BIK sizes against a generated local manifest.
+- [ ] **M1-012** Create `private/README.local.md` automatically or manually to document the private directory without tracking its contents.
+- [ ] **M1-013** Install Xenia Canary in a private tools location and pin the tested build.
+- [ ] **M1-014** Install Ghidra/XEX analysis support and graphics-debug tooling, or document why a selected alternative is used.
+- [ ] **M1-015** Add `scripts/bootstrap.ps1` to validate all prerequisites without performing destructive installation.
+
+### Deliverables
+
+- pinned ReXGlue SDK
+- deterministic toolchain discovery
+- verified private game extraction
+- reproducible environment/bootstrap report
+
+### Verification evidence
+
+- `bootstrap.ps1` passes in a new PowerShell session
+- `verify-source.ps1` rejects an intentionally wrong hash fixture
+- extraction output manifest exactly matches expected XEX and asset inventory
+- source ISO hash remains unchanged after extraction
+- ReXGlue CLI prints its pinned version and can initialize a sample project
+
+### Exit criteria
+
+- The supported dump is unambiguously identified before codegen.
+- No manual copying step is required but undocumented.
+- ReXGlue and the compiler can build a minimal sample.
+- Tool versions and paths are recorded.
+
+### Gate
+
+`GO M2` only if source verification, extraction, and a minimal ReXGlue build are reproducible.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M1-001, M1-002.
+
+## 10. Milestone M2 — Behavioral baseline and feasibility/codegen audit
+
+**Goal:** prove that the exact XEX can be analyzed and converted, and quantify every blocker before substantial runtime implementation begins.
+
+**Estimate:** 2–10 working days; extend only with an explicit feasibility review.
+
+### Prerequisites
+
+- M1 closed
+- Verified `private/game/default.xex`
+- Pinned Xenia Canary and ReXGlue builds
+
+### Tasks
+
+- [ ] **M2-001** Run the unmodified Complete Edition in Xenia Canary at stock 30 FPS.
+- [ ] **M2-002** Record sanitized baseline metadata: module hash, title/media IDs, mounted paths, imported modules, kernel build expectations, and first fatal/warning events.
+- [ ] **M2-003** Capture baseline screenshots or video for intro, frontend, garage, daytime race, nighttime race, HUD, and pause menu; keep copyrighted raw captures private unless distribution is approved.
+- [ ] **M2-004** Record baseline save creation/load behavior and controller mapping.
+- [ ] **M2-005** Scaffold the MCLA ReXGlue application with `rexglue init`.
+- [ ] **M2-006** Create `mcla_config.toml` pointing to the private XEX and generated output.
+- [ ] **M2-007** Keep all codegen optimization flags disabled for the first successful analysis.
+- [ ] **M2-008** Run codegen without `--force` and retain the full sanitized validation report.
+- [ ] **M2-009** Run codegen with `--force` only to inventory unresolved calls, invalid regions, unsupported PPC instructions, jump-table failures, exception handlers, and oversized functions.
+- [ ] **M2-010** Classify every codegen finding as config fix, ReXGlue defect, project hook/stub, false positive, or unknown.
+- [ ] **M2-011** Identify save/restore helpers, `setjmp`/`longjmp`, exception metadata, function chunks, and discontinuous control flow.
+- [ ] **M2-012** Add manual `[functions]`, `[[switch_tables]]`, invalid-data regions, and exception-handler entries incrementally with an address rationale in `docs/reverse-engineering.md`.
+- [ ] **M2-013** Map import records to symbolic XAM/xboxkrnl exports and generate an import coverage table.
+- [ ] **M2-014** Identify early startup calls and the minimum import/stub set required to reach the module entry point.
+- [ ] **M2-015** Compare known Complete Edition Xenia patch addresses against the local image, including skip intro, delta-time/60 FPS, motion blur, MSAA, and imposter-shadow patches. Do not enable enhancement patches yet.
+- [ ] **M2-016** Run ReXGlue codegen regression tests if the SDK or analyzer is modified.
+- [ ] **M2-017** Write `docs/evidence/M2-feasibility-report.md` with blocker counts, ownership, proposed fixes, and `GO`, `GO WITH SDK FORK`, or `NO-GO` recommendation.
+
+### Deliverables
+
+- exact local module hash and Xenia baseline
+- generated-code feasibility report
+- import coverage matrix
+- documented manual analysis configuration
+- explicit SDK fork decision
+
+### Verification evidence
+
+- Codegen is deterministic across two clean runs.
+- Generated file manifests match between identical runs.
+- Every validation error is classified; there are no uncatalogued failures.
+- Manual boundaries and switch tables include address-level evidence.
+- Unsupported instructions are enumerated by unique opcode and reachable execution phase.
+
+### Exit criteria
+
+- ReXGlue completes analysis without crashing.
+- The remaining blockers have finite, testable remediation paths.
+- No evidence suggests pervasive self-modifying code or an unsupported execution model that invalidates static recompilation.
+- The team explicitly accepts the estimated runtime/SDK work.
+
+### Stop conditions
+
+Pause for a feasibility decision if:
+
+- analysis is nondeterministic
+- essential control flow cannot be reconstructed after targeted investigation
+- startup requires broadly unsupported exception or MMIO behavior
+- generated code size or build requirements are impractical for the intended development environment
+
+### Gate
+
+`GO M3` requires an approved feasibility report, not merely generated C++ files.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M2-001, M2-002.
+
+## 11. Milestone M3 — Clean native build and module boot
+
+**Goal:** compile, link, and launch a native executable that initializes ReXGlue, loads the XEX image, and enters guest startup code with actionable diagnostics.
+
+**Estimate:** 1–4 weeks.
+
+### Prerequisites
+
+- M2 closed with `GO` or `GO WITH SDK FORK`
+- Stable generated-code manifest
+- Import coverage table
+
+### Tasks
+
+- [ ] **M3-001** Integrate generated sources through CMake without tracking private/generated proprietary content.
+- [ ] **M3-002** Add a project `ReXApp` subclass and document lifecycle hooks.
+- [ ] **M3-003** Configure guest memory layout, image base, function dispatch, and executable entry point.
+- [ ] **M3-004** Mount `private/game` as the guest disc root through the VFS.
+- [ ] **M3-005** Implement the minimum missing xboxkrnl imports required for startup.
+- [ ] **M3-006** Implement the minimum missing XAM imports required for startup.
+- [ ] **M3-007** Add explicit, logged offline stubs for nonessential XONLINE/XHV paths; do not silently return success when state matters.
+- [ ] **M3-008** Implement deterministic guest timebase and thread-start behavior for early initialization.
+- [ ] **M3-009** Add crash handling that reports guest PC, host stack, current PPC function, thread, and last import without dumping proprietary memory by default.
+- [ ] **M3-010** Add structured logging categories for app, PPC, kernel, XAM, VFS, GPU, audio, input, and patches.
+- [ ] **M3-011** Add a known-address skip-intro development patch behind an off-by-default configuration switch if Bink blocks startup.
+- [ ] **M3-012** Build Debug, RelWithDebInfo, and Release configurations.
+- [ ] **M3-013** Fix all compile/link failures and reachable startup `PPC_UNIMPLEMENTED` traps.
+- [ ] **M3-014** Add a startup smoke test with a bounded timeout and expected log markers.
+- [ ] **M3-015** Verify repeated launch/exit does not leak persistent processes or corrupt local data.
+
+### Deliverables
+
+- native executable in all required configurations
+- bounded startup smoke test
+- actionable diagnostic/crash pipeline
+- VFS-mounted original game data
+
+### Verification evidence
+
+- clean build succeeds from documented commands
+- executable reaches the guest module entry point
+- startup log shows verified image/title/media IDs
+- invalid game data is rejected with a clear error
+- ten consecutive startup/exit cycles complete without host crash or private-data modification outside approved paths
+
+### Exit criteria
+
+- No compile or link errors.
+- No S0/S1 defects in setup, image loading, or controlled shutdown.
+- First guest-code failure, if any, is deterministic and localized beyond module entry.
+
+### Gate
+
+`GO M4` requires reliable guest startup and diagnostics; a one-off boot is insufficient.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M3-001, M3-002.
+
+## 12. Milestone M4 — Frontend, intro path, and menu stability
+
+**Goal:** reach and operate the main frontend reliably with rendering, input, profile, and basic audio functioning.
+
+**Estimate:** 1–6 weeks.
+
+### Prerequisites
+
+- M3 closed
+- GPU plugin loads successfully
+- SDL input and basic XAM profile service available
+
+### Tasks
+
+- [ ] **M4-001** Initialize the D3D12 Xenos backend and present the first valid frame.
+- [ ] **M4-002** Validate render-target formats, EDRAM resolves, depth, MSAA, gamma, and shader translation used by the frontend.
+- [ ] **M4-003** Decide whether Bink intro playback is fixed now or remains behind the documented skip-intro development option.
+- [ ] **M4-004** Implement XAM user sign-in/profile behavior required by the game.
+- [ ] **M4-005** Map SDL/controller input to the expected Xbox 360 user slot.
+- [ ] **M4-006** Implement dead zones, button mapping, disconnect/reconnect, and focus-loss behavior.
+- [ ] **M4-007** Initialize XAUD/XMA output sufficiently for frontend music and UI sounds.
+- [ ] **M4-008** Implement required XMP behavior for music playback or provide a state-correct fallback.
+- [ ] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation.
+- [ ] **M4-010** Validate locale/language selection and guest path handling.
+- [ ] **M4-011** Add frontend smoke automation or a deterministic manual script covering startup, menu navigation, options, and exit.
+- [ ] **M4-012** Compare frontend frames and audio events with Xenia baseline.
+- [ ] **M4-013** Document all remaining frontend deviations and workarounds.
+
+### Deliverables
+
+- stable main menu/frontend
+- functional controller navigation
+- basic frontend audio
+- documented intro-video status
+
+### Verification evidence
+
+- 20 consecutive boot-to-menu runs succeed
+- controller can navigate all top-level menus and exit safely
+- no persistent GPU validation errors during a five-minute frontend session
+- frontend audio plays without runaway buffers, severe distortion, or crash
+- comparison captures exist for at least two resolutions
+
+### Exit criteria
+
+- Main menu is reachable without debugger intervention.
+- User/profile flow does not softlock.
+- Input, presentation, and frontend audio are operational.
+- Remaining visual defects are S2/S3 and documented.
+
+### Gate
+
+`GO M5` requires a repeatable path from process start to selecting a race or starting a new game.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M4-001, M4-002.
+
+## 13. Milestone M5 — First playable race vertical slice
+
+**Goal:** complete one representative race from frontend selection through results and return to free roam/menu at stock timing.
+
+**Estimate:** 2–8 weeks.
+
+### Prerequisites
+
+- M4 closed
+- A deterministic test save or new-game path is available
+- Gameplay GPU and audio diagnostics enabled
+
+### Tasks
+
+- [ ] **M5-001** Define the canonical first-race test route, vehicle, weather/time, controller, and expected outcome.
+- [ ] **M5-002** Load world streaming data from RPF without missing-file or path-case failures.
+- [ ] **M5-003** Validate road, building, vehicle, traffic, sky, shadow, particle, and HUD rendering.
+- [ ] **M5-004** Fix required EDRAM/ROV-like ordering behavior and depth restore issues.
+- [ ] **M5-005** Validate shader translation and texture tiling/deswizzling for representative materials.
+- [ ] **M5-006** Implement gameplay input, analog steering/throttle/brake, pause, and controller reconnect.
+- [ ] **M5-007** Implement or validate force-feedback calls without blocking gameplay when unsupported.
+- [ ] **M5-008** Validate vehicle physics timing and guest synchronization at stock 30 FPS.
+- [ ] **M5-009** Validate engine, collision, ambient, voice, UI, and music audio streams.
+- [ ] **M5-010** Fix streaming-thread, file-I/O, and allocator failures encountered during the route.
+- [ ] **M5-011** Implement required save/content APIs to persist race results.
+- [ ] **M5-012** Complete race-results transition and return path.
+- [ ] **M5-013** Run memory, handle, thread, and GPU resource leak checks across repeated races.
+- [ ] **M5-014** Add a vertical-slice regression checklist and sanitized evidence report.
+
+### Deliverables
+
+- one complete playable race
+- stock-speed deterministic physics baseline
+- representative GPU/audio/streaming coverage
+- persisted result or documented temporary save limitation
+
+### Verification evidence
+
+- complete the canonical race five times in one session
+- complete it after a fresh process start and after loading a save
+- no S0/S1 defects or fatal validation errors
+- frame pacing and game speed remain consistent with the stock Xenia baseline
+- memory/resource growth remains bounded across five repetitions
+
+### Exit criteria
+
+- A user can start, play, finish, and leave the test race without debugger intervention.
+- HUD, world, vehicle, input, and core audio are usable.
+- Race outcome persists or the remaining save blocker has an approved M6 plan.
+
+### Gate
+
+`GO M6` requires an end-to-end gameplay loop, not merely controllable free roam.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M5-001, M5-002.
+
+## 14. Milestone M6 — Core systems and repeatable gameplay alpha
+
+**Goal:** make all major single-player systems reliable enough for extended sessions and broad content testing.
+
+**Estimate:** 1–3 months.
+
+### Prerequisites
+
+- M5 closed
+- Canonical vertical slice automated or precisely documented
+
+### Tasks
+
+- [ ] **M6-001** Stabilize free-roam world streaming across all major city regions.
+- [ ] **M6-002** Validate garage, vehicle purchase, customization, tuning, paint, and vehicle switching.
+- [ ] **M6-003** Validate race types, opponents, traffic, police, checkpoints, finish conditions, and rewards.
+- [ ] **M6-004** Validate day/night, weather, reflections, post-processing, motion blur, shadows, and particle systems.
+- [ ] **M6-005** Complete save creation, autosave, manual save where applicable, load, overwrite, corruption handling, and storage-full behavior.
+- [ ] **M6-006** Validate profile, settings, controller preferences, and language persistence.
+- [ ] **M6-007** Stabilize XMA/XAUD/XMP audio for long sessions, stream transitions, pause/resume, and device changes.
+- [ ] **M6-008** Implement offline-safe behavior for achievements, presence, leaderboards, Rate My Ride, Driving Test unlocks, voice, and unavailable services.
+- [ ] **M6-009** Decide project policy for retired-service unlocks such as the Audi R8; keep gameplay fixes separate from cheats.
+- [ ] **M6-010** Validate pause, suspend-like focus loss, minimization, controller hot-plug, and clean exit.
+- [ ] **M6-011** Add host configuration for resolution, window mode, audio device, volume, controller, logging, and data root.
+- [ ] **M6-012** Establish performance telemetry for CPU frame time, GPU frame time, streaming stalls, audio underruns, and shader compilation.
+- [ ] **M6-013** Fix reachable unsupported PPC instructions and unimplemented imports discovered during broad play.
+- [ ] **M6-014** Run two-hour soak tests in frontend, free roam, repeated races, garage, and pause/resume.
+- [ ] **M6-015** Create the alpha compatibility matrix and known-issues list.
+
+### Deliverables
+
+- repeatable multi-session single-player alpha
+- robust saves/settings
+- broad core-system compatibility
+- documented offline-service policy
+
+### Verification evidence
+
+- two-hour soak test without S0/S1 failure
+- save/load works across process restart and version-compatible build changes
+- representative race types and all major city regions are covered
+- audio device and controller reconnect tests pass
+- no unbounded resource growth under the soak scenario
+
+### Exit criteria
+
+- Extended gameplay is practical without developer intervention.
+- Core progression, garage, audio, saves, and world streaming are functional.
+- All remaining progression risks are catalogued for M7.
+
+### Gate
+
+`GO M7` requires a stable alpha and a campaign test plan.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M6-001, M6-002.
+
+## 15. Milestone M7 — Full campaign and Complete Edition compatibility
+
+**Goal:** validate the entire single-player campaign and all on-disc Complete Edition content from a clean save through completion.
+
+**Estimate:** 2–6 months depending on discovered progression defects.
+
+### Prerequisites
+
+- M6 closed
+- Campaign checklist and save-backup procedure approved
+- Regression build pinned
+
+### Tasks
+
+- [ ] **M7-001** Build a chapter/event/race progression matrix for the full campaign.
+- [ ] **M7-002** Verify new game, tutorials, contacts, mission unlocks, reputation progression, and end-game state.
+- [ ] **M7-003** Validate every race/event category with representative failures, retries, restarts, and wins.
+- [ ] **M7-004** Validate all vehicle classes, motorcycles, customization categories, and performance upgrades.
+- [ ] **M7-005** Validate South Central map expansion and all Complete Edition vehicles/events.
+- [ ] **M7-006** Validate cutscenes, phone calls, scripted sequences, Bink playback, subtitles, and skip behavior.
+- [ ] **M7-007** Validate all garages, shops, map transitions, interiors, and streaming boundaries.
+- [ ] **M7-008** Validate police, traffic, AI, collision, damage, respawn, and recovery edge cases.
+- [ ] **M7-009** Validate save compatibility throughout progression and recovery from interrupted writes.
+- [ ] **M7-010** Test supported languages present on the disc.
+- [ ] **M7-011** Run clean-save full campaign playthrough number one and log every defect.
+- [ ] **M7-012** Fix progression blockers and rerun affected segments from earlier saves.
+- [ ] **M7-013** Run clean-save full campaign playthrough number two on a release-like build.
+- [ ] **M7-014** Audit all remaining XAM/xboxkrnl stub calls reached during the campaign; replace unsafe success stubs with state-correct implementations.
+- [ ] **M7-015** Finalize compatibility and known-issues documentation.
+
+### Deliverables
+
+- two documented full-campaign runs
+- Complete Edition content coverage matrix
+- stable save/progression behavior
+- no known single-player progression blockers
+
+### Verification evidence
+
+- clean save reaches campaign completion twice
+- South Central and all mandatory Complete Edition content load and complete
+- no S0/S1 defect remains open
+- all skipped, unavailable, or retired online functionality is explicitly documented
+- release-like build reproduces campaign completion without debug-only patches
+
+### Exit criteria
+
+- Full single-player campaign is completable from a clean save.
+- Complete Edition on-disc content is accessible.
+- Save data remains stable across the validated version line.
+- Remaining issues are non-blocking S2/S3 items with workarounds or accepted limitations.
+
+### Gate
+
+`GO M8/M9` requires complete campaign evidence. Enhancements cannot substitute for compatibility.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M7-001, M7-002.
+
+## 16. Milestone M8 — Modern enhancements and secondary platforms
+
+**Goal:** add optional improvements without changing stock behavior by default or regressing campaign compatibility.
+
+**Estimate:** 2–10 weeks per major enhancement group.
+
+### Prerequisites
+
+- M6 closed for experimentation
+- M7 closed before enhancement features are enabled in a public stable release
+- Stock compatibility test matrix available
+
+### Tasks
+
+- [ ] **M8-001** Port the known Complete Edition 60 FPS/delta-time patch behind an explicit option.
+- [ ] **M8-002** Audit physics, traffic, AI, animation, UI, audio, timers, and mission scripting at 60 FPS.
+- [ ] **M8-003** Define supported frame-rate modes; do not claim arbitrary unlocked FPS without validation.
+- [ ] **M8-004** Add resolution and aspect-ratio controls with correct HUD, culling, projection, and presentation behavior.
+- [ ] **M8-005** Validate ultrawide modes and cutscene handling.
+- [ ] **M8-006** Add optional motion-blur, MSAA, and imposter-shadow controls using verified addresses or native runtime settings.
+- [ ] **M8-007** Separate compatibility fixes from gameplay cheats and accessibility options in UI/config.
+- [ ] **M8-008** Evaluate shader precompilation/cache distribution without shipping proprietary shader data improperly.
+- [ ] **M8-009** Prototype Linux x86-64/Vulkan only after Windows D3D12 correctness is stable.
+- [ ] **M8-010** Create platform-specific build, input, audio, filesystem-case, and package tests for Linux.
+- [ ] **M8-011** Benchmark enhancements against the stock mode and document hardware requirements.
+- [ ] **M8-012** Run the M7 campaign regression matrix with every enhancement combination intended for release.
+
+### Deliverables
+
+- optional, configuration-controlled enhancements
+- preserved stock mode
+- documented performance and compatibility impact
+- Linux build only if it meets its own closure requirements
+
+### Verification evidence
+
+- stock mode remains binary/config behaviorally unchanged where intended
+- 60 FPS mode passes timing-sensitive campaign scenarios
+- supported resolution/aspect combinations pass screenshot and input tests
+- enhancement combinations pass the defined regression subset
+- Linux claims are backed by clean-machine test evidence
+
+### Exit criteria
+
+- Enhancements are opt-in unless proven universally safe.
+- No enhancement introduces a campaign blocker or save incompatibility.
+- Unsupported combinations are rejected or clearly labeled.
+
+### Gate
+
+Enhancements enter M9 packaging only after their individual compatibility gates pass.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M8-001, M8-002.
+
+## 17. Milestone M9 — Release hardening, packaging, and public distribution
+
+**Goal:** produce a reproducible, legally clean, supportable public release that requires users to supply their own supported game dump.
+
+**Estimate:** 2–6 weeks.
+
+### Prerequisites
+
+- M7 closed
+- Selected M8 features individually closed
+- No S0/S1 defects
+- Release version chosen
+
+### Tasks
+
+- [ ] **M9-001** Freeze the release candidate against exact project and ReXGlue SHAs.
+- [ ] **M9-002** Review all code, scripts, dependencies, licenses, and generated artifacts.
+- [ ] **M9-003** Run `ast-grep scan`, `ast-grep test`, compiler warnings, sanitizers where supported, unit tests, integration tests, and campaign regression tests.
+- [ ] **M9-004** Run secret, proprietary-file, large-file, and license scans over the full Git history and release staging directory.
+- [ ] **M9-005** Build an installer or portable package that contains no game assets and validates the user's dump.
+- [ ] **M9-006** Ensure extraction/import never overwrites the source ISO and never targets broad or unresolved paths.
+- [ ] **M9-007** Test install, first launch, data import, update, repair, uninstall, and rollback on clean Windows machines.
+- [ ] **M9-008** Verify uninstall never removes user game dumps, saves, unrelated directories, or shared dependencies.
+- [ ] **M9-009** Document minimum/recommended hardware, supported OS/GPU APIs, data hash, known issues, logs, and support bundle creation.
+- [ ] **M9-010** Define save/config compatibility policy and migration behavior.
+- [ ] **M9-011** Create deterministic release archives and checksums.
+- [ ] **M9-012** Bump the four-part version only after review and tests pass.
+- [ ] **M9-013** Update README-AI, README, changelog, compatibility matrix, build guide, and troubleshooting guide.
+- [ ] **M9-014** Explicitly stage only reviewed release files.
+- [ ] **M9-015** Commit and push the reviewed release candidate.
+- [ ] **M9-016** Verify the exact protected-merge/deployment head SHA.
+- [ ] **M9-017** Create and dereference the release tag; verify `HEAD == origin/main == dereferenced release tag` at release parity.
+- [ ] **M9-018** Publish checksums and release notes, then perform a post-release clean install from public artifacts.
+
+### Deliverables
+
+- legally clean release package
+- reproducible checksums
+- clean-machine installation evidence
+- complete user and developer documentation
+- exact release SHA/tag parity record
+
+### Verification evidence
+
+- two clean Windows installations from the final public artifact succeed
+- wrong-region/wrong-hash dumps fail safely with actionable messages
+- uninstall preserves source data and saves according to policy
+- Git history and release archive contain no prohibited game data or secrets
+- packaged runtime passes the same smoke and representative gameplay tests as the development build
+
+### Exit criteria
+
+- Release artifact is reproducible and supportable.
+- Exact head SHA and tag parity are verified.
+- Required legal/license notices are present.
+- Public documentation does not imply inclusion of the game.
+- Post-release install test passes.
+
+### Checkpoint log
+
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M9-001, M9-002.
+
+## 18. Task acceptance criteria register
+
+The criterion below is additional to the task wording and universal Definition of Done. Text after `/` is the minimum evidence.
+
+### M0 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M0-001 | README-AI contains current architecture, all milestones, live-ledger rules, and closure gates / document review |
+| M0-002 | `main` repository exists and reports a clean, understood status / `git status` and `git branch --show-current` |
+| M0-003 | Every prohibited extension and private/build path is ignored without hiding source files / ignored-fixture audit |
+| M0-004 | README states scope, ownership requirement, status, and non-turnkey limitations / rendered README review |
+| M0-005 | License is selected, applicable only to original project work, and referenced by README / license review |
+| M0-006 | VERSION parses as exactly four numeric components / validation command or test |
+| M0-007 | Planned directories exist with no proprietary payload / tree listing and prohibited-file scan |
+| M0-008 | ast-grep config discovers rules and tests successfully / `sg scan` and `sg test` outputs |
+| M0-009 | Each initial rule has positive and negative fixtures and no false positive in current source / rule-test report |
+| M0-010 | Four required docs exist with owners, purpose, and update triggers / documentation inventory |
+| M0-011 | Policy explicitly covers Git, release archives, logs, traces, and dumps / policy review |
+| M0-012 | Host `gh auth status` shows active `2FED`; remote mutation recheck is documented / sanitized auth output |
+| M0-013 | Visibility and remote URL are approved and recorded without pushing unreviewed content / decision-log entry |
+
+### M1 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M1-001 | `clang-cl --version` reports supported 20+ compiler in configured environment / version output |
+| M1-002 | Fresh PowerShell locates required CMake/Ninja deterministically / bootstrap transcript |
+| M1-003 | `sg --version`, scan, and test succeed / command output |
+| M1-004 | SDK source resolves to recorded v0.9.0 tag and immutable SHA with submodules complete / SHA manifest |
+| M1-005 | ReXGlue installs/builds from documented preset without manual source edits / clean build log |
+| M1-006 | A new contributor can follow build.md without undisclosed paths / dry-run review |
+| M1-007 | Extractor is provenance-reviewed and lists/extracts this XDVDFS image read-only / tool record and extraction log |
+| M1-008 | Script validates all declared identifiers and fails a bad fixture / Pester or equivalent results |
+| M1-009 | Script enforces contained destination and safe overwrite behavior / positive and rejection tests |
+| M1-010 | Private extraction contains exact expected inventory and hashes / generated manifest |
+| M1-011 | All RPF/BIK names and sizes match local manifest / comparison report |
+| M1-012 | Private directory explains regeneration and remains ignored / ignore audit |
+| M1-013 | Pinned Xenia launches and reports its build identifier / baseline tool log |
+| M1-014 | Selected RE/GPU tools open a representative target or documented sample / setup evidence |
+| M1-015 | Bootstrap reports every prerequisite and returns nonzero for a missing required tool / test transcript |
+
+### M2 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M2-001 | Exact dump reaches reproducible stock gameplay in pinned Xenia / sanitized run log |
+| M2-002 | Local module hash and runtime metadata are captured with private paths removed / baseline report |
+| M2-003 | Required visual states have labeled private comparison captures / capture index |
+| M2-004 | Save creation/load and controller baseline are repeatable / baseline checklist |
+| M2-005 | ReXGlue scaffold configures and builds its empty host target / build log |
+| M2-006 | TOML resolves only approved private/generated paths and parses successfully / codegen parse log |
+| M2-007 | Config audit confirms every optimization flag is disabled / config review |
+| M2-008 | Non-force codegen result and exit code are retained and classified / log artifact |
+| M2-009 | Force run produces a complete error inventory without replacing the non-force gate / inventory report |
+| M2-010 | Every unique finding has category, owner, severity, and next action / triage table |
+| M2-011 | Helper/EH/jump mechanisms have verified addresses or explicit not-used evidence / RE notes |
+| M2-012 | Every manual override cites disassembly/control-flow evidence and passes rerun / config diff and log |
+| M2-013 | Import records map to symbols or explicit unknown entries with reachability / coverage matrix |
+| M2-014 | Minimum startup import set is identified from trace/control flow / startup dependency report |
+| M2-015 | Each public patch address is byte-verified or rejected for this module / patch audit |
+| M2-016 | Applicable SDK tests pass after analyzer changes / test results |
+| M2-017 | Report chooses one allowed decision and justifies effort, risks, and blockers / approved report |
+
+### M3 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M3-001 | Clean CMake build consumes generated/private inputs without tracking them / build and Git audit |
+| M3-002 | ReXApp lifecycle hooks are minimal, documented, and exercised / startup log |
+| M3-003 | Runtime verifies base, entry point, and dispatch range before launch / assertion/test log |
+| M3-004 | Guest disc paths resolve expected files and reject escape paths / VFS tests |
+| M3-005 | Every implemented kernel import has behavior test or trace comparison / import test matrix |
+| M3-006 | Every implemented XAM import has behavior test or trace comparison / import test matrix |
+| M3-007 | Offline stubs expose intentional state and never hide required failure / stub review/tests |
+| M3-008 | Repeated startup produces bounded, consistent timing/thread ordering / trace comparison |
+| M3-009 | Synthetic crash report contains required context and excludes guest memory by default / crash fixture |
+| M3-010 | All required categories can be filtered and written safely / logging test |
+| M3-011 | Skip-intro is off by default, byte-guarded, and fails safely on mismatch / patch tests |
+| M3-012 | Debug, RelWithDebInfo, and Release clean builds succeed / build matrix |
+| M3-013 | No unresolved link or reachable startup PPC trap remains / build and smoke logs |
+| M3-014 | Smoke test enforces timeout and expected ordered markers / automated result |
+| M3-015 | Ten launch/exit cycles leave no process and preserve approved data / cycle report |
+
+### M4 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M4-001 | First valid frame presents repeatedly without device loss / 20-run log |
+| M4-002 | Frontend target/depth/MSAA/gamma paths match baseline within documented tolerance / GPU comparison |
+| M4-003 | Bink is either functional or bypassed by a safe documented development option / decision and test |
+| M4-004 | Required profile states match guest expectations / profile test matrix |
+| M4-005 | One selected controller maps correctly to user slot 0 / input trace |
+| M4-006 | Dead-zone, reconnect, and focus scenarios pass / controller checklist |
+| M4-007 | UI audio/music run five minutes without fatal underrun/distortion / audio log |
+| M4-008 | XMP transitions are state-correct or explicitly unsupported without softlock / transition tests |
+| M4-009 | Offline service checks finish without network access or frontend block / network-disabled test |
+| M4-010 | Supported locale and paths load expected resources / locale matrix |
+| M4-011 | Frontend route is repeatable from documented steps / automation or signed checklist |
+| M4-012 | Required baseline comparisons are indexed and reviewed / comparison report |
+| M4-013 | Every known deviation has severity, workaround, and target milestone / known-issues audit |
+
+### M5 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M5-001 | Canonical route is fully specified and reproducible / test-case document |
+| M5-002 | Route streams with zero unexpected VFS misses / VFS trace |
+| M5-003 | Listed visual categories are present and usable / labeled captures |
+| M5-004 | Target ordering/depth defects are fixed or bounded as accepted S2 / GPU validation report |
+| M5-005 | Representative shaders/textures match baseline / capture and shader audit |
+| M5-006 | All driving and pause controls work through full route / input checklist |
+| M5-007 | FFB behaves correctly or degrades without blocking / device matrix |
+| M5-008 | Physics/game speed match stock baseline over fixed route / timing measurements |
+| M5-009 | Listed audio classes play and transition correctly / audio event matrix |
+| M5-010 | No fatal allocator, I/O, or streaming event occurs / sanitized route log |
+| M5-011 | Result survives restart or approved M6 blocker is recorded / save evidence |
+| M5-012 | Results-to-return transition completes five times / run checklist |
+| M5-013 | Five repetitions show bounded resource growth / telemetry report |
+| M5-014 | Vertical-slice report links every required artifact / report review |
+
+### M6 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M6-001 | Coverage route crosses all major regions without fatal stream failure / route log |
+| M6-002 | Garage lifecycle works across save/restart / feature checklist |
+| M6-003 | Representative instance of every race-system category completes / matrix |
+| M6-004 | Listed environment effects pass day/night comparison / capture matrix |
+| M6-005 | Save matrix including interruption and full storage passes safely / destructive-scenario test |
+| M6-006 | Profile/settings persist only intended values / restart tests |
+| M6-007 | Two-hour audio soak has no fatal underrun/leak / telemetry |
+| M6-008 | Every retired service has explicit offline behavior and progression test / service matrix |
+| M6-009 | Unlock policy is approved and separates compatibility from cheats / decision log |
+| M6-010 | Window/device lifecycle scenarios pass / platform checklist |
+| M6-011 | Config validates values, defaults, and bad input / config tests |
+| M6-012 | Required telemetry is timestamped and correlates to guest events / sample trace |
+| M6-013 | All reached unsupported operations are fixed or classified non-blocking / coverage report |
+| M6-014 | Each required two-hour soak completes without S0/S1 / soak reports |
+| M6-015 | Alpha matrix names tested builds, hardware, paths, and limitations / review |
+
+### M7 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M7-001 | Matrix enumerates mandatory campaign/content nodes and dependencies / reviewed matrix |
+| M7-002 | Core progression chain completes from clean save / playthrough log |
+| M7-003 | Every event category has win/fail/retry evidence / matrix |
+| M7-004 | All vehicle classes and customization categories are exercised / coverage sheet |
+| M7-005 | South Central mandatory content loads and completes / coverage evidence |
+| M7-006 | Scripted media and subtitles pass representative and blocker cases / media matrix |
+| M7-007 | Listed transitions complete without stream softlock / transition log |
+| M7-008 | Gameplay edge cases recover without progression corruption / scenario tests |
+| M7-009 | Save recovery tests preserve valid prior state / recovery report |
+| M7-010 | Every claimed language boots and reaches gameplay / locale matrix |
+| M7-011 | First clean campaign reaches completion with defects logged / run record |
+| M7-012 | Each progression blocker has regression evidence after fix / defect links |
+| M7-013 | Second clean campaign completes on release-like build / run record |
+| M7-014 | Reached stubs are state-correct or documented unavailable / final import audit |
+| M7-015 | Compatibility docs match both full-run evidence sets / documentation review |
+
+### M8 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M8-001 | 60 FPS patch is byte-guarded, optional, and disabled by default / patch tests |
+| M8-002 | Timing-sensitive systems pass defined 30/60 comparison / timing matrix |
+| M8-003 | UI exposes only validated frame modes / config/UI tests |
+| M8-004 | Claimed aspect ratios render HUD/world correctly / capture matrix |
+| M8-005 | Ultrawide gameplay and cutscene policy are documented and tested / report |
+| M8-006 | Each graphics option independently toggles and restores stock behavior / option tests |
+| M8-007 | Compatibility, accessibility, and cheat categories are visibly separated / UI review |
+| M8-008 | Cache design passes legal/content audit and invalidation tests / audit |
+| M8-009 | Linux prototype builds without weakening Windows correctness / build evidence |
+| M8-010 | Linux-specific filesystem/input/audio/package matrix passes / results |
+| M8-011 | Benchmarks are reproducible with hardware/build/config recorded / benchmark report |
+| M8-012 | Intended option combinations pass campaign regression scope / regression report |
+
+### M9 criteria
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| M9-001 | RC records exact project, SDK, compiler, and dependency SHAs/versions / manifest |
+| M9-002 | Review has no unresolved release-blocking finding / signed review summary |
+| M9-003 | Entire required analysis/test suite passes on RC / consolidated test report |
+| M9-004 | Git history and staging scans find no secret/proprietary violation / scan reports |
+| M9-005 | Package contains no game data and validates/imports supported user dump / content audit |
+| M9-006 | Import rejects broad/unresolved targets and preserves source ISO / safety tests |
+| M9-007 | Install/update/repair/uninstall/rollback matrix passes clean machines / matrix |
+| M9-008 | Uninstall preservation tests prove user data safety / filesystem diff |
+| M9-009 | User documentation covers all claimed requirements and diagnostics / doc review |
+| M9-010 | Save/config compatibility and migration are tested and documented / migration report |
+| M9-011 | Two clean builds produce matching intended artifacts/checksums / reproducibility report |
+| M9-012 | Version bump follows highest-impact included change after tests / version review |
+| M9-013 | All named docs match RC behavior / documentation diff review |
+| M9-014 | Staged set equals reviewed release manifest / `git diff --cached` review |
+| M9-015 | Commit/push succeed only after gates and point to approved RC / remote evidence |
+| M9-016 | Protected operation SHA equals approved RC SHA / SHA record |
+| M9-017 | HEAD, origin/main, and dereferenced tag are identical / parity command output |
+| M9-018 | Public artifact clean-installs and checksums match published values / post-release report |
+
+## 19. Risk register
+
+| ID | Risk | Impact | Mitigation | First gate |
+|---|---|---|---|---|
+| R-001 | ReXGlue cannot reconstruct critical RAGE control flow | Critical | Manual functions/switch tables; analyzer fixes; SDK fork | M2 |
+| R-002 | Unsupported PPC instructions or exceptions are widespread | Critical | Opcode inventory, reachability analysis, SDK tests | M2–M3 |
+| R-003 | Xenos EDRAM/ROV behavior causes major rendering defects | High | D3D12-first, Xenia comparison, RenderDoc/PIX | M4–M5 |
+| R-004 | XMA/XAUD/XMP streaming is unstable | High | Audio diagnostics, long-session tests, upstream fixes | M4–M6 |
+| R-005 | XONLINE/retired service checks block progression | High | Explicit offline state model and progression tests | M4–M7 |
+| R-006 | Save/content APIs corrupt progression | Critical | Atomic host storage, backups, interruption tests | M5–M7 |
+| R-007 | 60 FPS changes physics or scripting | High | Stock 30 FPS baseline; opt-in timing matrix | M8 |
+| R-008 | Proprietary data enters Git or packages | Critical | Ignore rules, staged-file scan, history/release audit | M0/M9 |
+| R-009 | ReXGlue updates break the project | High | Pin SHA; explicit upgrade branches and regression suite | all |
+| R-010 | Build/generated code is too large for contributors | Medium | Disk check, split TUs, PCH, incremental presets | M1–M3 |
+| R-011 | Tooling paths depend on one developer machine | Medium | Bootstrap scripts and clean-environment tests | M1/M9 |
+| R-012 | External patches do not match the local XEX | High | Verify module hash and bytes before applying | M2/M8 |
+
+## 20. Decision log
+
+Record architecture decisions here or link to ADR files.
+
+| Date | Decision | Rationale | Status |
+|---|---|---|---|
+| 2026-08-10 | Use ReXGlue rather than bare XenonRecomp as primary base | ReXGlue supplies the runtime subsystems required by a full game | Accepted |
+| 2026-08-10 | Target Windows x86-64/D3D12 first | Best fit for current environment and MCLA's likely graphics requirements | Accepted |
+| 2026-08-10 | Preserve stock 30 FPS until gameplay correctness | Known 60 FPS mode requires delta-time changes and broader validation | Accepted |
+| 2026-08-10 | Keep game assets and generated proprietary output private | Legal and repository hygiene requirement | Accepted |
+| 2026-08-10 | Use `https://github.com/2FED/RE-MCLA.git` as the project remote | Repository supplied by project owner | Accepted |
+| 2026-08-10 | Commit after every closed task; closure commit and push after every closed milestone | Preserve auditable task boundaries and milestone gates | Accepted |
+
+## 21. Immediate next task queue
+
+Execute in this order unless a new blocker changes the plan:
+
+1. [ ] Complete M0-002 through M0-007: repository initialization, ignores, README, license, version, and directories.
+2. [ ] Complete M0-008 through M0-010: ast-grep and documentation scaffold.
+3. [ ] Complete M1-001: add Clang 20+ to Visual Studio Build Tools.
+4. [ ] Complete M1-004 through M1-006: pin and build ReXGlue v0.9.0.
+5. [ ] Complete M1-008 through M1-010: verify and extract the supported source dump.
+6. [ ] Complete M2-001 through M2-004: capture the exact Xenia baseline.
+7. [ ] Run the first ReXGlue codegen and produce the M2 feasibility report before implementing broad runtime behavior.
+
+Do not skip directly to enhancement patches, 60 FPS, or public packaging.
+
+## 22. README-AI maintenance checklist
+
+Update this document when any of the following changes:
+
+- supported game hash, edition, Title ID, Media ID, or title update
+- ReXGlue/Xenia/compiler version
+- build or bootstrap command
+- repository layout
+- architecture or hook strategy
+- milestone status or gate decision
+- supported platform, renderer, controller, audio path, or frame-rate mode
+- known legal/distribution constraint
+- release workflow, version, or compatibility claim
+
+Before closing a milestone, verify that this file reflects the actual repository rather than the intended repository.
