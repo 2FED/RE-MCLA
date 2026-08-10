@@ -258,6 +258,7 @@ No commit or push is permitted before review and required tests pass.
 
 Project delivery cadence:
 
+- Continue autonomously until the active milestone is reviewed, closed, committed, and pushed; user input/authorization is genuinely required; or an observable weekly usage allowance reaches 20%. If usage is not exposed to the agent, never invent a value—continue to milestone closure or a real blocker and rely on the user to signal an external quota threshold. The repository-local `AGENTS.md` is authoritative for this persistence rule.
 - Close one task per commit. A task commit may be created only after that task's acceptance criterion, review, and relevant tests pass.
 - Do not combine unrelated completed task IDs in one commit. If two tasks are inseparable, revise the ledger and dependency rationale before implementation.
 - Recommended task commit subject: `task(Mx-nnn): concise outcome`.
