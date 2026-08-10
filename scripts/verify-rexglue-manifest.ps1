@@ -64,7 +64,12 @@ function Assert-ContainedPath {
 
 $allowedKeys = @{
     project    = @('name', 'sdk_version', 'game_root')
-    entrypoint = @('file_path', 'out_directory_path', 'includes')
+    entrypoint = @(
+        'file_path', 'out_directory_path', 'includes',
+        'skip_lr', 'skip_msr', 'ctr_as_local', 'xer_as_local', 'reserved_as_local',
+        'cr_as_local', 'non_argument_as_local', 'non_volatile_as_local',
+        'generate_exception_handlers'
+    )
 }
 $values = @{}
 $section = $null
@@ -91,7 +96,7 @@ foreach ($rawLine in Get-Content -LiteralPath $resolvedManifest) {
     if (-not $section) {
         throw "Manifest value appears before a section at line $lineNumber."
     }
-    if ($line -notmatch '^([a-z_]+)\s*=\s*(?:"([^"]*)"|(\[\]))$') {
+    if ($line -notmatch '^([a-z_]+)\s*=\s*(?:"([^"]*)"|(\[\])|(true|false))$') {
         throw "Unsupported TOML syntax at line $lineNumber."
     }
     $key = $Matches[1]
@@ -102,7 +107,7 @@ foreach ($rawLine in Get-Content -LiteralPath $resolvedManifest) {
     if ($values.ContainsKey($qualifiedKey)) {
         throw "Duplicate key '$qualifiedKey' at line $lineNumber."
     }
-    $values[$qualifiedKey] = if ($Matches[3]) { '[]' } else { $Matches[2] }
+    $values[$qualifiedKey] = if ($Matches[3]) { '[]' } elseif ($Matches[4]) { $Matches[4] } else { $Matches[2] }
 }
 
 $expected = [ordered]@{
@@ -112,6 +117,15 @@ $expected = [ordered]@{
     'entrypoint.file_path'         = 'private/game/default.xex'
     'entrypoint.out_directory_path'= 'generated/default'
     'entrypoint.includes'          = '[]'
+    'entrypoint.skip_lr'           = 'false'
+    'entrypoint.skip_msr'          = 'false'
+    'entrypoint.ctr_as_local'      = 'false'
+    'entrypoint.xer_as_local'      = 'false'
+    'entrypoint.reserved_as_local' = 'false'
+    'entrypoint.cr_as_local'       = 'false'
+    'entrypoint.non_argument_as_local' = 'false'
+    'entrypoint.non_volatile_as_local' = 'false'
+    'entrypoint.generate_exception_handlers' = 'false'
 }
 foreach ($entry in $expected.GetEnumerator()) {
     if (-not $values.ContainsKey($entry.Key)) {
@@ -160,6 +174,7 @@ foreach ($entry in $expected.GetEnumerator()) {
     Entrypoint         = $values['entrypoint.file_path']
     OutputDirectory    = $values['entrypoint.out_directory_path']
     IncludesCount      = 0
+    OptimizationFlagsDisabled = 9
     EntrypointSize     = $xexItem.Length
     EntrypointSha256   = $xexHash
 }
