@@ -1,0 +1,12 @@
+# M2-012 incremental control-flow repair. Every entry is justified in
+# docs/reverse-engineering.md and must survive a non-force codegen rerun.
+
+[functions]
+"0x8220BF08" = { end = 0x8220C018, name = "sub_8220BF08" }
+"0x8220C018" = { end = 0x8220C0D0, name = "sub_8220C018" }
+"0x822C98B8" = { end = 0x822C9948, name = "sub_822C98B8" }
+"0x822C9948" = { end = 0x822C9A2C, name = "sub_822C9948" }
+"0x823F32E8" = { end = 0x823F3300, name = "sub_823F32E8" }
+"0x823FD718" = { end = 0x823FD720, name = "sub_823FD718" }
+"0x822B88C8" = { end = 0x822B88DC, name = "sub_822B88C8" }
+"0x824B0DE8" = { parent = 0x824B0CC0, end = 0x824B0DF8, name = "sub_824B0DE8" }

@@ -2,6 +2,7 @@
 param(
     [string]$AuditPath,
     [string]$ForceRoot,
+    [string]$GeneratedRoot,
     [string]$OutputPath
 )
 
@@ -10,9 +11,9 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $evidenceRoot = Join-Path $repoRoot 'docs/evidence'
-$generatedRoot = Join-Path $repoRoot 'generated/default'
 if (-not $AuditPath) { $AuditPath = Join-Path $repoRoot 'private/evidence/M2-011/control-flow-audit.tsv' }
 if (-not $ForceRoot) { $ForceRoot = Join-Path $repoRoot 'private/evidence/M2-009/force-first-run' }
+if (-not $GeneratedRoot) { $GeneratedRoot = Join-Path $repoRoot 'private/evidence/M2-011/generated-snapshot' }
 if (-not $OutputPath) { $OutputPath = Join-Path $evidenceRoot 'M2-011-control-flow-metadata.md' }
 
 function Resolve-RegularInput {
@@ -38,6 +39,10 @@ if (-not (Test-Path -LiteralPath $outputParent -PathType Container) -or
     ((Get-Item -LiteralPath $outputParent -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
     throw 'Output parent must be an existing non-reparse directory.'
 }
+if (-not (Test-Path -LiteralPath $GeneratedRoot -PathType Container)) {
+    throw "Historical generated snapshot was not found: '$GeneratedRoot'. Run scripts/materialize-m2-011-generated-snapshot.ps1."
+}
+$generatedRoot = (Resolve-Path -LiteralPath $GeneratedRoot).Path
 if ((Get-Item -LiteralPath $generatedRoot -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
     throw 'Generated analysis root must not be a reparse point.'
 }

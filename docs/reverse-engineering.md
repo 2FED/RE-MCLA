@@ -18,3 +18,20 @@ Detected save/restore helper bases:
 No standard Xenon setjmp/longjmp FPR save/restore body was found. The sole direct `RtlUnwind` caller is an unwind wrapper without jump-buffer restoration, so `setjmp_address` and `longjmp_address` remain unset.
 
 The seven M2-008 `UnresolvedCall` targets are executable entries in PDATA gaps. M2-012 owns the incremental configuration experiment. `0x824B0DE8` is the only current function-chunk candidate (parent PDATA function begins at `0x824B0CC0`); `0x8220C018`, `0x8220BF08`, and `0x822C98B8` are computed-dispatch entries; the other three are bounded leaf/tail helpers. No switch table, invalid-data range, or exception hint is justified yet.
+
+## M2-012 accepted manual configuration
+
+The incremental non-force sequence reduced the original seven blockers to zero. Bounding `0x822C98B8` at its first `bctr` exposed one adjacent entry, `0x822C9948`; a separate private Ghidra audit bounded that follow-up through `0x822C9A2C`. This is retained as evidence that exact function ends are preferable to swallowing an entire PDATA gap.
+
+| Address | Exclusive end | Parent | Reason |
+| --- | --- | --- | --- |
+| `0x8220BF08` | `0x8220C018` | none | computed-dispatch entry |
+| `0x8220C018` | `0x8220C0D0` | none | second shared-gap dispatch entry |
+| `0x822B88C8` | `0x822B88DC` | none | tail-branch thunk |
+| `0x822C98B8` | `0x822C9948` | none | first dispatch entry |
+| `0x822C9948` | `0x822C9A2C` | none | discovered follow-up dispatch entry |
+| `0x823F32E8` | `0x823F3300` | none | leaf helper |
+| `0x823FD718` | `0x823FD720` | none | tail-branch thunk |
+| `0x824B0DE8` | `0x824B0DF8` | `0x824B0CC0` | verified function chunk at parent PDATA end |
+
+`config/mcla_functions.toml` is the only analysis include. Manual switch-table, invalid-region, exception-handler, and setjmp/longjmp entries remain absent because M2-009/M2-011 found no corresponding failure. Two clean successful runs produced the same private generated manifest; see `docs/evidence/M2-012-manual-analysis-config.md`.

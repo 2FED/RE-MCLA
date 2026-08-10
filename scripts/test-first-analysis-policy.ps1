@@ -28,13 +28,17 @@ function Assert-Rejected {
 
 try {
     $source = [System.IO.File]::ReadAllText($sourceManifest)
-    & $validator -ManifestPath $sourceManifest | Out-Null
-    Assert-Rejected -Name 'enabled-flag' -Content ($source -replace '(?m)^skip_lr\s*=\s*false\s*$', 'skip_lr = true')
-    Assert-Rejected -Name 'analysis-override' -Content ($source + "`n[analysis]`nmax_jump_extension = 1`n")
+    $firstAnalysis = $source -replace '(?m)^includes\s*=.*$', 'includes = []'
+    $positivePath = Join-Path $testRoot 'first-analysis.toml'
+    [System.IO.File]::WriteAllText($positivePath, $firstAnalysis, [System.Text.UTF8Encoding]::new($false))
+    & $validator -ManifestPath $positivePath | Out-Null
+    Assert-Rejected -Name 'enabled-flag' -Content ($firstAnalysis -replace '(?m)^skip_lr\s*=\s*false\s*$', 'skip_lr = true')
+    Assert-Rejected -Name 'analysis-override' -Content ($firstAnalysis + "`n[analysis]`nmax_jump_extension = 1`n")
+    Assert-Rejected -Name 'manual-include' -Content $source
     [pscustomobject]@{
         Passed           = $true
         PositiveCases    = 1
-        NegativeCases    = 2
+        NegativeCases    = 3
     }
 } finally {
     [System.IO.Directory]::Delete($testRoot, $true)

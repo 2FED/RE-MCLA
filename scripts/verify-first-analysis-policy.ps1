@@ -58,6 +58,10 @@ foreach ($entry in $flags.GetEnumerator()) {
     }
 }
 
+if ($manifest -notmatch '(?m)^includes\s*=\s*\[\]\s*$') {
+    throw 'The immutable first-analysis policy requires an empty includes array.'
+}
+
 $forbiddenSections = @('analysis', 'functions', 'switch_tables', 'mid_asm_hooks', 'rexcrt')
 foreach ($section in $forbiddenSections) {
     if ($manifest -match "(?m)^\[\[?$([regex]::Escape($section))\]?\]\s*$") {

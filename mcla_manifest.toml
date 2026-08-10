@@ -8,7 +8,7 @@ game_root = "private/game"
 [entrypoint]
 file_path = "private/game/default.xex"
 out_directory_path = "generated/default"
-includes = []
+includes = ["config/mcla_functions.toml"]
 skip_lr = false
 skip_msr = false
 ctr_as_local = false

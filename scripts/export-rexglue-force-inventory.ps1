@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$RawRoot,
+    [string]$GeneratedRoot,
     [string]$OutputPath
 )
 
@@ -9,9 +10,11 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $evidenceRoot = Join-Path $repoRoot 'docs/evidence'
-$generatedRoot = Join-Path $repoRoot 'generated/default'
 if (-not $RawRoot) {
     $RawRoot = Join-Path $repoRoot 'private/evidence/M2-009/force-first-run'
+}
+if (-not $GeneratedRoot) {
+    $GeneratedRoot = Join-Path $repoRoot 'private/evidence/M2-011/generated-snapshot'
 }
 if (-not $OutputPath) {
     $OutputPath = Join-Path $evidenceRoot 'M2-009-force-codegen-inventory.md'
@@ -32,6 +35,13 @@ function Resolve-RegularInput {
 $resolvedRawRoot = (Resolve-Path -LiteralPath $RawRoot).Path
 if ((Get-Item -LiteralPath $resolvedRawRoot -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
     throw "Raw evidence root must not be a reparse point: '$resolvedRawRoot'."
+}
+if (-not (Test-Path -LiteralPath $GeneratedRoot -PathType Container)) {
+    throw "Historical generated snapshot must be an existing non-reparse directory: '$GeneratedRoot'."
+}
+$generatedRoot = (Resolve-Path -LiteralPath $GeneratedRoot).Path
+if ((Get-Item -LiteralPath $generatedRoot -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+    throw "Historical generated snapshot must be an existing non-reparse directory: '$GeneratedRoot'."
 }
 $metadataPath = Resolve-RegularInput (Join-Path $resolvedRawRoot 'run.json')
 $stdoutPath = Resolve-RegularInput (Join-Path $resolvedRawRoot 'stdout.log')

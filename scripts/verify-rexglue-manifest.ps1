@@ -96,6 +96,13 @@ foreach ($rawLine in Get-Content -LiteralPath $resolvedManifest) {
     if (-not $section) {
         throw "Manifest value appears before a section at line $lineNumber."
     }
+    if ($line -match '^includes\s*=\s*\["([^"]+)"\]$') {
+        if ($section -ne 'entrypoint' -or $values.ContainsKey('entrypoint.includes')) {
+            throw "Invalid or duplicate includes at line $lineNumber."
+        }
+        $values['entrypoint.includes'] = $Matches[1]
+        continue
+    }
     if ($line -notmatch '^([a-z_]+)\s*=\s*(?:"([^"]*)"|(\[\])|(true|false))$') {
         throw "Unsupported TOML syntax at line $lineNumber."
     }
@@ -116,7 +123,7 @@ $expected = [ordered]@{
     'project.game_root'            = 'private/game'
     'entrypoint.file_path'         = 'private/game/default.xex'
     'entrypoint.out_directory_path'= 'generated/default'
-    'entrypoint.includes'          = '[]'
+    'entrypoint.includes'          = 'config/mcla_functions.toml'
     'entrypoint.skip_lr'           = 'false'
     'entrypoint.skip_msr'          = 'false'
     'entrypoint.ctr_as_local'      = 'false'
@@ -139,18 +146,24 @@ if ($values.Count -ne $expected.Count) {
 Assert-SafeRelativePath -Value $values['project.game_root'] -Label 'project.game_root'
 Assert-SafeRelativePath -Value $values['entrypoint.file_path'] -Label 'entrypoint.file_path'
 Assert-SafeRelativePath -Value $values['entrypoint.out_directory_path'] -Label 'entrypoint.out_directory_path'
+Assert-SafeRelativePath -Value $values['entrypoint.includes'] -Label 'entrypoint.includes'
 
 $privateRoot = Join-Path $repoRoot 'private'
 $generatedRoot = Join-Path $repoRoot 'generated'
 $gameRoot = Assert-ContainedPath -Path (Join-Path $repoRoot $values['project.game_root']) -Container $privateRoot -Label 'Game root'
 $xexPath = Assert-ContainedPath -Path (Join-Path $repoRoot $values['entrypoint.file_path']) -Container $privateRoot -Label 'Entrypoint XEX'
 $outputPath = Assert-ContainedPath -Path (Join-Path $repoRoot $values['entrypoint.out_directory_path']) -Container $generatedRoot -Label 'Generated output'
+$configRoot = Join-Path $repoRoot 'config'
+$includePath = Assert-ContainedPath -Path (Join-Path $repoRoot $values['entrypoint.includes']) -Container $configRoot -Label 'Analysis include'
 
 if (-not (Test-Path -LiteralPath $gameRoot -PathType Container)) {
     throw "Configured game root does not exist: '$gameRoot'."
 }
 if (-not (Test-Path -LiteralPath $xexPath -PathType Leaf)) {
     throw "Configured entrypoint XEX does not exist: '$xexPath'."
+}
+if (-not (Test-Path -LiteralPath $includePath -PathType Leaf)) {
+    throw "Configured analysis include does not exist: '$includePath'."
 }
 $xexItem = Get-Item -LiteralPath $xexPath
 $xexHash = (Get-FileHash -LiteralPath $xexPath -Algorithm SHA256).Hash
@@ -173,7 +186,7 @@ foreach ($entry in $expected.GetEnumerator()) {
     GameRoot           = $values['project.game_root']
     Entrypoint         = $values['entrypoint.file_path']
     OutputDirectory    = $values['entrypoint.out_directory_path']
-    IncludesCount      = 0
+    IncludesCount      = 1
     OptimizationFlagsDisabled = 9
     EntrypointSize     = $xexItem.Length
     EntrypointSha256   = $xexHash

@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $rawRoot = Join-Path $repoRoot 'private/evidence/M2-009/force-first-run'
+$generatedRoot = Join-Path $repoRoot 'private/evidence/M2-011/generated-snapshot'
 $outputPath = Join-Path $repoRoot 'docs/evidence/M2-009-force-codegen-inventory.md'
 $exporter = Join-Path $PSScriptRoot 'export-rexglue-force-inventory.ps1'
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("mcla-force-export-" + [guid]::NewGuid().ToString('N'))
@@ -28,9 +29,9 @@ function Assert-Rejected {
 }
 
 try {
-    & $exporter -RawRoot $rawRoot -OutputPath $outputPath | Out-Null
+    & $exporter -RawRoot $rawRoot -GeneratedRoot $generatedRoot -OutputPath $outputPath | Out-Null
     $firstHash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash
-    & $exporter -RawRoot $rawRoot -OutputPath $outputPath | Out-Null
+    & $exporter -RawRoot $rawRoot -GeneratedRoot $generatedRoot -OutputPath $outputPath | Out-Null
     $secondHash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash
     if ($firstHash -ne $secondHash) { throw 'Force inventory export is not deterministic.' }
 
@@ -39,7 +40,7 @@ try {
     $forceMetadata = Get-Content $forceMetadataPath -Raw | ConvertFrom-Json
     $forceMetadata.force_enabled = $false
     [System.IO.File]::WriteAllText($forceMetadataPath, (($forceMetadata | ConvertTo-Json) + "`n"))
-    Assert-Rejected 'force-disabled' { & $exporter -RawRoot $forceFixture -OutputPath $outputPath | Out-Null }
+    Assert-Rejected 'force-disabled' { & $exporter -RawRoot $forceFixture -GeneratedRoot $generatedRoot -OutputPath $outputPath | Out-Null }
 
     $unknownFixture = Copy-RawFixture 'unknown-log-line'
     $unknownLogPath = Join-Path $unknownFixture 'stderr.log'
@@ -49,7 +50,7 @@ try {
     $unknownMetadata.stderr_bytes = (Get-Item $unknownLogPath).Length
     $unknownMetadata.stderr_sha256 = (Get-FileHash $unknownLogPath -Algorithm SHA256).Hash
     [System.IO.File]::WriteAllText($unknownMetadataPath, (($unknownMetadata | ConvertTo-Json) + "`n"))
-    Assert-Rejected 'unknown-log-line' { & $exporter -RawRoot $unknownFixture -OutputPath $outputPath | Out-Null }
+    Assert-Rejected 'unknown-log-line' { & $exporter -RawRoot $unknownFixture -GeneratedRoot $generatedRoot -OutputPath $outputPath | Out-Null }
 
     $manifestFixture = Copy-RawFixture 'manifest-count'
     $manifestPath = Join-Path $manifestFixture 'generated-manifest.json'
@@ -60,9 +61,9 @@ try {
     $manifestMetadata = Get-Content $manifestMetadataPath -Raw | ConvertFrom-Json
     $manifestMetadata.generated_manifest_sha256 = (Get-FileHash $manifestPath -Algorithm SHA256).Hash
     [System.IO.File]::WriteAllText($manifestMetadataPath, (($manifestMetadata | ConvertTo-Json) + "`n"))
-    Assert-Rejected 'manifest-count' { & $exporter -RawRoot $manifestFixture -OutputPath $outputPath | Out-Null }
+    Assert-Rejected 'manifest-count' { & $exporter -RawRoot $manifestFixture -GeneratedRoot $generatedRoot -OutputPath $outputPath | Out-Null }
 
-    Assert-Rejected 'outside-output' { & $exporter -RawRoot $rawRoot -OutputPath (Join-Path $testRoot 'outside.md') | Out-Null }
+    Assert-Rejected 'outside-output' { & $exporter -RawRoot $rawRoot -GeneratedRoot $generatedRoot -OutputPath (Join-Path $testRoot 'outside.md') | Out-Null }
 
     [pscustomobject]@{
         Passed        = $true
