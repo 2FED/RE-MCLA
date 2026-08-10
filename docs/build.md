@@ -17,7 +17,6 @@ Current verified host components:
 Still required or unverified:
 
 - deterministic source extraction script
-- pinned Xenia Canary baseline
 
 ## Deterministic toolchain discovery
 
@@ -140,6 +139,16 @@ Validate the extracted inventory against the ignored local manifest:
 ```
 
 Without `-VerifyHashes`, the validator checks schema/source identity, safe relative paths, exact inventory, every file size, total bytes, and the required 4 RPF/6 BIK counts. Use `-VerifyHashes` for milestone gates and after any suspected corruption; it reads and hashes all 6.57 GB of extracted payload.
+
+## Xenia Canary baseline
+
+The pinned behavioral-reference emulator is installed at:
+
+```text
+private/tools/xenia-canary/artifacts/xenia_canary.exe
+```
+
+Its immutable release/source/hash record and no-game startup result are in `docs/evidence/M1-013-xenia-canary.md`. Do not replace it from a moving “latest” URL. Baseline captures must include the logged `Build:` line and keep logs, screenshots, GPU traces, saves, and caches below ignored `private/` paths.
 
 No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
 
