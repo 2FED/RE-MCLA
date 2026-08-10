@@ -397,7 +397,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-010** Create `docs/architecture.md`, `docs/build.md`, `docs/testing.md`, and `docs/known-issues.md` skeletons. Each document now records owner, purpose, current state, and update triggers.
 - [x] **M0-011** Add a source-data policy describing files that must never enter Git or release archives. Policy covers Git/staging, releases, logs, traces, dumps, generated code, secrets, sanitization, and uninstall safety.
 - [x] **M0-012** Verify GitHub CLI authentication before any remote operation. User-verified on the host on 2026-08-10 for account `2FED`; recheck immediately before the first remote mutation.
-- [ ] **M0-013** Decide repository visibility and remote destination; do not push until review and tests pass.
+- [x] **M0-013** Decide repository visibility and remote destination; do not push until review and tests pass. Owner supplied `https://github.com/2FED/RE-MCLA.git`; GitHub CLI verified `2FED/RE-MCLA` is public, active, and currently has no default branch before the first push.
 
 ### Deliverables
 
