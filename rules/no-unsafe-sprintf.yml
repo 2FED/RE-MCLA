@@ -1,0 +1,10 @@
+id: no-unsafe-sprintf
+language: Cpp
+severity: error
+message: Use a bounded formatting operation or a project-safe formatting abstraction.
+rule:
+  any:
+    - pattern: sprintf($BUFFER, $FORMAT, $$$ARGUMENTS)
+    - pattern: std::sprintf($BUFFER, $FORMAT, $$$ARGUMENTS)
+    - pattern: vsprintf($BUFFER, $FORMAT, $ARGUMENTS)
+    - pattern: std::vsprintf($BUFFER, $FORMAT, $ARGUMENTS)

@@ -1,0 +1,7 @@
+id: no-unsafe-strcat
+valid:
+  - strcat_s(destination, destination_size, source);
+  - destination_string.append(source);
+invalid:
+  - strcat(destination, source);
+  - std::strcat(destination, source);

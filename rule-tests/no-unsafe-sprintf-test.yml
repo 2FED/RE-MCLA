@@ -1,0 +1,9 @@
+id: no-unsafe-sprintf
+valid:
+  - snprintf(buffer, sizeof(buffer), "%s", value);
+  - fmt::format_to_n(buffer, buffer_size, "{}", value);
+invalid:
+  - sprintf(buffer, "%s", value);
+  - std::sprintf(buffer, "%d", value);
+  - vsprintf(buffer, format, arguments);
+  - std::vsprintf(buffer, format, arguments);

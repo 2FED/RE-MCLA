@@ -1,0 +1,8 @@
+id: no-unsafe-strcat
+language: Cpp
+severity: error
+message: Use a bounded append operation or a project-safe string abstraction instead of strcat.
+rule:
+  any:
+    - pattern: strcat($DESTINATION, $SOURCE)
+    - pattern: std::strcat($DESTINATION, $SOURCE)
