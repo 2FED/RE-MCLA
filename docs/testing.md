@@ -50,6 +50,14 @@ scripts\export-xenia-baseline.ps1
 
 The exporter reads an ignored immutable log/config snapshot, requires the exact supported Xenia build and title identifiers, classifies every `w>`/`!>` event, and writes only whitelisted metadata below `docs/evidence`. Validation must cover deterministic regeneration, rejection of an unexpected module hash, rejection of an unknown warning class, rejection of an output path outside `docs/evidence`, and a scan proving that the generated report contains no absolute host path or profile identifier.
 
+Current ReXGlue manifest gate:
+
+```powershell
+scripts\verify-rexglue-manifest.ps1
+```
+
+The exact-schema validator accepts only the pinned `mcla`/SDK identity, approved private game root and XEX, ignored generated output, and an empty first-analysis include list. It rejects absolute/backslash/traversal paths, unknown or duplicate TOML sections/keys, unsupported syntax, reparse traversal, and an unexpected XEX size/hash. Tests must include independent TOML parsing plus negative traversal, unknown-key, duplicate-key, and wrong-output fixtures.
+
 Planned test layers:
 
 1. host utility unit tests
