@@ -133,6 +133,14 @@ The wrapper performs verification, containment checks, staged extraction, and a 
 
 Use `-WhatIf` for a full tool/source/path preflight without writing extracted data. The final destination must not already exist. To regenerate it, deliberately move or remove the old private directory outside this wrapper and rerun; the script never overwrites an existing payload.
 
+Validate the extracted inventory against the ignored local manifest:
+
+```powershell
+& (Join-Path $RepoRoot 'scripts\verify-game-manifest.ps1') -VerifyHashes
+```
+
+Without `-VerifyHashes`, the validator checks schema/source identity, safe relative paths, exact inventory, every file size, total bytes, and the required 4 RPF/6 BIK counts. Use `-VerifyHashes` for milestone gates and after any suspected corruption; it reads and hashes all 6.57 GB of extracted payload.
+
 No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
 
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.
