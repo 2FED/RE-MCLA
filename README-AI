@@ -365,7 +365,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 ### Tasks
 
 - [x] **M0-001** Create the authoritative `README-AI` milestone plan.
-- [ ] **M0-002** Initialize Git with `main` as the default branch.
+- [x] **M0-002** Initialize Git with `main` as the default branch. Verified on 2026-08-10; root task commit is `83a4bd2` and `origin` points to `https://github.com/2FED/RE-MCLA.git`.
 - [ ] **M0-003** Add `.gitignore` entries for `private/`, `generated/`, build trees, SDK binaries, logs, dumps, caches, ISO/XEX/XEXP/RPF/BIK files, and package artifacts.
 - [ ] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature.
 - [ ] **M0-005** Select and add a license covering only original port code and scripts.
