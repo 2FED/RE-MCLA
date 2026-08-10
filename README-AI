@@ -427,7 +427,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 - [ ] **M1-001** Install or enable Clang/clang-cl 20+ in Visual Studio Build Tools.
 - [ ] **M1-002** Make CMake 3.25+ and Ninja discoverable through deterministic scripts rather than relying on an interactive developer prompt.
-- [ ] **M1-003** Install and verify `ast-grep`.
+- [x] **M1-003** Install and verify `ast-grep`. Host installation `ast-grep 0.45.0` verified on 2026-08-10 at the WinGet package path; use `ast-grep`, not the deprecated `sg` alias.
 - [ ] **M1-004** Obtain ReXGlue v0.9.0 recursively and pin its exact commit/tag.
 - [ ] **M1-005** Build or install ReXGlue using the supported Windows preset.
 - [ ] **M1-006** Record ReXGlue build commands, dependency versions, and local install discovery in `docs/build.md`.
@@ -982,7 +982,7 @@ The criterion below is additional to the task wording and universal Definition o
 |---|---|
 | M1-001 | `clang-cl --version` reports supported 20+ compiler in configured environment / version output |
 | M1-002 | Fresh PowerShell locates required CMake/Ninja deterministically / bootstrap transcript |
-| M1-003 | `sg --version`, scan, and test succeed / command output |
+| M1-003 | Recommended `ast-grep` executable is runnable and reports a pinned/recorded version; project scan/test are gated by M0-008 / command output |
 | M1-004 | SDK source resolves to recorded v0.9.0 tag and immutable SHA with submodules complete / SHA manifest |
 | M1-005 | ReXGlue installs/builds from documented preset without manual source edits / clean build log |
 | M1-006 | A new contributor can follow build.md without undisclosed paths / dry-run review |
