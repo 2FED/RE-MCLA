@@ -16,7 +16,7 @@ Current verified host components:
 
 Still required or unverified:
 
-- deterministic source verification/extraction scripts
+- deterministic source extraction script
 - pinned Xenia Canary baseline
 
 ## Deterministic toolchain discovery
@@ -109,6 +109,17 @@ Test-Path (Join-Path $ReXGlueInstall 'lib\cmake\rexglue\rexglueConfig.cmake')
 Expected output is ReXGlue `0.9.0` and `True`. MCLA-R's later CMake presets will set this prefix themselves; until they exist, the session-local setup above is authoritative.
 
 The first clean build evidence is in `docs/evidence/M1-005-rexglue-build.md`. ReXGlue unit tests are not enabled by the stock preset and are not claimed by M1-005/M1-006; SDK-changing work must configure `REXGLUE_BUILD_TESTS=ON` and run the matching CTest preset.
+
+## Verify the supported source image
+
+Before listing, extracting, or analyzing game content, run:
+
+```powershell
+& (Join-Path $RepoRoot 'scripts\verify-source.ps1') `
+  -IsoPath 'C:\BDU\MCLA-Recomp\Midnight.Club.Los.Angeles.The.Complete.Edition.XBOX360\midmets4.iso'
+```
+
+The command returns one object with `Valid=True` only when the ISO size/hash, XDVDFS structure, embedded `default.xex` size/hash, Title ID, and Media ID all match the supported Complete Edition dump. Any mismatch throws and returns a nonzero process result when invoked from automation. Do not continue to extraction after an error.
 
 No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
 
