@@ -120,7 +120,9 @@ if (-not (Test-IsContainedPath -Candidate $staging -RootPrefix $privatePrefix)) 
 
 try {
     New-Item -ItemType Directory -Path $staging | Out-Null
-    & $resolvedExtractor -x $resolvedIso -d $staging
+    # extract-xiso's Windows getopt stops parsing options at the first ISO
+    # argument, so every option must precede the source path.
+    & $resolvedExtractor -q -x -d $staging $resolvedIso
     if ($LASTEXITCODE -ne 0) {
         throw "extract-xiso failed with exit code $LASTEXITCODE."
     }

@@ -17,6 +17,7 @@ Script: `scripts/extract-game.ps1`
 - A nonzero extractor result or empty output fails the operation.
 - The completed staging directory moves to the final path only after all pre-move checks pass.
 - Failed staging data is removed only after its full path and generated name are revalidated.
+- All `extract-xiso` options precede the ISO operand because its Windows `getopt` implementation stops option parsing at the first non-option argument.
 
 The script supports `-WhatIf`; preflight still performs source/tool verification but does not create staging or destination data.
 
@@ -39,3 +40,5 @@ Negative tests passed:
 - an existing `private/existing-destination-test` directory was rejected before extraction.
 
 The actual supported payload extraction and inventory validation are M1-010/M1-011, not part of this wrapper-only task.
+
+The first full extraction exposed and closed an argument-order regression: `-x ISO -d staging` extracted to a default working-directory folder and then treated `-d` as another input. The wrapper now invokes `-q -x -d staging ISO`. The misplaced generated directory was validated as the exact 15-file/6,569,586,392-byte payload, removed as reproducible output, and the corrected staged extraction completed successfully.
