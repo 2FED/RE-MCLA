@@ -202,4 +202,6 @@ cmake --preset win-amd64-debug
 
 The configured Ninja graph must expose both `mcla` and `mcla_codegen`. Do not build `mcla` before codegen: its required `generated/default/mcla_init.h` and guest-derived sources are intentionally absent until the M2 analysis gate. `generated/rexglue.cmake` is the sole tracked file below `generated/`; all codegen output remains ignored.
 
+The immutable M2-008 first non-force gate was run through `scripts\run-rexglue-codegen-gate.ps1`. It completed all six analysis phases and returned exit code 1 for seven validation-stage `UnresolvedCall` findings without emitting `generated/default`. Its raw streams remain ignored; regenerate the reviewed public evidence with `scripts\export-rexglue-codegen-gate.ps1`. Do not remove or overwrite the private first-run root, rerun this one-shot gate, add `--force` to it, or use the M2-008 root for the separate M2-009 force inventory.
+
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.

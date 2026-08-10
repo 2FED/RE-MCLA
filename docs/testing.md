@@ -67,6 +67,16 @@ scripts\test-first-analysis-policy.ps1
 
 The gate requires all nine ReXGlue code-generation options to be explicitly `false`, verifies that the pinned SDK both parses those exact keys and retains false defaults, and rejects manual hint or analysis-tuning sections. Run it before every M2-008 non-force codegen attempt.
 
+Current M2-008 non-force codegen evidence gates:
+
+```powershell
+scripts\run-rexglue-codegen-gate.ps1 -WhatIf
+scripts\export-rexglue-codegen-gate.ps1
+scripts\test-export-rexglue-codegen-gate.ps1
+```
+
+The one-shot runner refuses an existing private evidence root or non-empty generated target, revalidates the manifest and conservative policy, invokes only `rexglue codegen mcla_manifest.toml`, and records both streams plus exit metadata privately. The exporter is fail-closed: it requires the immutable stream hashes, exact non-force command/exit classification, known line grammar, six analysis phases, and seven `UnresolvedCall` details before publishing the full path/thread-sanitized transcript. Export tests require deterministic regeneration and rejection of force-enabled metadata, an unknown log line, and an output outside `docs/evidence`.
+
 Planned test layers:
 
 1. host utility unit tests
