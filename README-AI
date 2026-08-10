@@ -459,7 +459,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M1-002** Make CMake 3.25+ and Ninja discoverable through deterministic scripts rather than relying on an interactive developer prompt. `scripts/Resolve-Toolchain.ps1` now uses `vswhere.exe`, validates CMake 3.25+, Ninja 1.10+, and clang-cl 20+, and can export their directories into the current dot-sourced PowerShell session.
 - [x] **M1-003** Install and verify `ast-grep`. Host installation `ast-grep 0.45.0` verified on 2026-08-10 at the WinGet package path; use `ast-grep`, not the deprecated `sg` alias.
 - [x] **M1-004** Obtain ReXGlue v0.9.0 recursively and pin its exact commit/tag. `third_party/rexglue-sdk` is pinned at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`; all 25 nested dependency nodes are initialized, clean, and recorded in `docs/rexglue-sdk.md`.
-- [ ] **M1-005** Build or install ReXGlue using the supported Windows preset.
+- [x] **M1-005** Build or install ReXGlue using the supported Windows preset. The unmodified `win-amd64` preset configured with Clang 20.1.8 and its CI-equivalent `install` target completed all 2,258 actions; the installed CLI reports `0.9.0`. Evidence is recorded in `docs/evidence/M1-005-rexglue-build.md`.
 - [ ] **M1-006** Record ReXGlue build commands, dependency versions, and local install discovery in `docs/build.md`.
 - [ ] **M1-007** Install a trusted XDVDFS extraction tool or implement a reviewed read-only extractor.
 - [ ] **M1-008** Implement `scripts/verify-source.ps1` to validate ISO size, SHA-256, Title ID, Media ID, `default.xex` size, and XEX SHA-256.
