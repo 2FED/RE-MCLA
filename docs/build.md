@@ -121,6 +121,18 @@ Before listing, extracting, or analyzing game content, run:
 
 The command returns one object with `Valid=True` only when the ISO size/hash, XDVDFS structure, embedded `default.xex` size/hash, Title ID, and Media ID all match the supported Complete Edition dump. Any mismatch throws and returns a nonzero process result when invoked from automation. Do not continue to extraction after an error.
 
+## Extract the verified game payload
+
+The wrapper performs verification, containment checks, staged extraction, and a no-overwrite final move:
+
+```powershell
+& (Join-Path $RepoRoot 'scripts\extract-game.ps1') `
+  -IsoPath 'C:\BDU\MCLA-Recomp\Midnight.Club.Los.Angeles.The.Complete.Edition.XBOX360\midmets4.iso' `
+  -DestinationPath 'private\game'
+```
+
+Use `-WhatIf` for a full tool/source/path preflight without writing extracted data. The final destination must not already exist. To regenerate it, deliberately move or remove the old private directory outside this wrapper and rerun; the script never overwrites an existing payload.
+
 No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
 
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.
