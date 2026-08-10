@@ -41,6 +41,8 @@ The project uses ReXGlue as its intended recompilation/runtime base and uses Xen
 
 The authoritative architecture, prerequisites, task ledger, milestone gates, acceptance criteria, risk register, and current decisions are maintained in [README-AI](README-AI).
 
+Rules for handling game dumps, generated code, logs, traces, and release artifacts are defined in [docs/source-data-policy.md](docs/source-data-policy.md).
+
 The plan progresses through:
 
 1. repository and tooling foundation
