@@ -375,6 +375,8 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 **Goal:** establish a safe, documented, reproducible repository before proprietary extraction or code generation begins.
 
+**Status:** `CLOSED — GO M1` on 2026-08-10.
+
 **Estimate:** 0.5–2 working days.
 
 ### Prerequisites
@@ -433,6 +435,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - 2026-08-10 — M0 checkpoint 4. Completed since prior checkpoint: M0-006 and M0-007. Health: `GREEN`. Evidence: commits `4aa5b93` and this M0-007 task commit; four-part VERSION validation; repository-tree and prohibited-file audit. Risks: empty scaffold placeholders must be removed as real files land, and private/generated roots must remain ignored. Re-evaluated estimate: 0.5–1.5 working days. Gate readiness: not ready. Next tasks: M0-008, M0-009. Scope/criteria remain valid.
 - 2026-08-10 — M0 checkpoint 5. Completed since prior checkpoint: M0-008 and M0-009. Health: `GREEN`. Evidence: commit `34b4288`, this M0-009 task commit, ast-grep 0.45.0 scan, and positive/negative rule fixtures. Risks: bootstrap syntax rules do not yet enforce VFS or hook architecture because no real C++ AST exists. Re-evaluated estimate: 0.5–1 working day. Gate readiness: not ready. Next tasks: M0-010, M0-011. Scope revised: architectural rules are added when the C++ scaffold lands; bootstrap safety rules satisfy M0.
 - 2026-08-10 — M0 checkpoint 6. Completed since prior checkpoint: M0-010 and M0-011. Health: `GREEN`. Evidence: commit `c39d9a1`, this M0-011 task commit, documentation-contract audit, and source-data-policy coverage review. Risks: future diagnostic formats require renewed privacy/proprietary-data review before publication. Re-evaluated estimate: less than 0.5 working day. Gate readiness: pending M0-013 remote verification and final milestone review. Next tasks: M0-013, M0 closure review. Scope/criteria remain valid.
+- 2026-08-10 — M0 closure review. Completed: all 13 M0 tasks. Health: `GREEN`; decision: `GO M1`. Evidence: all task commits through `84fcfe2`; ast-grep 0.45.0 with 3/3 rule tests and clean scan; 147/147 task-criteria coverage; valid four-part VERSION; documentation-contract audit; clean `git fsck`; zero prohibited tracked paths; private disc directory confirmed ignored; public `2FED/RE-MCLA` remote verified. Residual risks: architectural AST rules await real C++ code, and remote authentication must be rechecked immediately before mutation. Gate readiness: ready. Next tasks: M1-001 and M1-002; M1-003 was completed early. Scope/criteria remain valid.
 
 ## 9. Milestone M1 — Reproducible toolchain and source ingestion
 
