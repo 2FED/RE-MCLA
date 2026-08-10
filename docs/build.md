@@ -13,10 +13,13 @@ Current verified host components:
 - CMake 3.31.6 from Visual Studio
 - Ninja 1.12.1 from Visual Studio
 - ast-grep 0.45.0
+- Eclipse Temurin JDK 21.0.12+8
+- Ghidra 12.0.4 with XEXLoaderWV 13.0.0
+- RenderDoc 1.45.0
 
 Still required or unverified:
 
-- deterministic source extraction script
+- aggregate prerequisite validation through `scripts/bootstrap.ps1`
 
 ## Deterministic toolchain discovery
 
@@ -149,6 +152,32 @@ private/tools/xenia-canary/artifacts/xenia_canary.exe
 ```
 
 Its immutable release/source/hash record and no-game startup result are in `docs/evidence/M1-013-xenia-canary.md`. Do not replace it from a moving “latest” URL. Baseline captures must include the logged `Build:` line and keep logs, screenshots, GPU traces, saves, and caches below ignored `private/` paths.
+
+## Ghidra, XEXLoaderWV, and RenderDoc
+
+The verified reverse-engineering pair is Ghidra 12.0.4 plus SaveEditors XEXLoaderWV 13.0.0 and Temurin JDK 21.0.12+8. XEXLoaderWV 13.0.0 is built specifically for this Ghidra/JDK combination; do not upgrade Ghidra independently. The local Ghidra install, extension, user profile, projects, and logs live under ignored `private/tools/ghidra/`.
+
+Run Ghidra headlessly with private user directories so projects and caches stay inside the repository's ignored boundary:
+
+```powershell
+$GhidraBase = Join-Path $RepoRoot 'private\tools\ghidra'
+$env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-21.0.12.8-hotspot'
+$env:USERPROFILE = Join-Path $GhidraBase 'user'
+$env:APPDATA = Join-Path $env:USERPROFILE 'AppData\Roaming'
+$env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local'
+
+& (Join-Path $GhidraBase 'install\ghidra_12.0.4_PUBLIC\support\analyzeHeadless.bat')
+```
+
+The pinned extension passed a real headless import of `private/game/default.xex`; sanitized evidence is in `docs/evidence/M1-014-re-tools.md`. Do not publish Ghidra projects, decrypted program data, XEX bytes, caches, or analysis exports without a separate source-data review.
+
+RenderDoc 1.45.0 is installed at `C:\Program Files\RenderDoc`. Verify it without starting a GUI:
+
+```powershell
+& 'C:\Program Files\RenderDoc\renderdoccmd.exe' --version
+```
+
+Store future `.rdc` captures under ignored `private/`. A tool upgrade requires recording new versions/hashes and repeating the representative-target smoke test.
 
 No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
 
