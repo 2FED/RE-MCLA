@@ -30,6 +30,15 @@ scripts\run-xenia-baseline.ps1 -WhatIf
 
 For a real run, omit `-WhatIf` or supply a new `-BaselinePath` below `private/`. The launcher verifies the exact Xenia/XEX hashes, refuses overwrite/outside/reparse destinations, isolates storage/content/cache/log paths, disables patches and title updates, and keeps `time_scalar=1`. M2-001 requires private evidence that the run reaches active gameplay, not merely module load.
 
+Current Xenia metadata export gate:
+
+```powershell
+scripts\export-xenia-baseline.ps1 -WhatIf
+scripts\export-xenia-baseline.ps1
+```
+
+The exporter reads an ignored immutable log/config snapshot, requires the exact supported Xenia build and title identifiers, classifies every `w>`/`!>` event, and writes only whitelisted metadata below `docs/evidence`. Validation must cover deterministic regeneration, rejection of an unexpected module hash, rejection of an unknown warning class, rejection of an output path outside `docs/evidence`, and a scan proving that the generated report contains no absolute host path or profile identifier.
+
 Planned test layers:
 
 1. host utility unit tests
