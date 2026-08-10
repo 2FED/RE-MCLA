@@ -16,7 +16,6 @@ Current verified host components:
 
 Still required or unverified:
 
-- ReXGlue v0.9.0 build/install from the pinned source graph described in `docs/rexglue-sdk.md`
 - deterministic source verification/extraction scripts
 - pinned Xenia Canary baseline
 
@@ -41,6 +40,76 @@ clang-cl --version
 
 Dot-sourcing is required because a child PowerShell process cannot modify its parent's environment. The eventual `bootstrap.ps1` will consume this resolver and validate the remaining project prerequisites.
 
-No project build command is authoritative yet. Add commands here only after they pass in a fresh PowerShell session and are captured by the bootstrap workflow.
+## ReXGlue SDK source and dependencies
+
+MCLA-R tracks ReXGlue as a Git submodule. The authoritative source tag, commit, and complete recursive SHA manifest are in `docs/rexglue-sdk.md`. Initialize exactly that graph after cloning:
+
+```powershell
+git submodule sync --recursive
+git submodule update --init --recursive
+git submodule status --recursive
+```
+
+The first status line must contain ReXGlue commit `3eb9b511b4140d2769e27be63eae57d41bfa2afa`; no line may begin with `-`, `+`, or `U`.
+
+The verified v0.9.0 Windows build uses:
+
+- ReXGlue 0.9.0 with the exact nested dependencies in `docs/rexglue-sdk.md`
+- Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
+- Clang/Clang++ 20.1.8 in GNU-compatible driver mode
+- CMake 3.31.6 and Ninja 1.12.1
+- upstream `win-amd64` multi-config preset
+- D3D12 enabled and Vulkan disabled
+- C++23 and `-march=x86-64-v3`
+
+## Build and install ReXGlue
+
+Run these commands from the MCLA-R repository root in a new PowerShell session. They initialize the Visual Studio compiler/SDK environment without requiring an interactive Developer Prompt:
+
+```powershell
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$Toolchain = . (Join-Path $RepoRoot 'scripts\Resolve-Toolchain.ps1') -ExportPath
+$LaunchVs = Join-Path $Toolchain.VisualStudioRoot 'Common7\Tools\Launch-VsDevShell.ps1'
+& $LaunchVs -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+
+$SdkSource = Join-Path $RepoRoot 'third_party\rexglue-sdk'
+Push-Location $SdkSource
+cmake --preset win-amd64
+cmake --build out/build/win-amd64 --target install --parallel
+Pop-Location
+```
+
+The install target builds Debug, Release, and RelWithDebInfo because the upstream preset sets `CMAKE_DEFAULT_CONFIGS=all`. It writes generated files only below the submodule's ignored `out/` directory. Do not edit or commit generated SDK files.
+
+To rebuild without reconfiguring:
+
+```powershell
+cmake --build (Join-Path $SdkSource 'out\build\win-amd64') --target install --parallel
+```
+
+## Discover the local ReXGlue install
+
+Use explicit session-local paths instead of relying on CMake's per-user package registry:
+
+```powershell
+$ReXGlueInstall = Join-Path $SdkSource 'out\install\win-amd64'
+$ReXGlueBin = Join-Path $ReXGlueInstall 'bin'
+
+$env:PATH = "$ReXGlueBin;$env:PATH"
+if ([string]::IsNullOrEmpty($env:CMAKE_PREFIX_PATH)) {
+    $env:CMAKE_PREFIX_PATH = $ReXGlueInstall
+} else {
+    $env:CMAKE_PREFIX_PATH = "$ReXGlueInstall;$env:CMAKE_PREFIX_PATH"
+}
+
+rexglue --version
+Test-Path (Join-Path $ReXGlueInstall 'lib\cmake\rexglue\rexglueConfig.cmake')
+```
+
+Expected output is ReXGlue `0.9.0` and `True`. MCLA-R's later CMake presets will set this prefix themselves; until they exist, the session-local setup above is authoritative.
+
+The first clean build evidence is in `docs/evidence/M1-005-rexglue-build.md`. ReXGlue unit tests are not enabled by the stock preset and are not claimed by M1-005/M1-006; SDK-changing work must configure `REXGLUE_BUILD_TESTS=ON` and run the matching CTest preset.
+
+No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
 
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.
