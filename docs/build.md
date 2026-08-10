@@ -9,13 +9,13 @@ Current verified host components:
 - Visual Studio Build Tools 2022 17.14
 - MSVC 14.44
 - Windows 11 SDK
+- LLVM/clang-cl/lld 20.1.8 at `C:\Program Files\LLVM\bin`
 - CMake 3.31.6 from Visual Studio
 - Ninja 1.12.1 from Visual Studio
 - ast-grep 0.45.0
 
 Still required or unverified:
 
-- clang-cl 20+
 - pinned ReXGlue v0.9.0 build/install
 - deterministic source verification/extraction scripts
 - pinned Xenia Canary baseline

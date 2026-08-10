@@ -158,6 +158,7 @@ Known installed components:
 - Visual Studio Build Tools 2022 `17.14`
 - MSVC `14.44`
 - Windows 11 SDK
+- LLVM/clang-cl/lld `20.1.8` installed at `C:\Program Files\LLVM\bin`
 - CMake `3.31.6` under the Visual Studio installation
 - Ninja `1.12.1` under the Visual Studio installation
 - Git `2.46.2`
@@ -165,7 +166,6 @@ Known installed components:
 
 Known missing or unverified components:
 
-- Clang/clang-cl 20 or newer
 - ReXGlue SDK v0.9.0 installation
 - Xenia Canary baseline installation
 - XDVDFS extraction tool
@@ -441,6 +441,8 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 **Goal:** create a one-command, hash-validated local environment that extracts or locates the exact supported game dump without modifying the source ISO.
 
+**Status:** `IN PROGRESS — GREEN`.
+
 **Estimate:** 1–4 working days.
 
 ### Prerequisites
@@ -451,7 +453,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 ### Tasks
 
-- [ ] **M1-001** Install or enable Clang/clang-cl 20+ in Visual Studio Build Tools.
+- [x] **M1-001** Install or enable Clang/clang-cl 20+ for use with Visual Studio Build Tools. Pinned official WinGet LLVM 20.1.8 installed machine-wide; `clang-cl`, `lld-link`, `llvm-ar`, and a C++23 syntax-only compilation verified on 2026-08-10.
 - [ ] **M1-002** Make CMake 3.25+ and Ninja discoverable through deterministic scripts rather than relying on an interactive developer prompt.
 - [x] **M1-003** Install and verify `ast-grep`. Host installation `ast-grep 0.45.0` verified on 2026-08-10 at the WinGet package path; use `ast-grep`, not the deprecated `sg` alias.
 - [ ] **M1-004** Obtain ReXGlue v0.9.0 recursively and pin its exact commit/tag.
@@ -495,7 +497,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M1-001, M1-002.
+- 2026-08-10 — M1 checkpoint 1. Completed: M1-001 and M1-003. Health: `GREEN`. Evidence: official LLVM 20.1.8 WinGet install; clang-cl/lld-link/llvm-ar version checks; C++23 syntax-only compile; ast-grep 0.45.0 version plus 3/3 project rule tests. Risks: standalone LLVM must be selected deterministically alongside the Visual Studio SDK environment; PATH cannot be assumed in already-running shells. Re-evaluated estimate: 1–4 working days. Gate readiness: not ready. Next tasks: M1-002 and M1-004. Scope/criteria remain valid.
 
 ## 10. Milestone M2 — Behavioral baseline and feasibility/codegen audit
 
