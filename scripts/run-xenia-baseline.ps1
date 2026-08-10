@@ -3,6 +3,7 @@ param(
     [string]$XeniaPath,
     [string]$XexPath,
     [string]$BaselinePath,
+    [switch]$Resume,
     [switch]$Wait
 )
 
@@ -17,6 +18,9 @@ if (-not $XeniaPath) {
 }
 if (-not $XexPath) {
     $XexPath = Join-Path $privateRoot 'game\default.xex'
+}
+if ($Resume -and -not $PSBoundParameters.ContainsKey('BaselinePath')) {
+    throw 'Resume requires an explicit -BaselinePath for the isolated profile to reuse.'
 }
 if (-not $BaselinePath) {
     $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -50,10 +54,11 @@ function Assert-FileIdentity {
     }
 }
 
-function Assert-ContainedNewDirectory {
+function Assert-ContainedBaselineDirectory {
     param(
         [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][string]$Container
+        [Parameter(Mandatory)][string]$Container,
+        [Parameter(Mandatory)][bool]$AllowExisting
     )
 
     $fullPath = [System.IO.Path]::GetFullPath($Path).TrimEnd('\')
@@ -63,7 +68,19 @@ function Assert-ContainedNewDirectory {
         throw "Baseline path must be a child of '$fullContainer'. Got '$fullPath'."
     }
     if (Test-Path -LiteralPath $fullPath) {
-        throw "Baseline path already exists and will not be overwritten: '$fullPath'."
+        $baselineItem = Get-Item -LiteralPath $fullPath -Force
+        if (-not $AllowExisting) {
+            throw "Baseline path already exists and will not be overwritten: '$fullPath'."
+        }
+        if (-not $baselineItem.PSIsContainer) {
+            throw "Resume baseline path is not a directory: '$fullPath'."
+        }
+        if ($baselineItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            throw "Resume baseline path must not be a reparse point: '$fullPath'."
+        }
+    }
+    elseif ($AllowExisting) {
+        throw "Resume baseline path does not exist: '$fullPath'."
     }
 
     $cursor = Split-Path -Parent $fullPath
@@ -87,12 +104,39 @@ $resolvedXenia = (Resolve-Path -LiteralPath $XeniaPath).Path
 $resolvedXex = (Resolve-Path -LiteralPath $XexPath).Path
 Assert-FileIdentity -Path $resolvedXenia -ExpectedSize -1 -ExpectedSha256 $expectedXeniaSha256 -Label 'Xenia Canary executable'
 Assert-FileIdentity -Path $resolvedXex -ExpectedSize $expectedXexSize -ExpectedSha256 $expectedXexSha256 -Label 'default.xex'
-$resolvedBaseline = Assert-ContainedNewDirectory -Path $BaselinePath -Container $privateRoot
+if ($Resume) {
+    $xeniaProcessName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedXenia)
+    $activeXenia = @(
+        Get-Process -Name $xeniaProcessName -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -eq $resolvedXenia }
+    )
+    if ($activeXenia.Count -gt 0) {
+        throw "Resume refused because the verified Xenia executable is already running (PID $($activeXenia.Id -join ', ')). Exit it normally before reusing the isolated profile."
+    }
+}
+$resolvedBaseline = Assert-ContainedBaselineDirectory -Path $BaselinePath -Container $privateRoot -AllowExisting ([bool]$Resume)
 
 $storagePath = Join-Path $resolvedBaseline 'storage'
 $contentPath = Join-Path $resolvedBaseline 'content'
 $cachePath = Join-Path $resolvedBaseline 'cache'
-$logPath = Join-Path $resolvedBaseline 'xenia-stock.log'
+if ($Resume) {
+    foreach ($requiredDirectory in @($storagePath, $contentPath, $cachePath)) {
+        if (-not (Test-Path -LiteralPath $requiredDirectory -PathType Container)) {
+            throw "Resume baseline is missing required directory: '$requiredDirectory'."
+        }
+        if ((Get-Item -LiteralPath $requiredDirectory -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            throw "Resume baseline directory must not be a reparse point: '$requiredDirectory'."
+        }
+    }
+    $resumeTimestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $logPath = Join-Path $resolvedBaseline "xenia-resume-$resumeTimestamp.log"
+}
+else {
+    $logPath = Join-Path $resolvedBaseline 'xenia-stock.log'
+}
+if (Test-Path -LiteralPath $logPath) {
+    throw "Session log already exists and will not be overwritten: '$logPath'."
+}
 
 $arguments = @(
     "`"$resolvedXex`""
@@ -125,13 +169,23 @@ $result = [ordered]@{
     StockTimeScale = 1
     PatchesEnabled = $false
     TitleUpdates   = $false
+    Resume         = [bool]$Resume
     ProcessId      = $null
     Started        = $false
     ExitCode       = $null
 }
 
-if ($PSCmdlet.ShouldProcess($resolvedBaseline, 'Create isolated stock Xenia baseline and launch the verified XEX')) {
-    New-Item -ItemType Directory -Path $storagePath, $contentPath, $cachePath -Force | Out-Null
+if ($Resume) {
+    $operation = 'Resume verified XEX with an existing isolated profile and a new session log'
+}
+else {
+    $operation = 'Create isolated stock Xenia baseline and launch the verified XEX'
+}
+
+if ($PSCmdlet.ShouldProcess($resolvedBaseline, $operation)) {
+    if (-not $Resume) {
+        New-Item -ItemType Directory -Path $storagePath, $contentPath, $cachePath -Force | Out-Null
+    }
     $process = Start-Process -FilePath $resolvedXenia -ArgumentList $arguments `
         -WorkingDirectory (Split-Path -Parent $resolvedXenia) -PassThru
     $result.ProcessId = $process.Id

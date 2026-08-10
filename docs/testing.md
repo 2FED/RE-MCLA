@@ -30,6 +30,17 @@ scripts\run-xenia-baseline.ps1 -WhatIf
 
 For a real run, omit `-WhatIf` or supply a new `-BaselinePath` below `private/`. The launcher verifies the exact Xenia/XEX hashes, refuses overwrite/outside/reparse destinations, isolates storage/content/cache/log paths, disables patches and title updates, and keeps `time_scalar=1`. M2-001 requires private evidence that the run reaches active gameplay, not merely module load.
 
+To verify save reload after the first Xenia process has exited, reuse the same isolated profile explicitly:
+
+```powershell
+scripts\run-xenia-baseline.ps1 `
+  -BaselinePath private\baseline\M2-001 `
+  -Resume `
+  -WhatIf
+```
+
+Remove `-WhatIf` only after confirming that no Xenia process is using the profile. Resume mode requires an explicit existing baseline, revalidates the pinned Xenia/XEX identities, requires non-reparse storage/content/cache directories, and creates a uniquely named `xenia-resume-*.log` rather than overwriting the stock-session log. A save reload passes only when the resumed process finds the existing profile and the operator reaches the previously saved progress.
+
 Current Xenia metadata export gate:
 
 ```powershell
