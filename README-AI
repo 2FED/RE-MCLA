@@ -258,7 +258,7 @@ No commit or push is permitted before review and required tests pass.
 
 Project delivery cadence:
 
-- Continue autonomously until the active milestone is reviewed, closed, committed, and pushed; user input/authorization is genuinely required; or an observable weekly usage allowance reaches 20%. If usage is not exposed to the agent, never invent a value—continue to milestone closure or a real blocker and rely on the user to signal an external quota threshold. The repository-local `AGENTS.md` is authoritative for this persistence rule.
+- Continue autonomously until the active milestone is reviewed, closed, committed, and pushed; user input/authorization is genuinely required; or an observable weekly usage allowance reaches 20%. After each closed task, read the live ChatGPT Settings -> Usage value or the interactive Codex `/status` fallback before starting another task. If usage is not exposed to the agent, never invent a value—continue to milestone closure or a real blocker and rely on the user to signal an external quota threshold. The repository-local `AGENTS.md` is authoritative for this persistence rule.
 - Close one task per commit. A task commit may be created only after that task's acceptance criterion, review, and relevant tests pass.
 - Do not combine unrelated completed task IDs in one commit. If two tasks are inseparable, revise the ledger and dependency rationale before implementation.
 - Recommended task commit subject: `task(Mx-nnn): concise outcome`.
@@ -395,7 +395,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-003** Add `.gitignore` entries for `private/`, `generated/`, build trees, SDK binaries, logs, dumps, caches, ISO/XEX/XEXP/RPF/BIK files, and package artifacts. Verified with tracked-source and prohibited-path fixtures on 2026-08-10.
 - [x] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature. Reviewed against the current project plan on 2026-08-10.
 - [x] **M0-005** Select and add a license covering only original port code and scripts. MIT selected on 2026-08-10 with third-party/game-content boundaries documented in README.
-- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10; planned `0.1.0.0` remains gated on reproducible scaffold and feasibility tooling.
+- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10 and advanced to `0.1.0.0` when M1 closed with a reproducible scaffold and feasibility toolchain on 2026-08-11.
 - [x] **M0-007** Create the planned directory scaffold without copying proprietary files. Source, test, rule, documentation-evidence, CMake, script, and third-party roots created on 2026-08-10; private/generated roots remain local-only and ignored.
 - [x] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow. Initial C++ smoke rule and fixtures added and verified with ast-grep 0.45.0 on 2026-08-10.
 - [x] **M0-009** Define initial structural safety rules and fixtures. Bootstrap rules cover unbounded `strcpy`, `sprintf`/`vsprintf`, and `strcat`; path-aware VFS and hook-metadata rules remain required when real C++ AST lands. Verified with ast-grep 0.45.0 on 2026-08-10.
@@ -444,7 +444,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 **Goal:** create a one-command, hash-validated local environment that extracts or locates the exact supported game dump without modifying the source ISO.
 
-**Status:** `IN PROGRESS — GREEN`.
+**Status:** `CLOSED — GO M2` on 2026-08-11.
 
 **Estimate:** 1–4 working days.
 
@@ -508,10 +508,13 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - 2026-08-10 — M1 checkpoint 6. Completed since prior checkpoint: M1-011 and M1-012. Health: `GREEN`. Evidence: reusable contained manifest validator passed all 15 hashes and exact 4 RPF/6 BIK counts; ignored local operator guide covers layout, regeneration, preservation, cleanup, pins, and update triggers; private/index audits remain clean. Risks: Xenia Canary and reverse-engineering/graphics tools are not pinned, and bootstrap does not yet aggregate all gates or regenerate the local manifest. Re-evaluated estimate: 1 working day. Gate readiness: not ready. Next tasks: M1-013 and M1-014. Scope/criteria remain valid.
 - 2026-08-11 — M1 checkpoint 7. Completed since prior checkpoint: M1-013 and M1-014. Health: `GREEN`. Evidence: pinned Xenia Canary build produced the expected null-backend build log; compatible Ghidra 12.0.4/XEXLoaderWV 13.0.0/JDK 21 stack imported the supported retail XEX, recovered its entry point and sections, and created 20,071 functions plus 257 import references; RenderDoc 1.45 CLI passed. Risks: the aggregate bootstrap and minimal ReXGlue sample gate remain incomplete, and actual GPU captures wait for the M2 emulator baseline or native scaffold. Re-evaluated estimate: less than 1 working day. Gate readiness: pending M1-015 and closure verification. Next task: M1-015. Scope/criteria remain valid.
 - 2026-08-11 — M1 checkpoint 8. Completed since prior checkpoint: M1-015. Health: `GREEN`. Evidence: fresh-shell aggregate bootstrap passed all 12 checks, including full source/extraction hashes, and the missing-tool test reported all checks then returned exit code 1. Risks: the milestone's minimal ReXGlue initialization/build exit criterion still requires closure verification; no application scaffold is claimed yet. Re-evaluated estimate: less than 0.5 working day. Gate readiness: pending minimal sample and final milestone review. Next task: M1 closure verification. Scope/criteria remain valid.
+- 2026-08-11 — M1 closure review. Completed: all 15 M1 tasks. Health: `GREEN`; decision: `GO M2`. Evidence: task commits through `b0c2f9c`; fresh-shell bootstrap 12/12; intentional missing-tool exit 1; clean ast-grep scan and 3/3 tests; 15/15 task-criteria coverage; exact unchanged ISO/XEX and 15-file payload hashes; ReXGlue v0.9.0 recursive pin; successful `rexglue init`; and a C++23 installed-SDK consumer that linked `rex::runtime` and printed `0.9.0`. Zero proprietary/private paths are tracked and Git integrity has no errors. Residual risks: target codegen, control-flow quality, runtime imports, real Xenia gameplay, and graphics/audio behavior are unmeasured and remain M2+ work. Gate readiness: ready. Next tasks: M2-001 and M2-002. Closure evidence is in `docs/evidence/M1-closure-review.md`. Scope/criteria remain valid.
 
 ## 10. Milestone M2 — Behavioral baseline and feasibility/codegen audit
 
 **Goal:** prove that the exact XEX can be analyzed and converted, and quantify every blocker before substantial runtime implementation begins.
+
+**Status:** `READY — NOT STARTED`.
 
 **Estimate:** 2–10 working days; extend only with an explicit feasibility review.
 
@@ -1227,13 +1230,12 @@ Record architecture decisions here or link to ADR files.
 
 Execute in this order unless a new blocker changes the plan:
 
-1. [ ] Complete M0-002 through M0-007: repository initialization, ignores, README, license, version, and directories.
-2. [ ] Complete M0-008 through M0-010: ast-grep and documentation scaffold.
-3. [ ] Complete M1-001: add Clang 20+ to Visual Studio Build Tools.
-4. [ ] Complete M1-004 through M1-006: pin and build ReXGlue v0.9.0.
-5. [ ] Complete M1-008 through M1-010: verify and extract the supported source dump.
-6. [ ] Complete M2-001 through M2-004: capture the exact Xenia baseline.
-7. [ ] Run the first ReXGlue codegen and produce the M2 feasibility report before implementing broad runtime behavior.
+1. [x] Close M0 repository foundation and governance.
+2. [x] Close M1 reproducible toolchain and source ingestion at version `0.1.0.0`.
+3. [ ] Complete M2-001 through M2-004: capture the exact stock Xenia baseline.
+4. [ ] Complete M2-005 through M2-007: establish the real target scaffold/config with optimizations disabled.
+5. [ ] Run M2-008 non-force codegen before any `--force` inventory.
+6. [ ] Classify every codegen finding and produce the M2 feasibility report before implementing broad runtime behavior.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

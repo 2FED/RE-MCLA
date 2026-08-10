@@ -40,7 +40,7 @@ ninja --version
 clang-cl --version
 ```
 
-Dot-sourcing is required because a child PowerShell process cannot modify its parent's environment. The eventual `bootstrap.ps1` will consume this resolver and validate the remaining project prerequisites.
+Dot-sourcing is required because a child PowerShell process cannot modify its parent's environment. `bootstrap.ps1` consumes this resolver inside its own fresh process and validates the remaining project prerequisites.
 
 ## ReXGlue SDK source and dependencies
 

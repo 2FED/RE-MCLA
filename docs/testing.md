@@ -13,6 +13,15 @@ ast-grep test --skip-snapshot-tests
 
 Current rule fixtures cover unbounded `strcpy`, `sprintf`/`vsprintf`, and `strcat` calls.
 
+Current M1 environment/source gate:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
+  -File C:\BDU\MCLA-Recomp\scripts\bootstrap.ps1
+```
+
+The gate must report all 12 prerequisites. Its normal route must pass 12/12, and a deliberately missing required-tool override must return nonzero after reporting the remaining checks. It includes full ISO and extracted-payload hashes.
+
 Planned test layers:
 
 1. host utility unit tests
