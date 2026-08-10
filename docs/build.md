@@ -179,6 +179,19 @@ RenderDoc 1.45.0 is installed at `C:\Program Files\RenderDoc`. Verify it without
 
 Store future `.rdc` captures under ignored `private/`. A tool upgrade requires recording new versions/hashes and repeating the representative-target smoke test.
 
+## One-command prerequisite gate
+
+From any working directory, run the complete read-only gate in a fresh PowerShell process:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
+  -File C:\BDU\MCLA-Recomp\scripts\bootstrap.ps1
+```
+
+The default run validates all pinned build, source, extraction, emulator, reverse-engineering, and graphics-debug prerequisites. It hashes the complete ISO and extracted payload, so it can take tens of seconds and perform substantial read I/O. It never installs or repairs a missing component. Every check is reported, and any failure produces a nonzero exit code after the remaining checks have run.
+
+Use the named path parameters only when the private layout differs from the documented defaults or when testing a failure. Overrides do not disable version or hash validation. The verified positive and missing-tool transcripts are summarized in `docs/evidence/M1-015-bootstrap.md`.
+
 No MCLA-R application build command is authoritative yet. Add one only after the native project scaffold passes in a fresh PowerShell session and is captured by the bootstrap workflow.
 
 Update this document whenever a prerequisite, version, path-discovery rule, preset, environment variable, codegen command, or package command changes.
