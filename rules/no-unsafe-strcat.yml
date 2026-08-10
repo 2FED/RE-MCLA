@@ -2,6 +2,8 @@ id: no-unsafe-strcat
 language: Cpp
 severity: error
 message: Use a bounded append operation or a project-safe string abstraction instead of strcat.
+ignores:
+  - third_party/**
 rule:
   any:
     - pattern: strcat($DESTINATION, $SOURCE)

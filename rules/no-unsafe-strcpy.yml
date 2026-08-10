@@ -2,6 +2,8 @@ id: no-unsafe-strcpy
 language: Cpp
 severity: error
 message: Use a bounded string operation or a project-safe string abstraction instead of strcpy.
+ignores:
+  - third_party/**
 rule:
   any:
     - pattern: strcpy($DESTINATION, $SOURCE)

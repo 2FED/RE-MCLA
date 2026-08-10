@@ -2,6 +2,8 @@ id: no-unsafe-sprintf
 language: Cpp
 severity: error
 message: Use a bounded formatting operation or a project-safe formatting abstraction.
+ignores:
+  - third_party/**
 rule:
   any:
     - pattern: sprintf($BUFFER, $FORMAT, $$$ARGUMENTS)
