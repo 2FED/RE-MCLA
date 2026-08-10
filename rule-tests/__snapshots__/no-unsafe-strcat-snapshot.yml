@@ -1,0 +1,14 @@
+id: no-unsafe-strcat
+snapshots:
+  std::strcat(destination, source);:
+    labels:
+    - source: std::strcat(destination, source)
+      style: primary
+      start: 0
+      end: 32
+  strcat(destination, source);:
+    labels:
+    - source: strcat(destination, source)
+      style: primary
+      start: 0
+      end: 27

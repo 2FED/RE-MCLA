@@ -1,0 +1,26 @@
+id: no-unsafe-sprintf
+snapshots:
+  sprintf(buffer, "%s", value);:
+    labels:
+    - source: sprintf(buffer, "%s", value)
+      style: primary
+      start: 0
+      end: 28
+  std::sprintf(buffer, "%d", value);:
+    labels:
+    - source: std::sprintf(buffer, "%d", value)
+      style: primary
+      start: 0
+      end: 33
+  std::vsprintf(buffer, format, arguments);:
+    labels:
+    - source: std::vsprintf(buffer, format, arguments)
+      style: primary
+      start: 0
+      end: 40
+  vsprintf(buffer, format, arguments);:
+    labels:
+    - source: vsprintf(buffer, format, arguments)
+      style: primary
+      start: 0
+      end: 35
