@@ -96,6 +96,15 @@ scripts\test-export-codegen-triage.ps1
 
 The exporter cross-checks the immutable M2-009 transcript against a private 34-address Ghidra audit produced by `scripts/ghidra/AddressAudit.java`. It requires all seven branch pairs and all twenty vector-pack sites, verifies executable-section and boundary context, decodes every pack word as format 5/mask 3/shift 0, and emits one owner/category/severity/action row per unique finding. Tests require deterministic regeneration and reject a missing audit record, changed pack fields, mutated force evidence, and output outside `docs/evidence`.
 
+Current M2-011 control-flow/exception evidence gates:
+
+```powershell
+scripts\export-control-flow-audit.ps1
+scripts\test-export-control-flow-audit.ps1
+```
+
+`scripts/ghidra/ControlFlowAudit.java` scans the private loaded image for exact save/restore and standard setjmp/longjmp signatures, decodes all 8-byte PDATA records, locates each unresolved source/target relative to PDATA, and follows every target to its first unconditional terminal. The exporter additionally verifies the complete immutable force-generated snapshot, generated source-function ownership, target absence from the dispatcher, the sole direct `RtlUnwind` caller, and intentionally unset jump overrides. Tests require deterministic output and reject missing/changed audit records or output outside `docs/evidence`.
+
 Planned test layers:
 
 1. host utility unit tests
