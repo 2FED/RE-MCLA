@@ -2,7 +2,7 @@
 param(
     [string]$GeneratedRoot,
     [string]$ExpectedManifestPath,
-    [ValidateRange(1, 10000)][int]$ExpectedCppCount = 62,
+    [ValidateRange(1, 10000)][int]$ExpectedCppCount = 65,
     [string]$BuildRoot
 )
 
@@ -14,7 +14,7 @@ if (-not $GeneratedRoot) {
     $GeneratedRoot = Join-Path $repoRoot 'generated/default'
 }
 if (-not $ExpectedManifestPath) {
-    $ExpectedManifestPath = Join-Path $repoRoot 'private/evidence/M3-005/generated-manifest.json'
+    $ExpectedManifestPath = Join-Path $repoRoot 'private/evidence/M3-009/generated-manifest-v0.9.0.7.json'
 }
 
 foreach ($path in @($GeneratedRoot, $ExpectedManifestPath)) {

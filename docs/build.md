@@ -52,11 +52,11 @@ git submodule update --init --recursive
 git submodule status --recursive
 ```
 
-The first status line must contain ReXGlue project-fork commit `eda7aebf9dbe8140d45f67d3e15053383d142696`; no line may begin with `-`, `+`, or `U`.
+The first status line must contain ReXGlue project-fork commit `efac376998cbb0520295d308be4703574a12a995`; no line may begin with `-`, `+`, or `U`.
 
-The verified v0.9.0.6 Windows build uses:
+The verified v0.9.0.7 Windows build uses:
 
-- ReXGlue 0.9.0.6 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.9.0.7 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -194,7 +194,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.9.0.6`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.9.0.7`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1
@@ -203,9 +203,22 @@ cmake --build --preset win-amd64-release --target mcla --parallel
 scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 ```
 
-With the accepted corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 62 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
+With the accepted M3-009 corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 65 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
 
-`generated/rexglue.cmake` is the sole tracked file below `generated/`. The 64 generated files, all object files, and the resulting executable remain ignored because they contain or embed translated proprietary game code. M3-001 clean Release evidence is in `docs/evidence/M3-001-generated-source-integration.md`.
+`generated/rexglue.cmake` is the sole tracked file below `generated/`. The current 67 generated files, all object files, and the resulting executable remain ignored because they contain or embed translated proprietary game code. M3-001 preserves the first clean Release baseline; M3-009 records the current 65-source instrumented corpus in `docs/evidence/M3-009-crash-reporting.md`.
+
+Verify the privacy-safe crash-report pipeline with:
+
+```powershell
+scripts\verify-crash-report-contract.ps1
+scripts\test-crash-report-contract.ps1
+scripts\test-crash-report.ps1
+scripts\run-crash-report-smoke.ps1
+```
+
+The synthetic probe loads the verified XEX but skips guest execution. Its report
+contains guest addresses, thread/import identifiers, and at most 16 host frames;
+it excludes guest memory, registers, stack data, and absolute host paths.
 
 Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
 

@@ -11,8 +11,12 @@
 #include <rex/memory/mapped_memory.h>
 #include <rex/runtime.h>
 #include <rex/system/function_dispatcher.h>
+#include <rex/system/crash_report.h>
 #include <rex/system/kernel_state.h>
+#include <rex/system/thread_state.h>
 #include <rex/system/user_module.h>
+
+#include <fstream>
 
 namespace {
 
@@ -36,6 +40,10 @@ REXCVAR_DEFINE_BOOL(mcla_module_config_probe, false, "MCLA",
 REXCVAR_DEFINE_BOOL(
     mcla_vfs_probe, false, "MCLA",
     "Validate the guest disc mount and write containment without launching guest code")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(mcla_crash_probe, false, "MCLA",
+                    "Write a synthetic privacy-safe guest crash report without guest execution")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 MclaApp::MclaApp(rex::ui::WindowedAppContext& ctx, rex::PPCImageInfo image_info)
@@ -230,6 +238,38 @@ bool MclaApp::ValidateGameVfsContract() {
   return true;
 }
 
+bool MclaApp::WriteSyntheticCrashReport() {
+  if (!runtime() || !runtime()->memory() || runtime()->user_data_root().empty()) {
+    return false;
+  }
+
+  rex::runtime::ThreadState thread_state(0x4D434C41, 0, 0, runtime()->memory());
+  auto* context = thread_state.context();
+  rex::diagnostics::GuestCrashReport report;
+  {
+    rex::ppc::GuestFunctionScope function_scope(*context, kExpectedEntryPoint);
+    rex::ppc::SetGuestProgramCounter(*context, kExpectedEntryPoint + 4);
+    rex::ppc::RecordGuestImport(*context, "__imp__XGetAVPack");
+    report = rex::diagnostics::CaptureGuestCrashReport("MCLA synthetic crash probe", &thread_state,
+                                                       1);
+  }
+
+  const auto report_path = runtime()->user_data_root() / "mcla-crash-report.txt";
+  std::ofstream stream(report_path, std::ios::binary | std::ios::trunc);
+  if (!stream) {
+    return false;
+  }
+  const std::string text = rex::diagnostics::FormatGuestCrashReport(report);
+  stream.write(text.data(), static_cast<std::streamsize>(text.size()));
+  stream.close();
+  if (!stream) {
+    return false;
+  }
+
+  REXLOG_INFO("MCLA crash probe: privacy-safe report written");
+  return true;
+}
+
 void MclaApp::LaunchModule() {
   if (!ValidateLoadedImageContract()) {
     REXLOG_ERROR("MCLA module config: loaded image contract rejected; guest launch blocked");
@@ -239,6 +279,16 @@ void MclaApp::LaunchModule() {
 
   if (REXCVAR_GET(mcla_module_config_probe)) {
     REXLOG_INFO("MCLA module config: probe complete; guest launch skipped");
+    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    return;
+  }
+
+  if (REXCVAR_GET(mcla_crash_probe)) {
+    if (!WriteSyntheticCrashReport()) {
+      REXLOG_ERROR("MCLA crash probe: report generation failed");
+    } else {
+      REXLOG_INFO("MCLA crash probe: complete; guest launch skipped");
+    }
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return;
   }

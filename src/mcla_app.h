@@ -23,6 +23,7 @@ class MclaApp : public rex::ReXApp {
   bool ValidateStaticImageContract();
   bool ValidateLoadedImageContract();
   bool ValidateGameVfsContract();
+  bool WriteSyntheticCrashReport();
 
   size_t function_mapping_count_ = 0;
 };

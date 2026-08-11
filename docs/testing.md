@@ -167,7 +167,27 @@ cmake --build --preset win-amd64-release --target mcla --parallel
 scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 ```
 
-The verifier requires the accepted 64-file/128,031,984-byte manifest, an exact unique 62-source `sources.cmake` list, repository containment, no reparse points, zero tracked generated files, Git-ignore coverage for every output, 62 compiled generated objects, and a PE executable. Fixture tests reject a changed hash, an unlisted file, a wrong total-byte count, a duplicate manifest path, and a mismatched source list.
+The verifier now requires the current M3-009 67-file/133,906,156-byte manifest, an exact unique 65-source `sources.cmake` list, repository containment, no reparse points, zero tracked generated files, Git-ignore coverage for every output, 65 compiled generated objects, and a PE executable. M3-001 retains the historical 64-file/62-source baseline in its evidence. Fixture tests reject a changed hash, an unlisted file, a wrong total-byte count, a duplicate manifest path, and a mismatched source list; the snapshot helper additionally rejects overwrite, outside-private output, and an empty generated root.
+
+M3-009 privacy-safe crash-report gate:
+
+```powershell
+scripts\verify-crash-report-contract.ps1
+scripts\test-crash-report-contract.ps1
+scripts\test-crash-report.ps1
+scripts\run-crash-report-smoke.ps1
+```
+
+The SDK source contract requires exception-aware guest function scopes, function
+and basic-block PC breadcrumbs, typed/raw/stub import breadcrumbs, the `XThread`
+C++ exception boundary, a 16-frame host-stack bound, and default guest-memory
+exclusion. Its fixture suite passes one positive case and rejects a missing
+exception boundary, enabled guest memory, missing generated PC tracking, and a
+missing raw-hook breadcrumb. The report verifier requires the exact schema and
+synthetic identifiers, contiguous bounded host frames, ordered lifecycle markers,
+and no guest execution. It rejects missing guest PC, enabled guest memory, private
+host paths, and a mismatched frame count. Raw reports/logs remain ignored below
+`private/evidence/M3-009/`.
 
 M3-002 application-lifecycle gate:
 

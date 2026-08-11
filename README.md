@@ -35,7 +35,7 @@ Support for any other region, revision, title update, or executable must be impl
 
 Static recompilation does not automatically make an Xbox 360 game portable. MCLA-R requires game-specific work for PowerPC control flow, Xbox kernel and XAM behavior, graphics, audio, input, storage, timing, retired online-service paths, and progression compatibility.
 
-The project uses an exact MCLA-R ReXGlue v0.9.0.6 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned for tested vector-codegen validation, Windows Unicode paths, safe host teardown, fail-closed game-data VFS behavior, deterministic offline-service states, and Xenia-compatible guest-thread startup ordering.
+The project uses an exact MCLA-R ReXGlue v0.9.0.7 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned for tested vector-codegen validation, Windows Unicode paths, safe host teardown, fail-closed game-data VFS behavior, deterministic offline-service states, Xenia-compatible guest-thread startup ordering, and privacy-safe guest crash reports.
 
 ## Development plan
 
