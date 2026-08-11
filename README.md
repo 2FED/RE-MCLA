@@ -6,7 +6,7 @@ The project aims to translate the original PowerPC executable ahead of time and 
 
 ## Status
 
-MCLA-R has completed its reproducible toolchain and source-ingestion milestone and is entering the behavioral-baseline/feasibility phase. Version `0.1.0.0` validates the exact supported dump and local tooling; it is not a playable build or public game release.
+MCLA-R has completed its behavioral baseline and static-codegen feasibility milestone with a `GO WITH SDK FORK` decision. Version `0.2.0.0` deterministically generates the exact supported executable with zero analysis diagnostics and is entering native compile/module-boot work; it is not yet a playable build or public game release.
 
 The initial target is:
 
@@ -35,7 +35,7 @@ Support for any other region, revision, title update, or executable must be impl
 
 Static recompilation does not automatically make an Xbox 360 game portable. MCLA-R requires game-specific work for PowerPC control flow, Xbox kernel and XAM behavior, graphics, audio, input, storage, timing, retired online-service paths, and progression compatibility.
 
-The project uses ReXGlue as its intended recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R.
+The project uses an exact MCLA-R ReXGlue v0.9.0.1 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned only for a tested vector-codegen validation fix.
 
 ## Development plan
 
@@ -63,7 +63,7 @@ The plan progresses through:
 
 ## Contributing
 
-The project is not yet ready for general contributions. Until the feasibility milestone is complete, coordinate work before implementing broad runtime or enhancement changes.
+The project is not yet ready for general contributions. During native boot work, coordinate before implementing broad runtime or enhancement changes.
 
 Never open an issue or pull request containing copyrighted game files, memory dumps, private logs, credentials, tokens, or links to unauthorized game downloads.
 

@@ -171,12 +171,18 @@ Known installed components:
 - Ghidra `12.0.4` with XEXLoaderWV `13.0.0`
 - RenderDoc `1.45.0`
 
-Known M2 unknowns:
+Resolved M2 feasibility questions:
 
-- target-XEX ReXGlue codegen feasibility and determinism
-- complete Xenia visual/save/controller baseline coverage
-- required manual function, switch-table, exception, and invalid-data overrides
-- minimum native runtime import/stub set
+- target-XEX non-force codegen is successful and deterministic at 64 files / 128,031,984 bytes
+- stock Xenia visual/save/controller baseline coverage is complete
+- eight manual function entries are required; switch-table, exception, invalid-data, and setjmp/longjmp overrides remain zero
+- all load-time variables and the 26-import pre-main function set have SDK registrations
+
+Known M3 unknowns:
+
+- native compile/link time and peak memory for the 128 MB generated corpus
+- first deterministic native guest failure beyond module entry
+- runtime-semantic completeness of statically registered startup imports
 
 Host GitHub CLI authentication was user-verified on 2026-08-10:
 
@@ -401,7 +407,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-003** Add `.gitignore` entries for `private/`, `generated/`, build trees, SDK binaries, logs, dumps, caches, ISO/XEX/XEXP/RPF/BIK files, and package artifacts. Verified with tracked-source and prohibited-path fixtures on 2026-08-10.
 - [x] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature. Reviewed against the current project plan on 2026-08-10.
 - [x] **M0-005** Select and add a license covering only original port code and scripts. MIT selected on 2026-08-10 with third-party/game-content boundaries documented in README.
-- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10 and advanced to `0.1.0.0` when M1 closed with a reproducible scaffold and feasibility toolchain on 2026-08-11.
+- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10, advanced to `0.1.0.0` at M1 toolchain closure, and to `0.2.0.0` at M2 clean-codegen feasibility closure on 2026-08-11.
 - [x] **M0-007** Create the planned directory scaffold without copying proprietary files. Source, test, rule, documentation-evidence, CMake, script, and third-party roots created on 2026-08-10; private/generated roots remain local-only and ignored.
 - [x] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow. Initial C++ smoke rule and fixtures added and verified with ast-grep 0.45.0 on 2026-08-10.
 - [x] **M0-009** Define initial structural safety rules and fixtures. Bootstrap rules cover unbounded `strcpy`, `sprintf`/`vsprintf`, and `strcat`; path-aware VFS and hook-metadata rules remain required when real C++ AST lands. Verified with ast-grep 0.45.0 on 2026-08-10.
@@ -520,7 +526,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 
 **Goal:** prove that the exact XEX can be analyzed and converted, and quantify every blocker before substantial runtime implementation begins.
 
-**Status:** `IN PROGRESS — GREEN`.
+**Status:** `CLOSED — GO WITH SDK FORK M3` on 2026-08-11.
 
 **Estimate:** 2–10 working days; extend only with an explicit feasibility review.
 
@@ -597,10 +603,13 @@ Pause for a feasibility decision if:
 - 2026-08-11 — M2 checkpoint 7 (Codex review). Completed since prior checkpoint: M2-011 and M2-012; total 12/17. Health: `YELLOW — SDK REGRESSION REMAINS`. Evidence: all save/restore helpers and 20,071 PDATA records are mapped; 34 exception-marked functions parsed; setjmp/longjmp is explicitly not used; all seven original cross-gap branches and one follow-up entry have bounded rationales; non-force codegen reaches zero analysis errors; and two clean outputs have an identical 64-file/128,031,984-byte manifest. Removed risk: the seven S1 analysis blockers are closed by minimal reviewed configuration. Remaining risk: twenty S2 FLOAT16_4 warnings require M2-016 semantics tests. Estimate narrows to 1–6 working days. Gate readiness: not ready; import/startup coverage, patch comparison, SDK regression, and feasibility decision remain. Next tasks: M2-013 and M2-014. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M2-011-control-flow-metadata.md`, `docs/evidence/M2-012-manual-analysis-config.md`.
 - 2026-08-11 — M2 checkpoint 8 (Codex review). Completed since prior checkpoint: M2-013 and M2-014; total 14/17. Health: `YELLOW — SDK VECTOR REGRESSION REMAINS`. Evidence: all 503 XEX import records resolve to 257 known XAM/xboxkrnl symbols with explicit static reachability; all 246 function thunks match the accepted dispatcher; all 11 variable imports have pinned SDK mappings; and the conservative pre-main envelope contains 26 registered functions with no missing project stub. Removed risk: no unknown ordinal or missing early-startup registration remains. Remaining risks: public patch addresses need local byte verification, and twenty FLOAT16_4 warnings still need SDK regression coverage. Estimate narrows to 1–4 working days. Gate readiness: not ready; M2-015 through M2-017 remain. Next tasks: M2-015 and M2-016. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M2-013-import-coverage.md`, `docs/evidence/M2-014-startup-import-set.md`.
 - 2026-08-11 — M2 checkpoint 9 (Codex review). Completed since prior checkpoint: M2-015 and M2-016; total 16/17. Health: `GREEN — FEASIBILITY DECISION PENDING`. Evidence: all eight Complete Edition public patch writes match the local image and remain disabled; forked ReXGlue v0.9.0.1 has direct FLOAT16_4 mask-3 semantics coverage; focused and full PPC suites pass; the twenty vector warnings fall to zero; and all 64 generated files remain byte-identical to M2-012. Removed risks: patch-address mismatch and unverified vector-pack semantics. New dependency: MCLA-R must pin the public `2FED/rexglue-sdk` fork until the fix lands upstream. Estimate narrows to less than one working day for M2-017 and closure review. Gate readiness: technically ready for decision, not yet approved. Next task: M2-017, then milestone closure review. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M2-015-xenia-patch-audit.md`, `docs/evidence/M2-016-rexglue-vector-regression.md`.
+- 2026-08-11 — M2 closure review. Completed: all 17 M2 tasks. Health: `GREEN`; decision: `GO WITH SDK FORK M3`; release: `0.2.0.0`. Evidence: task commits through `f0be783`; 17/17 task and acceptance-register coverage; project tests 10/10; ReXGlue PPC 1,459/1,459 cases and 5,733 assertions; clean ast-grep scan and 3/3 rule tests; bootstrap 12/12; final non-force codegen with zero diagnostics and the accepted 64-file manifest; complete 503-record import map; public fork/tag/SHA verification; zero prohibited tracked paths; and clean Git integrity apart from harmless dangling objects. Residual native build/startup/import-semantic risks are owned by M3. Gate readiness: ready. Next tasks: M3-001 and M3-002. Closure evidence: `docs/evidence/M2-closure-review.md`. Scope and criteria remain valid.
 
 ## 11. Milestone M3 — Clean native build and module boot
 
 **Goal:** compile, link, and launch a native executable that initializes ReXGlue, loads the XEX image, and enters guest startup code with actionable diagnostics.
+
+**Status:** `ACTIVE — GO WITH SDK FORK`.
 
 **Estimate:** 1–4 weeks.
 
@@ -655,7 +664,7 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M3-001, M3-002.
+- No checkpoint yet. Health: `GREEN — READY TO START`. Next tasks: M3-001, M3-002.
 
 ## 12. Milestone M4 — Frontend, intro path, and menu stability
 
@@ -1249,7 +1258,8 @@ Execute in this order unless a new blocker changes the plan:
 3. [x] Complete M2-001 through M2-012: baseline, deterministic codegen, finding triage, and manual analysis configuration.
 4. [x] Complete M2-013: map all XAM/xboxkrnl import records and static reachability classes.
 5. [x] Complete M2-016: add SDK regression coverage for the twenty FLOAT16_4 sites.
-6. [ ] Complete M2-017 and close M2 with an explicit feasibility decision before implementing broad runtime behavior.
+6. [x] Complete M2-017 and close M2 at version `0.2.0.0` with `GO WITH SDK FORK`.
+7. [ ] Complete M3-001 and M3-002: integrate generated sources and define the `ReXApp` lifecycle.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 
