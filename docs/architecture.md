@@ -6,6 +6,36 @@ Purpose: describe the implemented host/runtime architecture and the boundaries b
 
 Current state: the canonical ReXGlue v0.9.0.7 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units; the project-owned host lifecycle, loaded-image probes, and privacy-safe synthetic crash path are verified independently.
 
+## Consumer preparation model
+
+The planned public distribution is an asset-free launcher/runtime package, not a
+prebuilt copy of the game. A user supplies their legally obtained supported disc
+dump locally. The launcher verifies the exact image identity, extracts only into
+a contained staging root, runs the existing code-generation and native-build
+pipeline locally, and atomically publishes a fingerprinted prepared-game
+directory. Subsequent launches reuse that prepared directory; repair or a
+project/SDK update may trigger a new preparation generation.
+
+```text
+user disc dump
+    -> exact identity verification
+    -> contained local extraction
+    -> local guest code generation and native compilation
+    -> atomic prepared/<content+toolchain fingerprint>/
+    -> launcher starts the prepared native runtime
+```
+
+The source dump is read-only, is never uploaded or packaged, and is not deleted
+by repair or uninstall. Game assets, extracted executables, and generated guest
+code remain local and untracked. The current scripts implement the core
+validation, extraction, code-generation, native-build, and launch stages; they
+do not yet implement fingerprinted prepared-generation publication or reuse.
+M9 owns that atomic/resumable prepare-repair-update orchestrator, the launcher
+UI, portable toolchain decisions, and clean-machine package tests. A future
+split between a prebuilt host/runtime and a locally generated guest module is
+desirable if the pinned runtime supports it, but is not a prerequisite for this
+distribution model.
+
 Implemented bootstrap boundary:
 
 - `CMakeLists.txt` pins ReXGlue 0.9.0.7, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin

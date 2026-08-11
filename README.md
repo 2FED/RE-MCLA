@@ -6,7 +6,7 @@ The project aims to translate the original PowerPC executable ahead of time and 
 
 ## Status
 
-MCLA-R has completed its behavioral baseline and static-codegen feasibility milestone with a `GO WITH SDK FORK` decision. Version `0.2.0.0` deterministically generates the exact supported executable with zero analysis diagnostics and is entering native compile/module-boot work; it is not yet a playable build or public game release.
+MCLA-R has completed its clean native build and module-boot milestone with a `GO M4` decision. Version `0.3.0.0` reliably loads the exact supported image, reaches verified graphics-pipeline and audio-callback startup, and passes ten consecutive controlled launch/exit cycles. It does not yet reach a validated frontend and is not a playable build or public game release.
 
 The initial target is:
 
@@ -21,7 +21,7 @@ Linux, higher frame rates, ultrawide support, and other enhancements are later g
 
 This repository does not contain the game, game assets, Xbox 360 executables, generated proprietary game code, title updates, DLC packages, or encryption/signing material.
 
-Development and eventual user builds require a legally obtained user-supplied dump of the supported Xbox 360 Complete Edition. The planned tooling will validate the dump before extracting or using it and will not modify the source image.
+Development and eventual user builds require a legally obtained user-supplied dump of the supported Xbox 360 Complete Edition. The implemented tooling validates the dump before extracting or using it and does not modify the source image.
 
 Current research targets the following disc identity:
 
@@ -35,7 +35,13 @@ Support for any other region, revision, title update, or executable must be impl
 
 Static recompilation does not automatically make an Xbox 360 game portable. MCLA-R requires game-specific work for PowerPC control flow, Xbox kernel and XAM behavior, graphics, audio, input, storage, timing, retired online-service paths, and progression compatibility.
 
-The project uses an exact MCLA-R ReXGlue v0.9.0.7 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned for tested vector-codegen validation, Windows Unicode paths, safe host teardown, fail-closed game-data VFS behavior, deterministic offline-service states, Xenia-compatible guest-thread startup ordering, and privacy-safe guest crash reports. Project diagnostics use nine independently filterable categories: app, PPC, kernel, XAM, VFS, GPU, audio, input, and patches.
+The project uses an exact MCLA-R ReXGlue v0.9.0.7 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned for tested vector-codegen validation, Windows Unicode paths, corrected window/input destruction ordering, fail-closed game-data VFS behavior, deterministic offline-service states, Xenia-compatible guest-thread startup ordering, and privacy-safe guest crash reports. General forced guest-thread teardown can still poison a guest-heap lock; the synthetic diagnostic route is contained and normal `WM_CLOSE` cycles are independently verified, but this SDK limitation is not claimed as fixed. Project diagnostics use nine independently filterable categories: app, PPC, kernel, XAM, VFS, GPU, audio, input, and patches.
+
+## Planned user-supplied dump workflow
+
+The intended public experience is the same broad model used by asset-free recompilation launchers: MCLA-R ships a launcher, runtime, validation metadata, and original project code, while the user selects their own supported disc dump. On first preparation, the launcher will verify the exact dump, safely extract the required files, run local code generation/compilation, and publish an atomic fingerprinted prepared-game directory. Later launches will reuse that prepared directory until repair or an update is required.
+
+The current repository already implements the underlying developer pipeline—exact ISO validation, contained extraction, local code generation, native compilation, runtime launch, and data-integrity checks—but not the consumer launcher or clean-machine packaging UX. The source dump must never be uploaded, modified, bundled, or deleted; after successful preparation it need not be reread on every launch, but it remains user-owned and available for repair/rebuild. Generated proprietary guest code and game assets remain local and untracked.
 
 ## Development plan
 
