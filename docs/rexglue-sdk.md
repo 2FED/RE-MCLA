@@ -12,12 +12,12 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.1`
-- Immutable project commit: `583c8ff35cde3818992fc78d936c635bca092a6b`
-- Fork branch: `mcla/float16-mask3`
+- Project release tag: `v0.9.0.2`
+- Immutable project commit: `14c901c6c58dc5791985a116575a2cc59849d2fe`
+- Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
-The fork adds one reviewed codegen validation fix and one PPC regression case: `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound. The emitted semantics are unchanged. M2-016 ran the complete PPC suite and byte-compared a clean MCLA generation against the accepted v0.9.0 output. See `docs/evidence/M2-016-rexglue-vector-regression.md`.
+The fork carries two reviewed fixes. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage and unchanged generated MCLA bytes. ReXApp also converts host paths through `rex::path_to_utf8()` rather than locale-dependent `std::filesystem::path::string()`, with a non-ASCII round-trip test and a real Windows lifecycle smoke. See `docs/evidence/M2-016-rexglue-vector-regression.md` and `docs/evidence/M3-002-app-lifecycle.md`.
 
 ## Reproduction
 
@@ -32,19 +32,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.1
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.2^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `583c8ff35cde3818992fc78d936c635bca092a6b`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `14c901c6c58dc5791985a116575a2cc59849d2fe`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.1 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.2 project-fork commit:
 
 ```text
-583c8ff35cde3818992fc78d936c635bca092a6b third_party/rexglue-sdk
+14c901c6c58dc5791985a116575a2cc59849d2fe third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

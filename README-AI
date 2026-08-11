@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.1 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.2 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -164,7 +164,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.1` pinned recursively at commit `583c8ff35cde3818992fc78d936c635bca092a6b` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.2` pinned recursively at commit `14c901c6c58dc5791985a116575a2cc59849d2fe` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -180,7 +180,7 @@ Resolved M2 feasibility questions:
 
 Known M3 unknowns:
 
-- native compile/link time and peak memory for the 128 MB generated corpus
+- peak memory for clean native compilation of the 128 MB generated corpus
 - first deterministic native guest failure beyond module entry
 - runtime-semantic completeness of statically registered startup imports
 
@@ -192,6 +192,13 @@ Host GitHub CLI authentication was user-verified on 2026-08-10:
 - scopes: `gist`, `read:org`, `repo`, `workflow`
 
 Sandboxed agent shells may not always inherit the Windows keyring session. Treat the host result as authoritative, but rerun `gh auth status` immediately before the first remote mutation.
+
+Before filing a confirmed tool defect upstream, search both open and closed
+issues and pull requests using the failure signature, affected API, subsystem,
+and likely user-facing wording. Inspect every plausible match rather than
+relying only on titles. Publish only sanitized reproduction details, never
+private game data or local identity/path details, and do not create an issue
+when an existing report covers the same root cause.
 
 CMake and Ninja are not currently on the normal shell `PATH`; scripts must locate them deterministically or initialize the Visual Studio environment.
 
@@ -622,7 +629,7 @@ Pause for a feasibility decision if:
 ### Tasks
 
 - [x] **M3-001** Integrate generated sources through CMake without tracking private/generated proprietary content. The exact ReXGlue v0.9.0.1 preset consumes 62 generated C++ files from the accepted 64-file manifest; a clean 66-action Release build compiles all 62 objects and links an ignored 41,972,736-byte PE. Version mismatch, missing-generated fallback, hash/list/containment, and Git-ignore gates pass. Evidence: `scripts/verify-generated-integration.ps1`, `scripts/test-generated-integration.ps1`, `docs/evidence/M3-001-generated-source-integration.md`.
-- [ ] **M3-002** Add a project `ReXApp` subclass and document lifecycle hooks.
+- [x] **M3-002** Add a project `ReXApp` subclass and document lifecycle hooks. `MclaApp` owns three minimal hooks and a guest-free probe. CDB traced the first Windows fast-fail to ReXGlue's locale-dependent `path.string()` conversion of a localized Documents path. Fork v0.9.0.2 converts all nine host paths to UTF-8 and adds non-ASCII regression coverage; final RelWithDebInfo and Release probes exit 0 with four ordered markers and controlled shutdown. Evidence: `scripts/test-app-lifecycle.ps1`, `scripts/run-app-lifecycle-smoke.ps1`, `scripts/debug-app-lifecycle-smoke.ps1`, `docs/evidence/M3-002-app-lifecycle.md`.
 - [ ] **M3-003** Configure guest memory layout, image base, function dispatch, and executable entry point.
 - [ ] **M3-004** Mount `private/game` as the guest disc root through the VFS.
 - [ ] **M3-005** Implement the minimum missing xboxkrnl imports required for startup.
@@ -664,7 +671,8 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `GREEN — READY TO START`. Next tasks: M3-001, M3-002.
+- 2026-08-11 — M3 checkpoint 1 (immediate S1 re-evaluation). Completed: M3-001 (1/15); M3-002 implementation is open. Health: `RED — HOST LIFECYCLE FAST-FAIL`. Evidence: commit `466ea63`; clean 66-action Release integration; 12/12 project tests; first private M3-002 smoke log; Windows Application Error/WER event `0xC0000409` with fast-fail subcode 7 in `ucrtbase.dll`. New risk: the native host aborts after the project logging-ready hook and before path-finalization, so no module-boot work may be claimed or started. Estimate is suspended pending a symbolized stack. Gate readiness: not ready. Next task: diagnose/fix M3-002, then rerun lifecycle smoke; M3-003 remains queued. Scope and acceptance criteria remain valid.
+- 2026-08-11 — M3 checkpoint 2 (two-task and SDK-change review). Completed: M3-001 and M3-002 (2/15). Health: `GREEN — MODULE BOOT NOT YET STARTED`. Evidence: clean 67-action Release build of all 62 generated objects; CDB root cause in `ReXApp::SetupEnvironment`; reviewed ReXGlue v0.9.0.2 UTF-8-path fix and focused regression; full PPC suite 1,459/1,459 cases and 5,733 assertions; final RelWithDebInfo and Release probes exit 0 with four ordered lifecycle markers. Removed risk: localized Windows profile paths no longer abort host initialization. Remaining risk: guest memory/dispatch/entry configuration is unexercised. Estimate returns to 1–4 weeks. Gate readiness: not ready. Next tasks: M3-003 and M3-004. Milestone scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-002-app-lifecycle.md`.
 
 ## 12. Milestone M4 — Frontend, intro path, and menu stability
 
@@ -1259,7 +1267,8 @@ Execute in this order unless a new blocker changes the plan:
 4. [x] Complete M2-013: map all XAM/xboxkrnl import records and static reachability classes.
 5. [x] Complete M2-016: add SDK regression coverage for the twenty FLOAT16_4 sites.
 6. [x] Complete M2-017 and close M2 at version `0.2.0.0` with `GO WITH SDK FORK`.
-7. [-] Complete M3-001 and M3-002: generated-source integration is complete; define and exercise the `ReXApp` lifecycle next.
+7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 is fixed in the pinned ReXGlue v0.9.0.2 fork.
+8. [ ] Complete M3-003 and M3-004: configure guest image startup, then mount the validated private game root through the VFS.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

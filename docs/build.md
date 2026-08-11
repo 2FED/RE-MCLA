@@ -52,11 +52,11 @@ git submodule update --init --recursive
 git submodule status --recursive
 ```
 
-The first status line must contain ReXGlue project-fork commit `583c8ff35cde3818992fc78d936c635bca092a6b`; no line may begin with `-`, `+`, or `U`.
+The first status line must contain ReXGlue project-fork commit `14c901c6c58dc5791985a116575a2cc59849d2fe`; no line may begin with `-`, `+`, or `U`.
 
-The verified v0.9.0.1 Windows build uses:
+The verified v0.9.0.2 Windows build uses:
 
-- ReXGlue 0.9.0.1 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.9.0.2 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -194,7 +194,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.9.0.1`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.9.0.2`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1
@@ -206,6 +206,19 @@ scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 With the accepted corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 62 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
 
 `generated/rexglue.cmake` is the sole tracked file below `generated/`. The 64 generated files, all object files, and the resulting executable remain ignored because they contain or embed translated proprietary game code. M3-001 clean Release evidence is in `docs/evidence/M3-001-generated-source-integration.md`.
+
+Exercise only the project-owned host lifecycle, without constructing the guest
+runtime or launching translated code, with:
+
+```powershell
+scripts\run-app-lifecycle-smoke.ps1
+```
+
+The wrapper launches the ignored Release executable with
+`--mcla_lifecycle_probe`, requires a clean exit within 15 seconds, verifies four
+ordered lifecycle markers, and stores the raw log under ignored
+`private/evidence/M3-002/`. This is a host startup smoke test, not a module-boot
+or gameplay claim.
 
 The immutable M2-008 first non-force gate was run through `scripts\run-rexglue-codegen-gate.ps1`. It completed all six analysis phases and returned exit code 1 for seven validation-stage `UnresolvedCall` findings without emitting `generated/default`. Its raw streams remain ignored; regenerate the reviewed public evidence with `scripts\export-rexglue-codegen-gate.ps1`. Do not remove or overwrite the private first-run root, rerun this one-shot gate, add `--force` to it, or use the M2-008 root for the separate M2-009 force inventory.
 

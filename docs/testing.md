@@ -169,6 +169,20 @@ scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 
 The verifier requires the accepted 64-file/128,031,984-byte manifest, an exact unique 62-source `sources.cmake` list, repository containment, no reparse points, zero tracked generated files, Git-ignore coverage for every output, 62 compiled generated objects, and a PE executable. Fixture tests reject a changed hash, an unlisted file, a wrong total-byte count, a duplicate manifest path, and a mismatched source list.
 
+M3-002 application-lifecycle gate:
+
+```powershell
+scripts\test-app-lifecycle.ps1
+scripts\run-app-lifecycle-smoke.ps1
+```
+
+The static regression check keeps the native entry point attached to the
+project-owned `MclaApp` subclass and verifies the deliberately small hook/probe
+contract. The real smoke follows the SDK windowed-app lifecycle without
+constructing or launching the guest runtime and passes only on exit code 0 with
+the four startup/probe/shutdown log markers in order. Raw logs stay below
+ignored `private/evidence/M3-002/`.
+
 Planned test layers:
 
 1. host utility unit tests
