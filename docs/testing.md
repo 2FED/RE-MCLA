@@ -273,6 +273,24 @@ its owned PID to terminate and signal exit within five seconds. It re-verifies
 the post-exit log before binding its exact bytes/hash into the result. Raw
 logs/results remain ignored below `private/evidence/M3-014/`.
 
+M3-015 repeated launch/exit gate:
+
+```powershell
+scripts\test-launch-exit-cycles.ps1
+scripts\run-launch-exit-cycles.ps1
+scripts\verify-launch-exit-cycles.ps1 -ResultPath <private-result.json>
+```
+
+The final runner always performs a RelWithDebInfo clean build, then ten crash
+probes followed by ten consecutive canonical normal startups. Crash probes
+must write the privacy-safe report and shutdown marker and signal exit 0;
+normal cycles must reach all M3-014 markers, accept `WM_CLOSE`, write exactly
+one ordered window-close/hard-exit tail, and signal exit 0. Force cleanup,
+surviving exact-path processes, game or binary drift, prior-cycle tree
+mutation, and aggregate path leakage all fail closed. A reduced `-CycleCount`
+is development-only and can never satisfy the result verifier. Raw evidence
+remains ignored below `private/evidence/M3-015/`.
+
 M3-002 application-lifecycle gate:
 
 ```powershell

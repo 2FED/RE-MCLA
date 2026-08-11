@@ -295,6 +295,22 @@ handle to signal exit within a separate five-second cleanup deadline, then
 re-verifies the immutable final log and exact result byte/hash fields.
 Private logs/results remain below `private/evidence/M3-014/`.
 
+Run the final repeated-process and integrity gate with:
+
+```powershell
+scripts\test-launch-exit-cycles.ps1
+scripts\run-launch-exit-cycles.ps1
+scripts\verify-launch-exit-cycles.ps1 -ResultPath <private-result.json>
+```
+
+The canonical command performs its own `--clean-first` RelWithDebInfo build;
+do not use `-SkipCleanBuild` or a reduced cycle count for acceptance. It runs
+all ten crash probes first so the first invocation is immediately post-relink,
+then runs ten consecutive normal windows through controlled `WM_CLOSE`. Every
+invocation receives unique ignored user/cache roots. The gate re-hashes all
+completed cycle trees after later runs, all four staged binaries before/after,
+and the complete 15-file private game manifest before/after.
+
 Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
 
 ```powershell

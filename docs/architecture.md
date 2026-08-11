@@ -41,6 +41,15 @@ canonical identity marker consumed by the M3-014 smoke gate.
 `--mcla_module_config_probe` exercises that complete contract and exits before
 guest execution.
 
+The synthetic crash-report probe closes its report before scheduling its UI
+exit callback. ReXGlue's general Runtime teardown can force-terminate the idle
+Audio Worker while it owns a guest-heap lock, after which `XThread::FreeStack`
+may block forever in `BaseHeap::Release`. Because this diagnostic route never
+launches guest entry-point code, its callback emits the project shutdown
+marker, flushes logging, and hard-exits the process. Normal application closure
+does not use this probe shortcut: M3-015 separately drives the real window
+through `WM_CLOSE` and requires ReXGlue's ordered close/hard-exit markers.
+
 Before every normal guest launch, `MclaApp` verifies that `game:` and `d:` map
 to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files
 through all aliases, rejects root traversal, and proves the game device is

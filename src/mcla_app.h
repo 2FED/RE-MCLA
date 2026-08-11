@@ -25,6 +25,7 @@ class MclaApp : public rex::ReXApp {
   bool ValidateLoadedImageContract();
   bool ValidateGameVfsContract();
   bool WriteSyntheticCrashReport();
+  [[noreturn]] void HardExitCrashProbeFromUIThread();
 
   size_t function_mapping_count_ = 0;
 };

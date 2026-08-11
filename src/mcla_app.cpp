@@ -15,6 +15,7 @@
 #include <rex/system/user_module.h>
 
 #include <array>
+#include <cstdlib>
 #include <fstream>
 #include <utility>
 
@@ -366,7 +367,7 @@ void MclaApp::LaunchModule() {
     } else {
       MCLA_APP_INFO("MCLA crash probe: complete; guest launch skipped");
     }
-    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    app_context().CallInUIThreadDeferred([this]() { HardExitCrashProbeFromUIThread(); });
     return;
   }
 
@@ -383,6 +384,17 @@ void MclaApp::LaunchModule() {
   }
 
   rex::ReXApp::LaunchModule();
+}
+
+[[noreturn]] void MclaApp::HardExitCrashProbeFromUIThread() {
+  // Runtime teardown may force-terminate the idle audio XThread while it owns
+  // a guest-heap lock, permanently poisoning that lock before FreeStack. The
+  // crash probe has already closed its report and intentionally launches no
+  // guest code, so use the same flush-and-hard-exit containment as WM_CLOSE.
+  OnShutdown();
+  MCLA_APP_INFO("MCLA crash probe: controlled hard exit");
+  rex::FlushLogging();
+  std::_Exit(0);
 }
 
 void MclaApp::OnShutdown() { MCLA_APP_INFO("MCLA lifecycle: shutdown"); }
