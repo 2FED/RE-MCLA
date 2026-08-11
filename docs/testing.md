@@ -136,6 +136,15 @@ scripts\test-export-startup-import-set.ps1
 
 The startup exporter pins the accepted generated/import evidence, verifies the exact `xstart` call order and title-main boundary, computes the transitive pre-main call closure, and requires every resulting import registration plus all eleven variable mappings in the pinned SDK. It distinguishes load-time mappings, pre-main functions, error-path semantics, and post-main shutdown calls. Tests require deterministic output and reject changed coverage, missing generated input, or output outside `docs/evidence`.
 
+M2-015 public-patch byte audit:
+
+```powershell
+scripts\export-xenia-patch-audit.ps1
+scripts\test-export-xenia-patch-audit.ps1
+```
+
+`scripts/ghidra/PatchAudit.java` reads the eight reviewed addresses from the loaded private XEX image. The exporter pins the upstream Complete Edition TOML SHA, upstream commit, target XEX, and Ghidra TSV; requires the exact title/module/media identity; verifies original bytes, containing words, instruction context, replacements, and disabled-by-default state; and publishes no proprietary bytes beyond the small patch-site words needed for verification. Tests reject an enabled/mutated upstream file, changed original bytes, or output outside `docs/evidence`.
+
 Planned test layers:
 
 1. host utility unit tests
