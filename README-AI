@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.7 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.9 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -179,7 +179,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.7` pinned recursively at commit `efac376998cbb0520295d308be4703574a12a995` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.9` pinned recursively at commit `01f895afb1b084652915c0b463910d57049f06be` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -193,11 +193,12 @@ Resolved M2 feasibility questions:
 - eight M2 analysis entries plus twelve runtime-discovered M3 callable entries are required; switch-table, exception, invalid-data, and setjmp/longjmp overrides remain zero
 - all load-time variables and the 26-import pre-main function set have SDK registrations
 
-Known M3 unknowns:
+Post-M4-001 unknowns:
 
-- peak memory for clean native compilation of the 128 MB generated corpus
-- renderer/plugin selection and the first stable visual frame after successful guest startup
-- runtime semantics of conditional/error-path imports not exercised on the stock pre-main route
+- M4-001 proves guest-backed successful D3D12 presents and a nontrivial private
+  readback, but does not establish frontend reachability or render correctness
+- frontend render-target, EDRAM, shader, gamma, intro-video, audio, input, profile, and menu behavior is unverified
+- runtime semantics of conditional/error-path imports not exercised on the stock pre-main route remain unverified
 
 Host GitHub CLI authentication was user-verified on 2026-08-10:
 
@@ -714,19 +715,20 @@ Pause for a feasibility decision if:
 
 **Goal:** reach and operate the main frontend reliably with rendering, input, profile, and basic audio functioning.
 
-**Status:** `READY — GO M4`.
+**Status:** `ACTIVE — GO M4`.
 
 **Estimate:** 1–6 weeks.
 
 ### Prerequisites
 
 - M3 closed
-- GPU plugin loads successfully
-- SDL input and basic XAM profile service available
+- exact configuration-matched Xenos plugin stages and loads successfully
+- private stock-Xenia visual baseline and privacy-safe capture tooling are available
+- SDL input and basic XAM profile behavior are M4 closure dependencies owned by M4-004 through M4-006, not entry prerequisites
 
 ### Tasks
 
-- [ ] **M4-001** Initialize the D3D12 Xenos backend and present the first valid frame.
+- [x] **M4-001** Instrument and verify a guest-originated swap through successful D3D12 presentation and a nontrivial guest-output readback. ReXGlue v0.9.0.9 now binds monotonic guest-output sequences to successful DXGI presents, holds mailbox ownership through capture readback, rejects ahead-of-present captures, and exposes the exact successful HRESULT class. The canonical clean RelWithDebInfo gate passes 20/20 isolated launches with at least three guest-backed presents per cycle, 20/20 independently nontrivial 1280x720 BMPs, 20/20 capture/present watermark equality, two-second dwell, exit 0 through `WM_CLOSE`, no force cleanup/orphans, and unchanged source game/runtime/prior-run trees. The project owner classified the private legal-screen capture as recognizable, correctly oriented MCLA-derived output rather than host-only blank/solid/garbage. This does not claim frontend reachability or rendering correctness. Evidence: `scripts/run-first-frame-smoke.ps1`, `scripts/verify-first-frame-smoke.ps1`, `scripts/test-first-frame-smoke.ps1`, `docs/evidence/M4-001-first-valid-frame.md`.
 - [ ] **M4-002** Validate render-target formats, EDRAM resolves, depth, MSAA, gamma, and shader translation used by the frontend.
 - [ ] **M4-003** Decide whether Bink intro playback is fixed now or remains behind the documented skip-intro development option.
 - [ ] **M4-004** Implement XAM user sign-in/profile behavior required by the game.
@@ -768,7 +770,17 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M4-001, M4-002.
+- 2026-08-11 — M4 checkpoint 1. Completed: M4-001 (1/13). Health:
+  `GREEN — FIRST GUEST FRAME PHYSICALLY VERIFIED`. Evidence: corrected ReXGlue
+  v0.9.0.9 at `01f895afb1b084652915c0b463910d57049f06be`; clean RelWithDebInfo build;
+  20/20 guest-backed present/readback cycles; 20/20 independently nontrivial
+  1280x720 captures; capture/present watermark equality in every cycle; no
+  device loss, force cleanup, orphan, source-game/runtime/prior-tree drift, or
+  private-path leak; project-owner visual PASS. Removed risk: pipeline creation
+  is no longer mistaken for presentation. Remaining risks: frontend reachability,
+  EDRAM/format/shader/gamma correctness, intro, input, profile, and audio remain
+  unverified. Gate readiness: not ready. Active next task: M4-002. Evidence:
+  `docs/evidence/M4-001-first-valid-frame.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 
@@ -1152,7 +1164,7 @@ The criterion below is additional to the task wording and universal Definition o
 
 | ID | Individual acceptance criterion / minimum evidence |
 |---|---|
-| M4-001 | First valid frame presents repeatedly without device loss / 20-run log |
+| M4-001 | Twenty physical-evidence runs each bind at least three monotonic guest-output sequences to successful D3D12 presents, recompute a nontrivial same-or-later readback, dwell without device loss, close without force cleanup/orphans/drift, and include one private human game-derived-output classification / logs, captures, physical verifier, and sanitized aggregate |
 | M4-002 | Frontend target/depth/MSAA/gamma paths match baseline within documented tolerance / GPU comparison |
 | M4-003 | Bink is either functional or bypassed by a safe documented development option / decision and test |
 | M4-004 | Required profile states match guest expectations / profile test matrix |
@@ -1305,7 +1317,7 @@ Execute in this order unless a new blocker changes the plan:
 4. [x] Complete M2-013: map all XAM/xboxkrnl import records and static reachability classes.
 5. [x] Complete M2-016: add SDK regression coverage for the twenty FLOAT16_4 sites.
 6. [x] Complete M2-017 and close M2 at version `0.2.0.0` with `GO WITH SDK FORK`.
-7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 remains fixed in the current ReXGlue v0.9.0.7 fork.
+7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 remains fixed in the current ReXGlue v0.9.0.9 fork.
 8. [x] Complete M3-003 and M3-004: guest image/entry/dispatch plus private game-root VFS/write containment are verified.
 9. [x] Complete M3-005 and M3-006: minimum stock-route xboxkrnl and XAM imports are runtime- and behavior-verified.
 10. [x] Complete M3-007: explicit logged offline-service behavior is deterministic and regression-tested.
@@ -1318,7 +1330,11 @@ Execute in this order unless a new blocker changes the plan:
 17. [x] Complete M3-014: the canonical bounded smoke fail-closes on exact supported image identity and requires all expected subsystem markers.
 18. [x] Complete M3-015: ten crash probes plus ten controlled normal launch/exit cycles prove private-root isolation, source-data integrity, zero orphan processes, and a localized/contained KI-010 disposition.
 19. [x] Close M3 at version `0.3.0.0` with `GO M4` after the aggregate review, public SDK fetch verification, documentation update, closure commit, and push.
-20. [ ] Start M4-001 and M4-002: present and validate the first frontend frame without claiming frontend usability before its gate passes.
+20. [x] Complete M4-001: twenty physical-evidence cycles and a project-owner
+    visual PASS verify the first guest-derived frame without claiming frontend
+    reachability or render correctness.
+21. [ ] Complete M4-002: validate the frontend render-target, EDRAM, depth,
+    MSAA, gamma, and shader paths against the private Xenia baseline.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

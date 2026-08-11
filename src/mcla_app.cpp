@@ -13,11 +13,18 @@
 #include <rex/system/kernel_state.h>
 #include <rex/system/thread_state.h>
 #include <rex/system/user_module.h>
+#include <rex/ui/presenter.h>
 
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
+#include <thread>
 #include <utility>
+#include <vector>
 
 #include "generated/default/mcla_init.h"
 #include "mcla_logging.h"
@@ -54,6 +61,10 @@ REXCVAR_DEFINE_BOOL(mcla_crash_probe, false, "MCLA",
 
 REXCVAR_DEFINE_BOOL(mcla_logging_probe, false, "MCLA",
                     "Emit one schema marker for every MCLA-R logging category")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(mcla_first_frame_probe, false, "MCLA",
+                    "Capture the first nontrivial guest frame after presentation starts")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 #define MCLA_DEFINE_LOG_LEVEL_CVAR(name)                                                  \
@@ -386,6 +397,221 @@ void MclaApp::LaunchModule() {
   rex::ReXApp::LaunchModule();
 }
 
+namespace {
+
+struct FrameMetrics {
+  uint32_t occupied_rgb555_bins = 0;
+  uint32_t luma_p05 = 0;
+  uint32_t luma_p95 = 0;
+  uint32_t modal_per_mille = 1000;
+  uint32_t nonmodal_grid_cells = 0;
+
+  bool IsNontrivial() const {
+    return occupied_rgb555_bins >= 16 && luma_p95 >= luma_p05 + 8 && modal_per_mille <= 995 &&
+           nonmodal_grid_cells >= 4;
+  }
+};
+
+bool MeasureFrame(const rex::ui::RawImage& image, FrameMetrics& metrics) {
+  constexpr uint32_t kGridWidth = 16;
+  constexpr uint32_t kGridHeight = 9;
+  if (image.width < 64 || image.height < 64 || image.width > 8192 || image.height > 8192 ||
+      image.stride != size_t(image.width) * 4 || image.data.size() != image.stride * image.height) {
+    return false;
+  }
+
+  std::array<uint32_t, 1u << 15> rgb555_histogram{};
+  std::array<uint32_t, 256> luma_histogram{};
+  const uint64_t pixel_count = uint64_t(image.width) * image.height;
+  for (uint32_t y = 0; y < image.height; ++y) {
+    const uint8_t* row = image.data.data() + size_t(y) * image.stride;
+    for (uint32_t x = 0; x < image.width; ++x) {
+      const uint8_t* pixel = row + size_t(x) * 4;
+      const uint32_t bin = (uint32_t(pixel[0] >> 3) << 10) | (uint32_t(pixel[1] >> 3) << 5) |
+                           uint32_t(pixel[2] >> 3);
+      ++rgb555_histogram[bin];
+      const uint32_t luma = (54u * pixel[0] + 183u * pixel[1] + 19u * pixel[2] + 128u) >> 8;
+      ++luma_histogram[luma];
+    }
+  }
+
+  uint32_t modal_bin = 0;
+  uint32_t modal_count = 0;
+  for (uint32_t i = 0; i < rgb555_histogram.size(); ++i) {
+    if (rgb555_histogram[i]) {
+      ++metrics.occupied_rgb555_bins;
+    }
+    if (rgb555_histogram[i] > modal_count) {
+      modal_count = rgb555_histogram[i];
+      modal_bin = i;
+    }
+  }
+  metrics.modal_per_mille = static_cast<uint32_t>((uint64_t(modal_count) * 1000) / pixel_count);
+
+  const uint64_t p05_target = std::max<uint64_t>(1, (pixel_count * 5 + 99) / 100);
+  const uint64_t p95_target = std::max<uint64_t>(1, (pixel_count * 95 + 99) / 100);
+  uint64_t cumulative = 0;
+  bool found_p05 = false;
+  for (uint32_t i = 0; i < luma_histogram.size(); ++i) {
+    cumulative += luma_histogram[i];
+    if (!found_p05 && cumulative >= p05_target) {
+      metrics.luma_p05 = i;
+      found_p05 = true;
+    }
+    if (cumulative >= p95_target) {
+      metrics.luma_p95 = i;
+      break;
+    }
+  }
+
+  std::array<bool, kGridWidth * kGridHeight> nonmodal_cells{};
+  for (uint32_t y = 0; y < image.height; ++y) {
+    const uint8_t* row = image.data.data() + size_t(y) * image.stride;
+    for (uint32_t x = 0; x < image.width; ++x) {
+      const uint8_t* pixel = row + size_t(x) * 4;
+      const uint32_t bin = (uint32_t(pixel[0] >> 3) << 10) | (uint32_t(pixel[1] >> 3) << 5) |
+                           uint32_t(pixel[2] >> 3);
+      if (bin != modal_bin) {
+        const uint32_t grid_x = std::min(kGridWidth - 1, x * kGridWidth / image.width);
+        const uint32_t grid_y = std::min(kGridHeight - 1, y * kGridHeight / image.height);
+        nonmodal_cells[grid_y * kGridWidth + grid_x] = true;
+      }
+    }
+  }
+  metrics.nonmodal_grid_cells =
+      static_cast<uint32_t>(std::count(nonmodal_cells.begin(), nonmodal_cells.end(), true));
+  return true;
+}
+
+void WriteLittleEndian16(std::ofstream& stream, uint16_t value) {
+  const std::array<uint8_t, 2> bytes = {static_cast<uint8_t>(value),
+                                        static_cast<uint8_t>(value >> 8)};
+  stream.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
+void WriteLittleEndian32(std::ofstream& stream, uint32_t value) {
+  const std::array<uint8_t, 4> bytes = {
+      static_cast<uint8_t>(value), static_cast<uint8_t>(value >> 8),
+      static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 24)};
+  stream.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
+bool WriteFrameBmp(const std::filesystem::path& path, const rex::ui::RawImage& image) {
+  constexpr uint32_t kFileHeaderBytes = 14;
+  constexpr uint32_t kInfoHeaderBytes = 40;
+  const uint64_t pixel_bytes = uint64_t(image.width) * image.height * 4;
+  const uint64_t file_bytes = kFileHeaderBytes + kInfoHeaderBytes + pixel_bytes;
+  if (file_bytes > std::numeric_limits<uint32_t>::max()) {
+    return false;
+  }
+
+  std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+  if (!stream) {
+    return false;
+  }
+  stream.put('B');
+  stream.put('M');
+  WriteLittleEndian32(stream, static_cast<uint32_t>(file_bytes));
+  WriteLittleEndian32(stream, 0);
+  WriteLittleEndian32(stream, kFileHeaderBytes + kInfoHeaderBytes);
+  WriteLittleEndian32(stream, kInfoHeaderBytes);
+  WriteLittleEndian32(stream, image.width);
+  WriteLittleEndian32(stream, image.height);
+  WriteLittleEndian16(stream, 1);
+  WriteLittleEndian16(stream, 32);
+  WriteLittleEndian32(stream, 0);
+  WriteLittleEndian32(stream, static_cast<uint32_t>(pixel_bytes));
+  WriteLittleEndian32(stream, 0);
+  WriteLittleEndian32(stream, 0);
+  WriteLittleEndian32(stream, 0);
+  WriteLittleEndian32(stream, 0);
+
+  std::vector<uint8_t> bgra_row(size_t(image.width) * 4);
+  for (uint32_t y = image.height; y-- > 0;) {
+    const uint8_t* source = image.data.data() + size_t(y) * image.stride;
+    for (uint32_t x = 0; x < image.width; ++x) {
+      bgra_row[size_t(x) * 4 + 0] = source[size_t(x) * 4 + 2];
+      bgra_row[size_t(x) * 4 + 1] = source[size_t(x) * 4 + 1];
+      bgra_row[size_t(x) * 4 + 2] = source[size_t(x) * 4 + 0];
+      bgra_row[size_t(x) * 4 + 3] = 0xFF;
+    }
+    stream.write(reinterpret_cast<const char*>(bgra_row.data()), bgra_row.size());
+  }
+  stream.close();
+  return bool(stream);
+}
+
+bool SleepUntilOrStop(std::stop_token stop_token, std::chrono::steady_clock::time_point deadline) {
+  while (!stop_token.stop_requested()) {
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline) {
+      return true;
+    }
+    std::this_thread::sleep_for(
+        std::min(std::chrono::milliseconds(100),
+                 std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now)));
+  }
+  return false;
+}
+
+}  // namespace
+
+void MclaApp::OnPostLaunchModule(rex::system::XThread* thread) {
+  (void)thread;
+  if (REXCVAR_GET(mcla_first_frame_probe)) {
+    first_frame_probe_thread_ =
+        std::jthread([this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
+  }
+}
+
+void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
+  using namespace std::chrono_literals;
+  rex::ui::RawImage image;
+  bool observed_guest_output = false;
+  auto settle_deadline = std::chrono::steady_clock::time_point::max();
+  while (!stop_token.stop_requested()) {
+    auto* graphics = runtime() ? runtime()->graphics_system() : nullptr;
+    auto* presenter = graphics ? graphics->presenter() : nullptr;
+    if (!presenter || !presenter->CaptureGuestOutput(image)) {
+      std::this_thread::sleep_for(100ms);
+      continue;
+    }
+
+    if (!observed_guest_output) {
+      observed_guest_output = true;
+      settle_deadline = std::chrono::steady_clock::now() + 3s;
+      if (!SleepUntilOrStop(stop_token, settle_deadline)) {
+        return;
+      }
+      continue;
+    }
+
+    FrameMetrics metrics;
+    if (!MeasureFrame(image, metrics)) {
+      MCLA_GPU_ERROR(
+          "MCLA graphics: guest frame readback has invalid "
+          "dimensions or layout");
+      return;
+    }
+    if (!metrics.IsNontrivial()) {
+      std::this_thread::sleep_for(250ms);
+      continue;
+    }
+
+    const auto frame_path = runtime()->user_data_root() / "mcla-first-frame.bmp";
+    if (!WriteFrameBmp(frame_path, image)) {
+      MCLA_GPU_ERROR("MCLA graphics: failed to write private first-frame capture");
+      return;
+    }
+    MCLA_GPU_INFO(
+        "MCLA graphics: nontrivial guest frame captured {}x{}, rgb555 bins {}, "
+        "luma p05 {}, luma p95 {}, modal permille {}, nonmodal grid cells {}",
+        image.width, image.height, metrics.occupied_rgb555_bins, metrics.luma_p05, metrics.luma_p95,
+        metrics.modal_per_mille, metrics.nonmodal_grid_cells);
+    return;
+  }
+}
+
 [[noreturn]] void MclaApp::HardExitCrashProbeFromUIThread() {
   // Runtime teardown may force-terminate the idle audio XThread while it owns
   // a guest-heap lock, permanently poisoning that lock before FreeStack. The
@@ -397,4 +623,10 @@ void MclaApp::LaunchModule() {
   std::_Exit(0);
 }
 
-void MclaApp::OnShutdown() { MCLA_APP_INFO("MCLA lifecycle: shutdown"); }
+void MclaApp::OnShutdown() {
+  if (first_frame_probe_thread_.joinable()) {
+    first_frame_probe_thread_.request_stop();
+    first_frame_probe_thread_.join();
+  }
+  MCLA_APP_INFO("MCLA lifecycle: shutdown");
+}

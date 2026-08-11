@@ -4,7 +4,7 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.9.0.7 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units; the project-owned host lifecycle, loaded-image probes, and privacy-safe synthetic crash path are verified independently.
+Current state: the canonical ReXGlue v0.9.0.9 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic crash path, and guest-frame presentation telemetry are verified independently.
 
 ## Consumer preparation model
 
@@ -38,7 +38,7 @@ distribution model.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.9.0.7, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
+- `CMakeLists.txt` pins ReXGlue 0.9.0.9, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
@@ -85,7 +85,7 @@ to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files
 through all aliases, rejects root traversal, and proves the game device is
 read-only across open/create/delete and writable-mapping paths. The
 `--mcla_vfs_probe` route exercises the same checks and exits before guest-thread
-creation. ReXGlue v0.9.0.7 supplies the fail-closed device boundary and explicit
+creation. ReXGlue v0.9.0.9 supplies the fail-closed device boundary and explicit
 offline results for the ten direct XONLINE/social/XHV imports reviewed in M3-007;
 user/cache writes remain on their separately configured roots.
 
@@ -93,6 +93,19 @@ Early guest timing uses ReXGlue's host-derived 50-MHz guest clock for generated
 `mftb`/`mftbu`, `KeQueryPerformanceFrequency`, and `KeQuerySystemTime`. Guest
 threads notify the kernel, wait the Xenia-compatible 10-ms startup grace period,
 deliver queued APCs, and then dispatch a reviewed raw or XAPI start plan.
+
+The M4 presentation evidence boundary begins at a guest-originated Xenos swap.
+ReXGlue assigns the refreshed guest output a monotonic sequence, records bounded
+markers only when the final guest graphics effect reaches a successful DXGI
+`Present`, and publishes that sequence as a release-ordered watermark after the
+marker. Project capture runs on a separate stop-aware worker. The D3D12 capture
+consumer holds mailbox ownership through resource transition, copy, fence wait,
+and readback; it retries if the acquired guest sequence is newer than the
+published present watermark. MCLA then computes bounded nontrivial-image metrics
+and writes a private BMP. The physical verifier independently decodes that BMP
+and binds the sequence, successful-present HRESULT class, dimensions, metrics,
+and file hash. This proves presented guest activity plus a same-or-earlier
+readback; it does not claim frontend reachability or visual correctness.
 
 Generated functions retain metadata-only crash breadcrumbs: current PPC function,
 the last tracked function/basic-block guest PC, and the last typed, raw, or stubbed

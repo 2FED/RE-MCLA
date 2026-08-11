@@ -17,7 +17,7 @@ $manifestPath = (Resolve-Path -LiteralPath $ManifestPath).Path
 $sdkRoot = Join-Path $repoRoot 'third_party/rexglue-sdk'
 $configHeader = Join-Path $sdkRoot 'include/rex/codegen/config.h'
 $configSource = Join-Path $sdkRoot 'src/codegen/config.cpp'
-$expectedSdkCommit = 'efac376998cbb0520295d308be4703574a12a995'
+$expectedSdkCommit = '01f895afb1b084652915c0b463910d57049f06be'
 
 $actualSdkCommit = (& git -c "safe.directory=$($sdkRoot.Replace('\', '/'))" -C $sdkRoot rev-parse HEAD)
 if ($LASTEXITCODE -ne 0 -or -not $actualSdkCommit) {

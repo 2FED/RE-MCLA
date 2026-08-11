@@ -339,6 +339,34 @@ host snapshot and XEX hash are unchanged. The SDK fixture uses only a temporary
 directory and additionally covers rename, read opens, and read-only mappings.
 Raw runtime logs remain below ignored `private/evidence/M3-004/`.
 
+M4-001 first-valid-frame gate:
+
+```powershell
+scripts\test-first-frame-smoke.ps1
+scripts\run-first-frame-smoke.ps1
+scripts\verify-first-frame-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The canonical runner performs one clean RelWithDebInfo build followed by twenty
+serialized launches with isolated user/cache roots. Every cycle requires a
+guest-originated active output, count-1 and count-3 successful guest-backed
+DXGI presents with `SUCCEEDED` HRESULTs, a capture at or behind the published
+successful-present watermark, an independently nontrivial 32-bpp BMP, a
+two-second post-marker dwell, and controlled `WM_CLOSE` exit. The runner finds
+exactly one visible window owned by its exact PID whose title matches the
+versioned MCLA window contract; it never closes a helper or unrelated process.
+
+The physical verifier reopens the sibling evidence tree, reruns the lower M3
+startup verifier, hashes and parses every log/BMP, recomputes integer-exact
+RGB555/luma/modal/grid metrics, rejects missing/extra/reparse artifacts and
+private-path leakage, and binds all aggregate values to physical evidence. It
+also requires unchanged exact runtime artifacts, complete source-game file and
+directory topology, and all previously completed cycle trees. Force cleanup,
+device loss, failed presentation, an ahead-of-present capture, orphan process,
+or any data drift fails acceptance. Raw frames/logs remain ignored below
+`private/evidence/M4-001/`; tracked evidence contains only bounded hashes,
+counts, timings, and the human classification result.
+
 Planned test layers:
 
 1. host utility unit tests

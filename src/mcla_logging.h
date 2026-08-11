@@ -36,3 +36,4 @@ void EmitSchemaProbe();
 #define MCLA_VFS_INFO(...) REXLOG_CAT_INFO(::mcla::logging::Vfs(), __VA_ARGS__)
 #define MCLA_VFS_ERROR(...) REXLOG_CAT_ERROR(::mcla::logging::Vfs(), __VA_ARGS__)
 #define MCLA_GPU_INFO(...) REXLOG_CAT_INFO(::mcla::logging::Gpu(), __VA_ARGS__)
+#define MCLA_GPU_ERROR(...) REXLOG_CAT_ERROR(::mcla::logging::Gpu(), __VA_ARGS__)

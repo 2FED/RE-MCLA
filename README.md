@@ -6,7 +6,7 @@ The project aims to translate the original PowerPC executable ahead of time and 
 
 ## Status
 
-MCLA-R has completed its clean native build and module-boot milestone with a `GO M4` decision. Version `0.3.0.0` reliably loads the exact supported image, reaches verified graphics-pipeline and audio-callback startup, and passes ten consecutive controlled launch/exit cycles. It does not yet reach a validated frontend and is not a playable build or public game release.
+MCLA-R has completed its clean native build and module-boot milestone and is active in M4. Version `0.3.0.0` reliably loads the exact supported image; M4-001 additionally verifies twenty isolated guest-backed D3D12 present/readback cycles and a recognizable, correctly oriented private MCLA-derived frame. It does not yet reach a validated frontend and is not a playable build or public game release.
 
 The initial target is:
 
@@ -35,7 +35,7 @@ Support for any other region, revision, title update, or executable must be impl
 
 Static recompilation does not automatically make an Xbox 360 game portable. MCLA-R requires game-specific work for PowerPC control flow, Xbox kernel and XAM behavior, graphics, audio, input, storage, timing, retired online-service paths, and progression compatibility.
 
-The project uses an exact MCLA-R ReXGlue v0.9.0.7 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned for tested vector-codegen validation, Windows Unicode paths, corrected window/input destruction ordering, fail-closed game-data VFS behavior, deterministic offline-service states, Xenia-compatible guest-thread startup ordering, and privacy-safe guest crash reports. General forced guest-thread teardown can still poison a guest-heap lock; the synthetic diagnostic route is contained and normal `WM_CLOSE` cycles are independently verified, but this SDK limitation is not claimed as fixed. Project diagnostics use nine independently filterable categories: app, PPC, kernel, XAM, VFS, GPU, audio, input, and patches.
+The project uses an exact MCLA-R ReXGlue v0.9.0.9 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned for tested vector-codegen validation, Windows Unicode paths, corrected window/input destruction ordering, fail-closed game-data VFS behavior, deterministic offline-service states, Xenia-compatible guest-thread startup ordering, privacy-safe guest crash reports, and race-free guest-backed D3D12 presentation/capture telemetry. General forced guest-thread teardown can still poison a guest-heap lock; the synthetic diagnostic route is contained and normal `WM_CLOSE` cycles are independently verified, but this SDK limitation is not claimed as fixed. Project diagnostics use nine independently filterable categories: app, PPC, kernel, XAM, VFS, GPU, audio, input, and patches.
 
 ## Planned user-supplied dump workflow
 
