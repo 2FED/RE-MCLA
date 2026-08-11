@@ -2,21 +2,24 @@
 
 #include "mcla_app.h"
 
-#include "generated/default/mcla_init.h"
-
 #include <rex/cvar.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
 #include <rex/logging.h>
 #include <rex/memory/mapped_memory.h>
 #include <rex/runtime.h>
-#include <rex/system/function_dispatcher.h>
 #include <rex/system/crash_report.h>
+#include <rex/system/function_dispatcher.h>
 #include <rex/system/kernel_state.h>
 #include <rex/system/thread_state.h>
 #include <rex/system/user_module.h>
 
+#include <array>
 #include <fstream>
+#include <utility>
+
+#include "generated/default/mcla_init.h"
+#include "mcla_logging.h"
 
 namespace {
 
@@ -37,40 +40,84 @@ REXCVAR_DEFINE_BOOL(mcla_module_config_probe, false, "MCLA",
                     "Validate the loaded image and dispatch table without launching guest code")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REXCVAR_DEFINE_BOOL(
-    mcla_vfs_probe, false, "MCLA",
-    "Validate the guest disc mount and write containment without launching guest code")
+REXCVAR_DEFINE_BOOL(mcla_vfs_probe, false, "MCLA",
+                    "Validate the guest disc mount and write containment "
+                    "without launching guest code")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(mcla_crash_probe, false, "MCLA",
                     "Write a synthetic privacy-safe guest crash report without guest execution")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-MclaApp::MclaApp(rex::ui::WindowedAppContext& ctx, rex::PPCImageInfo image_info)
+REXCVAR_DEFINE_BOOL(mcla_logging_probe, false, "MCLA",
+                    "Emit one schema marker for every MCLA-R logging category")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+#define MCLA_DEFINE_LOG_LEVEL_CVAR(name)                                                  \
+  REXCVAR_DEFINE_STRING(mcla_log_##name, "inherit", "MCLA Logging",                       \
+                        "Category level override: inherit, trace, debug, info, warn, "    \
+                        "error, critical, off")                                           \
+      .allowed({"inherit", "trace", "debug", "info", "warn", "error", "critical", "off"}) \
+      .lifecycle(rex::cvar::Lifecycle::kInitOnly)
+
+MCLA_DEFINE_LOG_LEVEL_CVAR(app);
+MCLA_DEFINE_LOG_LEVEL_CVAR(ppc);
+MCLA_DEFINE_LOG_LEVEL_CVAR(kernel);
+MCLA_DEFINE_LOG_LEVEL_CVAR(xam);
+MCLA_DEFINE_LOG_LEVEL_CVAR(vfs);
+MCLA_DEFINE_LOG_LEVEL_CVAR(gpu);
+MCLA_DEFINE_LOG_LEVEL_CVAR(audio);
+MCLA_DEFINE_LOG_LEVEL_CVAR(input);
+MCLA_DEFINE_LOG_LEVEL_CVAR(patches);
+
+#undef MCLA_DEFINE_LOG_LEVEL_CVAR
+
+MclaApp::MclaApp(rex::ui::WindowedAppContext &ctx, rex::PPCImageInfo image_info)
     : ReXApp(ctx, "mcla", image_info) {}
 
-std::unique_ptr<rex::ui::WindowedApp> MclaApp::Create(rex::ui::WindowedAppContext& ctx) {
+std::unique_ptr<rex::ui::WindowedApp> MclaApp::Create(rex::ui::WindowedAppContext &ctx) {
   return std::unique_ptr<MclaApp>(new MclaApp(ctx, PPCImageConfig));
 }
 
 void MclaApp::OnPostInitLogging() {
-  REXLOG_INFO("MCLA lifecycle: logging ready");
+  const std::array overrides = {
+      std::pair{mcla::logging::App(), REXCVAR_GET(mcla_log_app)},
+      std::pair{mcla::logging::Ppc(), REXCVAR_GET(mcla_log_ppc)},
+      std::pair{mcla::logging::Kernel(), REXCVAR_GET(mcla_log_kernel)},
+      std::pair{mcla::logging::Xam(), REXCVAR_GET(mcla_log_xam)},
+      std::pair{mcla::logging::Vfs(), REXCVAR_GET(mcla_log_vfs)},
+      std::pair{mcla::logging::Gpu(), REXCVAR_GET(mcla_log_gpu)},
+      std::pair{mcla::logging::Audio(), REXCVAR_GET(mcla_log_audio)},
+      std::pair{mcla::logging::Input(), REXCVAR_GET(mcla_log_input)},
+      std::pair{mcla::logging::Patches(), REXCVAR_GET(mcla_log_patches)},
+  };
+  for (const auto &[category, level_name] : overrides) {
+    if (level_name != "inherit") {
+      if (const auto level = rex::ParseLogLevel(level_name)) {
+        rex::SetCategoryLevel(category, *level);
+      }
+    }
+  }
+  if (REXCVAR_GET(mcla_logging_probe)) {
+    mcla::logging::EmitSchemaProbe();
+  }
+  MCLA_APP_INFO("MCLA lifecycle: logging ready");
 }
 
 std::optional<rex::PathConfig> MclaApp::OnFinalizePaths(
-    const rex::PathConfig& defaults, std::function<void(rex::PathConfig)> resume) {
+    const rex::PathConfig &defaults, std::function<void(rex::PathConfig)> resume) {
   (void)resume;
   if (REXCVAR_GET(mcla_lifecycle_probe)) {
-    REXLOG_INFO("MCLA lifecycle: probe requested; guest runtime skipped");
+    MCLA_APP_INFO("MCLA lifecycle: probe requested; guest runtime skipped");
     app_context().CallInUIThreadDeferred([this]() {
-      REXLOG_INFO("MCLA lifecycle: probe complete");
+      MCLA_APP_INFO("MCLA lifecycle: probe complete");
       app_context().QuitFromUIThread();
     });
     return std::nullopt;
   }
 
   if (!ValidateStaticImageContract()) {
-    REXLOG_ERROR("MCLA module config: static image contract rejected");
+    MCLA_PPC_ERROR("MCLA module config: static image contract rejected");
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return std::nullopt;
   }
@@ -103,7 +150,7 @@ bool MclaApp::ValidateStaticImageContract() {
   uint32_t previous_guest = 0;
   bool found_sentinel = false;
   for (; mapping_count < max_mappings; ++mapping_count) {
-    const auto& mapping = PPCImageConfig.func_mappings[mapping_count];
+    const auto &mapping = PPCImageConfig.func_mappings[mapping_count];
     if (mapping.guest == 0) {
       found_sentinel = mapping.host == nullptr;
       break;
@@ -124,9 +171,11 @@ bool MclaApp::ValidateStaticImageContract() {
   }
 
   function_mapping_count_ = mapping_count;
-  REXLOG_INFO("MCLA module config: static image {:08X}-{:08X}, code {:08X}-{:08X}, {} mappings",
-              PPCImageConfig.image_base, static_cast<uint32_t>(image_end), PPCImageConfig.code_base,
-              static_cast<uint32_t>(code_end), function_mapping_count_);
+  MCLA_PPC_INFO(
+      "MCLA module config: static image {:08X}-{:08X}, code "
+      "{:08X}-{:08X}, {} mappings",
+      PPCImageConfig.image_base, static_cast<uint32_t>(image_end), PPCImageConfig.code_base,
+      static_cast<uint32_t>(code_end), function_mapping_count_);
   return true;
 }
 
@@ -142,7 +191,7 @@ bool MclaApp::ValidateLoadedImageContract() {
     return false;
   }
 
-  auto* dispatcher = runtime()->function_dispatcher();
+  auto *dispatcher = runtime()->function_dispatcher();
   const uint32_t code_last = kExpectedCodeBase + kExpectedCodeSize - 1;
   if (!dispatcher->HasAnyFunctionTable() ||
       dispatcher->FindCallerModuleBase(kExpectedCodeBase) != kExpectedCodeBase ||
@@ -151,10 +200,12 @@ bool MclaApp::ValidateLoadedImageContract() {
     return false;
   }
 
-  REXLOG_INFO("MCLA module config: loaded XEX base {:08X}, entry {:08X}",
-              executable->xex_module()->base_address(), executable->entry_point());
-  REXLOG_INFO("MCLA module config: entry {:08X} registered in dispatch range {:08X}-{:08X}",
-              kExpectedEntryPoint, kExpectedCodeBase, kExpectedCodeBase + kExpectedCodeSize);
+  MCLA_PPC_INFO("MCLA module config: loaded XEX base {:08X}, entry {:08X}",
+                executable->xex_module()->base_address(), executable->entry_point());
+  MCLA_PPC_INFO(
+      "MCLA module config: entry {:08X} registered in dispatch range "
+      "{:08X}-{:08X}",
+      kExpectedEntryPoint, kExpectedCodeBase, kExpectedCodeBase + kExpectedCodeSize);
   return true;
 }
 
@@ -163,7 +214,7 @@ bool MclaApp::ValidateGameVfsContract() {
     return false;
   }
 
-  auto* vfs = runtime()->file_system();
+  auto *vfs = runtime()->file_system();
   constexpr std::string_view kMount = "\\Device\\Harddisk0\\Partition1";
   std::string game_target;
   std::string d_target;
@@ -182,19 +233,19 @@ bool MclaApp::ValidateGameVfsContract() {
       {"xarchive_cache.rpf", 2130739200},
   };
 
-  for (const auto& expected : kExpectedFiles) {
+  for (const auto &expected : kExpectedFiles) {
     const std::string game_path = "game:\\" + std::string(expected.relative_path);
     const std::string d_path = "d:\\" + std::string(expected.relative_path);
     const std::string device_path =
         std::string(kMount) + "\\" + std::string(expected.relative_path);
-    auto* game_entry = vfs->ResolvePath(game_path);
+    auto *game_entry = vfs->ResolvePath(game_path);
     if (!game_entry || vfs->ResolvePath(d_path) != game_entry ||
         vfs->ResolvePath(device_path) != game_entry || !game_entry->is_read_only() ||
         game_entry->size() != expected.size) {
       return false;
     }
 
-    rex::filesystem::File* file = nullptr;
+    rex::filesystem::File *file = nullptr;
     rex::filesystem::FileAction action{};
     const auto status =
         vfs->OpenFile(nullptr, game_path, rex::filesystem::FileDisposition::kOpen,
@@ -204,19 +255,19 @@ bool MclaApp::ValidateGameVfsContract() {
     }
     file->Destroy();
   }
-  REXLOG_INFO("MCLA VFS: game: and d: resolve 3/3 expected disc files on {}", kMount);
+  MCLA_VFS_INFO("MCLA VFS: game: and d: resolve 3/3 expected disc files on {}", kMount);
 
   if (vfs->ResolvePath("game:\\..\\default.xex") ||
       vfs->ResolvePath("\\Device\\Harddisk0\\Partition1\\..\\Partition1\\default.xex")) {
     return false;
   }
-  REXLOG_INFO("MCLA VFS: root-escape paths rejected");
+  MCLA_VFS_INFO("MCLA VFS: root-escape paths rejected");
 
-  auto* xex_entry = vfs->ResolvePath("game:\\default.xex");
+  auto *xex_entry = vfs->ResolvePath("game:\\default.xex");
   if (!xex_entry) {
     return false;
   }
-  rex::filesystem::File* write_file = nullptr;
+  rex::filesystem::File *write_file = nullptr;
   rex::filesystem::FileAction write_action{};
   const auto existing_write = vfs->OpenFile(
       nullptr, "game:\\default.xex", rex::filesystem::FileDisposition::kOpen,
@@ -234,7 +285,7 @@ bool MclaApp::ValidateGameVfsContract() {
   if (create_write != kAccessDenied || write_file || vfs->ResolvePath(kCreateProbe)) {
     return false;
   }
-  REXLOG_INFO("MCLA VFS: write, create, delete, and writable-map requests denied");
+  MCLA_VFS_INFO("MCLA VFS: write, create, delete, and writable-map requests denied");
   return true;
 }
 
@@ -244,14 +295,14 @@ bool MclaApp::WriteSyntheticCrashReport() {
   }
 
   rex::runtime::ThreadState thread_state(0x4D434C41, 0, 0, runtime()->memory());
-  auto* context = thread_state.context();
+  auto *context = thread_state.context();
   rex::diagnostics::GuestCrashReport report;
   {
     rex::ppc::GuestFunctionScope function_scope(*context, kExpectedEntryPoint);
     rex::ppc::SetGuestProgramCounter(*context, kExpectedEntryPoint + 4);
     rex::ppc::RecordGuestImport(*context, "__imp__XGetAVPack");
-    report = rex::diagnostics::CaptureGuestCrashReport("MCLA synthetic crash probe", &thread_state,
-                                                       1);
+    report =
+        rex::diagnostics::CaptureGuestCrashReport("MCLA synthetic crash probe", &thread_state, 1);
   }
 
   const auto report_path = runtime()->user_data_root() / "mcla-crash-report.txt";
@@ -266,41 +317,43 @@ bool MclaApp::WriteSyntheticCrashReport() {
     return false;
   }
 
-  REXLOG_INFO("MCLA crash probe: privacy-safe report written");
+  MCLA_APP_INFO("MCLA crash probe: privacy-safe report written");
   return true;
 }
 
 void MclaApp::LaunchModule() {
   if (!ValidateLoadedImageContract()) {
-    REXLOG_ERROR("MCLA module config: loaded image contract rejected; guest launch blocked");
+    MCLA_PPC_ERROR(
+        "MCLA module config: loaded image contract rejected; guest "
+        "launch blocked");
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
   if (REXCVAR_GET(mcla_module_config_probe)) {
-    REXLOG_INFO("MCLA module config: probe complete; guest launch skipped");
+    MCLA_PPC_INFO("MCLA module config: probe complete; guest launch skipped");
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
   if (REXCVAR_GET(mcla_crash_probe)) {
     if (!WriteSyntheticCrashReport()) {
-      REXLOG_ERROR("MCLA crash probe: report generation failed");
+      MCLA_APP_ERROR("MCLA crash probe: report generation failed");
     } else {
-      REXLOG_INFO("MCLA crash probe: complete; guest launch skipped");
+      MCLA_APP_INFO("MCLA crash probe: complete; guest launch skipped");
     }
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
   if (!ValidateGameVfsContract()) {
-    REXLOG_ERROR("MCLA VFS: disc-root contract rejected; guest launch blocked");
+    MCLA_VFS_ERROR("MCLA VFS: disc-root contract rejected; guest launch blocked");
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
   if (REXCVAR_GET(mcla_vfs_probe)) {
-    REXLOG_INFO("MCLA VFS: probe complete; guest launch skipped");
+    MCLA_VFS_INFO("MCLA VFS: probe complete; guest launch skipped");
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return;
   }
@@ -308,6 +361,4 @@ void MclaApp::LaunchModule() {
   rex::ReXApp::LaunchModule();
 }
 
-void MclaApp::OnShutdown() {
-  REXLOG_INFO("MCLA lifecycle: shutdown");
-}
+void MclaApp::OnShutdown() { MCLA_APP_INFO("MCLA lifecycle: shutdown"); }

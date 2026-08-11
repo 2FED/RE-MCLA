@@ -220,6 +220,20 @@ The synthetic probe loads the verified XEX but skips guest execution. Its report
 contains guest addresses, thread/import identifiers, and at most 16 host frames;
 it excludes guest memory, registers, stack data, and absolute host paths.
 
+Verify independent structured logging filters without constructing Runtime:
+
+```powershell
+scripts\verify-logging-contract.ps1
+scripts\test-logging-contract.ps1
+scripts\test-logging-schema.ps1
+scripts\run-logging-smoke.ps1
+```
+
+Each `mcla_log_<category>` init-only option accepts `inherit`, `trace`, `debug`,
+`info`, `warn`, `error`, `critical`, or `off`; `inherit` is the default. The live
+gate sets the global level to `off`, enables one category per isolated run, and
+writes only ignored logs below `private/evidence/M3-010/`.
+
 Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
 
 ```powershell

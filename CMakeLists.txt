@@ -68,6 +68,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 set(MCLA_SOURCES
     src/main.cpp
     src/mcla_app.cpp
+    src/mcla_logging.cpp
 )
 
 if(WIN32)

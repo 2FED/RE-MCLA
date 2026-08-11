@@ -189,6 +189,25 @@ and no guest execution. It rejects missing guest PC, enabled guest memory, priva
 host paths, and a mismatched frame count. Raw reports/logs remain ignored below
 `private/evidence/M3-009/`.
 
+M3-010 structured-logging gate:
+
+```powershell
+scripts\verify-logging-contract.ps1
+scripts\test-logging-contract.ps1
+scripts\test-logging-schema.ps1
+scripts\run-logging-smoke.ps1
+```
+
+The source contract requires all nine exact category registrations, nine
+`inherit`-by-default allow-listed overrides, an off-by-default schema probe,
+categorized operational calls, and CMake integration. Its fixtures reject a
+missing category, enabled probe default, non-inheriting override default,
+missing override application, and a generic logger regression. Log fixtures
+reject the wrong category, duplicate schema markers, private paths, and an error
+level. The live gate performs nine lifecycle-only runs with global logging off
+and exactly one selected category at `info`; each log is capped at 64 KiB and
+remains under ignored `private/evidence/M3-010/`.
+
 M3-002 application-lifecycle gate:
 
 ```powershell

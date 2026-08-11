@@ -14,6 +14,7 @@ Implemented bootstrap boundary:
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
 - `src/mcla_app.h` is the project-owned lifecycle extension point
 - `src/mcla_app.cpp` owns the minimal logging-ready, path-finalization, and shutdown hooks; its opt-in `--mcla_lifecycle_probe` queues a clean UI-thread exit before guest runtime construction
+- `src/mcla_logging.h/.cpp` owns the schema-1 `app`, `ppc`, `kernel`, `xam`, `vfs`, `gpu`, `audio`, `input`, and `patches` category registry; every category inherits the global level unless its init-only project override is set
 - `generated/rexglue.cmake` is tracked non-proprietary SDK boilerplate
 - every other file below `generated/` remains ignored guest-derived output
 - when `generated/default` is absent, configuration exposes `mcla_codegen` but intentionally omits the native `mcla` target until a second configure
@@ -49,6 +50,13 @@ the last tracked function/basic-block guest PC, and the last typed, raw, or stub
 import. C++ exceptions escaping guest execution are caught at the `XThread`
 boundary and paired with a bounded module-relative host stack. Guest registers,
 guest stack data, and guest memory are excluded by default.
+
+Project-owned operational messages use semantic category loggers instead of the
+generic ReXGlue `core` logger. Existing lifecycle/crash, image/dispatch, and
+disc-policy messages route through `app`, `ppc`, and `vfs`; the remaining six
+categories are registered now for their owning M3+ subsystems. The opt-in
+logging probe emits one bounded schema marker per category and is used only by
+the private filter/write smoke gate.
 
 Planned subsystem boundaries:
 
