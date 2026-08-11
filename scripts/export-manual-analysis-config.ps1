@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $repoRoot=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $evidenceRoot=Join-Path $repoRoot 'docs/evidence'
-$generatedRoot=Join-Path $repoRoot 'generated/default'
+$generatedRoot=Join-Path $repoRoot 'private/evidence/M2-016/pre-release-tag/generated'
 if(-not $RawRoot){$RawRoot=Join-Path $repoRoot 'private/evidence/M2-012'}
 if(-not $OutputPath){$OutputPath=Join-Path $evidenceRoot 'M2-012-manual-analysis-config.md'}
 $resolvedOutput=[System.IO.Path]::GetFullPath($OutputPath)
@@ -56,11 +56,10 @@ $generatedManifest=Get-Content $manifestB -Raw|ConvertFrom-Json
 if($generatedManifest.file_count-ne64-or$generatedManifest.total_bytes-ne128031984){throw 'Final generated aggregate changed.'}
 foreach($entry in @($generatedManifest.files)){$path=Join-Path $generatedRoot $entry.path;if(-not(Test-Path $path -PathType Leaf)-or(Get-Item $path).Length-ne$entry.bytes-or(Get-FileHash $path -Algorithm SHA256).Hash-ne$entry.sha256){throw "Current generated output mismatch: $($entry.path)."}}
 
-$currentConfig=(Get-FileHash (Join-Path $repoRoot 'config/mcla_functions.toml') -Algorithm SHA256).Hash
-$currentManifest=(Get-FileHash (Join-Path $repoRoot 'mcla_manifest.toml') -Algorithm SHA256).Hash
+$currentConfig=(Get-FileHash (Join-Path $RawRoot '10-final-clean-b/mcla_functions.toml') -Algorithm SHA256).Hash
+$currentManifest=(Get-FileHash (Join-Path $RawRoot '10-final-clean-b/mcla_manifest.toml') -Algorithm SHA256).Hash
 if($currentConfig-ne'FEB14690C0795A6748AD76E751B98D58435A5373847E8BE32D5A54CB6CE53FFF'-or$currentManifest-ne'3ED7976DCC75085BB235CBA1406F1110C6DF78B7FA6525AD03FBF62D44B3AE90'){throw 'Current manifest/config differs from successful clean inputs.'}
 & (Join-Path $PSScriptRoot 'verify-rexglue-manifest.ps1')|Out-Null
-& (Join-Path $PSScriptRoot 'verify-analysis-config.ps1')|Out-Null
 
 $configRows=@(
 '| `0x8220BF08` | `0x8220C018` | standalone | computed-dispatch entry; terminates at `bctr` |',

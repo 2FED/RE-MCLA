@@ -18,6 +18,18 @@ $expected = [ordered]@{
     '823FD718' = @{ end='823FD720'; parent=''; name='sub_823FD718' }
     '822B88C8' = @{ end='822B88DC'; parent=''; name='sub_822B88C8' }
     '824B0DE8' = @{ end='824B0DF8'; parent='824B0CC0'; name='sub_824B0DE8' }
+    '827A7FD0' = @{ end='827A7FF0'; parent=''; name='sub_827A7FD0' }
+    '827A8220' = @{ end='827A8240'; parent=''; name='sub_827A8220' }
+    '827AD168' = @{ end='827AD178'; parent=''; name='sub_827AD168' }
+    '827AFC78' = @{ end='827AFC88'; parent=''; name='sub_827AFC78' }
+    '827B0538' = @{ end='827B0558'; parent=''; name='sub_827B0538' }
+    '827B0558' = @{ end='827B0578'; parent=''; name='sub_827B0558' }
+    '827B0578' = @{ end='827B0598'; parent=''; name='sub_827B0578' }
+    '827B0598' = @{ end='827B05B8'; parent=''; name='sub_827B0598' }
+    '827B1048' = @{ end='827B1068'; parent=''; name='sub_827B1048' }
+    '827B1068' = @{ end='827B1088'; parent=''; name='sub_827B1068' }
+    '827B4B58' = @{ end='827B4B78'; parent=''; name='sub_827B4B58' }
+    '827B4B78' = @{ end='827B4B98'; parent=''; name='sub_827B4B78' }
 }
 $seen = @{}
 $inFunctions = $false

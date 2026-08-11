@@ -36,6 +36,27 @@ The incremental non-force sequence reduced the original seven blockers to zero. 
 
 `config/mcla_functions.toml` is the only analysis include. Manual switch-table, invalid-region, exception-handler, and setjmp/longjmp entries remain absent because M2-009/M2-011 found no corresponding failure. Two clean successful runs produced the same private generated manifest; see `docs/evidence/M2-012-manual-analysis-config.md`.
 
+## M3 runtime-discovered callable entries
+
+The first native guest launch exposed twelve additional valid callable boundaries that static GapFill did not register. Each failure named the exact indirect target, and each accepted interval was regenerated without `--force`, reviewed as a bounded tail/leaf body, and then cleared by the next launch. The final mapping count is 30,020 and a 15-second stock-path run reaches archive, input, XAM, and video initialization without another invalid-function trap.
+
+| Address | Exclusive end | Generated body | Runtime evidence |
+| --- | --- | --- | --- |
+| `0x827A7FD0` | `0x827A7FF0` | 7-instruction tail to `0x821C06C8` | first invalid target |
+| `0x827A8220` | `0x827A8240` | 7-instruction tail to `0x821C06C8` | next invalid target |
+| `0x827AD168` | `0x827AD178` | 3-instruction tail to `0x823D9A98` | next invalid target |
+| `0x827AFC78` | `0x827AFC88` | 3-instruction tail to `0x823D9A98` | next invalid target |
+| `0x827B0538` | `0x827B0558` | 8-instruction tail to `0x821D22E8` | next invalid target |
+| `0x827B0558` | `0x827B0578` | 8-instruction tail to `0x821D22E8` | next invalid target; split the initially broad interval |
+| `0x827B0578` | `0x827B0598` | 8-instruction tail to `0x821D22E8` | adjacent repeated callable pattern |
+| `0x827B0598` | `0x827B05B8` | 7-instruction tail to `0x821C06C8` | adjacent repeated callable pattern |
+| `0x827B1048` | `0x827B1068` | 8-instruction tail to `0x821D22E8` | next invalid target |
+| `0x827B1068` | `0x827B1088` | 8-instruction leaf ending in `blr` | adjacent repeated callable pattern |
+| `0x827B4B58` | `0x827B4B78` | 8-instruction tail to `0x821D22E8` | final invalid target |
+| `0x827B4B78` | `0x827B4B98` | 8-instruction tail to `0x821D22E8` | adjacent repeated callable pattern |
+
+These entries are guest control-flow metadata, not kernel stubs. Their runtime discovery is tracked as an M3-005 prerequisite repair and does not change the M2 feasibility result that no startup import registration was missing.
+
 ## Import map handoff
 
 M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

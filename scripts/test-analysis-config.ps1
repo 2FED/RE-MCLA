@@ -12,7 +12,8 @@ try {
     $content=[System.IO.File]::ReadAllText($source)
     & $validator -ConfigPath $source|Out-Null
     Assert-Rejected 'missing-function' ($content -replace '(?m)^"0x823FD718".*\r?\n','')
+    Assert-Rejected 'missing-runtime-function' ($content -replace '(?m)^"0x827B4B78".*\r?\n','')
     Assert-Rejected 'wrong-parent' ($content -replace 'parent = 0x824B0CC0','parent = 0x824B0CC4')
     Assert-Rejected 'unreviewed-section' ($content+"`n[[switch_tables]]`naddress=1`n")
-    [pscustomobject]@{Passed=$true;PositiveCases=1;NegativeCases=3}
+    [pscustomobject]@{Passed=$true;PositiveCases=1;NegativeCases=4}
 } finally {[System.IO.Directory]::Delete($testRoot,$true)}

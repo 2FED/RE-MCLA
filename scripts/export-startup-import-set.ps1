@@ -11,7 +11,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $evidenceRoot = Join-Path $repoRoot 'docs/evidence'
-if (-not $GeneratedRoot) { $GeneratedRoot = Join-Path $repoRoot 'generated/default' }
+if (-not $GeneratedRoot) { $GeneratedRoot = Join-Path $repoRoot 'private/evidence/M2-016/pre-release-tag/generated' }
 if (-not $GeneratedManifestPath) { $GeneratedManifestPath = Join-Path $repoRoot 'private/evidence/M2-012/10-final-clean-b/generated-manifest.json' }
 if (-not $ImportCoveragePath) { $ImportCoveragePath = Join-Path $evidenceRoot 'M2-013-import-coverage.md' }
 if (-not $SdkRoot) { $SdkRoot = Join-Path $repoRoot 'third_party/rexglue-sdk' }

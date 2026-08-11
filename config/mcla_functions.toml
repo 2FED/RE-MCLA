@@ -1,4 +1,4 @@
-# M2-012 incremental control-flow repair. Every entry is justified in
+# M2-012 and M3-005 incremental control-flow repair. Every entry is justified in
 # docs/reverse-engineering.md and must survive a non-force codegen rerun.
 
 [functions]
@@ -10,3 +10,15 @@
 "0x823FD718" = { end = 0x823FD720, name = "sub_823FD718" }
 "0x822B88C8" = { end = 0x822B88DC, name = "sub_822B88C8" }
 "0x824B0DE8" = { parent = 0x824B0CC0, end = 0x824B0DF8, name = "sub_824B0DE8" }
+"0x827A7FD0" = { end = 0x827A7FF0, name = "sub_827A7FD0" }
+"0x827A8220" = { end = 0x827A8240, name = "sub_827A8220" }
+"0x827AD168" = { end = 0x827AD178, name = "sub_827AD168" }
+"0x827AFC78" = { end = 0x827AFC88, name = "sub_827AFC78" }
+"0x827B0538" = { end = 0x827B0558, name = "sub_827B0538" }
+"0x827B0558" = { end = 0x827B0578, name = "sub_827B0558" }
+"0x827B0578" = { end = 0x827B0598, name = "sub_827B0578" }
+"0x827B0598" = { end = 0x827B05B8, name = "sub_827B0598" }
+"0x827B1048" = { end = 0x827B1068, name = "sub_827B1048" }
+"0x827B1068" = { end = 0x827B1088, name = "sub_827B1068" }
+"0x827B4B58" = { end = 0x827B4B78, name = "sub_827B4B58" }
+"0x827B4B78" = { end = 0x827B4B98, name = "sub_827B4B78" }

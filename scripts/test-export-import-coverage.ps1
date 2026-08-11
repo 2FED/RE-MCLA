@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $log = Join-Path $repoRoot 'private/baseline/M2-002/xenia-stock.snapshot.log'
-$generated = Join-Path $repoRoot 'generated/default'
+$generated = Join-Path $repoRoot 'private/evidence/M2-016/pre-release-tag/generated'
 $manifest = Join-Path $repoRoot 'private/evidence/M2-012/10-final-clean-b/generated-manifest.json'
 $output = Join-Path $repoRoot 'docs/evidence/M2-013-import-coverage.md'
 $exporter = Join-Path $PSScriptRoot 'export-import-coverage.ps1'

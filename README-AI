@@ -173,16 +173,16 @@ Known installed components:
 
 Resolved M2 feasibility questions:
 
-- target-XEX non-force codegen is successful and deterministic at 64 files / 128,031,984 bytes
+- target-XEX non-force codegen is successful and deterministic; the current M3-005 configuration emits 64 files / 128,038,099 bytes
 - stock Xenia visual/save/controller baseline coverage is complete
-- eight manual function entries are required; switch-table, exception, invalid-data, and setjmp/longjmp overrides remain zero
+- eight M2 analysis entries plus twelve runtime-discovered M3 callable entries are required; switch-table, exception, invalid-data, and setjmp/longjmp overrides remain zero
 - all load-time variables and the 26-import pre-main function set have SDK registrations
 
 Known M3 unknowns:
 
 - peak memory for clean native compilation of the 128 MB generated corpus
-- first deterministic native guest failure beyond module entry
-- runtime-semantic completeness of statically registered startup imports
+- renderer/plugin selection and the first stable visual frame after successful guest startup
+- runtime semantics of conditional/error-path imports not exercised on the stock pre-main route
 
 Host GitHub CLI authentication was user-verified on 2026-08-10:
 
@@ -632,7 +632,7 @@ Pause for a feasibility decision if:
 - [x] **M3-002** Add a project `ReXApp` subclass and document lifecycle hooks. `MclaApp` owns three minimal hooks and a guest-free probe. CDB traced the first Windows fast-fail to ReXGlue's locale-dependent `path.string()` conversion of a localized Documents path. Fork v0.9.0.2 converts all nine host paths to UTF-8 and adds non-ASCII regression coverage; final RelWithDebInfo and Release probes exit 0 with four ordered markers and controlled shutdown. Evidence: `scripts/test-app-lifecycle.ps1`, `scripts/run-app-lifecycle-smoke.ps1`, `scripts/debug-app-lifecycle-smoke.ps1`, `docs/evidence/M3-002-app-lifecycle.md`.
 - [x] **M3-003** Configure guest memory layout, image base, function dispatch, and executable entry point. Static validation fail-closes on any mismatch in the exact image/code/dispatch ranges, bounded ordered 30,008-function map, sentinel, or entry mapping. Release and RelWithDebInfo probes load the real XEX, verify base `82000000`, entry `821322B8`, and dispatcher coverage, then exit 0 before guest-thread creation. The first probe exposed an SDK teardown use-after-free fixed in fork v0.9.0.3. Evidence: `scripts/verify-module-config.ps1`, `scripts/test-module-config.ps1`, `scripts/run-module-config-smoke.ps1`, `docs/evidence/M3-003-module-config.md`.
 - [x] **M3-004** Mount `private/game` as the guest disc root through the VFS. ReXGlue v0.9.0.4 fail-closes root traversal, write-intent opens, rename, and writable mappings on read-only host devices. Release and RelWithDebInfo probes resolve representative XEX/BIK/RPF files through `game:`, `d:`, and the physical device, deny every tested mutation path, preserve the exact 15-file/6,569,586,392-byte source snapshot, and exit 0 before guest launch. Evidence: `scripts/test-vfs-policy.ps1`, `scripts/run-vfs-smoke.ps1`, `docs/evidence/M3-004-vfs-disc-root.md`.
-- [ ] **M3-005** Implement the minimum missing xboxkrnl imports required for startup.
+- [x] **M3-005** Implement the minimum missing xboxkrnl imports required for startup. Runtime-guided, non-force analysis repair adds twelve bounded callable entries missed by static GapFill and raises the dispatch map from 30,008 to 30,020 entries. A CDB comparison at the title-main boundary proves all 11 variable imports and the exact 10-function stock xboxkrnl route out of the 22-function conservative set; 1 positive and 4 negative verifier fixtures fail closed on boundary, function, variable, and fatal-log regressions. No project-owned xboxkrnl semantic stub is required for the observed startup route. Evidence: `scripts/test-xboxkrnl-startup-import-trace.ps1`, `scripts/run-xboxkrnl-startup-import-trace.ps1`, `docs/evidence/M3-005-xboxkrnl-startup-imports.md`.
 - [ ] **M3-006** Implement the minimum missing XAM imports required for startup.
 - [ ] **M3-007** Add explicit, logged offline stubs for nonessential XONLINE/XHV paths; do not silently return success when state matters.
 - [ ] **M3-008** Implement deterministic guest timebase and thread-start behavior for early initialization.
@@ -675,6 +675,7 @@ Pause for a feasibility decision if:
 - 2026-08-11 — M3 checkpoint 2 (two-task and SDK-change review). Completed: M3-001 and M3-002 (2/15). Health: `GREEN — MODULE BOOT NOT YET STARTED`. Evidence: clean 67-action Release build of all 62 generated objects; CDB root cause in `ReXApp::SetupEnvironment`; reviewed ReXGlue v0.9.0.2 UTF-8-path fix and focused regression; full PPC suite 1,459/1,459 cases and 5,733 assertions; final RelWithDebInfo and Release probes exit 0 with four ordered lifecycle markers. Removed risk: localized Windows profile paths no longer abort host initialization. Remaining risk: guest memory/dispatch/entry configuration is unexercised. Estimate returns to 1–4 weeks. Gate readiness: not ready. Next tasks: M3-003 and M3-004. Milestone scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-002-app-lifecycle.md`.
 - 2026-08-11 — M3 checkpoint 3 (immediate S1 and SDK-change review). Completed: M3-003 (3/15). Health: `GREEN — ENTRY VERIFIED, GUEST NOT STARTED`. Evidence: exact `82000000-829E0000` image, `82130000-827CD054` code, and `829E0000-8373A0A8` dispatch ranges; bounded 30,008-entry map with one sentinel/entry; 1 positive and 5 negative fixtures; Release and RelWithDebInfo loaded-XEX probes with five ordered markers and exit 0. The first probe exposed a deterministic ReXApp teardown use-after-free; CDB localized stale `MnkInputDriver::attached_window_`, and fork v0.9.0.3 now destroys Runtime/input before Window. Removed risks: image/entry/dispatch mismatch and loaded-image shutdown crash. Remaining risk: VFS completeness and write containment are not yet proven. Estimate remains 1–4 weeks. Gate readiness: not ready. Next tasks: M3-004 and M3-005. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-003-module-config.md`.
 - 2026-08-11 — M3 checkpoint 4 (immediate S1 and SDK-change review). Completed: M3-004 (4/15). Health: `GREEN — DISC VFS CONTAINED, GUEST NOT STARTED`. Evidence: exact `game:`/`d:`/physical-device alias resolution for representative XEX/BIK/RPF entries; root-escape rejection; read-only open/create/delete/rename/writable-map regression coverage; 26/26 focused SDK assertions; Release and RelWithDebInfo VFS probes with five ordered markers and exit 0; unchanged 15-file/6,569,586,392-byte snapshot and 15/15 full hashes. ReXGlue v0.9.0.4 closes mutation bypasses found during the audit. Removed risk: guest disc access can no longer mutate or lexically escape the private source mount through the tested VFS APIs. Remaining risk: startup import behavior has not been executed. Estimate remains 1–4 weeks. Gate readiness: not ready. Next tasks: M3-005 and M3-006. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-004-vfs-disc-root.md`.
+- 2026-08-11 — M3 checkpoint 5 (immediate control-flow feasibility review). Completed: M3-005 (5/15). Health: `GREEN — TITLE MAIN REACHED`. Evidence: deterministic 64-file/128,038,099-byte non-force output and 30,020-entry dispatch map; twelve reviewed runtime-discovered tail/leaf entries; all 11 xboxkrnl variables patched once; exact 10-function stock route from the 22-function conservative matrix; one title-main boundary; 1 positive and 4 negative verifier fixtures; final RelWithDebInfo trace exits cleanly at the boundary. Removed risks: startup could fail on unregistered valid guest targets or hide a missing stock-route kernel import. Remaining risk: XAM and offline-service semantics beyond the boundary are unverified. Estimate remains 1–4 weeks. Gate readiness: not ready. Next tasks: M3-006 and M3-007. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-005-xboxkrnl-startup-imports.md`.
 
 ## 12. Milestone M4 — Frontend, intro path, and menu stability
 
@@ -1271,7 +1272,7 @@ Execute in this order unless a new blocker changes the plan:
 6. [x] Complete M2-017 and close M2 at version `0.2.0.0` with `GO WITH SDK FORK`.
 7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 remains fixed in the current ReXGlue v0.9.0.4 fork.
 8. [x] Complete M3-003 and M3-004: guest image/entry/dispatch plus private game-root VFS/write containment are verified.
-9. [-] Complete M3-005 and M3-006: implement and behavior-test the minimum startup xboxkrnl and XAM import set.
+9. [-] Complete M3-005 and M3-006: xboxkrnl startup behavior is verified; implement and behavior-test the minimum startup XAM import set.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 
