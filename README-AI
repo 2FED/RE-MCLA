@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.4 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.5 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -164,7 +164,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.4` pinned recursively at commit `51e997dc44185d3df205c4bd36e8042e99801871` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.5` pinned recursively at commit `23b55de7d0ac36b67d032eecc2bf8ed00d9d26a6` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -634,7 +634,7 @@ Pause for a feasibility decision if:
 - [x] **M3-004** Mount `private/game` as the guest disc root through the VFS. ReXGlue v0.9.0.4 fail-closes root traversal, write-intent opens, rename, and writable mappings on read-only host devices. Release and RelWithDebInfo probes resolve representative XEX/BIK/RPF files through `game:`, `d:`, and the physical device, deny every tested mutation path, preserve the exact 15-file/6,569,586,392-byte source snapshot, and exit 0 before guest launch. Evidence: `scripts/test-vfs-policy.ps1`, `scripts/run-vfs-smoke.ps1`, `docs/evidence/M3-004-vfs-disc-root.md`.
 - [x] **M3-005** Implement the minimum missing xboxkrnl imports required for startup. Runtime-guided, non-force analysis repair adds twelve bounded callable entries missed by static GapFill and raises the dispatch map from 30,008 to 30,020 entries. A CDB comparison at the title-main boundary proves all 11 variable imports and the exact 10-function stock xboxkrnl route out of the 22-function conservative set; 1 positive and 4 negative verifier fixtures fail closed on boundary, function, variable, and fatal-log regressions. No project-owned xboxkrnl semantic stub is required for the observed startup route. Evidence: `scripts/test-xboxkrnl-startup-import-trace.ps1`, `scripts/run-xboxkrnl-startup-import-trace.ps1`, `docs/evidence/M3-005-xboxkrnl-startup-imports.md`.
 - [x] **M3-006** Implement the minimum missing XAM imports required for startup. CDB reviews all four conservative XAM bridges at the title-main boundary and proves the exact stock route is one `XGetAVPack` call returning guest `r3 = 6`; `XGetLanguage`, `XamShowMessageBoxUIEx`, and `XamLoaderTerminateTitle` remain zero-hit conditional/post-main paths. One positive and six negative fixtures reject boundary, required-call, result-value, route-expansion, semantic-stub, and fatal-log regressions. No project-owned XAM stub is required before title main. Evidence: `scripts/test-xam-startup-import-trace.ps1`, `scripts/run-xam-startup-import-trace.ps1`, `docs/evidence/M3-006-xam-startup-imports.md`.
-- [ ] **M3-007** Add explicit, logged offline stubs for nonessential XONLINE/XHV paths; do not silently return success when state matters.
+- [x] **M3-007** Add explicit, logged offline stubs for nonessential XONLINE/XHV paths. ReXGlue v0.9.0.5 replaces nine generic stale-`r3` XAM/XONLINE exports and one silent XHV query with deterministic offline contracts and once-only diagnostics. Ten guest-visible regression assertions plus one positive and three negative project-verifier cases cover registration, logs, return state, accepted-import scope, and stale-register rejection. Evidence: `scripts/verify-offline-service-stubs.ps1`, `scripts/test-offline-service-stubs.ps1`, `docs/evidence/M3-007-offline-services.md`.
 - [ ] **M3-008** Implement deterministic guest timebase and thread-start behavior for early initialization.
 - [ ] **M3-009** Add crash handling that reports guest PC, host stack, current PPC function, thread, and last import without dumping proprietary memory by default.
 - [ ] **M3-010** Add structured logging categories for app, PPC, kernel, XAM, VFS, GPU, audio, input, and patches.
@@ -677,6 +677,7 @@ Pause for a feasibility decision if:
 - 2026-08-11 — M3 checkpoint 4 (immediate S1 and SDK-change review). Completed: M3-004 (4/15). Health: `GREEN — DISC VFS CONTAINED, GUEST NOT STARTED`. Evidence: exact `game:`/`d:`/physical-device alias resolution for representative XEX/BIK/RPF entries; root-escape rejection; read-only open/create/delete/rename/writable-map regression coverage; 26/26 focused SDK assertions; Release and RelWithDebInfo VFS probes with five ordered markers and exit 0; unchanged 15-file/6,569,586,392-byte snapshot and 15/15 full hashes. ReXGlue v0.9.0.4 closes mutation bypasses found during the audit. Removed risk: guest disc access can no longer mutate or lexically escape the private source mount through the tested VFS APIs. Remaining risk: startup import behavior has not been executed. Estimate remains 1–4 weeks. Gate readiness: not ready. Next tasks: M3-005 and M3-006. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-004-vfs-disc-root.md`.
 - 2026-08-11 — M3 checkpoint 5 (immediate control-flow feasibility review). Completed: M3-005 (5/15). Health: `GREEN — TITLE MAIN REACHED`. Evidence: deterministic 64-file/128,038,099-byte non-force output and 30,020-entry dispatch map; twelve reviewed runtime-discovered tail/leaf entries; all 11 xboxkrnl variables patched once; exact 10-function stock route from the 22-function conservative matrix; one title-main boundary; 1 positive and 4 negative verifier fixtures; final RelWithDebInfo trace exits cleanly at the boundary. Removed risks: startup could fail on unregistered valid guest targets or hide a missing stock-route kernel import. Remaining risk: XAM and offline-service semantics beyond the boundary are unverified. Estimate remains 1–4 weeks. Gate readiness: not ready. Next tasks: M3-006 and M3-007. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-005-xboxkrnl-startup-imports.md`.
 - 2026-08-11 — M3 checkpoint 6 (two-task import review). Completed: M3-005 and M3-006 (6/15). Health: `GREEN — STOCK PRE-MAIN IMPORT ROUTE VERIFIED`. Evidence: all 11 xboxkrnl variables; exact 10/22-function xboxkrnl route; exact 1/4-function XAM route; `XGetAVPack` guest result `6`; one title-main boundary; 12 combined positive/negative import-verifier cases; no fatal, invalid-function, unimplemented, or reached XAM UI-stub marker. Removed risk: successful title-main entry no longer relies on unverified normal-route kernel/XAM imports. Remaining risk: offline XONLINE/XHV behavior and post-boundary initialization semantics are unverified. Estimate remains 1–4 weeks. Gate readiness: not ready. Next tasks: M3-007 and M3-008. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-005-xboxkrnl-startup-imports.md`, `docs/evidence/M3-006-xam-startup-imports.md`.
+- 2026-08-11 — M3 checkpoint 7 (immediate SDK-change review). Completed: M3-007 (7/15). Health: `GREEN — DIRECT OFFLINE SERVICE STATES EXPLICIT`. Evidence: nine direct XAM/XONLINE imports no longer use generic `REX_EXPORT_STUB`; `XamVoiceHeadsetPresent` is explicitly logged false; every reviewed bridge writes deterministic `r3`; 10/10 focused assertions, 210/210 relevant unit tests, and 1,459/1,459 PPC tests pass; project verifier passes one positive and rejects three semantic regressions. Removed risk: offline calls cannot inherit a caller register and masquerade as success, a title ID, or a connection state. Remaining risk: post-boundary call reachability and broader SDK generic-stub inventory are not yet behavior-classified. Estimate remains 1–4 weeks. Gate readiness: not ready. Next tasks: M3-008 and M3-009. Scope and acceptance criteria remain valid. Evidence: `docs/evidence/M3-007-offline-services.md`.
 
 ## 12. Milestone M4 — Frontend, intro path, and menu stability
 
@@ -1271,10 +1272,11 @@ Execute in this order unless a new blocker changes the plan:
 4. [x] Complete M2-013: map all XAM/xboxkrnl import records and static reachability classes.
 5. [x] Complete M2-016: add SDK regression coverage for the twenty FLOAT16_4 sites.
 6. [x] Complete M2-017 and close M2 at version `0.2.0.0` with `GO WITH SDK FORK`.
-7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 remains fixed in the current ReXGlue v0.9.0.4 fork.
+7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 remains fixed in the current ReXGlue v0.9.0.5 fork.
 8. [x] Complete M3-003 and M3-004: guest image/entry/dispatch plus private game-root VFS/write containment are verified.
 9. [x] Complete M3-005 and M3-006: minimum stock-route xboxkrnl and XAM imports are runtime- and behavior-verified.
-10. [-] Complete M3-007 and M3-008: explicit offline-service behavior plus deterministic early timebase/thread-start semantics.
+10. [x] Complete M3-007: explicit logged offline-service behavior is deterministic and regression-tested.
+11. [-] Complete M3-008: verify deterministic early timebase and thread-start semantics.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

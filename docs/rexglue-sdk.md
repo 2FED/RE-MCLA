@@ -12,12 +12,12 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.4`
-- Immutable project commit: `51e997dc44185d3df205c4bd36e8042e99801871`
+- Project release tag: `v0.9.0.5`
+- Immutable project commit: `23b55de7d0ac36b67d032eecc2bf8ed00d9d26a6`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
-The fork carries four reviewed fixes. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage and unchanged generated MCLA bytes. ReXApp converts host paths through `rex::path_to_utf8()` rather than locale-dependent `std::filesystem::path::string()`. It also destroys Runtime/input drivers before their attached Window, preventing a teardown use-after-free after a loaded-image probe. Finally, read-only host VFS devices reject root traversal, write-intent opens, rename, and writable mappings instead of silently downgrading or reaching the host filesystem. See `docs/evidence/M2-016-rexglue-vector-regression.md`, `docs/evidence/M3-002-app-lifecycle.md`, `docs/evidence/M3-003-module-config.md`, and `docs/evidence/M3-004-vfs-disc-root.md`.
+The fork carries five reviewed fix groups. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage and unchanged generated MCLA bytes. ReXApp converts host paths through `rex::path_to_utf8()` rather than locale-dependent `std::filesystem::path::string()`. It also destroys Runtime/input drivers before their attached Window, preventing a teardown use-after-free after a loaded-image probe. Read-only host VFS devices reject root traversal, write-intent opens, rename, and writable mappings instead of silently downgrading or reaching the host filesystem. The ten direct XONLINE/social/XHV imports selected by M3-007 now return explicit offline states and emit once-only `[OFFLINE]` diagnostics instead of preserving stale caller `r3`. See `docs/evidence/M2-016-rexglue-vector-regression.md`, `docs/evidence/M3-002-app-lifecycle.md`, `docs/evidence/M3-003-module-config.md`, `docs/evidence/M3-004-vfs-disc-root.md`, and `docs/evidence/M3-007-offline-services.md`.
 
 ## Reproduction
 
@@ -32,19 +32,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.4^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.5^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `51e997dc44185d3df205c4bd36e8042e99801871`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `23b55de7d0ac36b67d032eecc2bf8ed00d9d26a6`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.4 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.5 project-fork commit:
 
 ```text
-51e997dc44185d3df205c4bd36e8042e99801871 third_party/rexglue-sdk
+23b55de7d0ac36b67d032eecc2bf8ed00d9d26a6 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

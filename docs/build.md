@@ -52,11 +52,11 @@ git submodule update --init --recursive
 git submodule status --recursive
 ```
 
-The first status line must contain ReXGlue project-fork commit `51e997dc44185d3df205c4bd36e8042e99801871`; no line may begin with `-`, `+`, or `U`.
+The first status line must contain ReXGlue project-fork commit `23b55de7d0ac36b67d032eecc2bf8ed00d9d26a6`; no line may begin with `-`, `+`, or `U`.
 
-The verified v0.9.0.4 Windows build uses:
+The verified v0.9.0.5 Windows build uses:
 
-- ReXGlue 0.9.0.4 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.9.0.5 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -194,7 +194,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.9.0.4`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.9.0.5`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1
