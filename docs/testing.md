@@ -127,6 +127,15 @@ scripts\test-export-import-coverage.ps1
 
 The exporter accepts only the immutable M2-002 Xenia import audit and the byte-verified M2-012 generated snapshot. It maps all 503 XEX records to 257 library/ordinal symbols, verifies all 246 generated function thunk addresses, classifies 11 variable imports, and scans every generated translation unit for direct import calls. Its tests require deterministic output and reject a changed audit, changed generated manifest, or output outside `docs/evidence`.
 
+M2-014 startup dependency gate:
+
+```powershell
+scripts\export-startup-import-set.ps1
+scripts\test-export-startup-import-set.ps1
+```
+
+The startup exporter pins the accepted generated/import evidence, verifies the exact `xstart` call order and title-main boundary, computes the transitive pre-main call closure, and requires every resulting import registration plus all eleven variable mappings in the pinned SDK. It distinguishes load-time mappings, pre-main functions, error-path semantics, and post-main shutdown calls. Tests require deterministic output and reject changed coverage, missing generated input, or output outside `docs/evidence`.
+
 Planned test layers:
 
 1. host utility unit tests
