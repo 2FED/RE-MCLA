@@ -52,11 +52,11 @@ git submodule update --init --recursive
 git submodule status --recursive
 ```
 
-The first status line must contain ReXGlue commit `3eb9b511b4140d2769e27be63eae57d41bfa2afa`; no line may begin with `-`, `+`, or `U`.
+The first status line must contain ReXGlue project-fork commit `583c8ff35cde3818992fc78d936c635bca092a6b`; no line may begin with `-`, `+`, or `U`.
 
-The verified v0.9.0 Windows build uses:
+The verified v0.9.0.1 Windows build uses:
 
-- ReXGlue 0.9.0 with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.9.0.1 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1

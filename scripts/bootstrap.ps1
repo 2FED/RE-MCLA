@@ -47,9 +47,9 @@ if (-not $RenderDocPath) {
 
 $expected = [ordered]@{
     AstGrepVersion     = '0.45.0'
-    ReXGlueCommit      = '3eb9b511b4140d2769e27be63eae57d41bfa2afa'
-    ReXGlueTag         = 'v0.9.0'
-    ReXGlueVersion     = '0.9.0'
+    ReXGlueCommit      = '583c8ff35cde3818992fc78d936c635bca092a6b'
+    ReXGlueTag         = 'v0.9.0.1'
+    ReXGlueVersion     = '0.9.0.1'
     ExtractorSha256    = '7C7AF9C17E095C3C1E78E644DF5F0E72F01C4690B3117F038AAFE26EB5A8A2F4'
     XeniaSha256        = 'C51D73364180D5F09B29BC348732A5B79D3959D5639321BDA58D490B4ABCF06A'
     GhidraVersion      = '12.0.4'
@@ -196,7 +196,7 @@ Invoke-PrerequisiteCheck -Name 'ReXGlue recursive source pin' -Action {
         throw "ReXGlue tracked worktree is dirty: $dirty"
     }
 
-    $recursive = Invoke-NativeText -Executable $gitExe -Arguments @('-c', 'safe.directory=*', '-C', $repoRoot, 'submodule', 'status', '--recursive', 'third_party/rexglue-sdk')
+    $recursive = Invoke-NativeText -Executable $gitExe -Arguments @('-c', 'safe.directory=*', '-C', $sdkRoot, 'submodule', 'status', '--recursive')
     $badLines = @($recursive -split "`r?`n" | Where-Object { $_ -match '^[-+U]' })
     if ($badLines.Count -gt 0) {
         throw "Incomplete or mismatched recursive submodule state: $($badLines -join '; ')"

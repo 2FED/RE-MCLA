@@ -145,6 +145,18 @@ scripts\test-export-xenia-patch-audit.ps1
 
 `scripts/ghidra/PatchAudit.java` reads the eight reviewed addresses from the loaded private XEX image. The exporter pins the upstream Complete Edition TOML SHA, upstream commit, target XEX, and Ghidra TSV; requires the exact title/module/media identity; verifies original bytes, containing words, instruction context, replacements, and disabled-by-default state; and publishes no proprietary bytes beyond the small patch-site words needed for verification. Tests reject an enabled/mutated upstream file, changed original bytes, or output outside `docs/evidence`.
 
+M2-016 ReXGlue SDK regression gate:
+
+```powershell
+cmake --preset win-amd64 -S third_party/rexglue-sdk -B third_party/rexglue-sdk/out/build/win-amd64-tests -DREXGLUE_BUILD_TESTS=ON -DREXGLUE_ENABLE_TRACY=OFF -DREXGLUE_ENABLE_PERF_COUNTERS=OFF
+cmake --build third_party/rexglue-sdk/out/build/win-amd64-tests --config Release --target ppc_tests --parallel
+third_party/rexglue-sdk/out/win-amd64/Release/ppc_tests.exe "*vpkd3d128*"
+third_party/rexglue-sdk/out/win-amd64/Release/ppc_tests.exe
+scripts/run-rexglue-vector-regression.ps1 -Confirm:$false
+```
+
+The SDK test tree must be configured with `REXGLUE_BUILD_TESTS=ON`. The focused test covers the project-fork mask-3 opcode, the full 166-file PPC corpus catches codegen regressions, and the project runner requires zero MCLA FLOAT16_4 warnings plus byte parity for all 64 accepted generated files. Raw logs and generated game code remain ignored under `private/evidence/M2-016`.
+
 Planned test layers:
 
 1. host utility unit tests
