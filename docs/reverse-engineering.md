@@ -57,6 +57,28 @@ The first native guest launch exposed twelve additional valid callable boundarie
 
 These entries are guest control-flow metadata, not kernel stubs. Their runtime discovery is tracked as an M3-005 prerequisite repair and does not change the M2 feasibility result that no startup import registration was missing.
 
+## M3 post-GPU runtime-discovered callable entries
+
+Selecting the Xenos plugin advanced normal startup beyond video initialization
+and exposed five additional exact indirect-call targets. Each target was added
+alone, regenerated without `--force`, inspected as a complete bounded body, and
+cleared by the next native trace. One initially short experimental bound for
+`0x823F3C68` was rejected because it lacked a return; the accepted bound extends
+to the next known function and ends in `blr`.
+
+| Address | Exclusive end | Generated body | Runtime evidence |
+| --- | --- | --- | --- |
+| `0x8249CBF0` | `0x8249CC00` | four-instruction vtable tail through slot `+80` | first post-GPU invalid target |
+| `0x8249CC00` | `0x8249CC10` | four-instruction vtable tail through slot `+68` | next invalid target |
+| `0x823F3C68` | `0x823F3C80` | six-instruction result leaf ending in `blr` | next invalid target |
+| `0x823F6EF8` | `0x823F6F1C` | status guard returning `0x80070057` or tailing to `0x823F6F1C` | next invalid target |
+| `0x822C9DD8` | `0x822C9DE8` | three-instruction tail to `0x822C7568` | final invalid target |
+
+The accepted non-force output contains 30,025 mappings. A final 20-second
+project-default Xenos run reaches graphics pipeline and audio callback work with
+no fatal, invalid-function, `PPC_UNIMPLEMENTED`, or guest-crash marker. See
+`docs/evidence/M3-013-startup-traps.md`.
+
 ## Import map handoff
 
 M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

@@ -104,6 +104,17 @@ void MclaApp::OnPostInitLogging() {
   MCLA_APP_INFO("MCLA lifecycle: logging ready");
 }
 
+void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
+  const bool guest_free_probe =
+      REXCVAR_GET(mcla_lifecycle_probe) || REXCVAR_GET(mcla_module_config_probe) ||
+      REXCVAR_GET(mcla_vfs_probe) || REXCVAR_GET(mcla_crash_probe) ||
+      REXCVAR_GET(mcla_logging_probe);
+  if (config.gpu_plugin.empty() && !guest_free_probe) {
+    config.gpu_plugin = "xenos";
+    MCLA_GPU_INFO("MCLA graphics: selected GPU plugin 'xenos'");
+  }
+}
+
 std::optional<rex::PathConfig> MclaApp::OnFinalizePaths(
     const rex::PathConfig &defaults, std::function<void(rex::PathConfig)> resume) {
   (void)resume;

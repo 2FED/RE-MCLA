@@ -14,10 +14,15 @@ $expected = [ordered]@{
     '8220C018' = @{ end='8220C0D0'; parent=''; name='sub_8220C018' }
     '822C98B8' = @{ end='822C9948'; parent=''; name='sub_822C98B8' }
     '822C9948' = @{ end='822C9A2C'; parent=''; name='sub_822C9948' }
+    '822C9DD8' = @{ end='822C9DE8'; parent=''; name='sub_822C9DD8' }
     '823F32E8' = @{ end='823F3300'; parent=''; name='sub_823F32E8' }
+    '823F3C68' = @{ end='823F3C80'; parent=''; name='sub_823F3C68' }
+    '823F6EF8' = @{ end='823F6F1C'; parent=''; name='sub_823F6EF8' }
     '823FD718' = @{ end='823FD720'; parent=''; name='sub_823FD718' }
     '822B88C8' = @{ end='822B88DC'; parent=''; name='sub_822B88C8' }
     '824B0DE8' = @{ end='824B0DF8'; parent='824B0CC0'; name='sub_824B0DE8' }
+    '8249CBF0' = @{ end='8249CC00'; parent=''; name='sub_8249CBF0' }
+    '8249CC00' = @{ end='8249CC10'; parent=''; name='sub_8249CC00' }
     '827A7FD0' = @{ end='827A7FF0'; parent=''; name='sub_827A7FD0' }
     '827A8220' = @{ end='827A8240'; parent=''; name='sub_827A8220' }
     '827AD168' = @{ end='827AD178'; parent=''; name='sub_827AD168' }

@@ -14,7 +14,7 @@ if (-not $GeneratedRoot) {
     $GeneratedRoot = Join-Path $repoRoot 'generated/default'
 }
 if (-not $ExpectedManifestPath) {
-    $ExpectedManifestPath = Join-Path $repoRoot 'private/evidence/M3-009/generated-manifest-v0.9.0.7.json'
+    $ExpectedManifestPath = Join-Path $repoRoot 'private/evidence/M3-013/generated-manifest-v0.9.0.7.json'
 }
 
 foreach ($path in @($GeneratedRoot, $ExpectedManifestPath)) {

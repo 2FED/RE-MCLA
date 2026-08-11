@@ -203,7 +203,7 @@ cmake --build --preset win-amd64-release --target mcla --parallel
 scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 ```
 
-With the accepted M3-009 corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 65 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
+With the accepted M3-013 corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 65 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
 
 `generated/rexglue.cmake` is the sole tracked file below `generated/`. The current 67 generated files, all object files, and the resulting executable remain ignored because they contain or embed translated proprietary game code. M3-001 preserves the first clean Release baseline; M3-009 records the current 65-source instrumented corpus in `docs/evidence/M3-009-crash-reporting.md`.
 
@@ -262,6 +262,21 @@ gate. Every accepted configuration must compile all 65 generated C++ objects,
 produce a PE executable, and stage only its matching `rexruntime`,
 `TracyClient`, and `rexgpu-xenos` DLL variant. Raw logs and the hash manifest
 remain ignored below `private/evidence/M3-012/`.
+
+Verify the post-GPU startup boundary without an explicit `gpu_plugin` argument:
+
+```powershell
+scripts\verify-analysis-config.ps1
+scripts\test-startup-trap-trace.ps1
+scripts\run-startup-trap-smoke.ps1
+```
+
+Normal MCLA launches select `xenos` by project default. The runner observes the
+RelWithDebInfo process for 20 seconds, requires project selection, plugin load,
+module launch, graphics interrupt/pipeline, and audio callback markers, then
+performs bounded cleanup. It rejects a no-GPU route, fatal or unregistered
+guest target, `PPC_UNIMPLEMENTED`, guest crash, and any post-launch Bink evidence.
+Guest-free lifecycle/config/VFS/crash/logging probes do not select a GPU.
 
 Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
 

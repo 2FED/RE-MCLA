@@ -25,6 +25,13 @@ module-config probe owns image/dispatch verification. The VFS probe owns the
 disc mount and write-containment contract; import behavior remains owned by
 M3-005 and later tasks.
 
+Normal guest launches select the staged `xenos` GPU plugin in `MclaApp::OnPreSetup`
+when no explicit plugin is configured. Lifecycle, module-config, VFS, crash,
+and logging probes are deliberately exempt so their guest-free contracts do not
+acquire a graphics dependency. The final M3-013 dispatch map contains 30,025
+entries after five bounded post-GPU callable boundaries were added through
+non-force analysis configuration.
+
 Before Runtime construction, `MclaApp` fail-closes on any mismatch in the
 accepted image/code ranges, bounded ordered function map, sentinel, or entry
 mapping. After XEX load and before guest-thread creation it verifies the loaded

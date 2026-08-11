@@ -14,6 +14,7 @@ class MclaApp : public rex::ReXApp {
   MclaApp(rex::ui::WindowedAppContext& ctx, rex::PPCImageInfo image_info);
 
   void OnPostInitLogging() override;
+  void OnPreSetup(rex::RuntimeConfig& config) override;
   std::optional<rex::PathConfig> OnFinalizePaths(
       const rex::PathConfig& defaults, std::function<void(rex::PathConfig)> resume) override;
   void LaunchModule() override;

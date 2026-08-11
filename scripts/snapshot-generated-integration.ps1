@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
     [string]$GeneratedRoot = 'generated/default',
-    [string]$OutputPath = 'private/evidence/M3-009/generated-manifest-v0.9.0.7.json'
+    [string]$OutputPath = 'private/evidence/M3-013/generated-manifest-v0.9.0.7.json'
 )
 
 Set-StrictMode -Version Latest

@@ -167,7 +167,7 @@ cmake --build --preset win-amd64-release --target mcla --parallel
 scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 ```
 
-The verifier now requires the current M3-009 67-file/133,906,156-byte manifest, an exact unique 65-source `sources.cmake` list, repository containment, no reparse points, zero tracked generated files, Git-ignore coverage for every output, 65 compiled generated objects, and a PE executable. M3-001 retains the historical 64-file/62-source baseline in its evidence. Fixture tests reject a changed hash, an unlisted file, a wrong total-byte count, a duplicate manifest path, and a mismatched source list; the snapshot helper additionally rejects overwrite, outside-private output, and an empty generated root.
+The verifier now requires the current M3-013 67-file/133,908,410-byte manifest, an exact unique 65-source `sources.cmake` list, repository containment, no reparse points, zero tracked generated files, Git-ignore coverage for every output, 65 compiled generated objects, and a PE executable. M3-001 retains the historical 64-file/62-source baseline in its evidence. Fixture tests reject a changed hash, an unlisted file, a wrong total-byte count, a duplicate manifest path, and a mismatched source list; the snapshot helper additionally rejects overwrite, outside-private output, and an empty generated root.
 
 M3-009 privacy-safe crash-report gate:
 
@@ -238,6 +238,21 @@ configures and clean-builds Debug, RelWithDebInfo, and Release, requires 65
 generated objects in each tree, validates the PE and artifact hashes, and
 rejects stale runtime/Tracy/Xenos variants from the other configurations. Raw
 configure/build logs remain ignored below `private/evidence/M3-012/`.
+
+M3-013 post-GPU startup-trap gate:
+
+```powershell
+scripts\verify-analysis-config.ps1
+scripts\test-startup-trap-trace.ps1
+scripts\run-startup-trap-smoke.ps1
+```
+
+The trace fixture passes one ordered project-default Xenos route and rejects
+seven regressions: missing selection, no-GPU fallback, invalid function,
+`PPC_UNIMPLEMENTED`, guest crash, missing pipeline progress, and post-launch
+Bink evidence. The live runner must remain alive for the full 20-second window,
+reach graphics and audio work, then be forcibly cleaned with no surviving
+process. Raw logs/results remain ignored below `private/evidence/M3-013/`.
 
 M3-002 application-lifecycle gate:
 
