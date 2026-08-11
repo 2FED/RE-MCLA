@@ -4,11 +4,11 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.9.0.5 `mcla` application consumes the ignored M2 generated corpus and produces a native Windows Release executable. The first clean build compiled 62 generated translation units and linked successfully; the project-owned host lifecycle now has a guest-free smoke path.
+Current state: the canonical ReXGlue v0.9.0.6 `mcla` application consumes the ignored M2 generated corpus and produces a native Windows Release executable. The first clean build compiled 62 generated translation units and linked successfully; the project-owned host lifecycle now has a guest-free smoke path.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.9.0.5, validates the contained 62-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla)`
+- `CMakeLists.txt` pins ReXGlue 0.9.0.6, validates the contained 62-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla)`
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
@@ -35,9 +35,14 @@ to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files
 through all aliases, rejects root traversal, and proves the game device is
 read-only across open/create/delete and writable-mapping paths. The
 `--mcla_vfs_probe` route exercises the same checks and exits before guest-thread
-creation. ReXGlue v0.9.0.5 supplies the fail-closed device boundary and explicit
+creation. ReXGlue v0.9.0.6 supplies the fail-closed device boundary and explicit
 offline results for the ten direct XONLINE/social/XHV imports reviewed in M3-007;
 user/cache writes remain on their separately configured roots.
+
+Early guest timing uses ReXGlue's host-derived 50-MHz guest clock for generated
+`mftb`/`mftbu`, `KeQueryPerformanceFrequency`, and `KeQuerySystemTime`. Guest
+threads notify the kernel, wait the Xenia-compatible 10-ms startup grace period,
+deliver queued APCs, and then dispatch a reviewed raw or XAPI start plan.
 
 Planned subsystem boundaries:
 

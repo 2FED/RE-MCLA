@@ -52,11 +52,11 @@ git submodule update --init --recursive
 git submodule status --recursive
 ```
 
-The first status line must contain ReXGlue project-fork commit `23b55de7d0ac36b67d032eecc2bf8ed00d9d26a6`; no line may begin with `-`, `+`, or `U`.
+The first status line must contain ReXGlue project-fork commit `eda7aebf9dbe8140d45f67d3e15053383d142696`; no line may begin with `-`, `+`, or `U`.
 
-The verified v0.9.0.5 Windows build uses:
+The verified v0.9.0.6 Windows build uses:
 
-- ReXGlue 0.9.0.5 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.9.0.6 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -194,7 +194,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.9.0.5`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.9.0.6`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1
@@ -206,6 +206,17 @@ scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 With the accepted corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 62 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
 
 `generated/rexglue.cmake` is the sole tracked file below `generated/`. The 64 generated files, all object files, and the resulting executable remain ignored because they contain or embed translated proprietary game code. M3-001 clean Release evidence is in `docs/evidence/M3-001-generated-source-integration.md`.
+
+Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
+
+```powershell
+scripts\verify-early-init-contract.ps1
+scripts\test-early-init-contract.ps1
+scripts\test-early-init-trace.ps1
+scripts\run-early-init-smoke.ps1 -RunCount 3 -TimeoutSeconds 30
+```
+
+The live probe uses CDB, creates isolated ignored user/cache roots, records only event markers and hashes, and stops at the first child guest-thread start plan after all reviewed timing/thread imports have appeared.
 
 Exercise only the project-owned host lifecycle, without constructing the guest
 runtime or launching translated code, with:
