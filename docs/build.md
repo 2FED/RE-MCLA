@@ -234,6 +234,19 @@ Each `mcla_log_<category>` init-only option accepts `inherit`, `trace`, `debug`,
 gate sets the global level to `off`, enables one category per isolated run, and
 writes only ignored logs below `private/evidence/M3-010/`.
 
+Re-evaluate the conditional skip-intro decision with an unpatched bounded run:
+
+```powershell
+scripts\verify-skip-intro-decision.ps1
+scripts\test-intro-blocker-trace.ps1
+scripts\run-intro-blocker-smoke.ps1
+```
+
+The current accepted classification is `gpu-plugin-unconfigured-before-bink`.
+The wrapper observes for 15 seconds, requires module launch plus both no-GPU
+markers, rejects post-launch Bink/fatal/crash evidence, kills the isolated
+process, and confirms cleanup. It never enables or writes a guest patch.
+
 Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
 
 ```powershell

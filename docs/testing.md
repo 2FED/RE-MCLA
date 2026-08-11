@@ -208,6 +208,21 @@ level. The live gate performs nine lifecycle-only runs with global logging off
 and exactly one selected category at `info`; each log is capped at 64 KiB and
 remains under ignored `private/evidence/M3-010/`.
 
+M3-011 conditional skip-intro decision gate:
+
+```powershell
+scripts\verify-skip-intro-decision.ps1
+scripts\test-intro-blocker-trace.ps1
+scripts\run-intro-blocker-smoke.ps1
+```
+
+The static decision gate requires zero project skip-intro implementation while
+retaining the disabled M2-015 byte audit. The trace test passes one current
+classification and rejects missing launch, missing GPU prerequisite, post-launch
+Bink evidence, and guest crash evidence. The live runner expects the unpatched
+process to remain alive for the bounded observation, then forcibly cleans it up
+and stores only private raw logs/result metadata below `private/evidence/M3-011/`.
+
 M3-002 application-lifecycle gate:
 
 ```powershell
