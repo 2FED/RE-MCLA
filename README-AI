@@ -621,7 +621,7 @@ Pause for a feasibility decision if:
 
 ### Tasks
 
-- [ ] **M3-001** Integrate generated sources through CMake without tracking private/generated proprietary content.
+- [x] **M3-001** Integrate generated sources through CMake without tracking private/generated proprietary content. The exact ReXGlue v0.9.0.1 preset consumes 62 generated C++ files from the accepted 64-file manifest; a clean 66-action Release build compiles all 62 objects and links an ignored 41,972,736-byte PE. Version mismatch, missing-generated fallback, hash/list/containment, and Git-ignore gates pass. Evidence: `scripts/verify-generated-integration.ps1`, `scripts/test-generated-integration.ps1`, `docs/evidence/M3-001-generated-source-integration.md`.
 - [ ] **M3-002** Add a project `ReXApp` subclass and document lifecycle hooks.
 - [ ] **M3-003** Configure guest memory layout, image base, function dispatch, and executable entry point.
 - [ ] **M3-004** Mount `private/game` as the guest disc root through the VFS.
@@ -1259,7 +1259,7 @@ Execute in this order unless a new blocker changes the plan:
 4. [x] Complete M2-013: map all XAM/xboxkrnl import records and static reachability classes.
 5. [x] Complete M2-016: add SDK regression coverage for the twenty FLOAT16_4 sites.
 6. [x] Complete M2-017 and close M2 at version `0.2.0.0` with `GO WITH SDK FORK`.
-7. [ ] Complete M3-001 and M3-002: integrate generated sources and define the `ReXApp` lifecycle.
+7. [-] Complete M3-001 and M3-002: generated-source integration is complete; define and exercise the `ReXApp` lifecycle next.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

@@ -192,15 +192,20 @@ The default run validates all pinned build, source, extraction, emulator, revers
 
 Use the named path parameters only when the private layout differs from the documented defaults or when testing a failure. Overrides do not disable version or hash validation. The verified positive and missing-tool transcripts are summarized in `docs/evidence/M1-015-bootstrap.md`.
 
-## Configure the MCLA application scaffold
+## Generate, verify, and build the MCLA application
 
-After initializing the compiler environment and `CMAKE_PREFIX_PATH` as above, configure the canonical scaffold with:
+The presets pin the installed project-fork SDK at ReXGlue `0.9.0.1`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
-cmake --preset win-amd64-debug
+scripts\verify-generated-integration.ps1
+cmake --preset win-amd64-release
+cmake --build --preset win-amd64-release --target mcla --parallel
+scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
 ```
 
-The configured Ninja graph must expose both `mcla` and `mcla_codegen`. Do not build `mcla` before codegen: its required `generated/default/mcla_init.h` and guest-derived sources are intentionally absent until the M2 analysis gate. `generated/rexglue.cmake` is the sole tracked file below `generated/`; all codegen output remains ignored.
+With the accepted corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 62 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
+
+`generated/rexglue.cmake` is the sole tracked file below `generated/`. The 64 generated files, all object files, and the resulting executable remain ignored because they contain or embed translated proprietary game code. M3-001 clean Release evidence is in `docs/evidence/M3-001-generated-source-integration.md`.
 
 The immutable M2-008 first non-force gate was run through `scripts\run-rexglue-codegen-gate.ps1`. It completed all six analysis phases and returned exit code 1 for seven validation-stage `UnresolvedCall` findings without emitting `generated/default`. Its raw streams remain ignored; regenerate the reviewed public evidence with `scripts\export-rexglue-codegen-gate.ps1`. Do not remove or overwrite the private first-run root, rerun this one-shot gate, add `--force` to it, or use the M2-008 root for the separate M2-009 force inventory.
 

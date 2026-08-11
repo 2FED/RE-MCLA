@@ -157,6 +157,18 @@ scripts/run-rexglue-vector-regression.ps1 -Confirm:$false
 
 The SDK test tree must be configured with `REXGLUE_BUILD_TESTS=ON`. The focused test covers the project-fork mask-3 opcode, the full 166-file PPC corpus catches codegen regressions, and the project runner requires zero MCLA FLOAT16_4 warnings plus byte parity for all 64 accepted generated files. Raw logs and generated game code remain ignored under `private/evidence/M2-016`.
 
+M3-001 generated-source/native-build integration gate:
+
+```powershell
+scripts\test-generated-integration.ps1
+scripts\verify-generated-integration.ps1
+cmake --preset win-amd64-release
+cmake --build --preset win-amd64-release --target mcla --parallel
+scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
+```
+
+The verifier requires the accepted 64-file/128,031,984-byte manifest, an exact unique 62-source `sources.cmake` list, repository containment, no reparse points, zero tracked generated files, Git-ignore coverage for every output, 62 compiled generated objects, and a PE executable. Fixture tests reject a changed hash, an unlisted file, a wrong total-byte count, a duplicate manifest path, and a mismatched source list.
+
 Planned test layers:
 
 1. host utility unit tests
