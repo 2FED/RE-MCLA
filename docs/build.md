@@ -52,11 +52,11 @@ git submodule update --init --recursive
 git submodule status --recursive
 ```
 
-The first status line must contain ReXGlue project-fork commit `b5d268d7352a956d21d0fdb10ecc9f1f36e0455b`; no line may begin with `-`, `+`, or `U`.
+The first status line must contain ReXGlue project-fork commit `51e997dc44185d3df205c4bd36e8042e99801871`; no line may begin with `-`, `+`, or `U`.
 
-The verified v0.9.0.3 Windows build uses:
+The verified v0.9.0.4 Windows build uses:
 
-- ReXGlue 0.9.0.3 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.9.0.4 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -194,7 +194,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.9.0.3`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.9.0.4`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1
@@ -231,6 +231,18 @@ scripts\run-module-config-smoke.ps1
 The default probe reads `private/game/default.xex`, redirects user/cache output
 to an ignored per-run evidence directory, requires five ordered contract and
 shutdown markers, and rejects any log indicating guest execution.
+
+Validate the mounted disc aliases and fail-closed write policy with:
+
+```powershell
+scripts\test-vfs-policy.ps1
+scripts\run-vfs-smoke.ps1
+scripts\run-vfs-smoke.ps1 -BuildRoot out\build\win-amd64-relwithdebinfo
+```
+
+The smoke requires the exact 15-file private game inventory, snapshots metadata
+and the XEX hash before and after the process, redirects all approved writes to
+ignored evidence roots, and fails if a probe file appears in `private/game`.
 
 The immutable M2-008 first non-force gate was run through `scripts\run-rexglue-codegen-gate.ps1`. It completed all six analysis phases and returned exit code 1 for seven validation-stage `UnresolvedCall` findings without emitting `generated/default`. Its raw streams remain ignored; regenerate the reviewed public evidence with `scripts\export-rexglue-codegen-gate.ps1`. Do not remove or overwrite the private first-run root, rerun this one-shot gate, add `--force` to it, or use the M2-008 root for the separate M2-009 force inventory.
 

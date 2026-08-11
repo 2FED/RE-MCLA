@@ -4,11 +4,11 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.9.0.3 `mcla` application consumes the ignored M2 generated corpus and produces a native Windows Release executable. The first clean build compiled 62 generated translation units and linked successfully; the project-owned host lifecycle now has a guest-free smoke path.
+Current state: the canonical ReXGlue v0.9.0.4 `mcla` application consumes the ignored M2 generated corpus and produces a native Windows Release executable. The first clean build compiled 62 generated translation units and linked successfully; the project-owned host lifecycle now has a guest-free smoke path.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.9.0.3, validates the contained 62-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla)`
+- `CMakeLists.txt` pins ReXGlue 0.9.0.4, validates the contained 62-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla)`
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
@@ -20,14 +20,23 @@ Implemented bootstrap boundary:
 
 The lifecycle probe exists only to verify host application wiring. It does not
 construct `Runtime`, load the XEX, or execute translated code. The separate
-module-config probe owns image/dispatch verification; VFS and import behavior
-remain owned by M3-004 and later tasks.
+module-config probe owns image/dispatch verification. The VFS probe owns the
+disc mount and write-containment contract; import behavior remains owned by
+M3-005 and later tasks.
 
 Before Runtime construction, `MclaApp` fail-closes on any mismatch in the
 accepted image/code ranges, bounded ordered function map, sentinel, or entry
 mapping. After XEX load and before guest-thread creation it verifies the loaded
 base/entry and dispatcher coverage. `--mcla_module_config_probe` exercises that
-complete contract and exits before guest execution. VFS policy remains M3-004.
+complete contract and exits before guest execution.
+
+Before every normal guest launch, `MclaApp` verifies that `game:` and `d:` map
+to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files
+through all aliases, rejects root traversal, and proves the game device is
+read-only across open/create/delete and writable-mapping paths. The
+`--mcla_vfs_probe` route exercises the same checks and exits before guest-thread
+creation. ReXGlue v0.9.0.4 supplies the fail-closed device boundary; user/cache
+writes remain on their separately configured roots.
 
 Planned subsystem boundaries:
 

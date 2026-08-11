@@ -199,6 +199,24 @@ base/entry and dispatcher range, then exits before guest-thread creation. Raw
 evidence and redirected user/cache paths remain below ignored
 `private/evidence/M3-003/`.
 
+M3-004 VFS disc-root and containment gate:
+
+```powershell
+scripts\test-vfs-policy.ps1
+scripts\run-vfs-smoke.ps1
+scripts\run-vfs-smoke.ps1 -BuildRoot out\build\win-amd64-relwithdebinfo
+scripts\verify-game-manifest.ps1 -VerifyHashes
+third_party\rexglue-sdk\out\win-amd64\Debug\unit_tests.exe "[filesystem]"
+```
+
+The native probe resolves representative XEX, BIK, and RPF files through
+`game:`, `d:`, and the physical guest device; rejects alias and physical-device
+root traversal; and requires access denied for write/create plus failure for
+delete and writable mapping. The wrapper proves the 15-file/6,569,586,392-byte
+host snapshot and XEX hash are unchanged. The SDK fixture uses only a temporary
+directory and additionally covers rename, read opens, and read-only mappings.
+Raw runtime logs remain below ignored `private/evidence/M3-004/`.
+
 Planned test layers:
 
 1. host utility unit tests

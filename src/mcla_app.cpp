@@ -5,7 +5,10 @@
 #include "generated/default/mcla_init.h"
 
 #include <rex/cvar.h>
+#include <rex/filesystem/file.h>
+#include <rex/filesystem/vfs.h>
 #include <rex/logging.h>
+#include <rex/memory/mapped_memory.h>
 #include <rex/runtime.h>
 #include <rex/system/function_dispatcher.h>
 #include <rex/system/kernel_state.h>
@@ -18,6 +21,7 @@ constexpr uint32_t kExpectedImageSize = 0x009E0000;
 constexpr uint32_t kExpectedCodeBase = 0x82130000;
 constexpr uint32_t kExpectedCodeSize = 0x0069D054;
 constexpr uint32_t kExpectedEntryPoint = 0x821322B8;
+constexpr rex::X_STATUS kAccessDenied = 0xC0000022u;
 
 }  // namespace
 
@@ -27,6 +31,11 @@ REXCVAR_DEFINE_BOOL(mcla_lifecycle_probe, false, "MCLA",
 
 REXCVAR_DEFINE_BOOL(mcla_module_config_probe, false, "MCLA",
                     "Validate the loaded image and dispatch table without launching guest code")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_vfs_probe, false, "MCLA",
+    "Validate the guest disc mount and write containment without launching guest code")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 MclaApp::MclaApp(rex::ui::WindowedAppContext& ctx, rex::PPCImageInfo image_info)
@@ -141,6 +150,86 @@ bool MclaApp::ValidateLoadedImageContract() {
   return true;
 }
 
+bool MclaApp::ValidateGameVfsContract() {
+  if (!runtime() || !runtime()->file_system()) {
+    return false;
+  }
+
+  auto* vfs = runtime()->file_system();
+  constexpr std::string_view kMount = "\\Device\\Harddisk0\\Partition1";
+  std::string game_target;
+  std::string d_target;
+  if (!vfs->FindSymbolicLink("game:", game_target) || !vfs->FindSymbolicLink("d:", d_target) ||
+      game_target != kMount || d_target != kMount) {
+    return false;
+  }
+
+  struct ExpectedFile {
+    std::string_view relative_path;
+    size_t size;
+  };
+  constexpr ExpectedFile kExpectedFiles[] = {
+      {"default.xex", 9252864},
+      {"intro720.bik", 123836692},
+      {"xarchive_cache.rpf", 2130739200},
+  };
+
+  for (const auto& expected : kExpectedFiles) {
+    const std::string game_path = "game:\\" + std::string(expected.relative_path);
+    const std::string d_path = "d:\\" + std::string(expected.relative_path);
+    const std::string device_path =
+        std::string(kMount) + "\\" + std::string(expected.relative_path);
+    auto* game_entry = vfs->ResolvePath(game_path);
+    if (!game_entry || vfs->ResolvePath(d_path) != game_entry ||
+        vfs->ResolvePath(device_path) != game_entry || !game_entry->is_read_only() ||
+        game_entry->size() != expected.size) {
+      return false;
+    }
+
+    rex::filesystem::File* file = nullptr;
+    rex::filesystem::FileAction action{};
+    const auto status =
+        vfs->OpenFile(nullptr, game_path, rex::filesystem::FileDisposition::kOpen,
+                      rex::filesystem::FileAccess::kGenericRead, false, true, &file, &action);
+    if (XFAILED(status) || !file) {
+      return false;
+    }
+    file->Destroy();
+  }
+  REXLOG_INFO("MCLA VFS: game: and d: resolve 3/3 expected disc files on {}", kMount);
+
+  if (vfs->ResolvePath("game:\\..\\default.xex") ||
+      vfs->ResolvePath("\\Device\\Harddisk0\\Partition1\\..\\Partition1\\default.xex")) {
+    return false;
+  }
+  REXLOG_INFO("MCLA VFS: root-escape paths rejected");
+
+  auto* xex_entry = vfs->ResolvePath("game:\\default.xex");
+  if (!xex_entry) {
+    return false;
+  }
+  rex::filesystem::File* write_file = nullptr;
+  rex::filesystem::FileAction write_action{};
+  const auto existing_write = vfs->OpenFile(
+      nullptr, "game:\\default.xex", rex::filesystem::FileDisposition::kOpen,
+      rex::filesystem::FileAccess::kGenericWrite, false, true, &write_file, &write_action);
+  if (existing_write != kAccessDenied || write_file ||
+      xex_entry->OpenMapped(rex::memory::MappedMemory::Mode::kReadWrite) ||
+      vfs->DeletePath("game:\\default.xex")) {
+    return false;
+  }
+
+  constexpr std::string_view kCreateProbe = "game:\\__mcla_vfs_write_probe.tmp";
+  const auto create_write = vfs->OpenFile(
+      nullptr, kCreateProbe, rex::filesystem::FileDisposition::kCreate,
+      rex::filesystem::FileAccess::kGenericWrite, false, true, &write_file, &write_action);
+  if (create_write != kAccessDenied || write_file || vfs->ResolvePath(kCreateProbe)) {
+    return false;
+  }
+  REXLOG_INFO("MCLA VFS: write, create, delete, and writable-map requests denied");
+  return true;
+}
+
 void MclaApp::LaunchModule() {
   if (!ValidateLoadedImageContract()) {
     REXLOG_ERROR("MCLA module config: loaded image contract rejected; guest launch blocked");
@@ -150,6 +239,18 @@ void MclaApp::LaunchModule() {
 
   if (REXCVAR_GET(mcla_module_config_probe)) {
     REXLOG_INFO("MCLA module config: probe complete; guest launch skipped");
+    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    return;
+  }
+
+  if (!ValidateGameVfsContract()) {
+    REXLOG_ERROR("MCLA VFS: disc-root contract rejected; guest launch blocked");
+    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    return;
+  }
+
+  if (REXCVAR_GET(mcla_vfs_probe)) {
+    REXLOG_INFO("MCLA VFS: probe complete; guest launch skipped");
     app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
     return;
   }
