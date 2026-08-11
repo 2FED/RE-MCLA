@@ -47,9 +47,9 @@ if (-not $RenderDocPath) {
 
 $expected = [ordered]@{
     AstGrepVersion     = '0.45.0'
-    ReXGlueCommit      = '14c901c6c58dc5791985a116575a2cc59849d2fe'
-    ReXGlueTag         = 'v0.9.0.2'
-    ReXGlueVersion     = '0.9.0.2'
+    ReXGlueCommit      = 'b5d268d7352a956d21d0fdb10ecc9f1f36e0455b'
+    ReXGlueTag         = 'v0.9.0.3'
+    ReXGlueVersion     = '0.9.0.3'
     ExtractorSha256    = '7C7AF9C17E095C3C1E78E644DF5F0E72F01C4690B3117F038AAFE26EB5A8A2F4'
     XeniaSha256        = 'C51D73364180D5F09B29BC348732A5B79D3959D5639321BDA58D490B4ABCF06A'
     GhidraVersion      = '12.0.4'

@@ -16,5 +16,12 @@ class MclaApp : public rex::ReXApp {
   void OnPostInitLogging() override;
   std::optional<rex::PathConfig> OnFinalizePaths(
       const rex::PathConfig& defaults, std::function<void(rex::PathConfig)> resume) override;
+  void LaunchModule() override;
   void OnShutdown() override;
+
+ private:
+  bool ValidateStaticImageContract();
+  bool ValidateLoadedImageContract();
+
+  size_t function_mapping_count_ = 0;
 };

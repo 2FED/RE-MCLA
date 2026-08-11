@@ -8,6 +8,7 @@ $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $header = Get-Content -LiteralPath (Join-Path $repoRoot 'src/mcla_app.h') -Raw
 $implementation = Get-Content -LiteralPath (Join-Path $repoRoot 'src/mcla_app.cpp') -Raw
 $main = Get-Content -LiteralPath (Join-Path $repoRoot 'src/main.cpp') -Raw
+$sdkApp = Get-Content -LiteralPath (Join-Path $repoRoot 'third_party/rexglue-sdk/src/ui/rex_app.cpp') -Raw
 
 $requiredHeaderPatterns = @(
     'class\s+MclaApp\s*:\s*public\s+rex::ReXApp',
@@ -36,6 +37,11 @@ if ($main -notmatch 'REX_DEFINE_APP\s*\(\s*mcla\s*,\s*MclaApp::Create\s*\)') {
 }
 if ($header -match 'generated/default' -or $main -match 'generated/default') {
     throw 'Generated image declarations must remain isolated in mcla_app.cpp.'
+}
+$runtimeReset = $sdkApp.LastIndexOf('runtime_.reset();', [System.StringComparison]::Ordinal)
+$windowReset = $sdkApp.LastIndexOf('window_.reset();', [System.StringComparison]::Ordinal)
+if ($runtimeReset -lt 0 -or $windowReset -lt 0 -or $runtimeReset -gt $windowReset) {
+    throw 'ReXApp must destroy Runtime/input drivers before their attached Window.'
 }
 
 [pscustomobject]@{

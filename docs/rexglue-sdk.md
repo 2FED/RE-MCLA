@@ -12,12 +12,12 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.2`
-- Immutable project commit: `14c901c6c58dc5791985a116575a2cc59849d2fe`
+- Project release tag: `v0.9.0.3`
+- Immutable project commit: `b5d268d7352a956d21d0fdb10ecc9f1f36e0455b`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
-The fork carries two reviewed fixes. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage and unchanged generated MCLA bytes. ReXApp also converts host paths through `rex::path_to_utf8()` rather than locale-dependent `std::filesystem::path::string()`, with a non-ASCII round-trip test and a real Windows lifecycle smoke. See `docs/evidence/M2-016-rexglue-vector-regression.md` and `docs/evidence/M3-002-app-lifecycle.md`.
+The fork carries three reviewed fixes. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage and unchanged generated MCLA bytes. ReXApp converts host paths through `rex::path_to_utf8()` rather than locale-dependent `std::filesystem::path::string()`. It also destroys Runtime/input drivers before their attached Window, preventing a teardown use-after-free after a loaded-image probe. See `docs/evidence/M2-016-rexglue-vector-regression.md`, `docs/evidence/M3-002-app-lifecycle.md`, and `docs/evidence/M3-003-module-config.md`.
 
 ## Reproduction
 
@@ -32,19 +32,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.2^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.3^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `14c901c6c58dc5791985a116575a2cc59849d2fe`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `b5d268d7352a956d21d0fdb10ecc9f1f36e0455b`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.2 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.3 project-fork commit:
 
 ```text
-14c901c6c58dc5791985a116575a2cc59849d2fe third_party/rexglue-sdk
+b5d268d7352a956d21d0fdb10ecc9f1f36e0455b third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

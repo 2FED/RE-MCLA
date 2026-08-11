@@ -183,6 +183,22 @@ constructing or launching the guest runtime and passes only on exit code 0 with
 the four startup/probe/shutdown log markers in order. Raw logs stay below
 ignored `private/evidence/M3-002/`.
 
+M3-003 module-configuration gate:
+
+```powershell
+scripts\test-module-config.ps1
+scripts\verify-module-config.ps1
+scripts\run-module-config-smoke.ps1
+```
+
+The static verifier requires the exact image/code/dispatch ranges, a bounded
+ordered 30,008-entry function map, its final sentinel, and exactly one mapping
+for the executable entry. Five negative fixtures exercise fail-closed behavior.
+The real probe constructs Runtime, loads the private XEX, verifies the loaded
+base/entry and dispatcher range, then exits before guest-thread creation. Raw
+evidence and redirected user/cache paths remain below ignored
+`private/evidence/M3-003/`.
+
 Planned test layers:
 
 1. host utility unit tests
