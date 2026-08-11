@@ -34,9 +34,12 @@ non-force analysis configuration.
 
 Before Runtime construction, `MclaApp` fail-closes on any mismatch in the
 accepted image/code ranges, bounded ordered function map, sentinel, or entry
-mapping. After XEX load and before guest-thread creation it verifies the loaded
-base/entry and dispatcher coverage. `--mcla_module_config_probe` exercises that
-complete contract and exits before guest execution.
+mapping. After XEX load and before guest-thread creation it verifies exact Title
+ID `545407F8`, Media ID `5940C9DB`, loaded image range
+`82000000-829E0000`, entry `821322B8`, and dispatcher coverage, then emits the
+canonical identity marker consumed by the M3-014 smoke gate.
+`--mcla_module_config_probe` exercises that complete contract and exits before
+guest execution.
 
 Before every normal guest launch, `MclaApp` verifies that `game:` and `d:` map
 to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files

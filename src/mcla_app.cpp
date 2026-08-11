@@ -28,6 +28,8 @@ constexpr uint32_t kExpectedImageSize = 0x009E0000;
 constexpr uint32_t kExpectedCodeBase = 0x82130000;
 constexpr uint32_t kExpectedCodeSize = 0x0069D054;
 constexpr uint32_t kExpectedEntryPoint = 0x821322B8;
+constexpr uint32_t kExpectedTitleId = 0x545407F8;
+constexpr uint32_t kExpectedMediaId = 0x5940C9DB;
 constexpr rex::X_STATUS kAccessDenied = 0xC0000022u;
 
 }  // namespace
@@ -196,9 +198,14 @@ bool MclaApp::ValidateLoadedImageContract() {
   }
 
   auto executable = runtime()->kernel_state()->GetExecutableModule();
+  const auto *xex = executable ? executable->xex_module() : nullptr;
+  const auto *execution_info = xex ? xex->opt_execution_info() : nullptr;
   if (!executable || !executable->is_executable() ||
-      executable->xex_module()->base_address() != kExpectedImageBase ||
-      executable->entry_point() != kExpectedEntryPoint) {
+      !execution_info || xex->base_address() != kExpectedImageBase ||
+      xex->image_size() != kExpectedImageSize ||
+      executable->entry_point() != kExpectedEntryPoint ||
+      execution_info->title_id != kExpectedTitleId ||
+      execution_info->media_id != kExpectedMediaId) {
     return false;
   }
 
@@ -211,8 +218,14 @@ bool MclaApp::ValidateLoadedImageContract() {
     return false;
   }
 
+  MCLA_PPC_INFO(
+      "MCLA module identity: title {:08X}, media {:08X}, image "
+      "{:08X}-{:08X}, entry {:08X}",
+      static_cast<uint32_t>(execution_info->title_id),
+      static_cast<uint32_t>(execution_info->media_id), xex->base_address(),
+      xex->base_address() + xex->image_size(), executable->entry_point());
   MCLA_PPC_INFO("MCLA module config: loaded XEX base {:08X}, entry {:08X}",
-                executable->xex_module()->base_address(), executable->entry_point());
+                xex->base_address(), executable->entry_point());
   MCLA_PPC_INFO(
       "MCLA module config: entry {:08X} registered in dispatch range "
       "{:08X}-{:08X}",

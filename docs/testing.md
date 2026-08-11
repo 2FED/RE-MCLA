@@ -254,6 +254,25 @@ Bink evidence. The live runner must remain alive for the full 20-second window,
 reach graphics and audio work, then be forcibly cleaned with no surviving
 process. Raw logs/results remain ignored below `private/evidence/M3-013/`.
 
+M3-014 canonical startup-smoke gate:
+
+```powershell
+scripts\test-startup-smoke.ps1
+scripts\run-startup-smoke.ps1
+scripts\verify-startup-smoke.ps1 -RuntimeLogPath <private-log>
+scripts\verify-startup-smoke-result.ps1 -ResultPath <private-result.json> -RuntimeLogPath <private-log>
+```
+
+The static/fixture gate requires the exact project source identity contract,
+passes complete log and result objects, rejects thirteen marker/failure
+mutations, eight result-integrity/termination mutations, and one corrupt XEX
+before process creation. The live runner accepts only the supported XEX hash,
+requires exact Title ID, Media ID, loaded image range, entry, read-only VFS,
+module, graphics, and audio evidence within the bounded deadline, then requires
+its owned PID to terminate and signal exit within five seconds. It re-verifies
+the post-exit log before binding its exact bytes/hash into the result. Raw
+logs/results remain ignored below `private/evidence/M3-014/`.
+
 M3-002 application-lifecycle gate:
 
 ```powershell

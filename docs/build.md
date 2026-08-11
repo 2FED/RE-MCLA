@@ -278,6 +278,23 @@ performs bounded cleanup. It rejects a no-GPU route, fatal or unregistered
 guest target, `PPC_UNIMPLEMENTED`, guest crash, and any post-launch Bink evidence.
 Guest-free lifecycle/config/VFS/crash/logging probes do not select a GPU.
 
+Run the canonical fail-closed startup smoke:
+
+```powershell
+scripts\test-startup-smoke.ps1
+scripts\run-startup-smoke.ps1
+scripts\verify-startup-smoke-result.ps1 -ResultPath <private-result.json> -RuntimeLogPath <private-log>
+```
+
+The runner first requires the supported 9,252,864-byte Complete Edition
+`default.xex` and exact SHA-256. It then gives the RelWithDebInfo process at
+most 20 seconds to emit 15 ordered lifecycle, Xenos, static/loaded image
+identity, read-only VFS, module-launch, graphics, and audio markers. Success is
+marker-driven; the harness terminates only its own PID, requires its process
+handle to signal exit within a separate five-second cleanup deadline, then
+re-verifies the immutable final log and exact result byte/hash fields.
+Private logs/results remain below `private/evidence/M3-014/`.
+
 Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
 
 ```powershell
