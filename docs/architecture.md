@@ -8,7 +8,7 @@ Current state: the canonical ReXGlue v0.9.0.7 `mcla` application consumes the ig
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.9.0.7, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla)`
+- `CMakeLists.txt` pins ReXGlue 0.9.0.7, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`

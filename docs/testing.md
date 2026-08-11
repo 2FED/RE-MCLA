@@ -223,6 +223,22 @@ Bink evidence, and guest crash evidence. The live runner expects the unpatched
 process to remain alive for the bounded observation, then forcibly cleans it up
 and stores only private raw logs/result metadata below `private/evidence/M3-011/`.
 
+M3-012 clean build-matrix gate:
+
+```powershell
+scripts\test-build-matrix.ps1
+scripts\run-build-matrix.ps1
+scripts\verify-build-matrix.ps1 -ResultPath <private-result.json>
+```
+
+The manifest fixture passes one exact three-configuration result and rejects a
+wrong task, missing configuration, cross-configuration GPU DLL, failed build,
+invalid hash, and wrong generated-object count. The live gate independently
+configures and clean-builds Debug, RelWithDebInfo, and Release, requires 65
+generated objects in each tree, validates the PE and artifact hashes, and
+rejects stale runtime/Tracy/Xenos variants from the other configurations. Raw
+configure/build logs remain ignored below `private/evidence/M3-012/`.
+
 M3-002 application-lifecycle gate:
 
 ```powershell

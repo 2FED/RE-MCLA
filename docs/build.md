@@ -247,6 +247,22 @@ The wrapper observes for 15 seconds, requires module launch plus both no-GPU
 markers, rejects post-launch Bink/fatal/crash evidence, kills the isolated
 process, and confirms cleanup. It never enables or writes a guest patch.
 
+Build and verify the complete Windows AMD64 configuration matrix with:
+
+```powershell
+scripts\test-build-matrix.ps1
+scripts\run-build-matrix.ps1
+```
+
+The runner configures the exact Debug, RelWithDebInfo, and Release presets and
+performs a clean `mcla` build for each. Before each build it removes only the
+known copied runtime, Tracy, and Xenos DLL names from that preset's contained
+build root, preventing stale cross-configuration artifacts from satisfying the
+gate. Every accepted configuration must compile all 65 generated C++ objects,
+produce a PE executable, and stage only its matching `rexruntime`,
+`TracyClient`, and `rexgpu-xenos` DLL variant. Raw logs and the hash manifest
+remain ignored below `private/evidence/M3-012/`.
+
 Verify the M3 early-initialization contract and repeat the bounded runtime ordering trace with:
 
 ```powershell
