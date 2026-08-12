@@ -417,6 +417,29 @@ rejects reparse points, topology/privacy violations, patch drift, force cleanup,
 orphans, and cross-cycle mutation. Raw noisy logs and BMPs remain private under
 `private/evidence/M4-003/`.
 
+M4-004 single-local-user profile gate:
+
+```powershell
+scripts\test-xam-profile-smoke.ps1
+scripts\run-xam-profile-smoke.ps1
+scripts\verify-xam-profile-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The runner clean-installs RelWithDebInfo ReXGlue, executes the focused profile
+defaults tests, clean-builds the app, and performs three isolated 35-second
+title probes. The bounded XAM audit must prove slot 0 is locally signed in with
+a stable nonzero mask-7 XUID and consistent name/sign-in information. Slots 1,
+2, and 3 must each appear independently as signed out/no-such-user, with both
+privacy-safe presence masks equal to hexadecimal `E`. Every cycle then passes
+the existing physical title oracle, dwells for two seconds, and exits 0 through
+exact-PID `WM_CLOSE` without force cleanup or an orphan.
+
+The deterministic three voice setting defaults are covered by focused SDK unit
+tests. The accepted title route does not call `ReadProfileSettings`, privilege
+masks 251/252, or `SigninUI`; the gate validates such records fail-closed if
+they become reachable but does not claim their runtime execution. Raw logs,
+captures, and result JSON stay below ignored `private/evidence/M4-004/`.
+
 Planned test layers:
 
 1. host utility unit tests

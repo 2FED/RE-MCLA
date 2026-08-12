@@ -1,6 +1,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Result')]
 param(
     [Parameter(Mandatory, ParameterSetName = 'Result')][string]$ResultPath,
+    [Parameter(ParameterSetName = 'Result')][switch]$HistoricalEvidenceOnly,
     [Parameter(Mandatory, ParameterSetName = 'Probe')][string]$RuntimeLogPath,
     [Parameter(Mandatory, ParameterSetName = 'Probe')][string]$BmpPath,
     [Parameter(Mandatory, ParameterSetName = 'Probe')][switch]$ProbeOnly
@@ -464,7 +465,9 @@ foreach ($name in @('all_write_roots_contained','all_prior_cycles_immutable',
     if (-not $result.$name) { throw "Aggregate flag '$name' is false." }
 }
 Assert-PatchAbsent
-$m4Result = & $m4Verifier -ResultPath $acceptedPath
+$m4Arguments = @{ ResultPath = $acceptedPath }
+if ($HistoricalEvidenceOnly) { $m4Arguments.HistoricalEvidenceOnly = $true }
+$m4Result = & $m4Verifier @m4Arguments
 if (-not $m4Result.Passed -or $m4Result.Cycles -ne 10) {
     throw 'Accepted M4-002 physical result no longer verifies.'
 }
@@ -474,12 +477,18 @@ foreach ($field in $identityFields) {
         throw "Canonical game identity '$field' differs physically."
     }
 }
-$physicalArtifacts = @(Get-ArtifactSnapshot)
 $acceptedObject = Get-Content -LiteralPath $acceptedPath -Raw | ConvertFrom-Json
 for ($index = 0; $index -lt 4; $index++) {
-    if ($result.artifacts.after[$index].sha256 -ne $physicalArtifacts[$index].sha256 -or
-        $result.artifacts.after[$index].sha256 -ne $acceptedObject.artifacts.after[$index].sha256) {
+    if ($result.artifacts.after[$index].sha256 -ne $acceptedObject.artifacts.after[$index].sha256) {
         throw "Canonical artifact '$($artifactNames[$index])' differs physically."
+    }
+}
+if (-not $HistoricalEvidenceOnly) {
+    $physicalArtifacts = @(Get-ArtifactSnapshot)
+    for ($index = 0; $index -lt 4; $index++) {
+        if ($result.artifacts.after[$index].sha256 -ne $physicalArtifacts[$index].sha256) {
+            throw "Canonical artifact '$($artifactNames[$index])' changed after the gate."
+        }
     }
 }
 if (@(Get-ExactProcesses).Count -ne 0) { throw 'Exact canonical MCLA process survived.' }

@@ -73,23 +73,23 @@ try {
         $records+=[ordered]@{index=$i;capture_elapsed_milliseconds=42000;dwell_elapsed_milliseconds=2000;exit_elapsed_milliseconds=100;exit_code=0;close_requested=$true;harness_force_cleanup=$false;process_signal_confirmed=$true;process_cleanup_confirmed=$true;prior_cycles_immutable=$true;runtime_logs=@($manifest.Files);runtime_log_file_count=$manifest.Count;runtime_log_bytes=[long]$manifest.Bytes;runtime_log_set_sha256=$manifest.Hash;capture_relative_path="runs/$name/user/mcla-first-frame.bmp";capture_sha256=$probe.M4.Bmp.Sha256;capture_bytes=$probe.M4.Bmp.Bytes;preflight_resolution_count=3;post_launch_bink_count=0;nt_create_file_count=$probe.NtCreateFileCount;nt_read_file_count=$probe.NtReadFileCount;nt_read_file_success_count=$probe.NtReadFileSuccessCount;title_coverage_success_count=$probe.TitleCoverageSuccessCount;logo_edge_correlation_ppm=$probe.M4.Roi.LogoCorrelationPpm;press_edge_correlation_ppm=$probe.M4.Roi.PressCorrelationPpm;resolve_calls=$probe.M4.Audit.ResolveCalls;draw_issued=$probe.M4.Audit.DrawIssued;user_tree_sha256=$ut.Hash;cache_tree_sha256=$ct.Hash;cycle_tree_sha256=('0'*64);user_file_count=$ut.FileCount;cache_file_count=$ct.FileCount;user_bytes=$ut.Bytes;cache_bytes=$ct.Bytes}
         $records[-1].cycle_tree_sha256=(Get-TreeSnapshot $root).Hash
     }
-    $identity=Get-GameIdentity;$build=Join-Path $repoRoot 'out/build/win-amd64-relwithdebinfo';$artifacts=@('mcla.exe','rexruntimerd.dll','TracyClientrd.dll','rexgpu-xenosrd.dll'|ForEach-Object{[ordered]@{name=$_;sha256=(Get-FileHash (Join-Path $build $_) -Algorithm SHA256).Hash}})
+    $identity=Get-GameIdentity;$acceptedObject=Get-Content $accepted -Raw|ConvertFrom-Json;$artifacts=@($acceptedObject.artifacts.after|ForEach-Object{[ordered]@{name=$_.name;sha256=$_.sha256}})
     $result=[ordered]@{schema=1;task='M4-003';decision='guest-bypass-no-patch';claim='title-reached-with-zero-post-launch-bink-not-playback-proof';cycle_count=3;capture_timeout_seconds=60;first_frame_settle_seconds=35;post_marker_dwell_milliseconds=2000;exit_timeout_seconds=10;accepted_m4_002=[ordered]@{name='M4-002-result.json';sha256=(Get-FileHash $accepted -Algorithm SHA256).Hash;cycles=10;verified=$true};game_identity=[ordered]@{before=$identity;after=$identity};artifacts=[ordered]@{before=$artifacts;after=$artifacts};cycles=$records;patch_implemented=$false;patch_enabled=$false;prior_word_audit=$true;all_write_roots_contained=$true;all_prior_cycles_immutable=$true;no_surviving_processes=$true;data_integrity_preserved=$true;all_title_probes_passed=$true;zero_post_launch_bink=$true}
     $resultPath=Join-Path $fixtureRoot 'result.json';[IO.File]::WriteAllText($resultPath,(($result|ConvertTo-Json -Depth 10)+[Environment]::NewLine),$utf8)
-    $positive=&$verifier -ResultPath $resultPath;if(-not$positive.Passed){throw 'Physical positive failed.'}
+    $positive=&$verifier -ResultPath $resultPath -HistoricalEvidenceOnly;if(-not$positive.Passed){throw 'Physical positive failed.'}
 
     foreach($mode in 'misplaced','extra-prelaunch-bik','bink','noisy','title'){$p=Join-Path $fixtureRoot "negative-$mode";Make-Probe $p $mode;Expect-Failure {&$verifier -ProbeOnly -RuntimeLogPath (Join-Path $p 'mcla.log') -BmpPath (Join-Path $p 'user/mcla-first-frame.bmp')} $mode}
     $runnerText=Get-Content $runner -Raw;$verifierText=Get-Content $verifier -Raw
     foreach($needle in @("--mcla_first_frame_settle_seconds=35","--log_noisy=true","--render_target_path_d3d12=rtv","WaitForExit(10000)","for(`$cycle=1;`$cycle-le3")){if(-not$runnerText.Contains($needle)){throw "Runner source contract missing $needle"}}
-    foreach($needle in @('guest-bypass-no-patch','not-playback-proof','NtReadFileSuccessCount','TitleCoverageSuccessCount','-ResultPath $acceptedPath','-ProbeOnly')){if(-not$verifierText.Contains($needle)){throw "Verifier source contract missing $needle"}}
+    foreach($needle in @('guest-bypass-no-patch','not-playback-proof','NtReadFileSuccessCount','TitleCoverageSuccessCount','ResultPath = $acceptedPath','HistoricalEvidenceOnly','-ProbeOnly')){if(-not$verifierText.Contains($needle)){throw "Verifier source contract missing $needle"}}
     $mutated=Get-Content $resultPath -Raw|ConvertFrom-Json;$mutated.patch_enabled=$true;$bad=Join-Path $fixtureRoot 'bad.json';[IO.File]::WriteAllText($bad,(ConvertTo-Json $mutated -Depth 10),$utf8);Expect-Failure {&$verifier -ResultPath $bad} 'noncanonical-result-path-and-patch'
     $original=[IO.File]::ReadAllText($resultPath)
     $mutated=$original|ConvertFrom-Json;$mutated.game_identity.after.tree_sha256='0'*64
     [IO.File]::WriteAllText($resultPath,(ConvertTo-Json $mutated -Depth 10),$utf8)
-    Expect-Failure {&$verifier -ResultPath $resultPath} 'game-drift'
+    Expect-Failure {&$verifier -ResultPath $resultPath -HistoricalEvidenceOnly} 'game-drift'
     [IO.File]::WriteAllText($resultPath,$original,$utf8)
     $extra=Join-Path $fixtureRoot 'runs/01/unexpected';[IO.Directory]::CreateDirectory($extra)|Out-Null
-    Expect-Failure {&$verifier -ResultPath $resultPath} 'physical-extra-child'
+    Expect-Failure {&$verifier -ResultPath $resultPath -HistoricalEvidenceOnly} 'physical-extra-child'
     Remove-Item -LiteralPath $extra -Force
     foreach($needle in @('ReparsePoint','Get-ExactProcesses','no_surviving_processes')){if(-not$verifierText.Contains($needle)){throw "Integrity source contract missing $needle"}}
     [pscustomobject]@{Passed=$true;PhysicalPositives=4;FailClosedNegatives=8;SourceContractChecks=14;PlaybackProven=$false}

@@ -5,6 +5,7 @@
 #include <rex/cvar.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
+#include <rex/kernel/xam/profile_audit.h>
 #include <rex/logging.h>
 #include <rex/memory/mapped_memory.h>
 #include <rex/runtime.h>
@@ -610,6 +611,7 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       return;
     }
     graphics->RequestRenderAuditCheckpoint();
+    rex::kernel::xam::EmitXamProfileAuditSummary("checkpoint");
     MCLA_GPU_INFO(
         "MCLA graphics: nontrivial guest frame captured {}x{}, rgb555 bins {}, "
         "luma p05 {}, luma p95 {}, modal permille {}, nonmodal grid cells {}",

@@ -3,6 +3,9 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Result')]
     [string]$ResultPath,
 
+    [Parameter(ParameterSetName = 'Result')]
+    [switch]$HistoricalEvidenceOnly,
+
     [Parameter(Mandatory, ParameterSetName = 'Probe')]
     [string]$RuntimeLogPath,
 
@@ -1352,11 +1355,14 @@ foreach ($field in @('file_count', 'payload_bytes', 'hashes_verified', 'manifest
         throw "Canonical game tree no longer matches aggregate field '$field'."
     }
 }
-$physicalArtifacts = @(Get-CanonicalArtifactSnapshot)
-for ($index = 0; $index -lt $physicalArtifacts.Count; $index++) {
-    if ($result.artifacts.after[$index].name -cne $physicalArtifacts[$index].name -or
-        $result.artifacts.after[$index].sha256 -ne $physicalArtifacts[$index].sha256) {
-        throw "Canonical runtime artifact '$($physicalArtifacts[$index].name)' changed after the gate."
+$physicalArtifacts = @()
+if (-not $HistoricalEvidenceOnly) {
+    $physicalArtifacts = @(Get-CanonicalArtifactSnapshot)
+    for ($index = 0; $index -lt $physicalArtifacts.Count; $index++) {
+        if ($result.artifacts.after[$index].name -cne $physicalArtifacts[$index].name -or
+            $result.artifacts.after[$index].sha256 -ne $physicalArtifacts[$index].sha256) {
+            throw "Canonical runtime artifact '$($physicalArtifacts[$index].name)' changed after the gate."
+        }
     }
 }
 if (@(Get-ExactCanonicalProcesses).Count -ne 0) {
