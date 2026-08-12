@@ -730,7 +730,7 @@ Pause for a feasibility decision if:
 
 - [x] **M4-001** Instrument and verify a guest-originated swap through successful D3D12 presentation and a nontrivial guest-output readback. ReXGlue v0.9.0.9 now binds monotonic guest-output sequences to successful DXGI presents, holds mailbox ownership through capture readback, rejects ahead-of-present captures, and exposes the exact successful HRESULT class. The canonical clean RelWithDebInfo gate passes 20/20 isolated launches with at least three guest-backed presents per cycle, 20/20 independently nontrivial 1280x720 BMPs, 20/20 capture/present watermark equality, two-second dwell, exit 0 through `WM_CLOSE`, no force cleanup/orphans, and unchanged source game/runtime/prior-run trees. The project owner classified the private legal-screen capture as recognizable, correctly oriented MCLA-derived output rather than host-only blank/solid/garbage. This does not claim frontend reachability or rendering correctness. Evidence: `scripts/run-first-frame-smoke.ps1`, `scripts/verify-first-frame-smoke.ps1`, `scripts/test-first-frame-smoke.ps1`, `docs/evidence/M4-001-first-valid-frame.md`.
 - [x] **M4-002** Validate the D3D12 host-RTV render-target, staged EDRAM resolve, depth, MSAA, table-gamma, shader/PSO, and draw paths used by the autonomous title frontend. ReXGlue v0.9.0.10 adds opt-in bounded schema-1 render auditing plus a GPU-thread checkpoint that freezes four internally balanced summaries before normal hard exit; Tracy instrumentation safely no-ops outside its manual lifetime. The canonical clean RelWithDebInfo gate passes 10/10 isolated 35-second title captures with exact logo/`PRESS` UI-region correlation against the private Xenia baseline, 27 render targets, 39-40 bound-format records, 40 ownership modes, 117-217 successful PSOs, 7,597-18,153 successful common-copy resolves, 1,199,122-3,085,569 guest draws, active depth/MSAA and non-identity table gamma, exit 0, no force cleanup/orphans, and physically reverified source/runtime/evidence integrity. The owner gave a visual PASS and classified a green vehicle-shadow artifact as minor and non-blocking. This task does not claim ROV, PWL gamma, true-direct resolve, whole-frame equality, menu usability, or general rendering correctness. Evidence: `scripts/run-render-path-smoke.ps1`, `scripts/verify-render-path-smoke.ps1`, `scripts/test-render-path-smoke.ps1`, `scripts/verify-sdk-profiling-lifetime.ps1`, `scripts/test-sdk-profiling-lifetime.ps1`, `docs/evidence/M4-002-render-paths.md`.
-- [ ] **M4-003** Decide whether Bink intro playback is fixed now or remains behind the documented skip-intro development option.
+- [x] **M4-003** Classify the native intro route as verified Bink playback, a reproducibly justified development-only skip, or a stable guest-selected bypass that reaches the title without a compatibility patch. The selected result is `guest-bypass-no-patch`: three isolated unpatched noisy-I/O runs reached the physically verified Complete Edition title in 43,263-44,659 ms, retained active successful guest-file reads through the title boundary, and contained exactly the three project-owned pre-launch `intro720.bik` VFS resolutions with zero post-launch Bink/BIK access. All runs exited 0 through `WM_CLOSE`, required no force cleanup, preserved the exact game/runtime/prior-run trees, and retained the guarded no-patch decision. This proves the intro is not a blocker on the supported boot route; it does not prove Bink decode/playback correctness, which remains M7-006 scope. Evidence: `scripts/run-intro-route-decision.ps1`, `scripts/verify-intro-route-decision.ps1`, `scripts/test-intro-route-decision.ps1`, `docs/evidence/M4-003-intro-route-decision.md`.
 - [ ] **M4-004** Implement XAM user sign-in/profile behavior required by the game.
 - [ ] **M4-005** Map SDL/controller input to the expected Xbox 360 user slot.
 - [ ] **M4-006** Implement dead zones, button mapping, disconnect/reconnect, and focus-loss behavior.
@@ -796,6 +796,21 @@ Pause for a feasibility decision if:
   whole-frame parity, intro disposition, input/profile/audio, and menu
   usability. Gate readiness: not ready. Active next task: M4-003. Evidence:
   `docs/evidence/M4-002-render-paths.md`.
+
+- 2026-08-12 — M4 checkpoint 3 (intro-route feasibility decision). Completed:
+  M4-003 (3/13). Health: `GREEN — UNPATCHED GUEST ROUTE BYPASSES BINK AND
+  REACHES TITLE`. Evidence: final physical run `20260812-095920-a6979ac7`;
+  3/3 isolated noisy-I/O title captures; 43,263-44,659 ms capture time;
+  3/3 exact pre-launch project VFS resolution triplets; zero post-launch
+  Bink/BIK access; 4,633-4,642 successful guest reads per run with 10-23
+  successful reads near the title marker; physical logo/`PRESS` correlation;
+  exit 0 through `WM_CLOSE`; no force cleanup/orphans; unchanged game,
+  runtime, and prior-cycle trees; skip-intro code absent and disabled.
+  Decision: no compatibility patch is justified. Remaining scope: Bink
+  decoding/playback fidelity is not proven and remains M7-006; profile, input,
+  audio, and menu usability remain active M4 work. Gate readiness: not ready.
+  Active next task: M4-004. Evidence:
+  `docs/evidence/M4-003-intro-route-decision.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 
@@ -1181,7 +1196,7 @@ The criterion below is additional to the task wording and universal Definition o
 |---|---|
 | M4-001 | Twenty physical-evidence runs each bind at least three monotonic guest-output sequences to successful D3D12 presents, recompute a nontrivial same-or-later readback, dwell without device loss, close without force cleanup/orphans/drift, and include one private human game-derived-output classification / logs, captures, physical verifier, and sanitized aggregate |
 | M4-002 | Scoped host-RTV target/depth/MSAA/table-gamma paths are physically audited and stable title UI regions match the private baseline within documented tolerance / GPU comparison |
-| M4-003 | Bink is either functional or bypassed by a safe documented development option / decision and test |
+| M4-003 | The intro route is fail-closed as verified playback, a reproducibly justified safe development skip, or a repeatable unpatched guest bypass; the selected branch and remaining Bink-fidelity scope are explicit / decision, physical trace, and tests |
 | M4-004 | Required profile states match guest expectations / profile test matrix |
 | M4-005 | One selected controller maps correctly to user slot 0 / input trace |
 | M4-006 | Dead-zone, reconnect, and focus scenarios pass / controller checklist |
@@ -1351,8 +1366,11 @@ Execute in this order unless a new blocker changes the plan:
 21. [x] Complete M4-002: validate the scoped host-RTV frontend render-target,
     staged EDRAM resolve, depth, MSAA, table-gamma, shader/PSO, and draw paths
     against stable UI regions from the private Xenia baseline.
-22. [ ] Complete M4-003: re-evaluate native Bink/intro behavior now that the
-    autonomous route reaches the title frontend without a skip-intro patch.
+22. [x] Complete M4-003: three physical noisy-I/O runs classify the supported
+    native boot as a stable unpatched guest-selected Bink bypass; actual Bink
+    playback fidelity remains explicitly deferred to M7-006.
+23. [ ] Complete M4-004: implement and verify the XAM user sign-in/profile
+    behavior required by the title frontend.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

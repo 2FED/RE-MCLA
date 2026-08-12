@@ -391,6 +391,32 @@ parses rotated logs, rehashes the canonical game and runtime artifacts, rejects
 reparse/private/extra evidence, and confirms no exact-path process remains.
 Raw evidence stays under ignored `private/evidence/M4-002/`.
 
+M4-003 treats playback, an evidence-justified development skip, and an
+unpatched guest-selected bypass as distinct outcomes. Title reachability alone
+is not playback proof. A bypass decision must combine private noisy guest-I/O
+traces with physical title-frame verification and must show that every BIK
+reference belongs to the project VFS preflight before module launch, while the
+unmodified guest route opens no BIK after launch. The known skip word remains
+absent unless repeated disabled runs first localize an actual Bink blocker.
+
+```powershell
+scripts\test-intro-route-decision.ps1
+scripts\run-intro-route-decision.ps1
+scripts\verify-intro-route-decision.ps1 -ResultPath <private-result.json>
+```
+
+The canonical bypass branch performs three serialized, isolated, unpatched
+launches with noisy guest-I/O tracing, the M4-002 35-second title probe, a
+two-second dwell, and exact-PID `WM_CLOSE`. Each cycle must physically pass the
+title logo/`PRESS` ROI oracle, contain exactly the three project-owned
+`intro720.bik` resolutions before module launch, contain zero Bink/BIK evidence
+after launch, and retain successful `NtReadFile` positive controls near the
+title marker. The verifier rehashes the accepted M4-002 result, canonical game,
+four runtime artifacts, rotated logs, capture, and every evidence tree; it also
+rejects reparse points, topology/privacy violations, patch drift, force cleanup,
+orphans, and cross-cycle mutation. Raw noisy logs and BMPs remain private under
+`private/evidence/M4-003/`.
+
 Planned test layers:
 
 1. host utility unit tests
