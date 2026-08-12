@@ -91,7 +91,7 @@ foreach ($configuration in $matrix) {
 $result = [ordered]@{
     schema = 1
     task = 'M3-012'
-    sdk_version = '0.9.0.9'
+    sdk_version = '0.9.0.10'
     generated_cpp_expected = 65
     configurations = $records
 }

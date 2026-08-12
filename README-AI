@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.9 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.10 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -179,7 +179,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.9` pinned recursively at commit `01f895afb1b084652915c0b463910d57049f06be` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.10` pinned recursively at commit `f7e9df0e7923b13ae3e879d39dc827b9010a0ab9` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -729,7 +729,7 @@ Pause for a feasibility decision if:
 ### Tasks
 
 - [x] **M4-001** Instrument and verify a guest-originated swap through successful D3D12 presentation and a nontrivial guest-output readback. ReXGlue v0.9.0.9 now binds monotonic guest-output sequences to successful DXGI presents, holds mailbox ownership through capture readback, rejects ahead-of-present captures, and exposes the exact successful HRESULT class. The canonical clean RelWithDebInfo gate passes 20/20 isolated launches with at least three guest-backed presents per cycle, 20/20 independently nontrivial 1280x720 BMPs, 20/20 capture/present watermark equality, two-second dwell, exit 0 through `WM_CLOSE`, no force cleanup/orphans, and unchanged source game/runtime/prior-run trees. The project owner classified the private legal-screen capture as recognizable, correctly oriented MCLA-derived output rather than host-only blank/solid/garbage. This does not claim frontend reachability or rendering correctness. Evidence: `scripts/run-first-frame-smoke.ps1`, `scripts/verify-first-frame-smoke.ps1`, `scripts/test-first-frame-smoke.ps1`, `docs/evidence/M4-001-first-valid-frame.md`.
-- [ ] **M4-002** Validate render-target formats, EDRAM resolves, depth, MSAA, gamma, and shader translation used by the frontend.
+- [x] **M4-002** Validate the D3D12 host-RTV render-target, staged EDRAM resolve, depth, MSAA, table-gamma, shader/PSO, and draw paths used by the autonomous title frontend. ReXGlue v0.9.0.10 adds opt-in bounded schema-1 render auditing plus a GPU-thread checkpoint that freezes four internally balanced summaries before normal hard exit; Tracy instrumentation safely no-ops outside its manual lifetime. The canonical clean RelWithDebInfo gate passes 10/10 isolated 35-second title captures with exact logo/`PRESS` UI-region correlation against the private Xenia baseline, 27 render targets, 39-40 bound-format records, 40 ownership modes, 117-217 successful PSOs, 7,597-18,153 successful common-copy resolves, 1,199,122-3,085,569 guest draws, active depth/MSAA and non-identity table gamma, exit 0, no force cleanup/orphans, and physically reverified source/runtime/evidence integrity. The owner gave a visual PASS and classified a green vehicle-shadow artifact as minor and non-blocking. This task does not claim ROV, PWL gamma, true-direct resolve, whole-frame equality, menu usability, or general rendering correctness. Evidence: `scripts/run-render-path-smoke.ps1`, `scripts/verify-render-path-smoke.ps1`, `scripts/test-render-path-smoke.ps1`, `scripts/verify-sdk-profiling-lifetime.ps1`, `scripts/test-sdk-profiling-lifetime.ps1`, `docs/evidence/M4-002-render-paths.md`.
 - [ ] **M4-003** Decide whether Bink intro playback is fixed now or remains behind the documented skip-intro development option.
 - [ ] **M4-004** Implement XAM user sign-in/profile behavior required by the game.
 - [ ] **M4-005** Map SDL/controller input to the expected Xbox 360 user slot.
@@ -781,6 +781,21 @@ Pause for a feasibility decision if:
   EDRAM/format/shader/gamma correctness, intro, input, profile, and audio remain
   unverified. Gate readiness: not ready. Active next task: M4-002. Evidence:
   `docs/evidence/M4-001-first-valid-frame.md`.
+
+- 2026-08-12 — M4 checkpoint 2. Completed: M4-002 (2/13). Health:
+  `GREEN — AUTONOMOUS TITLE FRONTEND AND SCOPED XENOS PATHS VERIFIED`.
+  Evidence: ReXGlue v0.9.0.10 at
+  `f7e9df0e7923b13ae3e879d39dc827b9010a0ab9`; clean RelWithDebInfo build;
+  final physical run `20260812-085022-cc01a857`; 10/10 isolated title captures
+  with logo and tight `PRESS` correlation against the pinned private Xenia
+  reference; 10/10 balanced RT/BIND/ownership, staged-resolve, shader/PSO,
+  draw/depth/MSAA, and table-gamma audits; exit 0, zero force cleanup/orphans,
+  and physically reverified source/runtime/prior-tree integrity. The owner gave
+  a visual PASS and classified a green vehicle-shadow artifact as minor and
+  non-blocking. Remaining scope: ROV, PWL gamma, true-direct resolve,
+  whole-frame parity, intro disposition, input/profile/audio, and menu
+  usability. Gate readiness: not ready. Active next task: M4-003. Evidence:
+  `docs/evidence/M4-002-render-paths.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 
@@ -1165,7 +1180,7 @@ The criterion below is additional to the task wording and universal Definition o
 | ID | Individual acceptance criterion / minimum evidence |
 |---|---|
 | M4-001 | Twenty physical-evidence runs each bind at least three monotonic guest-output sequences to successful D3D12 presents, recompute a nontrivial same-or-later readback, dwell without device loss, close without force cleanup/orphans/drift, and include one private human game-derived-output classification / logs, captures, physical verifier, and sanitized aggregate |
-| M4-002 | Frontend target/depth/MSAA/gamma paths match baseline within documented tolerance / GPU comparison |
+| M4-002 | Scoped host-RTV target/depth/MSAA/table-gamma paths are physically audited and stable title UI regions match the private baseline within documented tolerance / GPU comparison |
 | M4-003 | Bink is either functional or bypassed by a safe documented development option / decision and test |
 | M4-004 | Required profile states match guest expectations / profile test matrix |
 | M4-005 | One selected controller maps correctly to user slot 0 / input trace |
@@ -1317,7 +1332,7 @@ Execute in this order unless a new blocker changes the plan:
 4. [x] Complete M2-013: map all XAM/xboxkrnl import records and static reachability classes.
 5. [x] Complete M2-016: add SDK regression coverage for the twenty FLOAT16_4 sites.
 6. [x] Complete M2-017 and close M2 at version `0.2.0.0` with `GO WITH SDK FORK`.
-7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 remains fixed in the current ReXGlue v0.9.0.9 fork.
+7. [x] Complete M3-001 and M3-002: generated integration and the minimal project lifecycle are verified; the Windows Unicode-path S1 remains fixed in the current ReXGlue v0.9.0.10 fork.
 8. [x] Complete M3-003 and M3-004: guest image/entry/dispatch plus private game-root VFS/write containment are verified.
 9. [x] Complete M3-005 and M3-006: minimum stock-route xboxkrnl and XAM imports are runtime- and behavior-verified.
 10. [x] Complete M3-007: explicit logged offline-service behavior is deterministic and regression-tested.
@@ -1333,8 +1348,11 @@ Execute in this order unless a new blocker changes the plan:
 20. [x] Complete M4-001: twenty physical-evidence cycles and a project-owner
     visual PASS verify the first guest-derived frame without claiming frontend
     reachability or render correctness.
-21. [ ] Complete M4-002: validate the frontend render-target, EDRAM, depth,
-    MSAA, gamma, and shader paths against the private Xenia baseline.
+21. [x] Complete M4-002: validate the scoped host-RTV frontend render-target,
+    staged EDRAM resolve, depth, MSAA, table-gamma, shader/PSO, and draw paths
+    against stable UI regions from the private Xenia baseline.
+22. [ ] Complete M4-003: re-evaluate native Bink/intro behavior now that the
+    autonomous route reaches the title frontend without a skip-intro patch.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 

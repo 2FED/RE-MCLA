@@ -52,6 +52,7 @@ compile_commands.json
 /logs/
 /traces/
 /captures/
+/.codex-remote-attachments/
 
 # Local configuration and secrets
 .env

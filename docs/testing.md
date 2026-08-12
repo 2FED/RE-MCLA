@@ -367,6 +367,30 @@ or any data drift fails acceptance. Raw frames/logs remain ignored below
 `private/evidence/M4-001/`; tracked evidence contains only bounded hashes,
 counts, timings, and the human classification result.
 
+M4-002 title render-path gate:
+
+```powershell
+scripts\test-sdk-profiling-lifetime.ps1
+scripts\test-render-path-smoke.ps1
+scripts\run-render-path-smoke.ps1
+scripts\verify-render-path-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The canonical runner clean-builds RelWithDebInfo, then performs ten serialized
+launches with isolated user/cache roots, a 35-second settle, a two-second
+checkpoint dwell, and exact-PID `WM_CLOSE`. It forces D3D12 host RTV and disables
+asynchronous shader compilation. Each cycle must produce a 1280x720 title frame
+whose stable logo and tight `PRESS` regions correlate at least 0.90 with the
+pinned private Xenia reference.
+
+The schema-1 audit records bounded RT/BIND/ownership, staged resolve,
+shader/PSO, draw/depth/MSAA, and gamma state. Four GPU-thread summaries freeze
+the audit before exit. The physical verifier recomputes BMP metrics and ROI
+correlations, cross-links BIND tuples to RT records, balances resolve routes,
+parses rotated logs, rehashes the canonical game and runtime artifacts, rejects
+reparse/private/extra evidence, and confirms no exact-path process remains.
+Raw evidence stays under ignored `private/evidence/M4-002/`.
+
 Planned test layers:
 
 1. host utility unit tests

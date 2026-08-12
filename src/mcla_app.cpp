@@ -67,6 +67,11 @@ REXCVAR_DEFINE_BOOL(mcla_first_frame_probe, false, "MCLA",
                     "Capture the first nontrivial guest frame after presentation starts")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_UINT32(mcla_first_frame_settle_seconds, 3, "MCLA",
+                      "Seconds to wait after the first guest output before capture")
+    .range(1, 60)
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 #define MCLA_DEFINE_LOG_LEVEL_CVAR(name)                                                  \
   REXCVAR_DEFINE_STRING(mcla_log_##name, "inherit", "MCLA Logging",                       \
                         "Category level override: inherit, trace, debug, info, warn, "    \
@@ -579,7 +584,8 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
 
     if (!observed_guest_output) {
       observed_guest_output = true;
-      settle_deadline = std::chrono::steady_clock::now() + 3s;
+      settle_deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(REXCVAR_GET(mcla_first_frame_settle_seconds));
       if (!SleepUntilOrStop(stop_token, settle_deadline)) {
         return;
       }
@@ -603,6 +609,7 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       MCLA_GPU_ERROR("MCLA graphics: failed to write private first-frame capture");
       return;
     }
+    graphics->RequestRenderAuditCheckpoint();
     MCLA_GPU_INFO(
         "MCLA graphics: nontrivial guest frame captured {}x{}, rgb555 bins {}, "
         "luma p05 {}, luma p95 {}, modal permille {}, nonmodal grid cells {}",
