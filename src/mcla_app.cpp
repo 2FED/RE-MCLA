@@ -5,6 +5,7 @@
 #include <rex/cvar.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
+#include <rex/input/sdl/input_slot_audit.h>
 #include <rex/kernel/xam/profile_audit.h>
 #include <rex/logging.h>
 #include <rex/memory/mapped_memory.h>
@@ -610,6 +611,7 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       MCLA_GPU_ERROR("MCLA graphics: failed to write private first-frame capture");
       return;
     }
+    rex::input::sdl::ArmInputSlotAudit("title");
     graphics->RequestRenderAuditCheckpoint();
     rex::kernel::xam::EmitXamProfileAuditSummary("checkpoint");
     MCLA_GPU_INFO(

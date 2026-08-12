@@ -452,3 +452,20 @@ Planned test layers:
 8. clean package tests
 
 Update this document when any command, fixture, baseline, supported hardware configuration, canonical route, or closure gate changes.
+
+## M4-005 physical SDL slot gate
+
+```powershell
+scripts\test-input-slot-smoke.ps1
+scripts\run-input-slot-smoke.ps1
+scripts\verify-input-slot-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The interactive runner prints seven progress phases, clean-installs the pinned
+SDK, runs the five focused SDL slot tests, clean-builds the app, and waits for
+the verified title with exactly one pre-connected controller whose A button is
+released. The operator holds A until the guest-down marker, then releases it. Acceptance
+requires the causal SDL down/up source sequences to appear as guest-visible
+slot-0 edges, slots 1-3 to remain disconnected, exact-PID `WM_CLOSE`, exit 0,
+and complete post-run source-game/runtime-artifact/evidence integrity. Raw controller identity,
+logs, capture, and result JSON remain private under `private/evidence/M4-005/`.
