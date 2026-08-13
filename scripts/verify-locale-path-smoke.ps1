@@ -157,7 +157,7 @@ $result = Resolve-Safe $ResultPath 'Result'
 $json = [IO.File]::ReadAllText($result, $utf8)
 if ($json -match '(?i)([A-Z]:[\\/]|\\\\[^"\s]+[\\/]|(?:^|["\\/])private[\\/])') { throw 'Result contains a private or absolute path.' }
 $record = $json | ConvertFrom-Json
-if ($record.schema -ne 1 -or $record.task -cne 'M4-010' -or $record.decision -cne 'locale-selection-unicode-path-title-matrix-pass' -or $record.sdk_version -cne '0.9.0.17' -or $record.frontend_title_reached -ne $true -or $record.xget_language_title_reached -ne $false -or $record.country_title_reached -ne $false -or $record.data_integrity_preserved -ne $true -or $record.no_surviving_processes -ne $true) { throw 'Result identity or scope failed.' }
+if ($record.schema -ne 1 -or $record.task -cne 'M4-010' -or $record.decision -cne 'locale-selection-unicode-path-title-matrix-pass' -or $record.sdk_version -cne '0.9.0.18' -or $record.frontend_title_reached -ne $true -or $record.xget_language_title_reached -ne $false -or $record.country_title_reached -ne $false -or $record.data_integrity_preserved -ne $true -or $record.no_surviving_processes -ne $true) { throw 'Result identity or scope failed.' }
 if (@($record.cycles).Count -ne 3) { throw 'Locale matrix must contain exactly three cycles.' }
 $expected = @(@(1, 103, '01-en-us'), @(4, 34, '02-fr-fr'), @(12, 88, '03-ru-ru'))
 $root = Split-Path $result

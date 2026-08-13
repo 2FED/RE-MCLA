@@ -576,3 +576,33 @@ under `private/`; public evidence contains only hashes and bounded metrics.
 The accepted title route reaches XConfig language but not `XGetLanguage` or
 country. Those zero-hit paths are unit/static contract evidence only. Complete
 localized menus, subtitles, voice, and gameplay remain later parity scope.
+
+## M4-011 saved frontend smoke gate
+
+```powershell
+scripts/test-frontend-smoke.ps1
+scripts/run-frontend-smoke.ps1
+scripts/verify-frontend-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The canonical gate performs one clean ReXGlue install, runs the focused VFS
+root tests, clean-builds the host, and executes three isolated cycles seeded
+from the pinned private post-OOBE profile. The autonomous route is exact:
+startup to the Complete Edition title, `START` to saved free-roam gameplay,
+`START` to pause, `RB` to Modes, and a second `RB` to Settings with Options
+highlighted. Synthetic input is restricted to slot 0, uses 200-ms holds, and
+waits two seconds between the two tab presses so the guest UI debounce observes
+both transitions.
+
+Each cycle must produce four distinct nontrivial 1280x720 captures, pass the
+existing title gate plus pinned pause/options region comparisons, preserve the
+post-OOBE seed and source-game/runtime-artifact identities, and finish with
+exit 0 after exact-window `WM_CLOSE`. The console title has no internal Exit
+action; the gate deliberately tests external closure and does not claim an
+in-game Exit command. Raw saves, frames, logs, references, and JSON remain
+ignored below `private/`.
+
+This proves repeatable navigation for the supported saved route only. It does
+not cover first-run OOBE and its cutscenes/vehicle selection, race entry or
+completion, detailed gameplay correctness, persistence writes, or frame/audio
+parity; those remain later tasks.

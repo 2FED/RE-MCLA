@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.17 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.18 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -179,7 +179,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.17` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.18` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -200,7 +200,7 @@ Post-M4-004 unknowns:
   host-RTV frontend render path, but not general render correctness
 - the reached single-local-user identity contract is verified, but profile
   writes/persistence and zero-hit optional XAM routes remain unverified
-- controller input, frontend audio, menu navigation, and gameplay remain unverified
+- the post-OOBE saved route through free-roam, pause, and Settings/Options is repeatable; first-run OOBE, races, detailed gameplay correctness, and frontend parity remain unverified
 - runtime semantics of conditional/error-path imports not exercised on the stock pre-main route remain unverified
 
 Host GitHub CLI authentication was user-verified on 2026-08-10:
@@ -741,7 +741,7 @@ Pause for a feasibility decision if:
 - [x] **M4-008** Provide a state-correct XMP fallback for the reached title route. ReXGlue v0.9.0.15 keeps unsupported title-play/output-capture paths explicitly failed and `Idle`, guards empty playlist navigation, and adds a bounded race-free XMP audit. One exact-release clean-build title run passed focused 4-case/20-assertion tests and observed 4,625/4,625 known status queries with zero playback calls, state changes, unexpected/inconsistent calls, overflow, or drops; it then exited 0 through exact-PID `WM_CLOSE` with source-game/runtime integrity intact. This proves the reached metadata/status fallback, not an XMP decoder, user-selected music playback, or event-level audio identity. Evidence: `scripts/run-xmp-route-smoke.ps1`, `scripts/verify-xmp-route-smoke.ps1`, `scripts/test-xmp-route-smoke.ps1`, `docs/evidence/M4-008-xmp-fallback.md`.
 - [x] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation. ReXGlue v0.9.0.16 gives the ten XLiveBase message IDs found in the MCLA corpus deterministic local-offline or unavailable results and adds an init-only guest socket block plus bounded audit. One exact-release clean-build title run passed 3-case/32-assertion focused tests, reached the verified frontend with the block enabled, observed zero service dispatches and zero socket attempts, and exited through exact-PID/title `WM_CLOSE` with source-game/runtime integrity intact. This proves the network-disabled offline route does not block the frontend; it does not claim runtime reachability of all ten messages, Xbox Live functionality, or a general host firewall. Evidence: `scripts/run-offline-service-smoke.ps1`, `scripts/verify-offline-service-smoke.ps1`, `scripts/test-offline-service-smoke.ps1`, `docs/evidence/M4-009-offline-services.md`.
 - [x] **M4-010** Validate locale/language selection and guest path handling. ReXGlue v0.9.0.17 returns the configured Xbox language through both locale routes, audits the title-reached XConfig value, and converts all UTF-8 path CVars plus log filenames to native Windows paths without mojibake. One clean-build EN/US, FR/FR, and RU/RU matrix passed exact locale records, pinned title/logo and localized-prompt ROI checks, real Cyrillic/accented user/cache/log roots, controlled `WM_CLOSE`, no orphan, and unchanged source-game/runtime artifacts. The title route physically reached XConfig language 25 times per cycle; `XGetLanguage` and country were zero-hit and remain static/unit-proven, not runtime-proven. This does not claim complete localized content or gameplay. Evidence: `scripts/run-locale-path-smoke.ps1`, `scripts/verify-locale-path-smoke.ps1`, `scripts/test-locale-path-smoke.ps1`, `docs/evidence/M4-010-locale-paths.md`.
-- [ ] **M4-011** Add frontend smoke automation or a deterministic manual script covering startup, menu navigation, options, and exit.
+- [x] **M4-011** Automate the supported saved frontend route. ReXGlue v0.9.0.18 fixes trailing-separator VFS mounted-root resolution, and the project adds a bounded synthetic slot-0 probe with 200-ms holds and a two-second tab debounce. One exact-release clean build followed by three isolated cycles from the pinned post-OOBE save: title `START` reached active nighttime free roam, gameplay `START` reached pause, and two `RB` presses reached Modes then Settings/Options. Every cycle produced four distinct 1280x720 captures, passed pinned title plus pause/options ROI classification, preserved the save seed, source-game tree, and runtime artifacts, and exited 0 through external exact-window `WM_CLOSE` without force cleanup or an orphan. MCLA has no internal Exit command, and none is claimed. First-run OOBE, race flow, gameplay correctness, and detailed parity remain open. Evidence: `scripts/run-frontend-smoke.ps1`, `scripts/verify-frontend-smoke.ps1`, `scripts/test-frontend-smoke.ps1`, `docs/evidence/M4-011-frontend-smoke.md`.
 - [ ] **M4-012** Compare frontend frames and audio events with Xenia baseline.
 - [ ] **M4-013** Document all remaining frontend deviations and workarounds.
 
@@ -903,6 +903,19 @@ Pause for a feasibility decision if:
   this title boundary and remain static/unit-proven rather than runtime-proven.
   Gate readiness: not ready. Active next task: M4-011. Evidence:
   `docs/evidence/M4-010-locale-paths.md`.
+
+- 2026-08-13 — M4 checkpoint 11. Completed: M4-011 (11/13). Health:
+  `GREEN — SAVED FRONTEND ROUTE REPEATABLE`. Evidence: canonical
+  exact-release clean-build run `20260813-230502-1f0de720`; three isolated
+  cycles used the pinned post-OOBE save and followed title `START` to free
+  roam, gameplay `START` to pause, then `RB`, `RB` to Settings/Options. All
+  three cycles produced four distinct 1280x720 captures, passed the title and
+  menu-region gates, exited 0 through external `WM_CLOSE`, required no force
+  cleanup, and preserved the seed, source-game tree, and runtime artifacts.
+  No internal Exit command is claimed. First-run OOBE, races, detailed
+  gameplay correctness, and frontend parity remain open. Gate readiness: not
+  ready. Active next task: M4-012. Evidence:
+  `docs/evidence/M4-011-frontend-smoke.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 

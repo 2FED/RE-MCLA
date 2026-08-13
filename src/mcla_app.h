@@ -9,6 +9,10 @@
 #include <stop_token>
 #include <thread>
 
+namespace rex::input {
+class InputDriver;
+}
+
 class MclaApp : public rex::ReXApp {
  public:
   static std::unique_ptr<rex::ui::WindowedApp> Create(rex::ui::WindowedAppContext& ctx);
@@ -35,5 +39,6 @@ class MclaApp : public rex::ReXApp {
   [[noreturn]] void HardExitCrashProbeFromUIThread();
 
   size_t function_mapping_count_ = 0;
+  rex::input::InputDriver *frontend_smoke_input_ = nullptr;
   std::jthread first_frame_probe_thread_;
 };
