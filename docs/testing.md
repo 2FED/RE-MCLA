@@ -493,3 +493,19 @@ The gate does not claim one monolithic process, controller identity, physical
 multi-pad coverage, or title-driven force feedback. Raw evidence remains under
 ignored `private/evidence/M4-006/`; see
 `docs/evidence/M4-006-controller-matrix.md`.
+
+## M4-007 frontend audio route
+
+```powershell
+scripts\test-audio-route-smoke.ps1
+scripts\run-audio-route-smoke.ps1
+scripts\verify-audio-route-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The canonical gate prints seven phases, clean-installs the SDK, runs focused
+audio classifiers, clean-builds the host, captures the verified title, and
+observes autonomous frontend audio for 300 seconds. Acceptance requires finite
+nonzero PCM at XMA, guest-submit, and SDL-device layers, zero failure/drop
+counters, queue depth at most 64, and at most two consecutive post-start
+starvation fills. Raw audio is never captured; logs, BMPs, and JSON remain
+private under `private/evidence/M4-007/`.

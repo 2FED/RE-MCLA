@@ -2,6 +2,7 @@
 
 #include "mcla_app.h"
 
+#include <rex/audio/audio_route_audit.h>
 #include <rex/cvar.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
@@ -85,6 +86,12 @@ REXCVAR_DEFINE_UINT32(
     mcla_first_frame_settle_seconds, 3, "MCLA",
     "Seconds to wait after the first guest output before capture")
     .range(1, 60)
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_UINT32(
+    mcla_audio_route_soak_seconds, 300, "MCLA",
+    "Seconds to observe the frontend audio route after title capture")
+    .range(60, 600)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 #define MCLA_DEFINE_LOG_LEVEL_CVAR(name)                                       \
@@ -723,6 +730,19 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
         image.width, image.height, metrics.occupied_rgb555_bins,
         metrics.luma_p05, metrics.luma_p95, metrics.modal_per_mille,
         metrics.nonmodal_grid_cells);
+    if (REXCVAR_GET(sdl_audio_route_audit)) {
+      const uint32_t soak_seconds =
+          REXCVAR_GET(mcla_audio_route_soak_seconds);
+      MCLA_AUDIO_INFO("MCLA audio: title soak started seconds {}",
+                      soak_seconds);
+      if (!SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() +
+                                           std::chrono::seconds(soak_seconds))) {
+        return;
+      }
+      rex::audio::EmitAudioRouteAuditSummary("title");
+      MCLA_AUDIO_INFO("MCLA audio: title soak completed seconds {}",
+                      soak_seconds);
+    }
     if (REXCVAR_GET(mcla_controller_matrix_probe)) {
       RunControllerMatrixRumbleProbe(
           stop_token,

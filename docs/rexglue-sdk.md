@@ -12,12 +12,12 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.13`
-- Immutable project commit: `071a80d17b9a629c7070880008a7bff1ac928c70`
+- Project release tag: `v0.9.0.14`
+- Immutable project commit: `3d18779d194acd57ab5e61034e9576d1fda61f6a`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
-The fork carries the previously reviewed fix groups plus bounded D3D12 guest-presentation and render-path observability. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage. ReXApp converts host paths through `rex::path_to_utf8()` rather than locale-dependent `std::filesystem::path::string()`. It also destroys Runtime/input drivers before their attached Window, preventing a teardown use-after-free after a loaded-image probe. Read-only host VFS devices reject root traversal, write-intent opens, rename, and writable mappings instead of silently downgrading or reaching the host filesystem. The ten direct XONLINE/social/XHV imports selected by M3-007 return explicit offline states and emit once-only `[OFFLINE]` diagnostics instead of preserving stale caller `r3`. Guest threads retain Xenia's 10-ms compatibility grace period and use regression-tested raw/XAPI start plans, while the 50-MHz guest clock path has direct monotonicity coverage. Generated functions and import hooks maintain metadata-only breadcrumbs, and C++ guest exceptions crossing `XThread` emit bounded host-stack context without guest memory by default. The v0.9.0.9 delta assigns monotonic guest-output sequences, records successful guest-backed DXGI presents and actual success HRESULTs, holds mailbox ownership through capture readback, and accepts capture evidence only at or behind the published successful-present watermark. The v0.9.0.10 delta makes Tracy zones safe before manual profiler startup and adds an init-only privacy-safe Xenos render audit. The v0.9.0.11 delta adds Xenia's cooperative sign-in-state yield, deterministic local-profile tests, and bounded privacy-safe XAM identity/profile telemetry with distinct absent-slot masks. The v0.9.0.12 delta adds deterministic first-controller slot-zero selection and a bounded privacy-safe SDL-to-XAM input audit. The v0.9.0.13 delta adds full controller-matrix auditing, real disconnect/focus/rumble semantics, and an explicit MCLA-only critical-section compatibility option. See the M2/M3 evidence listed below plus `docs/evidence/M4-002-render-paths.md`, `docs/evidence/M4-004-xam-profile.md`, `docs/evidence/M4-005-input-slot.md`, and `docs/evidence/M4-006-controller-matrix.md`.
+The fork carries the previously reviewed fix groups plus bounded D3D12 guest-presentation and render-path observability. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage. ReXApp converts host paths through `rex::path_to_utf8()` rather than locale-dependent `std::filesystem::path::string()`. It also destroys Runtime/input drivers before their attached Window, preventing a teardown use-after-free after a loaded-image probe. Read-only host VFS devices reject root traversal, write-intent opens, rename, and writable mappings instead of silently downgrading or reaching the host filesystem. The ten direct XONLINE/social/XHV imports selected by M3-007 return explicit offline states and emit once-only `[OFFLINE]` diagnostics instead of preserving stale caller `r3`. Guest threads retain Xenia's 10-ms compatibility grace period and use regression-tested raw/XAPI start plans, while the 50-MHz guest clock path has direct monotonicity coverage. Generated functions and import hooks maintain metadata-only breadcrumbs, and C++ guest exceptions crossing `XThread` emit bounded host-stack context without guest memory by default. The v0.9.0.9 delta assigns monotonic guest-output sequences, records successful guest-backed DXGI presents and actual success HRESULTs, holds mailbox ownership through capture readback, and accepts capture evidence only at or behind the published successful-present watermark. The v0.9.0.10 delta makes Tracy zones safe before manual profiler startup and adds an init-only privacy-safe Xenos render audit. The v0.9.0.11 delta adds Xenia's cooperative sign-in-state yield, deterministic local-profile tests, and bounded privacy-safe XAM identity/profile telemetry with distinct absent-slot masks. The v0.9.0.12 delta adds deterministic first-controller slot-zero selection and a bounded privacy-safe SDL-to-XAM input audit. The v0.9.0.13 delta adds full controller-matrix auditing, real disconnect/focus/rumble semantics, and an explicit MCLA-only critical-section compatibility option. The v0.9.0.14 delta adds bounded privacy-safe XMA/XAudio/SDL route and buffer-health auditing. See the M2/M3 evidence listed below plus `docs/evidence/M4-002-render-paths.md`, `docs/evidence/M4-004-xam-profile.md`, `docs/evidence/M4-005-input-slot.md`, `docs/evidence/M4-006-controller-matrix.md`, and `docs/evidence/M4-007-audio-route.md`.
 
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
@@ -38,19 +38,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.13^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.14^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `071a80d17b9a629c7070880008a7bff1ac928c70`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `3d18779d194acd57ab5e61034e9576d1fda61f6a`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.13 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.14 project-fork commit:
 
 ```text
-071a80d17b9a629c7070880008a7bff1ac928c70 third_party/rexglue-sdk
+3d18779d194acd57ab5e61034e9576d1fda61f6a third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11
