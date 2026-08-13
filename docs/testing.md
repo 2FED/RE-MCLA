@@ -509,3 +509,23 @@ nonzero PCM at XMA, guest-submit, and SDL-device layers, zero failure/drop
 counters, queue depth at most 64, and at most two consecutive post-start
 starvation fills. Raw audio is never captured; logs, BMPs, and JSON remain
 private under `private/evidence/M4-007/`.
+
+## M4-008 XMP fallback gate
+
+```powershell
+scripts/test-xmp-route-smoke.ps1
+scripts/run-xmp-route-smoke.ps1
+scripts/verify-xmp-route-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The canonical gate clean-installs the exact SDK tag, runs the four focused XMP
+fallback tests, clean-builds the host, and captures the physically verified
+title under trace logging. Acceptance requires one bounded idle-status record,
+at least 1,000 known queries with exact call/query equality, and zero playback,
+state-change, unexpected, inconsistent, overflow, or drop counters. The XMP
+summary must follow the title capture and precede the project marker and exact
+controlled lifecycle tail. The final verifier physically rehashes the complete
+runtime-log manifest, BMP, cycle tree, build/test logs, canonical source-game
+tree, and four runtime artifacts, and rejects reparse traversal or a surviving
+canonical process. This proves only the reached metadata-only fallback; raw
+logs, BMP, and JSON remain under ignored `private/evidence/M4-008/`.

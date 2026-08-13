@@ -10,6 +10,7 @@
 #include <rex/input/sdl/controller_matrix_audit.h>
 #include <rex/input/sdl/input_slot_audit.h>
 #include <rex/kernel/xam/profile_audit.h>
+#include <rex/kernel/xam/xmp_audit.h>
 #include <rex/kernel/xboxkrnl/rtl.h>
 #include <rex/logging.h>
 #include <rex/memory/mapped_memory.h>
@@ -742,6 +743,10 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       rex::audio::EmitAudioRouteAuditSummary("title");
       MCLA_AUDIO_INFO("MCLA audio: title soak completed seconds {}",
                       soak_seconds);
+    }
+    if (REXCVAR_GET(xmp_route_audit)) {
+      rex::kernel::xam::EmitXmpRouteAuditSummary("title");
+      MCLA_AUDIO_INFO("MCLA audio: XMP title route summarized");
     }
     if (REXCVAR_GET(mcla_controller_matrix_probe)) {
       RunControllerMatrixRumbleProbe(

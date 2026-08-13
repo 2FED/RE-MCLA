@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.14 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.15 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -179,7 +179,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.14` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.15` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -738,7 +738,7 @@ Pause for a feasibility decision if:
 - [x] **M4-005** Map SDL/controller input to the expected Xbox 360 user slot. ReXGlue v0.9.0.12 deterministically assigns the first physical SDL controller to slot 0 while retaining valid free SDL player indices for later pads, and adds an init-only bounded privacy-safe causal audit. One clean physical title run bound SDL South/A down and up edges to matching guest-visible slot-0 `XamInputGetState` edges, with query/success/disconnected masks `F/1/E`, zero removal/rejection/failure/drop counters, exit 0 through `WM_CLOSE`, no force cleanup/orphan, and unchanged source-game tree/runtime artifacts. This task proves one selected controller and one A challenge only; full controls, dead zones, focus, disconnect/reconnect, multi-pad behavior, and vibration remain M4-006. Evidence: `scripts/run-input-slot-smoke.ps1`, `scripts/verify-input-slot-smoke.ps1`, `scripts/test-input-slot-smoke.ps1`, `docs/evidence/M4-005-input-slot.md`.
 - [x] **M4-006** Validate dead-zone thresholds, the full standard controller surface, disconnect/reconnect, and focus-loss behavior. Three immutable physical layers prove causal `F3FF` digital and `3FF` analog coverage, focus lost/neutral/gained, and a fresh slot-0 remove/disconnect/reconnect/success PASS. The final hotplug run completed through controlled exit and is recovered from a post-run `30025`/`30026` verifier-literal drift without inventing the absent artifact snapshot. Evidence is explicitly split/non-monolithic; multi-pad physical behavior and title-driven force feedback are not claimed. Evidence: `scripts/run-controller-matrix.ps1`, `scripts/verify-controller-matrix.ps1`, `scripts/test-controller-matrix.ps1`, `docs/evidence/M4-006-controller-matrix.md`.
 - [x] **M4-007** Initialize and verify the autonomous title XAUD/XMA/SDL output route. ReXGlue v0.9.0.14 adds bounded privacy-safe telemetry from XMA decode through guest XAudio submission into SDL device frames plus queue/starvation health. One exact-release clean-build run passed focused 5-case/16-assertion tests and a 300-second soak (60,594 nonzero guest submits, 60,587 nonzero SDL frames, 319,325 nonzero XMA frames, max queue depth 8, zero starvation/failures/drops), followed by controlled `WM_CLOSE`. This proves sustained basic autonomous frontend audio, not individual UI/music event identity, human fidelity, XMP correctness, gameplay audio, device switching, or long-session stability. Evidence: `scripts/run-audio-route-smoke.ps1`, `scripts/verify-audio-route-smoke.ps1`, `scripts/test-audio-route-smoke.ps1`, `docs/evidence/M4-007-audio-route.md`.
-- [ ] **M4-008** Implement required XMP behavior for music playback or provide a state-correct fallback.
+- [x] **M4-008** Provide a state-correct XMP fallback for the reached title route. ReXGlue v0.9.0.15 keeps unsupported title-play/output-capture paths explicitly failed and `Idle`, guards empty playlist navigation, and adds a bounded race-free XMP audit. One exact-release clean-build title run passed focused 4-case/20-assertion tests and observed 4,625/4,625 known status queries with zero playback calls, state changes, unexpected/inconsistent calls, overflow, or drops; it then exited 0 through exact-PID `WM_CLOSE` with source-game/runtime integrity intact. This proves the reached metadata/status fallback, not an XMP decoder, user-selected music playback, or event-level audio identity. Evidence: `scripts/run-xmp-route-smoke.ps1`, `scripts/verify-xmp-route-smoke.ps1`, `scripts/test-xmp-route-smoke.ps1`, `docs/evidence/M4-008-xmp-fallback.md`.
 - [ ] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation.
 - [ ] **M4-010** Validate locale/language selection and guest path handling.
 - [ ] **M4-011** Add frontend smoke automation or a deterministic manual script covering startup, menu navigation, options, and exit.
@@ -866,6 +866,18 @@ Pause for a feasibility decision if:
   event-level Xenia comparison, human fidelity, gameplay audio, and long-session
   device-change stability. Gate readiness: not ready. Active next task: M4-008.
   Evidence: `docs/evidence/M4-007-audio-route.md`.
+
+- 2026-08-13 — M4 checkpoint 8. Completed: M4-008 (8/13). Health:
+  `GREEN — REACHED XMP STATUS ROUTE IS STATE-CORRECT`. Evidence: ReXGlue
+  v0.9.0.15 at `6f2a0f36c153495711a5c66487064ed86f6bb614`; canonical clean-build run
+  `20260813-182745-5b65003b`; focused 4-case/20-assertion SDK tests; 4,625
+  known status queries with state continuously `Idle`; zero playback calls,
+  state changes, unexpected/inconsistent calls, overflow, or drops; exact title
+  capture, controlled `WM_CLOSE`, exit 0, no orphan, and physically reverified
+  source-game/runtime integrity. Unsupported title playlist/output-capture calls
+  now fail explicitly instead of advertising fake playback. No XMP decoder or
+  user-selected music playback is claimed. Gate readiness: not ready. Active
+  next task: M4-009. Evidence: `docs/evidence/M4-008-xmp-fallback.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 

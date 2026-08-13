@@ -10,7 +10,7 @@
             "cacheVariables": {
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_PREFIX_PATH": "${sourceDir}/third_party/rexglue-sdk/out/install/win-amd64",
-                "REXSDK_VERSION": "0.9.0.14"
+                "REXSDK_VERSION": "0.9.0.15"
             },
             "condition": {
                 "type": "equals",
@@ -26,7 +26,7 @@
             "cacheVariables": {
                 "CMAKE_CXX_COMPILER": "clang++-20",
                 "CMAKE_PREFIX_PATH": "${sourceDir}/third_party/rexglue-sdk/out/install/linux-amd64",
-                "REXSDK_VERSION": "0.9.0.14"
+                "REXSDK_VERSION": "0.9.0.15"
             },
             "condition": {
                 "type": "equals",
