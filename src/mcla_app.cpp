@@ -205,6 +205,12 @@ REXCVAR_DEFINE_BOOL(
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_UINT32(
+    mcla_frontend_gameplay_wait_seconds, 30, "MCLA",
+    "Seconds to wait for the saved frontend route to enter gameplay")
+    .range(30, 60)
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_UINT32(
     mcla_first_frame_settle_seconds, 3, "MCLA",
     "Seconds to wait after the first guest output before capture")
     .range(1, 60)
@@ -894,6 +900,11 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       MCLA_APP_INFO("MCLA locale: title route summarized");
     }
     if (REXCVAR_GET(mcla_frontend_smoke_probe)) {
+      MCLA_INPUT_INFO(
+          "MCLA_FRONTEND_SMOKE_TIMING v=1 first_frame_settle_seconds={} "
+          "gameplay_wait_seconds={}",
+          REXCVAR_GET(mcla_first_frame_settle_seconds),
+          REXCVAR_GET(mcla_frontend_gameplay_wait_seconds));
       auto *frontend_driver =
           static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
       if (!frontend_driver ||
@@ -926,8 +937,10 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
         return false;
       };
 
-      if (!SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() +
-                                            std::chrono::seconds(30)) ||
+      if (!SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() +
+                                std::chrono::seconds(REXCVAR_GET(
+                                    mcla_frontend_gameplay_wait_seconds))) ||
           !capture_frontend_frame("gameplay", "mcla-frontend-gameplay.bmp")) {
         return;
       }

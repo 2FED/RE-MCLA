@@ -606,3 +606,29 @@ This proves repeatable navigation for the supported saved route only. It does
 not cover first-run OOBE and its cutscenes/vehicle selection, race entry or
 completion, detailed gameplay correctness, persistence writes, or frame/audio
 parity; those remain later tasks.
+
+## M4-012 frontend parity gate
+
+```powershell
+scripts/test-frontend-parity.ps1
+scripts/run-frontend-parity.ps1
+scripts/verify-frontend-parity.ps1 -ResultPath <private-result.json>
+```
+
+The gate re-verifies all three accepted 1280x720 M4-011 cycles, the pinned
+five-minute M4-007 audio route, and three immutable stock-Xenia title,
+free-roam, and pause frames. It then clean-builds and autonomously repeats the
+saved title-to-gameplay-to-pause-to-Options route with native draw scale 2,
+producing four 2560x1440 BMPs and a private comparison contact sheet. The
+scale-2 route uses exact 45-second pre-input and gameplay waits to reject
+loading-state captures.
+
+Acceptance uses normalized edge correlation in stable logo, prompt, HUD, menu
+footer, and Options regions. Pause permits only a bounded +/-8 by +/-2-pixel
+translation to account for viewport anchoring. Animated backgrounds are not
+whole-frame matched. Audio comparison is limited to the shared Xenia/native
+decoder-worker-client lifecycle plus the physically verified native nonzero
+sample route; the baseline contains no individual UI/music event identity, so
+none is claimed. The final verifier binds clean-build output, rotated logs,
+captures, contact sheet, prior results, source-game/save trees, runtime
+artifacts, controlled external close, and exact process cleanup.

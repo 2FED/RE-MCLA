@@ -742,7 +742,7 @@ Pause for a feasibility decision if:
 - [x] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation. ReXGlue v0.9.0.16 gives the ten XLiveBase message IDs found in the MCLA corpus deterministic local-offline or unavailable results and adds an init-only guest socket block plus bounded audit. One exact-release clean-build title run passed 3-case/32-assertion focused tests, reached the verified frontend with the block enabled, observed zero service dispatches and zero socket attempts, and exited through exact-PID/title `WM_CLOSE` with source-game/runtime integrity intact. This proves the network-disabled offline route does not block the frontend; it does not claim runtime reachability of all ten messages, Xbox Live functionality, or a general host firewall. Evidence: `scripts/run-offline-service-smoke.ps1`, `scripts/verify-offline-service-smoke.ps1`, `scripts/test-offline-service-smoke.ps1`, `docs/evidence/M4-009-offline-services.md`.
 - [x] **M4-010** Validate locale/language selection and guest path handling. ReXGlue v0.9.0.17 returns the configured Xbox language through both locale routes, audits the title-reached XConfig value, and converts all UTF-8 path CVars plus log filenames to native Windows paths without mojibake. One clean-build EN/US, FR/FR, and RU/RU matrix passed exact locale records, pinned title/logo and localized-prompt ROI checks, real Cyrillic/accented user/cache/log roots, controlled `WM_CLOSE`, no orphan, and unchanged source-game/runtime artifacts. The title route physically reached XConfig language 25 times per cycle; `XGetLanguage` and country were zero-hit and remain static/unit-proven, not runtime-proven. This does not claim complete localized content or gameplay. Evidence: `scripts/run-locale-path-smoke.ps1`, `scripts/verify-locale-path-smoke.ps1`, `scripts/test-locale-path-smoke.ps1`, `docs/evidence/M4-010-locale-paths.md`.
 - [x] **M4-011** Automate the supported saved frontend route. ReXGlue v0.9.0.18 fixes trailing-separator VFS mounted-root resolution, and the project adds a bounded synthetic slot-0 probe with 200-ms holds and a two-second tab debounce. One exact-release clean build followed by three isolated cycles from the pinned post-OOBE save: title `START` reached active nighttime free roam, gameplay `START` reached pause, and two `RB` presses reached Modes then Settings/Options. Every cycle produced four distinct 1280x720 captures, passed pinned title plus pause/options ROI classification, preserved the save seed, source-game tree, and runtime artifacts, and exited 0 through external exact-window `WM_CLOSE` without force cleanup or an orphan. MCLA has no internal Exit command, and none is claimed. First-run OOBE, race flow, gameplay correctness, and detailed parity remain open. Evidence: `scripts/run-frontend-smoke.ps1`, `scripts/verify-frontend-smoke.ps1`, `scripts/test-frontend-smoke.ps1`, `docs/evidence/M4-011-frontend-smoke.md`.
-- [ ] **M4-012** Compare frontend frames and audio events with Xenia baseline.
+- [x] **M4-012** Compare frontend frames and audio events with the pinned Xenia baseline. The canonical clean-build run reverified all three accepted 1280x720 M4-011 cycles and added a complete 2560x1440 scale-2 title, saved gameplay, pause, and Options cycle. Stable title/logo, prompt, HUD, pause-footer, and native Options regions passed normalized edge gates (0.751092-0.946633), with pause allowing only a bounded -5/+1-pixel registration; a private contact sheet was reviewed. The Xenia log and M4-007 route share one decoder/worker/client lifecycle, while the native five-minute route retains its nonzero XMA/XAudio/SDL counts. Whole-frame equivalence and individual UI/music event identity are explicitly not claimed. Evidence: `scripts/run-frontend-parity.ps1`, `scripts/verify-frontend-parity.ps1`, `scripts/test-frontend-parity.ps1`, `docs/evidence/M4-012-frontend-parity.md`.
 - [ ] **M4-013** Document all remaining frontend deviations and workarounds.
 
 ### Deliverables
@@ -916,6 +916,19 @@ Pause for a feasibility decision if:
   gameplay correctness, and frontend parity remain open. Gate readiness: not
   ready. Active next task: M4-012. Evidence:
   `docs/evidence/M4-011-frontend-smoke.md`.
+
+- 2026-08-14 — M4 checkpoint 12. Completed: M4-012 (12/13). Health:
+  `GREEN — TWO-RESOLUTION FRONTEND REGIONS AND AUDIO LIFECYCLE COMPARED`.
+  Evidence: canonical clean-build run `20260814-003029-963c60bd`; all three
+  accepted M4-011 1280x720 cycles reverified; one complete 2560x1440 scale-2
+  title/gameplay/pause/Options route; stable ROI correlations 0.751092-0.946633;
+  bounded pause registration -5/+1 pixels; reviewed private contact sheet;
+  exact Xenia frame/log hashes; and M4-007 nonzero audio-route counters bound
+  to three shared lifecycle classes. Exit 0 through external `WM_CLOSE`, no
+  force cleanup/orphan, and source-game/save/runtime integrity all pass.
+  Whole-frame equality and event-level audio identity remain explicitly
+  unclaimed. Gate readiness: not ready. Active next task: M4-013. Evidence:
+  `docs/evidence/M4-012-frontend-parity.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 
@@ -1479,6 +1492,13 @@ Execute in this order unless a new blocker changes the plan:
 24. [x] Complete M4-005: map one selected SDL controller to Xbox user slot 0.
 25. [x] Complete M4-006: validate the full controller surface, dead zones,
     disconnect/reconnect, focus-loss behavior, multi-pad policy, and vibration.
+26. [x] Complete M4-007 through M4-011: verify sustained frontend audio, XMP
+    fallback, offline services, locale/paths, and the repeatable saved frontend
+    route.
+27. [x] Complete M4-012: index and review 1280x720 and 2560x1440 frontend
+    comparisons plus the bounded Xenia/native audio-lifecycle comparison.
+28. [ ] Complete M4-013 and close M4 after the aggregate known-issues,
+    verification-count, milestone-gate, version, and release review.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
 
