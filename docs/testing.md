@@ -469,3 +469,27 @@ requires the causal SDL down/up source sequences to appear as guest-visible
 slot-0 edges, slots 1-3 to remain disconnected, exact-PID `WM_CLOSE`, exit 0,
 and complete post-run source-game/runtime-artifact/evidence integrity. Raw controller identity,
 logs, capture, and result JSON remain private under `private/evidence/M4-005/`.
+
+## M4-006 physical controller matrix
+
+```powershell
+scripts\test-controller-matrix.ps1
+scripts\verify-controller-matrix.ps1 `
+  -RecoveredHotplugEvidenceRun 20260813-144406-2c1974da `
+  -RecoveredHotplugEvidenceOnly
+```
+
+The accepted gate combines three byte-bound physical layers: causal digital
+controls and prior host-rumble commands, causal analog/focus coverage, and a
+fresh hotplug-only continuation. The continuation proves physical removal,
+guest disconnect, reconnect to slot 0, guest success, and controlled shutdown;
+it replays no prior input and submits no nonzero rumble pulse. The final run is
+classified through the recovered-evidence path because a stale `30025`
+dispatch-count literal rejected the valid `30026` log after execution had
+already completed. Recovery binds the original logs, BMP, build/test logs, and
+evidence trees without inventing the absent post-run artifact snapshot.
+
+The gate does not claim one monolithic process, controller identity, physical
+multi-pad coverage, or title-driven force feedback. Raw evidence remains under
+ignored `private/evidence/M4-006/`; see
+`docs/evidence/M4-006-controller-matrix.md`.

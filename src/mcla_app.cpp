@@ -5,8 +5,11 @@
 #include <rex/cvar.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
+#include <rex/input/input_system.h>
+#include <rex/input/sdl/controller_matrix_audit.h>
 #include <rex/input/sdl/input_slot_audit.h>
 #include <rex/kernel/xam/profile_audit.h>
+#include <rex/kernel/xboxkrnl/rtl.h>
 #include <rex/logging.h>
 #include <rex/memory/mapped_memory.h>
 #include <rex/runtime.h>
@@ -42,14 +45,16 @@ constexpr uint32_t kExpectedTitleId = 0x545407F8;
 constexpr uint32_t kExpectedMediaId = 0x5940C9DB;
 constexpr rex::X_STATUS kAccessDenied = 0xC0000022u;
 
-}  // namespace
+} // namespace
 
-REXCVAR_DEFINE_BOOL(mcla_lifecycle_probe, false, "MCLA",
-                    "Exercise the host lifecycle without constructing the guest runtime")
+REXCVAR_DEFINE_BOOL(
+    mcla_lifecycle_probe, false, "MCLA",
+    "Exercise the host lifecycle without constructing the guest runtime")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REXCVAR_DEFINE_BOOL(mcla_module_config_probe, false, "MCLA",
-                    "Validate the loaded image and dispatch table without launching guest code")
+REXCVAR_DEFINE_BOOL(
+    mcla_module_config_probe, false, "MCLA",
+    "Validate the loaded image and dispatch table without launching guest code")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(mcla_vfs_probe, false, "MCLA",
@@ -57,28 +62,38 @@ REXCVAR_DEFINE_BOOL(mcla_vfs_probe, false, "MCLA",
                     "without launching guest code")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REXCVAR_DEFINE_BOOL(mcla_crash_probe, false, "MCLA",
-                    "Write a synthetic privacy-safe guest crash report without guest execution")
+REXCVAR_DEFINE_BOOL(
+    mcla_crash_probe, false, "MCLA",
+    "Write a synthetic privacy-safe guest crash report without guest execution")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(mcla_logging_probe, false, "MCLA",
                     "Emit one schema marker for every MCLA-R logging category")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REXCVAR_DEFINE_BOOL(mcla_first_frame_probe, false, "MCLA",
-                    "Capture the first nontrivial guest frame after presentation starts")
+REXCVAR_DEFINE_BOOL(
+    mcla_first_frame_probe, false, "MCLA",
+    "Capture the first nontrivial guest frame after presentation starts")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REXCVAR_DEFINE_UINT32(mcla_first_frame_settle_seconds, 3, "MCLA",
-                      "Seconds to wait after the first guest output before capture")
+REXCVAR_DEFINE_BOOL(
+    mcla_controller_matrix_probe, false, "MCLA",
+    "Run the opt-in host controller rumble diagnostic after title capture")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_UINT32(
+    mcla_first_frame_settle_seconds, 3, "MCLA",
+    "Seconds to wait after the first guest output before capture")
     .range(1, 60)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-#define MCLA_DEFINE_LOG_LEVEL_CVAR(name)                                                  \
-  REXCVAR_DEFINE_STRING(mcla_log_##name, "inherit", "MCLA Logging",                       \
-                        "Category level override: inherit, trace, debug, info, warn, "    \
-                        "error, critical, off")                                           \
-      .allowed({"inherit", "trace", "debug", "info", "warn", "error", "critical", "off"}) \
+#define MCLA_DEFINE_LOG_LEVEL_CVAR(name)                                       \
+  REXCVAR_DEFINE_STRING(                                                       \
+      mcla_log_##name, "inherit", "MCLA Logging",                              \
+      "Category level override: inherit, trace, debug, info, warn, "           \
+      "error, critical, off")                                                  \
+      .allowed({"inherit", "trace", "debug", "info", "warn", "error",          \
+                "critical", "off"})                                            \
       .lifecycle(rex::cvar::Lifecycle::kInitOnly)
 
 MCLA_DEFINE_LOG_LEVEL_CVAR(app);
@@ -96,7 +111,8 @@ MCLA_DEFINE_LOG_LEVEL_CVAR(patches);
 MclaApp::MclaApp(rex::ui::WindowedAppContext &ctx, rex::PPCImageInfo image_info)
     : ReXApp(ctx, "mcla", image_info) {}
 
-std::unique_ptr<rex::ui::WindowedApp> MclaApp::Create(rex::ui::WindowedAppContext &ctx) {
+std::unique_ptr<rex::ui::WindowedApp>
+MclaApp::Create(rex::ui::WindowedAppContext &ctx) {
   return std::unique_ptr<MclaApp>(new MclaApp(ctx, PPCImageConfig));
 }
 
@@ -126,18 +142,20 @@ void MclaApp::OnPostInitLogging() {
 }
 
 void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
+  REXCVAR_SET(rtl_allow_cross_thread_critical_section_leave, true);
   const bool guest_free_probe =
-      REXCVAR_GET(mcla_lifecycle_probe) || REXCVAR_GET(mcla_module_config_probe) ||
-      REXCVAR_GET(mcla_vfs_probe) || REXCVAR_GET(mcla_crash_probe) ||
-      REXCVAR_GET(mcla_logging_probe);
+      REXCVAR_GET(mcla_lifecycle_probe) ||
+      REXCVAR_GET(mcla_module_config_probe) || REXCVAR_GET(mcla_vfs_probe) ||
+      REXCVAR_GET(mcla_crash_probe) || REXCVAR_GET(mcla_logging_probe);
   if (config.gpu_plugin.empty() && !guest_free_probe) {
     config.gpu_plugin = "xenos";
     MCLA_GPU_INFO("MCLA graphics: selected GPU plugin 'xenos'");
   }
 }
 
-std::optional<rex::PathConfig> MclaApp::OnFinalizePaths(
-    const rex::PathConfig &defaults, std::function<void(rex::PathConfig)> resume) {
+std::optional<rex::PathConfig>
+MclaApp::OnFinalizePaths(const rex::PathConfig &defaults,
+                         std::function<void(rex::PathConfig)> resume) {
   (void)resume;
   if (REXCVAR_GET(mcla_lifecycle_probe)) {
     MCLA_APP_INFO("MCLA lifecycle: probe requested; guest runtime skipped");
@@ -150,7 +168,8 @@ std::optional<rex::PathConfig> MclaApp::OnFinalizePaths(
 
   if (!ValidateStaticImageContract()) {
     MCLA_PPC_ERROR("MCLA module config: static image contract rejected");
-    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    app_context().CallInUIThreadDeferred(
+        [this]() { app_context().QuitFromUIThread(); });
     return std::nullopt;
   }
 
@@ -161,18 +180,22 @@ bool MclaApp::ValidateStaticImageContract() {
   if (PPCImageConfig.image_base != kExpectedImageBase ||
       PPCImageConfig.image_size != kExpectedImageSize ||
       PPCImageConfig.code_base != kExpectedCodeBase ||
-      PPCImageConfig.code_size != kExpectedCodeSize || !PPCImageConfig.func_mappings) {
+      PPCImageConfig.code_size != kExpectedCodeSize ||
+      !PPCImageConfig.func_mappings) {
     return false;
   }
 
-  const uint64_t image_end = uint64_t(PPCImageConfig.image_base) + PPCImageConfig.image_size;
-  const uint64_t code_end = uint64_t(PPCImageConfig.code_base) + PPCImageConfig.code_size;
-  const uint64_t dispatch_end = image_end + (uint64_t(PPCImageConfig.code_size) +
-                                             rex::runtime::FunctionDispatcher::kThunkReserveSize) *
-                                                2;
+  const uint64_t image_end =
+      uint64_t(PPCImageConfig.image_base) + PPCImageConfig.image_size;
+  const uint64_t code_end =
+      uint64_t(PPCImageConfig.code_base) + PPCImageConfig.code_size;
+  const uint64_t dispatch_end =
+      image_end + (uint64_t(PPCImageConfig.code_size) +
+                   rex::runtime::FunctionDispatcher::kThunkReserveSize) *
+                      2;
   if (PPCImageConfig.image_size == 0 || PPCImageConfig.code_size == 0 ||
-      PPCImageConfig.code_base < PPCImageConfig.image_base || code_end > image_end ||
-      dispatch_end > (uint64_t{1} << 32)) {
+      PPCImageConfig.code_base < PPCImageConfig.image_base ||
+      code_end > image_end || dispatch_end > (uint64_t{1} << 32)) {
     return false;
   }
 
@@ -192,7 +215,8 @@ bool MclaApp::ValidateStaticImageContract() {
     }
     const auto guest = static_cast<uint32_t>(mapping.guest);
     if (guest < PPCImageConfig.code_base || uint64_t(guest) >= code_end ||
-        (guest & (alignof(uint32_t) - 1)) != 0 || (mapping_count != 0 && guest <= previous_guest)) {
+        (guest & (alignof(uint32_t) - 1)) != 0 ||
+        (mapping_count != 0 && guest <= previous_guest)) {
       return false;
     }
     previous_guest = guest;
@@ -203,24 +227,25 @@ bool MclaApp::ValidateStaticImageContract() {
   }
 
   function_mapping_count_ = mapping_count;
-  MCLA_PPC_INFO(
-      "MCLA module config: static image {:08X}-{:08X}, code "
-      "{:08X}-{:08X}, {} mappings",
-      PPCImageConfig.image_base, static_cast<uint32_t>(image_end), PPCImageConfig.code_base,
-      static_cast<uint32_t>(code_end), function_mapping_count_);
+  MCLA_PPC_INFO("MCLA module config: static image {:08X}-{:08X}, code "
+                "{:08X}-{:08X}, {} mappings",
+                PPCImageConfig.image_base, static_cast<uint32_t>(image_end),
+                PPCImageConfig.code_base, static_cast<uint32_t>(code_end),
+                function_mapping_count_);
   return true;
 }
 
 bool MclaApp::ValidateLoadedImageContract() {
-  if (!runtime() || !runtime()->kernel_state() || !runtime()->function_dispatcher()) {
+  if (!runtime() || !runtime()->kernel_state() ||
+      !runtime()->function_dispatcher()) {
     return false;
   }
 
   auto executable = runtime()->kernel_state()->GetExecutableModule();
   const auto *xex = executable ? executable->xex_module() : nullptr;
   const auto *execution_info = xex ? xex->opt_execution_info() : nullptr;
-  if (!executable || !executable->is_executable() ||
-      !execution_info || xex->base_address() != kExpectedImageBase ||
+  if (!executable || !executable->is_executable() || !execution_info ||
+      xex->base_address() != kExpectedImageBase ||
       xex->image_size() != kExpectedImageSize ||
       executable->entry_point() != kExpectedEntryPoint ||
       execution_info->title_id != kExpectedTitleId ||
@@ -231,24 +256,25 @@ bool MclaApp::ValidateLoadedImageContract() {
   auto *dispatcher = runtime()->function_dispatcher();
   const uint32_t code_last = kExpectedCodeBase + kExpectedCodeSize - 1;
   if (!dispatcher->HasAnyFunctionTable() ||
-      dispatcher->FindCallerModuleBase(kExpectedCodeBase) != kExpectedCodeBase ||
+      dispatcher->FindCallerModuleBase(kExpectedCodeBase) !=
+          kExpectedCodeBase ||
       dispatcher->FindCallerModuleBase(code_last) != kExpectedCodeBase ||
       !dispatcher->GetFunction(kExpectedEntryPoint)) {
     return false;
   }
 
-  MCLA_PPC_INFO(
-      "MCLA module identity: title {:08X}, media {:08X}, image "
-      "{:08X}-{:08X}, entry {:08X}",
-      static_cast<uint32_t>(execution_info->title_id),
-      static_cast<uint32_t>(execution_info->media_id), xex->base_address(),
-      xex->base_address() + xex->image_size(), executable->entry_point());
+  MCLA_PPC_INFO("MCLA module identity: title {:08X}, media {:08X}, image "
+                "{:08X}-{:08X}, entry {:08X}",
+                static_cast<uint32_t>(execution_info->title_id),
+                static_cast<uint32_t>(execution_info->media_id),
+                xex->base_address(), xex->base_address() + xex->image_size(),
+                executable->entry_point());
   MCLA_PPC_INFO("MCLA module config: loaded XEX base {:08X}, entry {:08X}",
                 xex->base_address(), executable->entry_point());
-  MCLA_PPC_INFO(
-      "MCLA module config: entry {:08X} registered in dispatch range "
-      "{:08X}-{:08X}",
-      kExpectedEntryPoint, kExpectedCodeBase, kExpectedCodeBase + kExpectedCodeSize);
+  MCLA_PPC_INFO("MCLA module config: entry {:08X} registered in dispatch range "
+                "{:08X}-{:08X}",
+                kExpectedEntryPoint, kExpectedCodeBase,
+                kExpectedCodeBase + kExpectedCodeSize);
   return true;
 }
 
@@ -261,8 +287,9 @@ bool MclaApp::ValidateGameVfsContract() {
   constexpr std::string_view kMount = "\\Device\\Harddisk0\\Partition1";
   std::string game_target;
   std::string d_target;
-  if (!vfs->FindSymbolicLink("game:", game_target) || !vfs->FindSymbolicLink("d:", d_target) ||
-      game_target != kMount || d_target != kMount) {
+  if (!vfs->FindSymbolicLink("game:", game_target) ||
+      !vfs->FindSymbolicLink("d:", d_target) || game_target != kMount ||
+      d_target != kMount) {
     return false;
   }
 
@@ -277,31 +304,34 @@ bool MclaApp::ValidateGameVfsContract() {
   };
 
   for (const auto &expected : kExpectedFiles) {
-    const std::string game_path = "game:\\" + std::string(expected.relative_path);
+    const std::string game_path =
+        "game:\\" + std::string(expected.relative_path);
     const std::string d_path = "d:\\" + std::string(expected.relative_path);
     const std::string device_path =
         std::string(kMount) + "\\" + std::string(expected.relative_path);
     auto *game_entry = vfs->ResolvePath(game_path);
     if (!game_entry || vfs->ResolvePath(d_path) != game_entry ||
-        vfs->ResolvePath(device_path) != game_entry || !game_entry->is_read_only() ||
-        game_entry->size() != expected.size) {
+        vfs->ResolvePath(device_path) != game_entry ||
+        !game_entry->is_read_only() || game_entry->size() != expected.size) {
       return false;
     }
 
     rex::filesystem::File *file = nullptr;
     rex::filesystem::FileAction action{};
-    const auto status =
-        vfs->OpenFile(nullptr, game_path, rex::filesystem::FileDisposition::kOpen,
-                      rex::filesystem::FileAccess::kGenericRead, false, true, &file, &action);
+    const auto status = vfs->OpenFile(
+        nullptr, game_path, rex::filesystem::FileDisposition::kOpen,
+        rex::filesystem::FileAccess::kGenericRead, false, true, &file, &action);
     if (XFAILED(status) || !file) {
       return false;
     }
     file->Destroy();
   }
-  MCLA_VFS_INFO("MCLA VFS: game: and d: resolve 3/3 expected disc files on {}", kMount);
+  MCLA_VFS_INFO("MCLA VFS: game: and d: resolve 3/3 expected disc files on {}",
+                kMount);
 
   if (vfs->ResolvePath("game:\\..\\default.xex") ||
-      vfs->ResolvePath("\\Device\\Harddisk0\\Partition1\\..\\Partition1\\default.xex")) {
+      vfs->ResolvePath(
+          "\\Device\\Harddisk0\\Partition1\\..\\Partition1\\default.xex")) {
     return false;
   }
   MCLA_VFS_INFO("MCLA VFS: root-escape paths rejected");
@@ -314,7 +344,8 @@ bool MclaApp::ValidateGameVfsContract() {
   rex::filesystem::FileAction write_action{};
   const auto existing_write = vfs->OpenFile(
       nullptr, "game:\\default.xex", rex::filesystem::FileDisposition::kOpen,
-      rex::filesystem::FileAccess::kGenericWrite, false, true, &write_file, &write_action);
+      rex::filesystem::FileAccess::kGenericWrite, false, true, &write_file,
+      &write_action);
   if (existing_write != kAccessDenied || write_file ||
       xex_entry->OpenMapped(rex::memory::MappedMemory::Mode::kReadWrite) ||
       vfs->DeletePath("game:\\default.xex")) {
@@ -324,16 +355,20 @@ bool MclaApp::ValidateGameVfsContract() {
   constexpr std::string_view kCreateProbe = "game:\\__mcla_vfs_write_probe.tmp";
   const auto create_write = vfs->OpenFile(
       nullptr, kCreateProbe, rex::filesystem::FileDisposition::kCreate,
-      rex::filesystem::FileAccess::kGenericWrite, false, true, &write_file, &write_action);
-  if (create_write != kAccessDenied || write_file || vfs->ResolvePath(kCreateProbe)) {
+      rex::filesystem::FileAccess::kGenericWrite, false, true, &write_file,
+      &write_action);
+  if (create_write != kAccessDenied || write_file ||
+      vfs->ResolvePath(kCreateProbe)) {
     return false;
   }
-  MCLA_VFS_INFO("MCLA VFS: write, create, delete, and writable-map requests denied");
+  MCLA_VFS_INFO(
+      "MCLA VFS: write, create, delete, and writable-map requests denied");
   return true;
 }
 
 bool MclaApp::WriteSyntheticCrashReport() {
-  if (!runtime() || !runtime()->memory() || runtime()->user_data_root().empty()) {
+  if (!runtime() || !runtime()->memory() ||
+      runtime()->user_data_root().empty()) {
     return false;
   }
 
@@ -344,11 +379,12 @@ bool MclaApp::WriteSyntheticCrashReport() {
     rex::ppc::GuestFunctionScope function_scope(*context, kExpectedEntryPoint);
     rex::ppc::SetGuestProgramCounter(*context, kExpectedEntryPoint + 4);
     rex::ppc::RecordGuestImport(*context, "__imp__XGetAVPack");
-    report =
-        rex::diagnostics::CaptureGuestCrashReport("MCLA synthetic crash probe", &thread_state, 1);
+    report = rex::diagnostics::CaptureGuestCrashReport(
+        "MCLA synthetic crash probe", &thread_state, 1);
   }
 
-  const auto report_path = runtime()->user_data_root() / "mcla-crash-report.txt";
+  const auto report_path =
+      runtime()->user_data_root() / "mcla-crash-report.txt";
   std::ofstream stream(report_path, std::ios::binary | std::ios::trunc);
   if (!stream) {
     return false;
@@ -366,16 +402,17 @@ bool MclaApp::WriteSyntheticCrashReport() {
 
 void MclaApp::LaunchModule() {
   if (!ValidateLoadedImageContract()) {
-    MCLA_PPC_ERROR(
-        "MCLA module config: loaded image contract rejected; guest "
-        "launch blocked");
-    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    MCLA_PPC_ERROR("MCLA module config: loaded image contract rejected; guest "
+                   "launch blocked");
+    app_context().CallInUIThreadDeferred(
+        [this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
   if (REXCVAR_GET(mcla_module_config_probe)) {
     MCLA_PPC_INFO("MCLA module config: probe complete; guest launch skipped");
-    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    app_context().CallInUIThreadDeferred(
+        [this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
@@ -385,19 +422,23 @@ void MclaApp::LaunchModule() {
     } else {
       MCLA_APP_INFO("MCLA crash probe: complete; guest launch skipped");
     }
-    app_context().CallInUIThreadDeferred([this]() { HardExitCrashProbeFromUIThread(); });
+    app_context().CallInUIThreadDeferred(
+        [this]() { HardExitCrashProbeFromUIThread(); });
     return;
   }
 
   if (!ValidateGameVfsContract()) {
-    MCLA_VFS_ERROR("MCLA VFS: disc-root contract rejected; guest launch blocked");
-    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    MCLA_VFS_ERROR(
+        "MCLA VFS: disc-root contract rejected; guest launch blocked");
+    app_context().CallInUIThreadDeferred(
+        [this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
   if (REXCVAR_GET(mcla_vfs_probe)) {
     MCLA_VFS_INFO("MCLA VFS: probe complete; guest launch skipped");
-    app_context().CallInUIThreadDeferred([this]() { app_context().QuitFromUIThread(); });
+    app_context().CallInUIThreadDeferred(
+        [this]() { app_context().QuitFromUIThread(); });
     return;
   }
 
@@ -414,16 +455,17 @@ struct FrameMetrics {
   uint32_t nonmodal_grid_cells = 0;
 
   bool IsNontrivial() const {
-    return occupied_rgb555_bins >= 16 && luma_p95 >= luma_p05 + 8 && modal_per_mille <= 995 &&
-           nonmodal_grid_cells >= 4;
+    return occupied_rgb555_bins >= 16 && luma_p95 >= luma_p05 + 8 &&
+           modal_per_mille <= 995 && nonmodal_grid_cells >= 4;
   }
 };
 
-bool MeasureFrame(const rex::ui::RawImage& image, FrameMetrics& metrics) {
+bool MeasureFrame(const rex::ui::RawImage &image, FrameMetrics &metrics) {
   constexpr uint32_t kGridWidth = 16;
   constexpr uint32_t kGridHeight = 9;
-  if (image.width < 64 || image.height < 64 || image.width > 8192 || image.height > 8192 ||
-      image.stride != size_t(image.width) * 4 || image.data.size() != image.stride * image.height) {
+  if (image.width < 64 || image.height < 64 || image.width > 8192 ||
+      image.height > 8192 || image.stride != size_t(image.width) * 4 ||
+      image.data.size() != image.stride * image.height) {
     return false;
   }
 
@@ -431,13 +473,15 @@ bool MeasureFrame(const rex::ui::RawImage& image, FrameMetrics& metrics) {
   std::array<uint32_t, 256> luma_histogram{};
   const uint64_t pixel_count = uint64_t(image.width) * image.height;
   for (uint32_t y = 0; y < image.height; ++y) {
-    const uint8_t* row = image.data.data() + size_t(y) * image.stride;
+    const uint8_t *row = image.data.data() + size_t(y) * image.stride;
     for (uint32_t x = 0; x < image.width; ++x) {
-      const uint8_t* pixel = row + size_t(x) * 4;
-      const uint32_t bin = (uint32_t(pixel[0] >> 3) << 10) | (uint32_t(pixel[1] >> 3) << 5) |
+      const uint8_t *pixel = row + size_t(x) * 4;
+      const uint32_t bin = (uint32_t(pixel[0] >> 3) << 10) |
+                           (uint32_t(pixel[1] >> 3) << 5) |
                            uint32_t(pixel[2] >> 3);
       ++rgb555_histogram[bin];
-      const uint32_t luma = (54u * pixel[0] + 183u * pixel[1] + 19u * pixel[2] + 128u) >> 8;
+      const uint32_t luma =
+          (54u * pixel[0] + 183u * pixel[1] + 19u * pixel[2] + 128u) >> 8;
       ++luma_histogram[luma];
     }
   }
@@ -453,10 +497,13 @@ bool MeasureFrame(const rex::ui::RawImage& image, FrameMetrics& metrics) {
       modal_bin = i;
     }
   }
-  metrics.modal_per_mille = static_cast<uint32_t>((uint64_t(modal_count) * 1000) / pixel_count);
+  metrics.modal_per_mille =
+      static_cast<uint32_t>((uint64_t(modal_count) * 1000) / pixel_count);
 
-  const uint64_t p05_target = std::max<uint64_t>(1, (pixel_count * 5 + 99) / 100);
-  const uint64_t p95_target = std::max<uint64_t>(1, (pixel_count * 95 + 99) / 100);
+  const uint64_t p05_target =
+      std::max<uint64_t>(1, (pixel_count * 5 + 99) / 100);
+  const uint64_t p95_target =
+      std::max<uint64_t>(1, (pixel_count * 95 + 99) / 100);
   uint64_t cumulative = 0;
   bool found_p05 = false;
   for (uint32_t i = 0; i < luma_histogram.size(); ++i) {
@@ -473,37 +520,41 @@ bool MeasureFrame(const rex::ui::RawImage& image, FrameMetrics& metrics) {
 
   std::array<bool, kGridWidth * kGridHeight> nonmodal_cells{};
   for (uint32_t y = 0; y < image.height; ++y) {
-    const uint8_t* row = image.data.data() + size_t(y) * image.stride;
+    const uint8_t *row = image.data.data() + size_t(y) * image.stride;
     for (uint32_t x = 0; x < image.width; ++x) {
-      const uint8_t* pixel = row + size_t(x) * 4;
-      const uint32_t bin = (uint32_t(pixel[0] >> 3) << 10) | (uint32_t(pixel[1] >> 3) << 5) |
+      const uint8_t *pixel = row + size_t(x) * 4;
+      const uint32_t bin = (uint32_t(pixel[0] >> 3) << 10) |
+                           (uint32_t(pixel[1] >> 3) << 5) |
                            uint32_t(pixel[2] >> 3);
       if (bin != modal_bin) {
-        const uint32_t grid_x = std::min(kGridWidth - 1, x * kGridWidth / image.width);
-        const uint32_t grid_y = std::min(kGridHeight - 1, y * kGridHeight / image.height);
+        const uint32_t grid_x =
+            std::min(kGridWidth - 1, x * kGridWidth / image.width);
+        const uint32_t grid_y =
+            std::min(kGridHeight - 1, y * kGridHeight / image.height);
         nonmodal_cells[grid_y * kGridWidth + grid_x] = true;
       }
     }
   }
-  metrics.nonmodal_grid_cells =
-      static_cast<uint32_t>(std::count(nonmodal_cells.begin(), nonmodal_cells.end(), true));
+  metrics.nonmodal_grid_cells = static_cast<uint32_t>(
+      std::count(nonmodal_cells.begin(), nonmodal_cells.end(), true));
   return true;
 }
 
-void WriteLittleEndian16(std::ofstream& stream, uint16_t value) {
+void WriteLittleEndian16(std::ofstream &stream, uint16_t value) {
   const std::array<uint8_t, 2> bytes = {static_cast<uint8_t>(value),
                                         static_cast<uint8_t>(value >> 8)};
-  stream.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+  stream.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
 }
 
-void WriteLittleEndian32(std::ofstream& stream, uint32_t value) {
+void WriteLittleEndian32(std::ofstream &stream, uint32_t value) {
   const std::array<uint8_t, 4> bytes = {
       static_cast<uint8_t>(value), static_cast<uint8_t>(value >> 8),
       static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 24)};
-  stream.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+  stream.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
 }
 
-bool WriteFrameBmp(const std::filesystem::path& path, const rex::ui::RawImage& image) {
+bool WriteFrameBmp(const std::filesystem::path &path,
+                   const rex::ui::RawImage &image) {
   constexpr uint32_t kFileHeaderBytes = 14;
   constexpr uint32_t kInfoHeaderBytes = 40;
   const uint64_t pixel_bytes = uint64_t(image.width) * image.height * 4;
@@ -535,39 +586,88 @@ bool WriteFrameBmp(const std::filesystem::path& path, const rex::ui::RawImage& i
 
   std::vector<uint8_t> bgra_row(size_t(image.width) * 4);
   for (uint32_t y = image.height; y-- > 0;) {
-    const uint8_t* source = image.data.data() + size_t(y) * image.stride;
+    const uint8_t *source = image.data.data() + size_t(y) * image.stride;
     for (uint32_t x = 0; x < image.width; ++x) {
       bgra_row[size_t(x) * 4 + 0] = source[size_t(x) * 4 + 2];
       bgra_row[size_t(x) * 4 + 1] = source[size_t(x) * 4 + 1];
       bgra_row[size_t(x) * 4 + 2] = source[size_t(x) * 4 + 0];
       bgra_row[size_t(x) * 4 + 3] = 0xFF;
     }
-    stream.write(reinterpret_cast<const char*>(bgra_row.data()), bgra_row.size());
+    stream.write(reinterpret_cast<const char *>(bgra_row.data()),
+                 bgra_row.size());
   }
   stream.close();
   return bool(stream);
 }
 
-bool SleepUntilOrStop(std::stop_token stop_token, std::chrono::steady_clock::time_point deadline) {
+bool SleepUntilOrStop(std::stop_token stop_token,
+                      std::chrono::steady_clock::time_point deadline) {
   while (!stop_token.stop_requested()) {
     const auto now = std::chrono::steady_clock::now();
     if (now >= deadline) {
       return true;
     }
-    std::this_thread::sleep_for(
-        std::min(std::chrono::milliseconds(100),
-                 std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now)));
+    std::this_thread::sleep_for(std::min(
+        std::chrono::milliseconds(100),
+        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now)));
   }
   return false;
 }
 
-}  // namespace
+rex::X_RESULT
+SetControllerMatrixVibration(rex::input::InputSystem *input_system,
+                             uint16_t left_motor_speed,
+                             uint16_t right_motor_speed) {
+  rex::input::X_INPUT_VIBRATION vibration{};
+  vibration.left_motor_speed = left_motor_speed;
+  vibration.right_motor_speed = right_motor_speed;
+  return input_system->SetState(0, &vibration);
+}
 
-void MclaApp::OnPostLaunchModule(rex::system::XThread* thread) {
+void RunControllerMatrixRumbleProbe(std::stop_token stop_token,
+                                    rex::input::InputSystem *input_system) {
+  using namespace std::chrono_literals;
+  if (!input_system ||
+      !SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() + 5s)) {
+    return;
+  }
+
+  constexpr std::array<std::array<uint16_t, 2>, 3> kPulses = {
+      std::array<uint16_t, 2>{0x8000, 0x0000},
+      std::array<uint16_t, 2>{0x0000, 0x8000},
+      std::array<uint16_t, 2>{0x8000, 0x8000},
+  };
+  constexpr auto kPulseDuration = 3s;
+  constexpr auto kPulseGap = 2s;
+  for (size_t i = 0; i < kPulses.size(); ++i) {
+    if (stop_token.stop_requested() ||
+        SetControllerMatrixVibration(input_system, kPulses[i][0],
+                                     kPulses[i][1]) != rex::X_RESULT{0}) {
+      return;
+    }
+
+    const bool pulse_completed = SleepUntilOrStop(
+        stop_token, std::chrono::steady_clock::now() + kPulseDuration);
+    SetControllerMatrixVibration(input_system, 0, 0);
+    if (!pulse_completed) {
+      return;
+    }
+    if (i + 1 != kPulses.size() &&
+        !SleepUntilOrStop(stop_token,
+                          std::chrono::steady_clock::now() + kPulseGap)) {
+      return;
+    }
+  }
+}
+
+} // namespace
+
+void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
   (void)thread;
-  if (REXCVAR_GET(mcla_first_frame_probe)) {
-    first_frame_probe_thread_ =
-        std::jthread([this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
+  if (REXCVAR_GET(mcla_first_frame_probe) ||
+      REXCVAR_GET(mcla_controller_matrix_probe)) {
+    first_frame_probe_thread_ = std::jthread(
+        [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
 }
 
@@ -577,8 +677,8 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
   bool observed_guest_output = false;
   auto settle_deadline = std::chrono::steady_clock::time_point::max();
   while (!stop_token.stop_requested()) {
-    auto* graphics = runtime() ? runtime()->graphics_system() : nullptr;
-    auto* presenter = graphics ? graphics->presenter() : nullptr;
+    auto *graphics = runtime() ? runtime()->graphics_system() : nullptr;
+    auto *presenter = graphics ? graphics->presenter() : nullptr;
     if (!presenter || !presenter->CaptureGuestOutput(image)) {
       std::this_thread::sleep_for(100ms);
       continue;
@@ -586,8 +686,9 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
 
     if (!observed_guest_output) {
       observed_guest_output = true;
-      settle_deadline = std::chrono::steady_clock::now() +
-                        std::chrono::seconds(REXCVAR_GET(mcla_first_frame_settle_seconds));
+      settle_deadline =
+          std::chrono::steady_clock::now() +
+          std::chrono::seconds(REXCVAR_GET(mcla_first_frame_settle_seconds));
       if (!SleepUntilOrStop(stop_token, settle_deadline)) {
         return;
       }
@@ -596,9 +697,8 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
 
     FrameMetrics metrics;
     if (!MeasureFrame(image, metrics)) {
-      MCLA_GPU_ERROR(
-          "MCLA graphics: guest frame readback has invalid "
-          "dimensions or layout");
+      MCLA_GPU_ERROR("MCLA graphics: guest frame readback has invalid "
+                     "dimensions or layout");
       return;
     }
     if (!metrics.IsNontrivial()) {
@@ -606,19 +706,28 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       continue;
     }
 
-    const auto frame_path = runtime()->user_data_root() / "mcla-first-frame.bmp";
+    const auto frame_path =
+        runtime()->user_data_root() / "mcla-first-frame.bmp";
     if (!WriteFrameBmp(frame_path, image)) {
-      MCLA_GPU_ERROR("MCLA graphics: failed to write private first-frame capture");
+      MCLA_GPU_ERROR(
+          "MCLA graphics: failed to write private first-frame capture");
       return;
     }
+    rex::input::sdl::ArmControllerMatrixAudit("title");
     rex::input::sdl::ArmInputSlotAudit("title");
     graphics->RequestRenderAuditCheckpoint();
     rex::kernel::xam::EmitXamProfileAuditSummary("checkpoint");
     MCLA_GPU_INFO(
         "MCLA graphics: nontrivial guest frame captured {}x{}, rgb555 bins {}, "
         "luma p05 {}, luma p95 {}, modal permille {}, nonmodal grid cells {}",
-        image.width, image.height, metrics.occupied_rgb555_bins, metrics.luma_p05, metrics.luma_p95,
-        metrics.modal_per_mille, metrics.nonmodal_grid_cells);
+        image.width, image.height, metrics.occupied_rgb555_bins,
+        metrics.luma_p05, metrics.luma_p95, metrics.modal_per_mille,
+        metrics.nonmodal_grid_cells);
+    if (REXCVAR_GET(mcla_controller_matrix_probe)) {
+      RunControllerMatrixRumbleProbe(
+          stop_token,
+          static_cast<rex::input::InputSystem *>(runtime()->input_system()));
+    }
     return;
   }
 }
@@ -634,10 +743,19 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
   std::_Exit(0);
 }
 
-void MclaApp::OnShutdown() {
+void MclaApp::StopFirstFrameProbe() {
   if (first_frame_probe_thread_.joinable()) {
     first_frame_probe_thread_.request_stop();
     first_frame_probe_thread_.join();
   }
+}
+
+bool MclaApp::OnWindowCloseRequested() {
+  StopFirstFrameProbe();
+  return true;
+}
+
+void MclaApp::OnShutdown() {
+  StopFirstFrameProbe();
   MCLA_APP_INFO("MCLA lifecycle: shutdown");
 }

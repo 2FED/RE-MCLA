@@ -22,6 +22,7 @@ class MclaApp : public rex::ReXApp {
       const rex::PathConfig& defaults, std::function<void(rex::PathConfig)> resume) override;
   void LaunchModule() override;
   void OnPostLaunchModule(rex::system::XThread* thread) override;
+  bool OnWindowCloseRequested() override;
   void OnShutdown() override;
 
  private:
@@ -30,6 +31,7 @@ class MclaApp : public rex::ReXApp {
   bool ValidateGameVfsContract();
   bool WriteSyntheticCrashReport();
   void RunFirstFrameProbe(std::stop_token stop_token);
+  void StopFirstFrameProbe();
   [[noreturn]] void HardExitCrashProbeFromUIThread();
 
   size_t function_mapping_count_ = 0;

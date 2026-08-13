@@ -15,6 +15,7 @@
 "0x824B0DE8" = { parent = 0x824B0CC0, end = 0x824B0DF8, name = "sub_824B0DE8" }
 "0x8249CBF0" = { end = 0x8249CC00, name = "sub_8249CBF0" }
 "0x8249CC00" = { end = 0x8249CC10, name = "sub_8249CC00" }
+"0x82554080" = { end = 0x8255409C, name = "sub_82554080" }
 "0x827A7FD0" = { end = 0x827A7FF0, name = "sub_827A7FD0" }
 "0x827A8220" = { end = 0x827A8240, name = "sub_827A8220" }
 "0x827AD168" = { end = 0x827AD178, name = "sub_827AD168" }

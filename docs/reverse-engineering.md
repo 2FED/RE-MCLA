@@ -79,6 +79,22 @@ project-default Xenos run reaches graphics pipeline and audio callback work with
 no fatal, invalid-function, `PPC_UNIMPLEMENTED`, or guest-crash marker. See
 `docs/evidence/M3-013-startup-traps.md`.
 
+## M4 title-to-gameplay runtime-discovered callable entry
+
+The physical M4-006 controller run reached the verified title and proved the
+complete digital input surface before the title attempted an indirect call to
+`0x82554080`. Two runs named the same invalid target. A private Ghidra audit of
+the supported image confirms that `0x82554080` begins executable sequential PPC
+code, ends in `bctr` at `0x82554098`, and is followed by zero padding at
+`0x8255409C`; `0x825540A0` is already a distinct known function. The accepted
+minimal override is therefore the standalone half-open interval
+`[0x82554080, 0x8255409C)`, with no parent. No adjacent address is inferred.
+
+This is guest control-flow metadata discovered by advancing from the title into
+the gameplay transition. It must pass non-force codegen and generated
+registration review before runtime acceptance; it does not by itself claim that
+the gameplay transition is otherwise functional.
+
 ## Import map handoff
 
 M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

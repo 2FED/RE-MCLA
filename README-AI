@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.12 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.13 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -179,7 +179,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.12` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.13` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -736,7 +736,7 @@ Pause for a feasibility decision if:
 - [x] **M4-003** Classify the native intro route as verified Bink playback, a reproducibly justified development-only skip, or a stable guest-selected bypass that reaches the title without a compatibility patch. The selected result is `guest-bypass-no-patch`: three isolated unpatched noisy-I/O runs reached the physically verified Complete Edition title in 43,263-44,659 ms, retained active successful guest-file reads through the title boundary, and contained exactly the three project-owned pre-launch `intro720.bik` VFS resolutions with zero post-launch Bink/BIK access. All runs exited 0 through `WM_CLOSE`, required no force cleanup, preserved the exact game/runtime/prior-run trees, and retained the guarded no-patch decision. This proves the intro is not a blocker on the supported boot route; it does not prove Bink decode/playback correctness, which remains M7-006 scope. Evidence: `scripts/run-intro-route-decision.ps1`, `scripts/verify-intro-route-decision.ps1`, `scripts/test-intro-route-decision.ps1`, `docs/evidence/M4-003-intro-route-decision.md`.
 - [x] **M4-004** Implement and verify the XAM user sign-in/profile behavior reached by the autonomous title frontend. ReXGlue v0.9.0.11 retains Xenia-compatible single-local-user semantics, yields cooperatively on the polled sign-in-state import, and adds an init-only bounded privacy-safe audit. Three isolated clean-build runs reached the verified title with slot 0 local, stable nonzero mask-7 XUID, consistent name/sign-in info, and distinct signed-out/absent evidence for slots 1, 2, and 3 (`E/E` masks); all exited 0 through `WM_CLOSE` without force cleanup, orphan, game/runtime drift, or private-data publication. Focused SDK tests verify the deterministic local profile and voice defaults `0/0/100`. `ReadProfileSettings`, privilege masks 251/252, and `SigninUI` were zero-hit in all accepted title runs, so their runtime routes remain conditionally guarded but are not claimed as physically exercised; generalized profile writes/persistence remain M6-006 scope. Evidence: `scripts/run-xam-profile-smoke.ps1`, `scripts/verify-xam-profile-smoke.ps1`, `scripts/test-xam-profile-smoke.ps1`, `docs/evidence/M4-004-xam-profile.md`.
 - [x] **M4-005** Map SDL/controller input to the expected Xbox 360 user slot. ReXGlue v0.9.0.12 deterministically assigns the first physical SDL controller to slot 0 while retaining valid free SDL player indices for later pads, and adds an init-only bounded privacy-safe causal audit. One clean physical title run bound SDL South/A down and up edges to matching guest-visible slot-0 `XamInputGetState` edges, with query/success/disconnected masks `F/1/E`, zero removal/rejection/failure/drop counters, exit 0 through `WM_CLOSE`, no force cleanup/orphan, and unchanged source-game tree/runtime artifacts. This task proves one selected controller and one A challenge only; full controls, dead zones, focus, disconnect/reconnect, multi-pad behavior, and vibration remain M4-006. Evidence: `scripts/run-input-slot-smoke.ps1`, `scripts/verify-input-slot-smoke.ps1`, `scripts/test-input-slot-smoke.ps1`, `docs/evidence/M4-005-input-slot.md`.
-- [ ] **M4-006** Implement dead zones, button mapping, disconnect/reconnect, and focus-loss behavior.
+- [x] **M4-006** Validate dead-zone thresholds, the full standard controller surface, disconnect/reconnect, and focus-loss behavior. Three immutable physical layers prove causal `F3FF` digital and `3FF` analog coverage, focus lost/neutral/gained, and a fresh slot-0 remove/disconnect/reconnect/success PASS. The final hotplug run completed through controlled exit and is recovered from a post-run `30025`/`30026` verifier-literal drift without inventing the absent artifact snapshot. Evidence is explicitly split/non-monolithic; multi-pad physical behavior and title-driven force feedback are not claimed. Evidence: `scripts/run-controller-matrix.ps1`, `scripts/verify-controller-matrix.ps1`, `scripts/test-controller-matrix.ps1`, `docs/evidence/M4-006-controller-matrix.md`.
 - [ ] **M4-007** Initialize XAUD/XMA output sufficiently for frontend music and UI sounds.
 - [ ] **M4-008** Implement required XMP behavior for music playback or provide a state-correct fallback.
 - [ ] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation.
@@ -842,6 +842,19 @@ Pause for a feasibility decision if:
   integrity all pass. Full mappings, dead zones, focus, reconnect, multi-pad behavior, and
   vibration remain M4-006. Gate readiness: not ready. Active next task: M4-006.
   Evidence: `docs/evidence/M4-005-input-slot.md`.
+
+- 2026-08-13 — M4 checkpoint 6. Completed: M4-006 (6/13). Health:
+  `GREEN — SPLIT PHYSICAL CONTROLLER MATRIX VERIFIED`. Evidence: immutable
+  digital run `20260812-212030-5fc01c73`, analog/focus run
+  `20260813-124600-293c07b3`, and recovered controlled hotplug run
+  `20260813-144406-2c1974da`; causal digital `F3FF`, analog `3FF`, focus
+  lost/neutral/gained, remove/disconnect/reconnect/success, exact PASS summary,
+  and controlled exit. ReXGlue v0.9.0.13 focused tests pass 13 cases / 90
+  assertions; fixtures pass 72 continuation negatives plus two corruption
+  negatives per immutable layer. The final run is recovered after a stale
+  mapping-count verifier literal and does not claim the missing runtime artifact
+  snapshot. Gate readiness: not ready. Active next task: M4-007. Evidence:
+  `docs/evidence/M4-006-controller-matrix.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 
@@ -1403,7 +1416,7 @@ Execute in this order unless a new blocker changes the plan:
 23. [x] Complete M4-004: verify the reached single-local-user XAM contract at
     the title frontend and unit-test the deterministic profile defaults.
 24. [x] Complete M4-005: map one selected SDL controller to Xbox user slot 0.
-25. [ ] Complete M4-006: validate the full controller surface, dead zones,
+25. [x] Complete M4-006: validate the full controller surface, dead zones,
     disconnect/reconnect, focus-loss behavior, multi-pad policy, and vibration.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.
