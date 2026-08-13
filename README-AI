@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.15 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.16 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -179,7 +179,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.15` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.16` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -739,7 +739,7 @@ Pause for a feasibility decision if:
 - [x] **M4-006** Validate dead-zone thresholds, the full standard controller surface, disconnect/reconnect, and focus-loss behavior. Three immutable physical layers prove causal `F3FF` digital and `3FF` analog coverage, focus lost/neutral/gained, and a fresh slot-0 remove/disconnect/reconnect/success PASS. The final hotplug run completed through controlled exit and is recovered from a post-run `30025`/`30026` verifier-literal drift without inventing the absent artifact snapshot. Evidence is explicitly split/non-monolithic; multi-pad physical behavior and title-driven force feedback are not claimed. Evidence: `scripts/run-controller-matrix.ps1`, `scripts/verify-controller-matrix.ps1`, `scripts/test-controller-matrix.ps1`, `docs/evidence/M4-006-controller-matrix.md`.
 - [x] **M4-007** Initialize and verify the autonomous title XAUD/XMA/SDL output route. ReXGlue v0.9.0.14 adds bounded privacy-safe telemetry from XMA decode through guest XAudio submission into SDL device frames plus queue/starvation health. One exact-release clean-build run passed focused 5-case/16-assertion tests and a 300-second soak (60,594 nonzero guest submits, 60,587 nonzero SDL frames, 319,325 nonzero XMA frames, max queue depth 8, zero starvation/failures/drops), followed by controlled `WM_CLOSE`. This proves sustained basic autonomous frontend audio, not individual UI/music event identity, human fidelity, XMP correctness, gameplay audio, device switching, or long-session stability. Evidence: `scripts/run-audio-route-smoke.ps1`, `scripts/verify-audio-route-smoke.ps1`, `scripts/test-audio-route-smoke.ps1`, `docs/evidence/M4-007-audio-route.md`.
 - [x] **M4-008** Provide a state-correct XMP fallback for the reached title route. ReXGlue v0.9.0.15 keeps unsupported title-play/output-capture paths explicitly failed and `Idle`, guards empty playlist navigation, and adds a bounded race-free XMP audit. One exact-release clean-build title run passed focused 4-case/20-assertion tests and observed 4,625/4,625 known status queries with zero playback calls, state changes, unexpected/inconsistent calls, overflow, or drops; it then exited 0 through exact-PID `WM_CLOSE` with source-game/runtime integrity intact. This proves the reached metadata/status fallback, not an XMP decoder, user-selected music playback, or event-level audio identity. Evidence: `scripts/run-xmp-route-smoke.ps1`, `scripts/verify-xmp-route-smoke.ps1`, `scripts/test-xmp-route-smoke.ps1`, `docs/evidence/M4-008-xmp-fallback.md`.
-- [ ] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation.
+- [x] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation. ReXGlue v0.9.0.16 gives the ten XLiveBase message IDs found in the MCLA corpus deterministic local-offline or unavailable results and adds an init-only guest socket block plus bounded audit. One exact-release clean-build title run passed 3-case/32-assertion focused tests, reached the verified frontend with the block enabled, observed zero service dispatches and zero socket attempts, and exited through exact-PID/title `WM_CLOSE` with source-game/runtime integrity intact. This proves the network-disabled offline route does not block the frontend; it does not claim runtime reachability of all ten messages, Xbox Live functionality, or a general host firewall. Evidence: `scripts/run-offline-service-smoke.ps1`, `scripts/verify-offline-service-smoke.ps1`, `scripts/test-offline-service-smoke.ps1`, `docs/evidence/M4-009-offline-services.md`.
 - [ ] **M4-010** Validate locale/language selection and guest path handling.
 - [ ] **M4-011** Add frontend smoke automation or a deterministic manual script covering startup, menu navigation, options, and exit.
 - [ ] **M4-012** Compare frontend frames and audio events with Xenia baseline.
@@ -878,6 +878,20 @@ Pause for a feasibility decision if:
   now fail explicitly instead of advertising fake playback. No XMP decoder or
   user-selected music playback is claimed. Gate readiness: not ready. Active
   next task: M4-009. Evidence: `docs/evidence/M4-008-xmp-fallback.md`.
+
+- 2026-08-13 — M4 checkpoint 9. Completed: M4-009 (9/13). Health:
+  `GREEN — NETWORK-DISABLED OFFLINE TITLE ROUTE VERIFIED`. Evidence: ReXGlue
+  v0.9.0.16 at `218b7750d4c848c9b35d371bf78dd6c26ab93398`; canonical clean-build run
+  `20260813-193514-2bb7e7ca`; focused 3-case/32-assertion tests plus a clean
+  6-case/42-assertion adjacent offline/XAM subset; verified title capture with
+  the guest socket block enabled; zero reached XLiveBase dispatches, socket
+  attempts, unexpected results, host socket creations, overflow, or drops;
+  exact title/PID `WM_CLOSE`, exit 0, no orphan, and physically reverified
+  source-game/runtime integrity. The ten known MCLA XLiveBase message/result
+  semantics are unit-tested, but runtime reachability of those zero-hit paths,
+  Xbox Live functionality, and a general host firewall are not claimed. Gate
+  readiness: not ready. Active next task: M4-010. Evidence:
+  `docs/evidence/M4-009-offline-services.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 

@@ -529,3 +529,27 @@ runtime-log manifest, BMP, cycle tree, build/test logs, canonical source-game
 tree, and four runtime artifacts, and rejects reparse traversal or a surviving
 canonical process. This proves only the reached metadata-only fallback; raw
 logs, BMP, and JSON remain under ignored `private/evidence/M4-008/`.
+## M4-009 offline-service title gate
+
+Run the compact fail-closed parser fixtures with:
+
+```powershell
+scripts/test-offline-service-smoke.ps1
+```
+
+The canonical gate clean-builds ReXGlue and the host, runs the focused
+offline-service tests, enables the init-only guest socket block and bounded
+XLiveBase audit, waits for the verified title frame, then closes through the
+exact PID/title window:
+
+```powershell
+scripts/run-offline-service-smoke.ps1
+scripts/verify-offline-service-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The accepted autonomous route has zero XLiveBase dispatches and zero socket
+attempts. Treat this as proof that the explicit network-disabled policy does
+not block the frontend, combined with unit-tested semantics for all ten known
+MCLA XLiveBase message IDs. It is not runtime evidence that those zero-hit
+messages were exercised, an Xbox Live implementation, or a general host
+firewall. Raw logs and captures remain under ignored `private/evidence/M4-009/`.
