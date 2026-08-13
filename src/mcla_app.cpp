@@ -10,6 +10,7 @@
 #include <rex/input/sdl/controller_matrix_audit.h>
 #include <rex/input/sdl/input_slot_audit.h>
 #include <rex/kernel/xam/offline_service_audit.h>
+#include <rex/kernel/xam/locale_audit.h>
 #include <rex/kernel/xam/profile_audit.h>
 #include <rex/kernel/xam/xmp_audit.h>
 #include <rex/kernel/xboxkrnl/rtl.h>
@@ -752,6 +753,10 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
     if (REXCVAR_GET(xam_offline_service_audit)) {
       rex::kernel::xam::EmitOfflineServiceAuditSummary("title");
       MCLA_APP_INFO("MCLA offline services: title route summarized");
+    }
+    if (REXCVAR_GET(xam_locale_audit)) {
+      rex::kernel::xam::EmitLocaleAuditSummary("title");
+      MCLA_APP_INFO("MCLA locale: title route summarized");
     }
     if (REXCVAR_GET(mcla_controller_matrix_probe)) {
       RunControllerMatrixRumbleProbe(

@@ -15,6 +15,16 @@ param(
     [Parameter(ParameterSetName = 'Probe')]
     [string]$ReferencePngPath,
 
+    [Parameter(ParameterSetName = 'Probe')]
+    [switch]$LocalizedPrompt,
+
+    [Parameter(ParameterSetName = 'Probe')]
+    [string]$LocalizedPromptReferencePath,
+
+    [Parameter(ParameterSetName = 'Probe')]
+    [ValidatePattern('^[0-9A-F]{64}$')]
+    [string]$LocalizedPromptReferenceSha256,
+
     [Parameter(Mandatory, ParameterSetName = 'Probe')]
     [switch]$ProbeOnly
 )
@@ -437,7 +447,8 @@ function Get-ReferenceEvidence {
 }
 
 function Get-RoiEvidence {
-    param([string]$CandidatePath, [string]$ReferencePath)
+    param([string]$CandidatePath, [string]$ReferencePath, [bool]$AllowLocalizedPrompt,
+        [string]$PromptReferencePath)
     $candidateImage = [System.Drawing.Image]::FromFile($CandidatePath)
     $referenceImage = [System.Drawing.Image]::FromFile($ReferencePath)
     $candidate = [System.Drawing.Bitmap]::new($candidateImage)
@@ -458,10 +469,38 @@ function Get-RoiEvidence {
         if ($logoPpm -lt 900000) {
             throw "Title-logo ROI edge correlation is below 0.90 ($logo)."
         }
-        if ($pressPpm -lt 900000) {
+        $localizedPromptPpm = 0
+        if ($AllowLocalizedPrompt) {
+            if (-not $PromptReferencePath) {
+                throw 'Localized prompt comparison requires a pinned reference image.'
+            }
+            $localizedPromptRoi = [System.Drawing.Rectangle]::new(1000, 620, 250, 65)
+            $promptReferenceImage = [System.Drawing.Image]::FromFile($PromptReferencePath)
+            $promptReference = [System.Drawing.Bitmap]::new($promptReferenceImage)
+            try {
+                if ($promptReference.Width -ne 1280 -or $promptReference.Height -ne 720) {
+                    throw 'Localized prompt reference must be exactly 1280x720.'
+                }
+                $localizedPrompt = Get-NormalizedCorrelation `
+                    -Left (Get-EdgeVector -Bitmap $candidate -Roi $localizedPromptRoi) `
+                    -Right (Get-EdgeVector -Bitmap $promptReference -Roi $localizedPromptRoi)
+                $localizedPromptPpm = [int][Math]::Round($localizedPrompt * 1000000.0)
+            } finally {
+                $promptReference.Dispose()
+                $promptReferenceImage.Dispose()
+            }
+            if ($localizedPromptPpm -lt 900000) {
+                throw "Localized title-prompt ROI edge correlation is below 0.90 ($localizedPrompt)."
+            }
+        } elseif ($pressPpm -lt 900000) {
             throw "PRESS ROI edge correlation is below 0.90 ($press)."
         }
-        [pscustomobject]@{ LogoCorrelationPpm = $logoPpm; PressCorrelationPpm = $pressPpm }
+        [pscustomobject]@{
+            LogoCorrelationPpm = $logoPpm
+            PressCorrelationPpm = $pressPpm
+            LocalizedPrompt = $AllowLocalizedPrompt
+            LocalizedPromptCorrelationPpm = $localizedPromptPpm
+        }
     } finally {
         $candidate.Dispose()
         $reference.Dispose()
@@ -1016,7 +1055,9 @@ function Get-AuditEvidence {
 }
 
 function Get-ProbeEvidence {
-    param([string]$LogPath, [string]$FramePath, [string]$ReferencePath)
+    param([string]$LogPath, [string]$FramePath, [string]$ReferencePath,
+        [bool]$AllowLocalizedPrompt, [string]$PromptReferencePath,
+        [string]$PromptReferenceSha256)
     $resolvedLog = Assert-ContainedNonReparsePath -Path $LogPath -Description 'Runtime log'
     $resolvedFrame = Assert-ContainedNonReparsePath -Path $FramePath -Description 'Capture BMP'
     $resolvedReference = Assert-ContainedNonReparsePath -Path $ReferencePath `
@@ -1031,15 +1072,31 @@ function Get-ProbeEvidence {
         throw 'Physical BMP metrics do not match the bound project capture marker.'
     }
     $reference = Get-ReferenceEvidence -Path $resolvedReference
-    $roi = Get-RoiEvidence -CandidatePath $resolvedFrame -ReferencePath $reference.Path
+    $resolvedPromptReference = $null
+    if ($AllowLocalizedPrompt) {
+        $resolvedPromptReference = Assert-ContainedNonReparsePath -Path $PromptReferencePath `
+            -Description 'Localized prompt reference'
+        if ((Get-FileHash -LiteralPath $resolvedPromptReference -Algorithm SHA256).Hash -cne
+            $PromptReferenceSha256) {
+            throw 'Localized prompt reference SHA-256 does not match its pinned value.'
+        }
+    }
+    $roi = Get-RoiEvidence -CandidatePath $resolvedFrame -ReferencePath $reference.Path `
+        -AllowLocalizedPrompt $AllowLocalizedPrompt -PromptReferencePath $resolvedPromptReference
     [pscustomobject]@{ Log = $log; Bmp = $bmp; Reference = $reference; Roi = $roi; Audit = $audit }
 }
 
 if ($PSCmdlet.ParameterSetName -eq 'Probe') {
     if (-not $ProbeOnly) { throw 'Probe inputs require -ProbeOnly.' }
     if (-not $ReferencePngPath) { $ReferencePngPath = $defaultReferencePath }
+    if ($LocalizedPrompt.IsPresent -and
+        (-not $LocalizedPromptReferencePath -or -not $LocalizedPromptReferenceSha256)) {
+        throw 'Localized prompt mode requires its reference path and SHA-256.'
+    }
     Get-ProbeEvidence -LogPath $RuntimeLogPath -FramePath $BmpPath `
-        -ReferencePath $ReferencePngPath
+        -ReferencePath $ReferencePngPath -AllowLocalizedPrompt $LocalizedPrompt.IsPresent `
+        -PromptReferencePath $LocalizedPromptReferencePath `
+        -PromptReferenceSha256 $LocalizedPromptReferenceSha256
     return
 }
 

@@ -83,7 +83,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.9.0.16 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.9.0.17 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -179,7 +179,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.9.0.16` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.9.0.17` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -740,7 +740,7 @@ Pause for a feasibility decision if:
 - [x] **M4-007** Initialize and verify the autonomous title XAUD/XMA/SDL output route. ReXGlue v0.9.0.14 adds bounded privacy-safe telemetry from XMA decode through guest XAudio submission into SDL device frames plus queue/starvation health. One exact-release clean-build run passed focused 5-case/16-assertion tests and a 300-second soak (60,594 nonzero guest submits, 60,587 nonzero SDL frames, 319,325 nonzero XMA frames, max queue depth 8, zero starvation/failures/drops), followed by controlled `WM_CLOSE`. This proves sustained basic autonomous frontend audio, not individual UI/music event identity, human fidelity, XMP correctness, gameplay audio, device switching, or long-session stability. Evidence: `scripts/run-audio-route-smoke.ps1`, `scripts/verify-audio-route-smoke.ps1`, `scripts/test-audio-route-smoke.ps1`, `docs/evidence/M4-007-audio-route.md`.
 - [x] **M4-008** Provide a state-correct XMP fallback for the reached title route. ReXGlue v0.9.0.15 keeps unsupported title-play/output-capture paths explicitly failed and `Idle`, guards empty playlist navigation, and adds a bounded race-free XMP audit. One exact-release clean-build title run passed focused 4-case/20-assertion tests and observed 4,625/4,625 known status queries with zero playback calls, state changes, unexpected/inconsistent calls, overflow, or drops; it then exited 0 through exact-PID `WM_CLOSE` with source-game/runtime integrity intact. This proves the reached metadata/status fallback, not an XMP decoder, user-selected music playback, or event-level audio identity. Evidence: `scripts/run-xmp-route-smoke.ps1`, `scripts/verify-xmp-route-smoke.ps1`, `scripts/test-xmp-route-smoke.ps1`, `docs/evidence/M4-008-xmp-fallback.md`.
 - [x] **M4-009** Stub retired online presence and service checks without blocking offline frontend navigation. ReXGlue v0.9.0.16 gives the ten XLiveBase message IDs found in the MCLA corpus deterministic local-offline or unavailable results and adds an init-only guest socket block plus bounded audit. One exact-release clean-build title run passed 3-case/32-assertion focused tests, reached the verified frontend with the block enabled, observed zero service dispatches and zero socket attempts, and exited through exact-PID/title `WM_CLOSE` with source-game/runtime integrity intact. This proves the network-disabled offline route does not block the frontend; it does not claim runtime reachability of all ten messages, Xbox Live functionality, or a general host firewall. Evidence: `scripts/run-offline-service-smoke.ps1`, `scripts/verify-offline-service-smoke.ps1`, `scripts/test-offline-service-smoke.ps1`, `docs/evidence/M4-009-offline-services.md`.
-- [ ] **M4-010** Validate locale/language selection and guest path handling.
+- [x] **M4-010** Validate locale/language selection and guest path handling. ReXGlue v0.9.0.17 returns the configured Xbox language through both locale routes, audits the title-reached XConfig value, and converts all UTF-8 path CVars plus log filenames to native Windows paths without mojibake. One clean-build EN/US, FR/FR, and RU/RU matrix passed exact locale records, pinned title/logo and localized-prompt ROI checks, real Cyrillic/accented user/cache/log roots, controlled `WM_CLOSE`, no orphan, and unchanged source-game/runtime artifacts. The title route physically reached XConfig language 25 times per cycle; `XGetLanguage` and country were zero-hit and remain static/unit-proven, not runtime-proven. This does not claim complete localized content or gameplay. Evidence: `scripts/run-locale-path-smoke.ps1`, `scripts/verify-locale-path-smoke.ps1`, `scripts/test-locale-path-smoke.ps1`, `docs/evidence/M4-010-locale-paths.md`.
 - [ ] **M4-011** Add frontend smoke automation or a deterministic manual script covering startup, menu navigation, options, and exit.
 - [ ] **M4-012** Compare frontend frames and audio events with Xenia baseline.
 - [ ] **M4-013** Document all remaining frontend deviations and workarounds.
@@ -892,6 +892,17 @@ Pause for a feasibility decision if:
   Xbox Live functionality, and a general host firewall are not claimed. Gate
   readiness: not ready. Active next task: M4-010. Evidence:
   `docs/evidence/M4-009-offline-services.md`.
+
+- 2026-08-13 — M4 checkpoint 10. Completed: M4-010 (10/13). Health:
+  `GREEN — LOCALE AND UNICODE PATH MATRIX VERIFIED`. Evidence: canonical
+  exact-release clean-build run `20260813-213301-505ca1ca`; EN/US, FR/FR, and RU/RU each
+  returned the selected XConfig language 25 times, reached a pinned title/logo
+  and language-specific prompt gate, preserved exact Cyrillic/accented
+  user/cache/log roots, exited 0 through `WM_CLOSE`, and retained source-game
+  and runtime-artifact integrity. `XGetLanguage` and country were zero-hit at
+  this title boundary and remain static/unit-proven rather than runtime-proven.
+  Gate readiness: not ready. Active next task: M4-011. Evidence:
+  `docs/evidence/M4-010-locale-paths.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 

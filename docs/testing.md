@@ -553,3 +553,26 @@ not block the frontend, combined with unit-tested semantics for all ten known
 MCLA XLiveBase message IDs. It is not runtime evidence that those zero-hit
 messages were exercised, an Xbox Live implementation, or a general host
 firewall. Raw logs and captures remain under ignored `private/evidence/M4-009/`.
+
+## M4-010 locale and Unicode-path gate
+
+```powershell
+scripts/test-locale-path-smoke.ps1
+scripts/run-locale-path-smoke.ps1
+scripts/verify-locale-path-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The autonomous gate performs one clean SDK/app build followed by isolated
+EN/US, FR/FR, and RU/RU title runs. Each cycle binds the actual XConfig language
+value returned to the guest, exact Cyrillic/accented user/cache/log directory
+names, UTF-8 log parsing, four frozen GPU checkpoint summaries, the title logo,
+and a pinned language-specific prompt ROI. The localized ROI uses normalized
+edge correlation, so the animated title fade may change brightness without
+allowing a missing or differently shaped prompt. Acceptance also requires
+exact-PID `WM_CLOSE`, exit 0, no orphan, and unchanged source-game/runtime
+artifacts. Raw logs, BMPs, localized visual references, and JSON remain ignored
+under `private/`; public evidence contains only hashes and bounded metrics.
+
+The accepted title route reaches XConfig language but not `XGetLanguage` or
+country. Those zero-hit paths are unit/static contract evidence only. Complete
+localized menus, subtitles, voice, and gameplay remain later parity scope.
