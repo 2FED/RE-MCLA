@@ -17,7 +17,7 @@ $manifestPath = (Resolve-Path -LiteralPath $ManifestPath).Path
 $sdkRoot = Join-Path $repoRoot 'third_party/rexglue-sdk'
 $configHeader = Join-Path $sdkRoot 'include/rex/codegen/config.h'
 $configSource = Join-Path $sdkRoot 'src/codegen/config.cpp'
-$expectedSdkCommit = 'c4aa30c35386bb4d2ef051a59ea8e71bab667172'
+$expectedSdkCommit = '3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05'
 
 $gitlink = (& git -C $repoRoot ls-tree HEAD -- third_party/rexglue-sdk) -join ''
 if ($LASTEXITCODE -ne 0 -or $gitlink -notmatch '^160000 commit ([0-9a-f]{40})\s+third_party/rexglue-sdk$') { throw 'Could not resolve the pinned ReXGlue SDK gitlink.' }

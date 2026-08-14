@@ -20,7 +20,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $acceptedRun = '20260814-104624-fde51a30'
 $acceptedHash = '299392E59CB38AFB44256E773884856FF0C869A96D2045086A65396C1ED4EFCA'
 $evidenceSdkCommit = '923c92d1d1cb721cb704ac603fba263a01ba06aa'
-$currentSdkCommit = 'c4aa30c35386bb4d2ef051a59ea8e71bab667172'
+$currentSdkCommit = '3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05'
 $mainEvidenceCommit = 'c7ec3b672ff339228c5e53a805d8a92657642951'
 $requiredFormats = @(
   'k_1_5_5_5',
@@ -173,7 +173,7 @@ function Assert-SourceContract {
   if ($actualSdkCommit -cne $currentSdkCommit) {
     throw "SDK commit changed: $actualSdkCommit."
   }
-  & git -C $sdkRoot diff --quiet v0.9.0.18 v0.9.0.20 -- src/graphics/pipeline/texture/cache.cpp src/graphics/d3d12/texture_cache.cpp src/graphics/d3d12/pipeline_cache.cpp
+  & git -C $sdkRoot diff --quiet v0.9.0.18 v0.9.0.21 -- src/graphics/pipeline/texture/cache.cpp src/graphics/d3d12/texture_cache.cpp src/graphics/d3d12/pipeline_cache.cpp
   if ($LASTEXITCODE -ne 0) { throw 'Material-pipeline source changed after accepted evidence.' }
 
   $commonPath = Resolve-SafePath -Path 'third_party/rexglue-sdk/src/graphics/pipeline/texture/cache.cpp' -Description 'Texture cache source'

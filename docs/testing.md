@@ -930,6 +930,32 @@ Acceptance means no target defect was observed in this bounded route, so a
 behavior patch is not justified. It does not claim long-session leak freedom,
 failure-injection coverage, all-region streaming, or repeated complete races.
 
+## M5-011 save/content persistence contract
+
+```powershell
+scripts/test-save-content-contract.ps1
+scripts/run-save-content-contract.ps1
+scripts/verify-save-content-contract.ps1 -ResultPath <private-result.json>
+```
+
+The gate clean-builds and installs exact ReXGlue v0.9.0.21, runs the focused
+`[system][xam][content]` suite, and binds the current implementation to the
+immutable M5-002 existing-save route. The physical prior route proves content
+enumeration, writable `save0:` mount/open, successful reads, and unmount. The
+focused test writes saved-game metadata, destroys its content manager,
+constructs a new manager, reads and enumerates the same metadata, and rejects a
+truncated header.
+
+Source acceptance also requires `XamContentCreateEx` to propagate a header
+write failure, close the mount, delete the incomplete package, and return an
+unknown disposition. `WriteContentHeaderFile` must check both data writes and
+close, remove a partial header, and return access denied on failure.
+
+This is the required persistence API prerequisite. It deliberately records
+`race_result_write_physically_reached=false`: a real race-result write and its
+survival across a fresh process remain M5-012 and must not be inferred from the
+focused metadata roundtrip.
+
 ## M4-012 frontend parity gate
 
 ```powershell
