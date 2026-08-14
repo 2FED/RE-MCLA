@@ -12,6 +12,7 @@ function Get-VersionOutput {
         [string]$Executable
     )
 
+    $global:LASTEXITCODE = 0
     $output = & $Executable --version 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to query version from '$Executable' (exit code $LASTEXITCODE)."
@@ -77,6 +78,7 @@ $vswhere = Resolve-FirstExistingPath -ToolName 'vswhere.exe' -Candidates @(
     (Join-Path $programFilesX86 'Microsoft Visual Studio\Installer\vswhere.exe')
 )
 
+$global:LASTEXITCODE = 0
 $visualStudioRoot = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $visualStudioRoot) {
     throw 'vswhere.exe did not find Visual Studio with the C++ x64 build tools component.'

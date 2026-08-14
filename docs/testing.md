@@ -903,6 +903,33 @@ class presence, not isolation, mix balance, exact asset identity, spatial
 fidelity, exhaustive coverage, XMP decoding, or long-session/device-transition
 stability.
 
+## M5-010 route-failure report
+
+```powershell
+scripts/test-route-failure-report.ps1
+scripts/run-route-failure-report.ps1
+scripts/verify-route-failure-report.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This report physically re-verifies the immutable M5-002 noisy world-streaming
+route, all three M5-008 stock-speed gameplay cycles, and the longer M5-009
+audio/gameplay route. The five-process union must preserve five controlled
+external exits, all accepted result/evidence-tree hashes, and the current
+source-game/save/runtime identities.
+
+The noisy trace must contain 8,054 successful reads plus one valid asynchronous
+pending read with a successful IOSB, 87/87 virtual allocations, 49/49 frees,
+2,590/2,590 physical allocations, and no failed result. Every process may
+contain exactly the seven known retail development `.loc` misses; any other
+open failure is rejected. The complete log union rejects fatal allocation,
+archive, streaming, guest-crash, assertion, unregistered-function, and
+device-loss markers.
+
+Acceptance means no target defect was observed in this bounded route, so a
+behavior patch is not justified. It does not claim long-session leak freedom,
+failure-injection coverage, all-region streaming, or repeated complete races.
+
 ## M4-012 frontend parity gate
 
 ```powershell
