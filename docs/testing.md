@@ -663,6 +663,49 @@ remain ignored. The sanitized result stores only counts, coverage, relative
 evidence names, hashes, and booleans and rebinds the complete source-game tree,
 pinned save, four runtime artifacts, rotated logs, and four frontend captures.
 
+## M5-003 rendering-category gate
+
+```powershell
+scripts/test-rendering-smoke.ps1
+scripts/run-rendering-smoke.ps1
+scripts/verify-rendering-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The runner clean-builds the host and enters the pinned post-OOBE saved free-roam
+route with the D3D12 host-RTV path, draw scale 1, synchronous shader creation,
+and the bounded gameplay render audit enabled. The default-off InitOnly probe
+captures a stationary world frame, thirty one-second traffic samples, a raised
+camera/sky frame, a returned street frame, and three burnout frames. Six
+allowlisted `A` pulses dismiss phone/tutorial overlays every five seconds; every
+source/guest down/up transition is logged, ordered, and required, so a paused
+overlay cannot masquerade as active traffic or particles.
+
+The verifier chooses the traffic sample with the largest change only within a
+road ROI, binds all thirty samples rather than hiding the remainder, and requires
+independent temporal floors for camera movement and the two particle intervals.
+It also requires a gameplay-timed frozen Xenos checkpoint with successful
+PSO/draw/depth/MSAA/gamma/render-target/ownership/resolve activity and zero
+translation, PSO, binding, render-target, resolve, refresh, device-loss, or fatal
+failure. Shader detail records intentionally saturate the privacy cap at 256;
+the complete aggregate counters remain balanced and are separately bound.
+
+The runner creates a private eight-tile Xenia/native contact sheet and leaves a
+pending candidate. After the owner reviews the labeled native frames, finalize
+that exact immutable run without replaying it:
+
+```powershell
+scripts/run-rendering-smoke.ps1 `
+  -FinalizeExistingRun <run-id> -VisualPass
+```
+
+Finalization re-parses all logs and frames, hashes the complete cycle tree,
+source game, pinned seed, four runtime artifacts, build log, executable, and
+contact sheet, and records the owner verdict independently of automated image
+metrics. Acceptance covers recognizable/usable road, buildings, player vehicle,
+AI traffic, night sky, shadows, particles, and HUD in this bounded night
+free-roam slice. It does not claim whole-frame Xenia parity, all locations,
+weather/daylight, ROV/PWL/true-direct paths, or complete post-processing quality.
+
 ## M4-012 frontend parity gate
 
 ```powershell

@@ -29,6 +29,7 @@
 #include <array>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -86,10 +87,22 @@ public:
       *out_state = state_;
       if (armed_sequence_ != 0 && !observed_) {
         observed_ = true;
-        MCLA_INPUT_INFO("MCLA_FRONTEND_SMOKE_INPUT v=1 side=guest sequence={} "
-                        "buttons={:04X}",
-                        armed_sequence_,
-                        static_cast<uint16_t>(state_.gamepad.buttons));
+        if (render_audit_) {
+          MCLA_INPUT_INFO(
+              "MCLA_RENDER_SMOKE_INPUT v=1 side=guest sequence={} "
+              "buttons={:04X} lt={} rt={} lx={} ly={} rx={} ry={}",
+              armed_sequence_, static_cast<uint16_t>(state_.gamepad.buttons),
+              state_.gamepad.left_trigger, state_.gamepad.right_trigger,
+              static_cast<int16_t>(state_.gamepad.thumb_lx),
+              static_cast<int16_t>(state_.gamepad.thumb_ly),
+              static_cast<int16_t>(state_.gamepad.thumb_rx),
+              static_cast<int16_t>(state_.gamepad.thumb_ry));
+        } else {
+          MCLA_INPUT_INFO("MCLA_FRONTEND_SMOKE_INPUT v=1 side=guest "
+                          "sequence={} buttons={:04X}",
+                          armed_sequence_,
+                          static_cast<uint16_t>(state_.gamepad.buttons));
+        }
         condition_.notify_all();
       }
     }
@@ -117,6 +130,7 @@ public:
       state_.packet_number = ++packet_;
       state_.gamepad.buttons = buttons;
       armed_sequence_ = sequence;
+      render_audit_ = false;
       observed_ = false;
       MCLA_INPUT_INFO("MCLA_FRONTEND_SMOKE_INPUT v=1 side=source sequence={} "
                       "buttons={:04X}",
@@ -154,12 +168,46 @@ public:
         });
   }
 
+  bool SetRenderGamepad(std::stop_token stop_token,
+                        const rex::input::X_INPUT_GAMEPAD &gamepad,
+                        uint32_t sequence) {
+    {
+      std::lock_guard lock(mutex_);
+      state_ = {};
+      state_.packet_number = ++packet_;
+      state_.gamepad = gamepad;
+      armed_sequence_ = sequence;
+      render_audit_ = true;
+      observed_ = false;
+      MCLA_INPUT_INFO(
+          "MCLA_RENDER_SMOKE_INPUT v=1 side=source sequence={} buttons={:04X} "
+          "lt={} rt={} lx={} ly={} rx={} ry={}",
+          sequence, static_cast<uint16_t>(gamepad.buttons),
+          gamepad.left_trigger, gamepad.right_trigger,
+          static_cast<int16_t>(gamepad.thumb_lx),
+          static_cast<int16_t>(gamepad.thumb_ly),
+          static_cast<int16_t>(gamepad.thumb_rx),
+          static_cast<int16_t>(gamepad.thumb_ry));
+    }
+    std::unique_lock lock(mutex_);
+    return condition_.wait_for(
+        lock, std::chrono::seconds(5), [this, stop_token]() {
+          return observed_ || stop_token.stop_requested();
+        });
+  }
+
+  bool ReleaseRenderGamepad(std::stop_token stop_token, uint32_t sequence) {
+    rex::input::X_INPUT_GAMEPAD gamepad{};
+    return SetRenderGamepad(stop_token, gamepad, sequence);
+  }
+
 private:
   std::mutex mutex_;
   std::condition_variable condition_;
   rex::input::X_INPUT_STATE state_{};
   uint32_t packet_ = 0;
   uint32_t armed_sequence_ = 0;
+  bool render_audit_ = false;
   bool observed_ = false;
 };
 
@@ -202,6 +250,11 @@ REXCVAR_DEFINE_BOOL(
 REXCVAR_DEFINE_BOOL(
     mcla_frontend_smoke_probe, false, "MCLA",
     "Inject a bounded deterministic slot-0 frontend navigation sequence")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_rendering_smoke_probe, false, "MCLA",
+    "Capture bounded saved-gameplay world, street, and particle frames")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_UINT32(
@@ -284,7 +337,8 @@ void MclaApp::OnPostInitLogging() {
 
 void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   REXCVAR_SET(rtl_allow_cross_thread_critical_section_leave, true);
-  if (REXCVAR_GET(mcla_frontend_smoke_probe)) {
+  if (REXCVAR_GET(mcla_frontend_smoke_probe) ||
+      REXCVAR_GET(mcla_rendering_smoke_probe)) {
     config.input_factory = [this](bool tool_mode) {
       (void)tool_mode;
       auto input_system = std::make_unique<rex::input::InputSystem>(nullptr);
@@ -830,7 +884,8 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
   (void)thread;
   if (REXCVAR_GET(mcla_first_frame_probe) ||
       REXCVAR_GET(mcla_controller_matrix_probe) ||
-      REXCVAR_GET(mcla_frontend_smoke_probe)) {
+      REXCVAR_GET(mcla_frontend_smoke_probe) ||
+      REXCVAR_GET(mcla_rendering_smoke_probe)) {
     first_frame_probe_thread_ = std::jthread(
         [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
@@ -880,7 +935,9 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
     }
     rex::input::sdl::ArmControllerMatrixAudit("title");
     rex::input::sdl::ArmInputSlotAudit("title");
-    graphics->RequestRenderAuditCheckpoint();
+    if (!REXCVAR_GET(mcla_rendering_smoke_probe)) {
+      graphics->RequestRenderAuditCheckpoint();
+    }
     rex::kernel::xam::EmitXamProfileAuditSummary("checkpoint");
     MCLA_GPU_INFO(
         "MCLA graphics: nontrivial guest frame captured {}x{}, rgb555 bins {}, "
@@ -912,6 +969,103 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
     if (REXCVAR_GET(xam_locale_audit)) {
       rex::kernel::xam::EmitLocaleAuditSummary("title");
       MCLA_APP_INFO("MCLA locale: title route summarized");
+    }
+    if (REXCVAR_GET(mcla_rendering_smoke_probe)) {
+      MCLA_INPUT_INFO(
+          "MCLA_RENDER_SMOKE_CONFIG v=1 slot=0 gameplay_wait_seconds={} "
+          "traffic_samples=30 traffic_interval_ms=1000 camera_hold_ms=1200 "
+          "particle_hold_ms=15000 dismiss_pulses=6 frames=36",
+          REXCVAR_GET(mcla_frontend_gameplay_wait_seconds));
+      auto *render_driver =
+          static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
+      if (!render_driver ||
+          !render_driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_START,
+                                1)) {
+        MCLA_INPUT_ERROR(
+            "MCLA rendering smoke: title Start pulse was not observed");
+        return;
+      }
+      auto *presenter = graphics->presenter();
+      auto capture_render_frame = [&](std::string_view phase,
+                                      std::string_view file_name) {
+        const auto deadline = std::chrono::steady_clock::now() + 5s;
+        while (!stop_token.stop_requested() &&
+               std::chrono::steady_clock::now() < deadline) {
+          rex::ui::RawImage render_image;
+          const auto path = runtime()->user_data_root() / file_name;
+          if (presenter && presenter->CaptureGuestOutput(render_image) &&
+              WriteFrameBmp(path, render_image)) {
+            MCLA_INPUT_INFO(
+                "MCLA_RENDER_SMOKE_FRAME v=1 phase={} width={} height={} "
+                "status=PASS",
+                phase, render_image.width, render_image.height);
+            return true;
+          }
+          std::this_thread::sleep_for(100ms);
+        }
+        MCLA_GPU_ERROR("MCLA rendering smoke: failed to capture {} frame",
+                       phase);
+        return false;
+      };
+      if (!SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() +
+                                std::chrono::seconds(REXCVAR_GET(
+                                    mcla_frontend_gameplay_wait_seconds))) ||
+          !capture_render_frame("world", "mcla-render-world.bmp")) {
+        return;
+      }
+
+      for (uint32_t sample = 1; sample <= 30; ++sample) {
+        char phase[16]{};
+        char file_name[40]{};
+        std::snprintf(phase, sizeof(phase), "traffic-%02u", sample);
+        std::snprintf(file_name, sizeof(file_name),
+                      "mcla-render-traffic-%02u.bmp", sample);
+        if (!SleepUntilOrStop(stop_token,
+                              std::chrono::steady_clock::now() + 1000ms) ||
+            (sample % 5 == 0 &&
+             !render_driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_A,
+                                   1 + sample / 5)) ||
+            !capture_render_frame(phase, file_name)) {
+          return;
+        }
+      }
+
+      rex::input::X_INPUT_GAMEPAD camera{};
+      camera.thumb_ry = 32767;
+      if (!render_driver->SetRenderGamepad(stop_token, camera, 1) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 1200ms) ||
+          !capture_render_frame("sky", "mcla-render-sky.bmp") ||
+          !render_driver->ReleaseRenderGamepad(stop_token, 1) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 1500ms) ||
+          !capture_render_frame("street", "mcla-render-street.bmp")) {
+        return;
+      }
+
+      rex::input::X_INPUT_GAMEPAD particle{};
+      particle.left_trigger = 255;
+      particle.right_trigger = 255;
+      if (!render_driver->SetRenderGamepad(stop_token, particle, 2) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 1000ms) ||
+          !capture_render_frame("particle-a", "mcla-render-particle-a.bmp") ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 7000ms) ||
+          !capture_render_frame("particle-b", "mcla-render-particle-b.bmp") ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 7000ms) ||
+          !capture_render_frame("particle-c", "mcla-render-particle-c.bmp") ||
+          !render_driver->ReleaseRenderGamepad(stop_token, 2)) {
+        return;
+      }
+      graphics->RequestRenderAuditCheckpoint();
+      MCLA_INPUT_INFO(
+          "MCLA_RENDER_SMOKE_SUMMARY v=1 status=PASS frames=36 "
+          "frontend_input_records=28 render_input_records=8 "
+          "external_close_required=1");
+      return;
     }
     if (REXCVAR_GET(mcla_frontend_smoke_probe)) {
       MCLA_INPUT_INFO(
