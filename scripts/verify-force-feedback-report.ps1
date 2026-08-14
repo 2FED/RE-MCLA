@@ -18,7 +18,8 @@ $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $utf8 = [Text.UTF8Encoding]::new($false)
-$sdkCommit = '923c92d1d1cb721cb704ac603fba263a01ba06aa'
+$evidenceSdkCommit = '923c92d1d1cb721cb704ac603fba263a01ba06aa'
+$currentSdkCommit = '53c16fcfcbfee83752b7689cf74aba1d69a185fa'
 $gameplayRun = '20260814-130533-0b95f6b6'
 $gameplayResultHash = 'A89C0CC3E02C8D264B0DA29157021D050276BF46F028BBAAAD9B1FFC220CCEAB'
 $digitalRun = '20260812-212030-5fc01c73'
@@ -124,9 +125,11 @@ function Get-FunctionBody {
 
 function Assert-SourceContract {
   $sdk = Join-Path $repo 'third_party/rexglue-sdk'
-  if ((& git -C $sdk rev-parse HEAD).Trim() -cne $sdkCommit) {
+  if ((& git -C $sdk rev-parse HEAD).Trim() -cne $currentSdkCommit) {
     throw 'SDK commit changed.'
   }
+  & git -C $sdk diff --quiet v0.9.0.18 v0.9.0.19 -- include/rex/input src/input src/kernel/xam/xam_input.cpp tests/unit/input
+  if ($LASTEXITCODE -ne 0) { throw 'Force-feedback source changed after accepted evidence.' }
 
   $sdl = [IO.File]::ReadAllText((Join-Path $sdk 'src/input/sdl/sdl_input_driver.cpp'))
   $caps = Get-FunctionBody $sdl 'void SDLInputDriver::UpdateXCapabilities'
@@ -290,7 +293,7 @@ if (
   $record.task -cne 'M5-007' -or
   $record.decision -cne 'ffb-withheld-host-rumble-bounded' -or
   $record.sdk_version -cne '0.9.0.18' -or
-  $record.sdk_commit -cne $sdkCommit -or
+  $record.sdk_commit -cne $evidenceSdkCommit -or
   $record.gameplay_run_id -cne $gameplayRun -or
   $record.gameplay_result_sha256 -cne $gameplayResultHash -or
   $record.data_integrity_verified -isnot [bool] -or -not $record.data_integrity_verified

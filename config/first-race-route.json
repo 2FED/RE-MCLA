@@ -13,7 +13,7 @@
     "default_xex_sha256": "C386F4001FA569E6AD4B982F441F67412F00B3F47C166134555CD4B59854A432"
   },
   "runtime": {
-    "sdk_version": "0.9.0.18",
+    "sdk_version": "0.9.0.19",
     "backend": "d3d12-host-rtv",
     "draw_resolution_scale": 1,
     "target_fps": 30,

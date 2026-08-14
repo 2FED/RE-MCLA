@@ -800,7 +800,7 @@ the gate.
 
 The final verifier separately re-runs the immutable M4-006 recovered hotplug
 gate and source-compares the accepted ReXGlue `v0.9.0.13` input implementation
-with current `v0.9.0.18`. This binds the current autonomous gameplay response to
+with current `v0.9.0.19`. This binds the current autonomous gameplay response to
 the previously observed physical SDL digital, analog, focus, disconnect, and
 reconnect route without pretending that synthetic input is a new physical-pad
 test. The result covers one default-layout controller in saved free roam. It
@@ -839,6 +839,38 @@ effects are unavailable but not advertised, so they cannot block the saved
 gameplay route. Basic `XamInputSetState`/SDL rumble is concrete and physically
 bounded by the host diagnostic. The report does not claim title-driven FFB,
 multi-pad rumble policy, or a new physical vibration test.
+
+## M5-008 stock physics-timing gate
+
+```powershell
+scripts/test-physics-timing-smoke.ps1
+scripts/run-physics-timing-smoke.ps1
+scripts/verify-physics-timing-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This gate clean-builds the current SDK and host in optimized `Release`, then
+runs three isolated saved-gameplay cycles. A default-off, InitOnly diagnostic
+wraps the existing stock timer function at guest address `0x821BDA90` without
+patching guest code. After the normal title-to-gameplay route, each cycle
+captures a ten-second full-throttle window and records the stock effective,
+clamped, and raw timing values together with the 50-MHz guest clock, guest
+vblank count, and successful guest-output publication sequence.
+
+Acceptance requires 294-306 timer calls and output frames over the bounded
+window, exact 33,333-microsecond effective and clamped steps, raw host deltas in
+the 25-75 ms diagnostic band, a 59.4-60.6 Hz guest-vblank rate, a 29.4-30.6 FPS
+output rate, and simulated-time/wall plus guest-clock/wall ratios within the
+pinned ppm bounds. Each start/end frame pair must be canonical 1280x720 BGRA
+and visibly non-identical. Every cycle must exit 0 through exact external
+`WM_CLOSE`, with unchanged source-game, save, and runtime-artifact identities.
+
+`RelWithDebInfo` is explicitly not a performance baseline: profiling and debug
+instrumentation reduce this same route to roughly 20 FPS on the accepted host.
+It remains useful for correctness diagnostics. The accepted stock-speed claim
+is therefore limited to the optimized Release configuration, the pinned save,
+and the observed free-roam route; it does not claim arbitrary host hardware,
+race logic, traffic density, or unlocked/high-refresh behavior.
 
 ## M4-012 frontend parity gate
 

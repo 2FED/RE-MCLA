@@ -3,6 +3,7 @@
 #include "mcla_app.h"
 
 #include <rex/audio/audio_route_audit.h>
+#include <rex/chrono/clock.h>
 #include <rex/cvar.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
@@ -27,7 +28,9 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
@@ -48,9 +51,96 @@ constexpr uint32_t kExpectedImageSize = 0x009E0000;
 constexpr uint32_t kExpectedCodeBase = 0x82130000;
 constexpr uint32_t kExpectedCodeSize = 0x0069D054;
 constexpr uint32_t kExpectedEntryPoint = 0x821322B8;
+constexpr uint32_t kPhysicsTimerAddress = 0x821BDA90;
 constexpr uint32_t kExpectedTitleId = 0x545407F8;
 constexpr uint32_t kExpectedMediaId = 0x5940C9DB;
 constexpr rex::X_STATUS kAccessDenied = 0xC0000022u;
+
+struct PhysicsTimerRecord {
+  uint32_t effective_bits;
+  uint32_t clamped_bits;
+  uint32_t raw_bits;
+};
+
+struct PhysicsTimerSnapshot {
+  uint64_t calls = 0;
+  uint64_t invalid_values = 0;
+  uint32_t effective_us_min = UINT32_MAX;
+  uint32_t effective_us_max = 0;
+  uint32_t clamped_us_min = UINT32_MAX;
+  uint32_t clamped_us_max = 0;
+  uint32_t raw_us_min = UINT32_MAX;
+  uint32_t raw_us_max = 0;
+  std::array<PhysicsTimerRecord, 16> records{};
+  size_t record_count = 0;
+};
+
+std::mutex physics_timer_mutex;
+PPCFunc *physics_timer_original = nullptr;
+bool physics_timer_sampling = false;
+PhysicsTimerSnapshot physics_timer_snapshot;
+
+bool PhysicsTimerBitsToMicros(uint32_t bits, uint32_t &micros_out) {
+  const float seconds = std::bit_cast<float>(bits);
+  if (!std::isfinite(seconds) || seconds < 0.0f || seconds > 1.0f) {
+    return false;
+  }
+  micros_out = static_cast<uint32_t>(std::llround(double(seconds) * 1000000.0));
+  return true;
+}
+
+void BeginPhysicsTimerSampling() {
+  std::lock_guard lock(physics_timer_mutex);
+  physics_timer_snapshot = {};
+  physics_timer_sampling = true;
+}
+
+PhysicsTimerSnapshot EndPhysicsTimerSampling() {
+  std::lock_guard lock(physics_timer_mutex);
+  physics_timer_sampling = false;
+  return physics_timer_snapshot;
+}
+
+void PhysicsTimerProbe(PPCContext &ctx, uint8_t *base) {
+  const uint32_t timer = ctx.r3.u32;
+  physics_timer_original(ctx, base);
+  std::lock_guard lock(physics_timer_mutex);
+  if (!physics_timer_sampling) {
+    return;
+  }
+  const PhysicsTimerRecord record = {
+      REX_LOAD_U32(timer + 8),
+      REX_LOAD_U32(timer + 88),
+      REX_LOAD_U32(timer + 92),
+  };
+  ++physics_timer_snapshot.calls;
+  if (physics_timer_snapshot.record_count <
+      physics_timer_snapshot.records.size()) {
+    physics_timer_snapshot.records[physics_timer_snapshot.record_count++] =
+        record;
+  }
+  uint32_t effective_us = 0;
+  uint32_t clamped_us = 0;
+  uint32_t raw_us = 0;
+  if (!PhysicsTimerBitsToMicros(record.effective_bits, effective_us) ||
+      !PhysicsTimerBitsToMicros(record.clamped_bits, clamped_us) ||
+      !PhysicsTimerBitsToMicros(record.raw_bits, raw_us)) {
+    ++physics_timer_snapshot.invalid_values;
+    return;
+  }
+  physics_timer_snapshot.effective_us_min =
+      std::min(physics_timer_snapshot.effective_us_min, effective_us);
+  physics_timer_snapshot.effective_us_max =
+      std::max(physics_timer_snapshot.effective_us_max, effective_us);
+  physics_timer_snapshot.clamped_us_min =
+      std::min(physics_timer_snapshot.clamped_us_min, clamped_us);
+  physics_timer_snapshot.clamped_us_max =
+      std::max(physics_timer_snapshot.clamped_us_max, clamped_us);
+  physics_timer_snapshot.raw_us_min =
+      std::min(physics_timer_snapshot.raw_us_min, raw_us);
+  physics_timer_snapshot.raw_us_max =
+      std::max(physics_timer_snapshot.raw_us_max, raw_us);
+}
 
 class FrontendSmokeInputDriver final : public rex::input::InputDriver {
 public:
@@ -309,6 +399,11 @@ REXCVAR_DEFINE_BOOL(
     "Exercise bounded saved-gameplay steering, pedals, and pause input")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(
+    mcla_physics_timing_probe, false, "MCLA",
+    "Measure saved-gameplay guest clock and output cadence under throttle")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_UINT32(
     mcla_frontend_gameplay_wait_seconds, 30, "MCLA",
     "Seconds to wait for the saved frontend route to enter gameplay")
@@ -391,7 +486,8 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   REXCVAR_SET(rtl_allow_cross_thread_critical_section_leave, true);
   if (REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
-      REXCVAR_GET(mcla_gameplay_input_probe)) {
+      REXCVAR_GET(mcla_gameplay_input_probe) ||
+      REXCVAR_GET(mcla_physics_timing_probe)) {
     config.input_factory = [this](bool tool_mode) {
       (void)tool_mode;
       auto input_system = std::make_unique<rex::input::InputSystem>(nullptr);
@@ -713,6 +809,22 @@ void MclaApp::LaunchModule() {
     return;
   }
 
+  if (REXCVAR_GET(mcla_physics_timing_probe)) {
+    auto *dispatcher = runtime()->function_dispatcher();
+    physics_timer_original = dispatcher->GetFunction(kPhysicsTimerAddress);
+    if (!physics_timer_original ||
+        physics_timer_original == PhysicsTimerProbe ||
+        !dispatcher->SetFunction(kPhysicsTimerAddress, PhysicsTimerProbe)) {
+      MCLA_INPUT_ERROR("MCLA physics timing: stock timer hook {:08X} rejected",
+                       kPhysicsTimerAddress);
+      app_context().CallInUIThreadDeferred(
+          [this]() { app_context().QuitFromUIThread(); });
+      return;
+    }
+    MCLA_INPUT_INFO("MCLA_PHYSICS_TIMING_HOOK v=1 address={:08X} status=READY",
+                    kPhysicsTimerAddress);
+  }
+
   rex::ReXApp::LaunchModule();
 }
 
@@ -939,7 +1051,8 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_controller_matrix_probe) ||
       REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
-      REXCVAR_GET(mcla_gameplay_input_probe)) {
+      REXCVAR_GET(mcla_gameplay_input_probe) ||
+      REXCVAR_GET(mcla_physics_timing_probe)) {
     first_frame_probe_thread_ = std::jthread(
         [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
@@ -1024,14 +1137,28 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       rex::kernel::xam::EmitLocaleAuditSummary("title");
       MCLA_APP_INFO("MCLA locale: title route summarized");
     }
-    if (REXCVAR_GET(mcla_gameplay_input_probe)) {
+    if (REXCVAR_GET(mcla_gameplay_input_probe) ||
+        REXCVAR_GET(mcla_physics_timing_probe)) {
       using namespace std::chrono_literals;
-      MCLA_INPUT_INFO(
-          "MCLA_GAMEPLAY_INPUT_CONFIG v=1 slot=0 gameplay_wait_seconds={} "
-          "dismiss_pulses=6 dismiss_interval_ms=5000 button_hold_ms=250 "
-          "control_hold_ms=3000 "
-          "steer_hold_ms=2000 frames=8",
-          REXCVAR_GET(mcla_frontend_gameplay_wait_seconds));
+      const bool physics_timing = REXCVAR_GET(mcla_physics_timing_probe);
+      const uint64_t guest_tick_frequency =
+          rex::chrono::Clock::guest_tick_frequency();
+      if (physics_timing) {
+        MCLA_INPUT_INFO(
+            "MCLA_PHYSICS_TIMING_CONFIG v=1 slot=0 gameplay_wait_seconds={} "
+            "dismiss_pulses=6 dismiss_interval_ms=5000 sample_seconds=10 "
+            "guest_tick_frequency={} expected_vblank_millihz=60000 "
+            "expected_present_millihz=30000",
+            REXCVAR_GET(mcla_frontend_gameplay_wait_seconds),
+            guest_tick_frequency);
+      } else {
+        MCLA_INPUT_INFO(
+            "MCLA_GAMEPLAY_INPUT_CONFIG v=1 slot=0 gameplay_wait_seconds={} "
+            "dismiss_pulses=6 dismiss_interval_ms=5000 button_hold_ms=250 "
+            "control_hold_ms=3000 "
+            "steer_hold_ms=2000 frames=8",
+            REXCVAR_GET(mcla_frontend_gameplay_wait_seconds));
+      }
       auto *gameplay_driver =
           static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
       auto *presenter = graphics->presenter();
@@ -1049,10 +1176,17 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
           const auto path = runtime()->user_data_root() / file_name;
           if (presenter->CaptureGuestOutput(gameplay_image) &&
               WriteFrameBmp(path, gameplay_image)) {
-            MCLA_INPUT_INFO(
-                "MCLA_GAMEPLAY_INPUT_FRAME v=1 phase={} width={} height={} "
-                "status=PASS",
-                phase, gameplay_image.width, gameplay_image.height);
+            if (physics_timing) {
+              MCLA_INPUT_INFO(
+                  "MCLA_PHYSICS_TIMING_FRAME v=1 phase={} width={} height={} "
+                  "status=PASS",
+                  phase, gameplay_image.width, gameplay_image.height);
+            } else {
+              MCLA_INPUT_INFO(
+                  "MCLA_GAMEPLAY_INPUT_FRAME v=1 phase={} width={} height={} "
+                  "status=PASS",
+                  phase, gameplay_image.width, gameplay_image.height);
+            }
             return true;
           }
           std::this_thread::sleep_for(100ms);
@@ -1093,8 +1227,102 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
         }
       }
 
-      if (!capture_gameplay_frame("neutral-before",
-                                  "mcla-gameplay-neutral-before.bmp")) {
+      if (!capture_gameplay_frame(physics_timing ? "start" : "neutral-before",
+                                  physics_timing
+                                      ? "mcla-physics-start.bmp"
+                                      : "mcla-gameplay-neutral-before.bmp")) {
+        return;
+      }
+
+      if (physics_timing) {
+        rex::input::X_INPUT_GAMEPAD timing_throttle{};
+        timing_throttle.right_trigger = 255;
+        if (!gameplay_driver->SetGameplayGamepad(stop_token, timing_throttle,
+                                                 2)) {
+          MCLA_INPUT_ERROR("MCLA physics timing: throttle was not observed");
+          return;
+        }
+        const auto host_start = std::chrono::steady_clock::now();
+        BeginPhysicsTimerSampling();
+        const uint64_t guest_start = rex::chrono::Clock::QueryGuestTickCount();
+        const uint64_t vblank_start = presenter->GetGuestVblankSequence();
+        const uint64_t present_start = presenter->GetGuestOutputSequence();
+        if (!present_start || !SleepUntilOrStop(stop_token, host_start + 10s)) {
+          MCLA_INPUT_ERROR("MCLA physics timing: sample window failed");
+          return;
+        }
+        const auto host_end = std::chrono::steady_clock::now();
+        const PhysicsTimerSnapshot timer_snapshot = EndPhysicsTimerSampling();
+        const uint64_t guest_end = rex::chrono::Clock::QueryGuestTickCount();
+        const uint64_t vblank_end = presenter->GetGuestVblankSequence();
+        const uint64_t present_end = presenter->GetGuestOutputSequence();
+        if (!gameplay_driver->ReleaseGameplayGamepad(stop_token, 2) ||
+            !capture_gameplay_frame("end", "mcla-physics-end.bmp") ||
+            guest_end <= guest_start || vblank_end <= vblank_start ||
+            present_end <= present_start) {
+          MCLA_INPUT_ERROR("MCLA physics timing: final sample failed");
+          return;
+        }
+        const uint64_t host_us = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(host_end -
+                                                                  host_start)
+                .count());
+        const uint64_t guest_ticks = guest_end - guest_start;
+        const uint64_t vblank_delta = vblank_end - vblank_start;
+        const uint64_t present_delta = present_end - present_start;
+        const uint64_t guest_host_ratio_ppm =
+            host_us && guest_tick_frequency
+                ? static_cast<uint64_t>(static_cast<long double>(guest_ticks) *
+                                        1000000000000.0L /
+                                        (static_cast<long double>(host_us) *
+                                         guest_tick_frequency))
+                : 0;
+        const uint64_t vblank_millihz =
+            host_us ? vblank_delta * 1000000000ull / host_us : 0;
+        const uint64_t present_millihz =
+            host_us ? present_delta * 1000000000ull / host_us : 0;
+        const uint64_t present_to_vblank_ppm =
+            vblank_delta ? present_delta * 1000000ull / vblank_delta : 0;
+        const uint64_t simulated_time_to_wall_ppm =
+            host_us && timer_snapshot.effective_us_min != UINT32_MAX
+                ? timer_snapshot.calls * timer_snapshot.effective_us_min *
+                      1000000ull / host_us
+                : 0;
+        for (size_t i = 0; i < timer_snapshot.record_count; ++i) {
+          const auto &record = timer_snapshot.records[i];
+          MCLA_INPUT_INFO(
+              "MCLA_PHYSICS_TIMER_RECORD v=1 id={} effective_bits={:08X} "
+              "clamped_bits={:08X} raw_bits={:08X}",
+              i, record.effective_bits, record.clamped_bits, record.raw_bits);
+        }
+        MCLA_INPUT_INFO(
+            "MCLA_PHYSICS_TIMER_SUMMARY v=1 calls={} records={} "
+            "invalid_values={} effective_us_min={} effective_us_max={} "
+            "clamped_us_min={} clamped_us_max={} raw_us_min={} raw_us_max={}",
+            timer_snapshot.calls, timer_snapshot.record_count,
+            timer_snapshot.invalid_values,
+            timer_snapshot.effective_us_min == UINT32_MAX
+                ? 0
+                : timer_snapshot.effective_us_min,
+            timer_snapshot.effective_us_max,
+            timer_snapshot.clamped_us_min == UINT32_MAX
+                ? 0
+                : timer_snapshot.clamped_us_min,
+            timer_snapshot.clamped_us_max,
+            timer_snapshot.raw_us_min == UINT32_MAX ? 0
+                                                    : timer_snapshot.raw_us_min,
+            timer_snapshot.raw_us_max);
+        MCLA_INPUT_INFO(
+            "MCLA_PHYSICS_TIMING_SAMPLE v=1 host_us={} guest_ticks={} "
+            "guest_host_ratio_ppm={} vblank_delta={} vblank_millihz={} "
+            "present_delta={} present_millihz={} present_to_vblank_ppm={} "
+            "simulated_time_to_wall_ppm={}",
+            host_us, guest_ticks, guest_host_ratio_ppm, vblank_delta,
+            vblank_millihz, present_delta, present_millihz,
+            present_to_vblank_ppm, simulated_time_to_wall_ppm);
+        MCLA_INPUT_INFO(
+            "MCLA_PHYSICS_TIMING_SUMMARY v=1 status=COMPLETE samples=1 "
+            "frames=2 gameplay_input_records=8 external_close_required=1");
         return;
       }
 
