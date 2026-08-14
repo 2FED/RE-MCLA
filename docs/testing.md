@@ -770,6 +770,43 @@ player vehicle, traffic, night sky, shadows, particles, and HUD. The report does
 not claim every guest texture format, every material/location/weather condition,
 raw texture correctness in isolation, or whole-frame Xenia equivalence.
 
+## M5-006 saved-gameplay input gate
+
+```powershell
+scripts/test-gameplay-input-smoke.ps1
+scripts/run-gameplay-input-smoke.ps1
+scripts/verify-gameplay-input-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The runner clean-builds the current host and autonomously loads the pinned
+post-OOBE save. No controller or operator input is required for this current-run
+probe. A private synthetic slot-0 driver sends and causally observes title
+Start, full throttle, full brake, full-left and full-right steering under
+partial throttle, neutral releases, and gameplay Start/pause. Six slow A pulses
+clear startup overlays without depending on one exact overlay count. The route
+captures neutral, active/released throttle and brake, left/right steering, and
+pause frames before closing the exact game window externally with `WM_CLOSE`.
+
+Acceptance requires exactly 24 ordered gameplay source/guest records, 24 ordered
+overlay-dismiss records, eight canonical 1280x720 BMPs, at least 20,000 sampled
+pixel differences for neutral-to-throttle, throttle-to-brake, and left-to-right
+steering, and at least 500,000-ppm edge correlation against the pinned pause UI
+ROI. The accepted pause value is 613,358 ppm; a calibrated non-pause gameplay
+frame is only 46,465 ppm. Any guest crash, unimplemented PPC call, fatal marker,
+device loss, input failure, forced cleanup, orphan process, save mutation, game
+drift, artifact drift, malformed log topology, or evidence reparse point fails
+the gate.
+
+The final verifier separately re-runs the immutable M4-006 recovered hotplug
+gate and source-compares the accepted ReXGlue `v0.9.0.13` input implementation
+with current `v0.9.0.18`. This binds the current autonomous gameplay response to
+the previously observed physical SDL digital, analog, focus, disconnect, and
+reconnect route without pretending that synthetic input is a new physical-pad
+test. The result covers one default-layout controller in saved free roam. It
+does not claim race maneuver parity, multi-pad policy, title-driven rumble, or
+force feedback; M5-007 owns the latter.
+
 ## M4-012 frontend parity gate
 
 ```powershell
