@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "task": "M5-001",
+  "route_id": "pinned-save-sunset-strip-race-v1",
+  "status": "normative-route-requires-native-calibration",
+  "supported_image": {
+    "edition": "Complete Edition",
+    "title_id": "545407F8",
+    "media_id": "5940C9DB",
+    "entry": "821322B8",
+    "iso_sha256": "AFCAAE68593246B1F83328681B690E254A13C37DD2E8DC34AB0DEB6C0F471FDB",
+    "default_xex_bytes": 9252864,
+    "default_xex_sha256": "C386F4001FA569E6AD4B982F441F67412F00B3F47C166134555CD4B59854A432"
+  },
+  "runtime": {
+    "sdk_version": "0.9.0.18",
+    "backend": "d3d12-host-rtv",
+    "draw_resolution_scale": 1,
+    "target_fps": 30,
+    "patches_enabled": false,
+    "title_updates_enabled": false,
+    "language": "en",
+    "country": "us"
+  },
+  "seed": {
+    "classification": "pinned-post-oobe-load-only",
+    "tree_sha256": "5F3B045D690CFACE51F43AF504EF6006B7C5B0A913BF99C719F7EE179ABBC471",
+    "file_count": 2,
+    "directory_count": 6,
+    "bytes": 537756,
+    "save_sha256": "E8B559E1F2D03341B1147CAB4F5A3F3C778E6E9633B0B04B9908360FA2C67D68",
+    "header_sha256": "1DAEF55FA78BDD3F1AA75A36772B801C6C714B6D1A115A97904F3D1C957BC4C9"
+  },
+  "xenia_baseline": {
+    "free_roam_sha256": "A490553067A8F375191F618C34556B82C9FD244FF295519AB4383AAB40434F8B",
+    "race_sha256": "C5EC83D8A7DFB1AFD6E64CECAD3CA785E339CD9A0FF7ABC1978D189CDE7E67CB",
+    "race_pause_sha256": "6C7BE43B4A6C5C49B7542DC848EF7EF49E0BC8102588A0BF3D9FD8A25C31ADA5",
+    "width": 1280,
+    "height": 720
+  },
+  "start_state": {
+    "vehicle": "1998 Nissan 240SX",
+    "vehicle_color": "white",
+    "location": "Sunset Blvd free roam",
+    "time_of_day": "night",
+    "weather": "dry",
+    "camera": "default chase",
+    "hud": "enabled"
+  },
+  "controller": {
+    "backend": "sdl",
+    "physical_controller_count": 1,
+    "guest_slot": 0,
+    "layout": "default-button-automatic",
+    "gps": "BACK",
+    "pause": "START",
+    "headlights": "Y",
+    "steering": "LEFT_STICK",
+    "accelerate": "RIGHT_TRIGGER",
+    "brake_reverse": "LEFT_TRIGGER"
+  },
+  "event": {
+    "name": "Sunset Strip Race",
+    "opponent": "Trevor",
+    "opponent_vehicle": "1975 Datsun 280Z",
+    "field_size": 2,
+    "selection": "GPS-select-event-then-challenge-opponent-with-headlights",
+    "native_identity_proven": false
+  },
+  "steps": [
+    { "ordinal": 1, "id": "boot-title", "action": "boot exact image to verified Complete Edition title" },
+    { "ordinal": 2, "id": "load-free-roam", "action": "press START and reach pinned nighttime free roam" },
+    { "ordinal": 3, "id": "open-gps", "action": "press BACK and open the GPS map" },
+    { "ordinal": 4, "id": "select-event", "action": "select Sunset Strip Race and reject any different event" },
+    { "ordinal": 5, "id": "navigate-opponent", "action": "follow GPS to Trevor cruising Sunset Blvd" },
+    { "ordinal": 6, "id": "challenge", "action": "press Y to flash headlights at Trevor" },
+    { "ordinal": 7, "id": "race-start", "action": "reach a two-car race start with position HUD 2/2" },
+    { "ordinal": 8, "id": "race-finish", "action": "finish the race in position 1/2" },
+    { "ordinal": 9, "id": "results", "action": "observe the completed-race results transition" },
+    { "ordinal": 10, "id": "return", "action": "return to controllable free roam" },
+    { "ordinal": 11, "id": "external-close", "action": "close the exact game window with WM_CLOSE" }
+  ],
+  "timeouts_seconds": {
+    "title": 60,
+    "saved_free_roam_after_start": 45,
+    "event_selection": 120,
+    "opponent_navigation": 300,
+    "race_start_after_challenge": 60,
+    "race_completion": 300,
+    "results_transition": 30,
+    "return_to_free_roam": 45,
+    "external_close": 10
+  },
+  "acceptance": {
+    "required_finish_position": 1,
+    "required_field_size": 2,
+    "results_required": true,
+    "return_to_free_roam_required": true,
+    "controlled_external_close_required": true,
+    "save_persistence_claimed": false,
+    "whole_frame_parity_claimed": false,
+    "event_identity_must_be_calibrated_before_runtime_acceptance": true
+  },
+  "exclusions": [
+    "first-run-oobe",
+    "intro-bink-playback",
+    "alternate-races",
+    "save-persistence-after-race",
+    "multiple-controllers",
+    "title-driven-force-feedback",
+    "whole-frame-xenia-parity",
+    "non-d3d12-backends",
+    "non-stock-timing"
+  ]
+}

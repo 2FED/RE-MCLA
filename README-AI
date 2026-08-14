@@ -974,7 +974,7 @@ Pause for a feasibility decision if:
 
 **Goal:** complete one representative race from frontend selection through results and return to free roam/menu at stock timing.
 
-**Status:** `NOT STARTED — GATE OPEN WITH PINNED SAVE`.
+**Status:** `ACTIVE — M5-001 CANONICAL ROUTE DEFINED`.
 
 **Estimate:** 2–8 weeks.
 
@@ -986,7 +986,7 @@ Pause for a feasibility decision if:
 
 ### Tasks
 
-- [ ] **M5-001** Define the canonical first-race test route, vehicle, weather/time, controller, and expected outcome.
+- [x] **M5-001** Define the canonical first-race test route, vehicle, weather/time, controller, and expected outcome. The fail-closed `pinned-save-sunset-strip-race-v1` contract fixes the supported image/runtime, exact post-OOBE seed, white 1998 Nissan 240SX at dry night on Sunset Blvd, one default-layout SDL controller in slot 0, `Sunset Strip Race` against Trevor's 1975 Datsun 280Z, a required `1/2` finish, results, return to controllable free roam, and external `WM_CLOSE`. The seed plus three private stock-Xenia free-roam/race/pause frames are physically rehashed. Event identity is normative and must be calibrated from this seed before a native route can pass; persistence and whole-frame parity remain unclaimed. Evidence: `config/first-race-route.json`, `scripts/verify-first-race-route.ps1`, `scripts/test-first-race-route.ps1`, `docs/evidence/M5-001-first-race-route.md`.
 - [ ] **M5-002** Load world streaming data from RPF without missing-file or path-case failures.
 - [ ] **M5-003** Validate road, building, vehicle, traffic, sky, shadow, particle, and HUD rendering.
 - [ ] **M5-004** Fix required EDRAM/ROV-like ordering behavior and depth restore issues.
@@ -1028,7 +1028,7 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M5-001, M5-002.
+- 2026-08-14 — M5 checkpoint 1. Completed: M5-001; total 1/14. Health: `GREEN — CANONICAL FIRST-RACE ROUTE DEFINED, NATIVE EVENT CALIBRATION PENDING`. Evidence: exact image/runtime, pinned seed, three private Xenia state frames, fixed vehicle/night/dry/controller/event/action/outcome contract, fail-closed physical verifier and fixtures. Scope remains honest: the event identity is normative rather than native-proven, and no race completion or persistence is claimed. Next task: M5-002.
 
 ## 14. Milestone M6 — Core systems and repeatable gameplay alpha
 

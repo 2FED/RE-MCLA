@@ -607,6 +607,32 @@ not cover first-run OOBE and its cutscenes/vehicle selection, race entry or
 completion, detailed gameplay correctness, persistence writes, or frame/audio
 parity; those remain later tasks.
 
+## M5-001 canonical first-race route gate
+
+```powershell
+scripts/test-first-race-route.ps1
+scripts/verify-first-race-route.ps1
+```
+
+The tracked schema `config/first-race-route.json` defines
+`pinned-save-sunset-strip-race-v1`. The exact supported image, ReXGlue release,
+stock 30 FPS D3D12 host-RTV configuration, two-file post-OOBE seed, three
+private Xenia state references, white Nissan 240SX dry-night starting state,
+one SDL controller in slot 0, default Xbox controls, Sunset Strip Race/Trevor
+event identity, ordered transitions, and bounded timeouts are all exact.
+
+The route uses `BACK` to open GPS and `Y` to challenge the selected opponent
+with the default headlights action. It must start a two-car event and finish in position `1/2`. It must then show results, return to controllable free roam,
+and close through exact-window external `WM_CLOSE`. Event identity is normative until a
+native calibration observes it from the pinned seed; the verifier rejects any
+attempt to mark it physically proven in M5-001.
+
+The verifier rejects absolute/private paths in the public schema, reparse
+traversal, physical seed/XEX/Xenia-frame drift, wrong image/runtime/state,
+alternate events or controls, reordered actions, relaxed timeouts, second
+place, omitted results/return, and claims of persistence or whole-frame parity.
+Raw saves and frames remain ignored below `private/`.
+
 ## M4-012 frontend parity gate
 
 ```powershell
