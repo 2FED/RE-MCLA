@@ -807,6 +807,39 @@ test. The result covers one default-layout controller in saved free roam. It
 does not claim race maneuver parity, multi-pad policy, title-driven rumble, or
 force feedback; M5-007 owns the latter.
 
+## M5-007 force-feedback degradation report
+
+```powershell
+scripts/test-force-feedback-report.ps1
+scripts/run-force-feedback-report.ps1
+scripts/verify-force-feedback-report.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This is a report gate and does not launch the title or vibrate a controller. It
+re-verifies the accepted M5-006 saved-gameplay result and the immutable M4-006
+physical controller chain, then audits the current SDK source. Acceptance
+requires exactly eight `XInputdFF*` stub exports, no advertised
+`X_INPUT_CAPS_FFB_SUPPORTED` flag, a concrete `XamInputSetState` delegation,
+concrete SDL rumble submission/result mapping, and a visible
+`DEVICE_NOT_CONNECTED` result when no physical controller is present.
+
+The current gameplay log must contain all eight exact module-resolution records
+for ordinals `0282..0289`, zero `XInputdFF* STUB` call markers, one gameplay
+input PASS summary, one controlled execution-complete marker, and no crash,
+unimplemented, fatal, or device-loss marker. The physical baseline must contain
+six exact successful/supported host commands in LEFT/stop, RIGHT/stop,
+BOTH/stop order and must re-prove physical disconnect plus reconnect. The
+owner's earlier report of feeling those patterns is preserved only as an
+external user report; it is neither claimed as recorded in the run nor as
+independently machine-verified.
+
+The accepted decision is deliberately bounded: advanced guest force-feedback
+effects are unavailable but not advertised, so they cannot block the saved
+gameplay route. Basic `XamInputSetState`/SDL rumble is concrete and physically
+bounded by the host diagnostic. The report does not claim title-driven FFB,
+multi-pad rumble policy, or a new physical vibration test.
+
 ## M4-012 frontend parity gate
 
 ```powershell
