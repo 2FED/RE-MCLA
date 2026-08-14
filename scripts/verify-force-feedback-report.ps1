@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $utf8 = [Text.UTF8Encoding]::new($false)
 $evidenceSdkCommit = '923c92d1d1cb721cb704ac603fba263a01ba06aa'
-$currentSdkCommit = '53c16fcfcbfee83752b7689cf74aba1d69a185fa'
+$currentSdkCommit = 'c4aa30c35386bb4d2ef051a59ea8e71bab667172'
 $gameplayRun = '20260814-130533-0b95f6b6'
 $gameplayResultHash = 'A89C0CC3E02C8D264B0DA29157021D050276BF46F028BBAAAD9B1FFC220CCEAB'
 $digitalRun = '20260812-212030-5fc01c73'
@@ -128,7 +128,7 @@ function Assert-SourceContract {
   if ((& git -C $sdk rev-parse HEAD).Trim() -cne $currentSdkCommit) {
     throw 'SDK commit changed.'
   }
-  & git -C $sdk diff --quiet v0.9.0.18 v0.9.0.19 -- include/rex/input src/input src/kernel/xam/xam_input.cpp tests/unit/input
+  & git -C $sdk diff --quiet v0.9.0.18 v0.9.0.20 -- include/rex/input src/input src/kernel/xam/xam_input.cpp tests/unit/input
   if ($LASTEXITCODE -ne 0) { throw 'Force-feedback source changed after accepted evidence.' }
 
   $sdl = [IO.File]::ReadAllText((Join-Path $sdk 'src/input/sdl/sdl_input_driver.cpp'))

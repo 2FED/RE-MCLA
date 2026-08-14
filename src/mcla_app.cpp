@@ -404,6 +404,11 @@ REXCVAR_DEFINE_BOOL(
     "Measure saved-gameplay guest clock and output cadence under throttle")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(
+    mcla_audio_event_probe, false, "MCLA",
+    "Exercise bounded saved-gameplay audio event listening windows")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_UINT32(
     mcla_frontend_gameplay_wait_seconds, 30, "MCLA",
     "Seconds to wait for the saved frontend route to enter gameplay")
@@ -487,7 +492,8 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   if (REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
       REXCVAR_GET(mcla_gameplay_input_probe) ||
-      REXCVAR_GET(mcla_physics_timing_probe)) {
+      REXCVAR_GET(mcla_physics_timing_probe) ||
+      REXCVAR_GET(mcla_audio_event_probe)) {
     config.input_factory = [this](bool tool_mode) {
       (void)tool_mode;
       auto input_system = std::make_unique<rex::input::InputSystem>(nullptr);
@@ -1052,7 +1058,8 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
       REXCVAR_GET(mcla_gameplay_input_probe) ||
-      REXCVAR_GET(mcla_physics_timing_probe)) {
+      REXCVAR_GET(mcla_physics_timing_probe) ||
+      REXCVAR_GET(mcla_audio_event_probe)) {
     first_frame_probe_thread_ = std::jthread(
         [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
@@ -1112,7 +1119,8 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
         image.width, image.height, metrics.occupied_rgb555_bins,
         metrics.luma_p05, metrics.luma_p95, metrics.modal_per_mille,
         metrics.nonmodal_grid_cells);
-    if (REXCVAR_GET(sdl_audio_route_audit)) {
+    if (REXCVAR_GET(sdl_audio_route_audit) &&
+        !REXCVAR_GET(mcla_audio_event_probe)) {
       const uint32_t soak_seconds = REXCVAR_GET(mcla_audio_route_soak_seconds);
       MCLA_AUDIO_INFO("MCLA audio: title soak started seconds {}",
                       soak_seconds);
@@ -1136,6 +1144,133 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
     if (REXCVAR_GET(xam_locale_audit)) {
       rex::kernel::xam::EmitLocaleAuditSummary("title");
       MCLA_APP_INFO("MCLA locale: title route summarized");
+    }
+    if (REXCVAR_GET(mcla_audio_event_probe)) {
+      auto *audio_driver =
+          static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
+      if (!audio_driver) {
+        MCLA_AUDIO_ERROR("MCLA audio event: input dependency missing");
+        return;
+      }
+      MCLA_AUDIO_INFO(
+          "MCLA_AUDIO_EVENT_CONFIG v=1 slot=0 gameplay_wait_seconds={} "
+          "dismiss_pulses=6 music_seconds=8 ambient_seconds=8 "
+          "voice_seconds=30 engine_seconds=8 collision_seconds=15 "
+          "ui_seconds=4 external_listening_required=1",
+          REXCVAR_GET(mcla_frontend_gameplay_wait_seconds));
+      auto wait_phase = [&](rex::audio::AudioEventPhase phase,
+                            std::chrono::seconds duration) {
+        if (!rex::audio::BeginAudioEventPhase(phase)) {
+          return false;
+        }
+        MCLA_AUDIO_INFO("MCLA_AUDIO_EVENT_WINDOW v=1 phase={} event=LISTEN",
+                        rex::audio::AudioEventPhaseName(phase));
+        return SleepUntilOrStop(stop_token,
+                                std::chrono::steady_clock::now() + duration) &&
+               rex::audio::EndAudioEventPhase(phase);
+      };
+      auto set_gamepad = [&](const rex::input::X_INPUT_GAMEPAD &gamepad,
+                             uint32_t sequence) {
+        return audio_driver->SetGameplayGamepad(stop_token, gamepad, sequence);
+      };
+      auto release_gamepad = [&](uint32_t sequence) {
+        return audio_driver->ReleaseGameplayGamepad(stop_token, sequence);
+      };
+      auto press_and_release = [&](uint16_t buttons, uint32_t sequence) {
+        rex::input::X_INPUT_GAMEPAD gamepad{};
+        gamepad.buttons = buttons;
+        return set_gamepad(gamepad, sequence) &&
+               SleepUntilOrStop(stop_token,
+                                std::chrono::steady_clock::now() + 250ms) &&
+               release_gamepad(sequence);
+      };
+
+      if (!wait_phase(rex::audio::AudioEventPhase::kMusic, 8s) ||
+          !press_and_release(rex::input::X_INPUT_GAMEPAD_START, 101) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() +
+                                std::chrono::seconds(REXCVAR_GET(
+                                    mcla_frontend_gameplay_wait_seconds)))) {
+        MCLA_AUDIO_ERROR("MCLA audio event: title/gameplay transition failed");
+        return;
+      }
+      for (uint32_t dismiss = 1; dismiss <= 6; ++dismiss) {
+        if (!audio_driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_A,
+                                 110 + dismiss) ||
+            !SleepUntilOrStop(stop_token,
+                              std::chrono::steady_clock::now() + 5s)) {
+          MCLA_AUDIO_ERROR("MCLA audio event: overlay dismissal {} failed",
+                           dismiss);
+          return;
+        }
+      }
+      if (!wait_phase(rex::audio::AudioEventPhase::kAmbient, 8s) ||
+          !wait_phase(rex::audio::AudioEventPhase::kVoice, 30s)) {
+        MCLA_AUDIO_ERROR("MCLA audio event: passive listening window failed");
+        return;
+      }
+
+      rex::input::X_INPUT_GAMEPAD engine{};
+      engine.right_trigger = 255;
+      if (!rex::audio::BeginAudioEventPhase(
+              rex::audio::AudioEventPhase::kEngine)) {
+        MCLA_AUDIO_ERROR("MCLA audio event: engine window failed");
+        return;
+      }
+      MCLA_AUDIO_INFO("MCLA_AUDIO_EVENT_WINDOW v=1 phase=engine event=LISTEN");
+      if (!set_gamepad(engine, 102) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 8s) ||
+          !release_gamepad(102) ||
+          !rex::audio::EndAudioEventPhase(
+              rex::audio::AudioEventPhase::kEngine)) {
+        MCLA_AUDIO_ERROR("MCLA audio event: engine window failed");
+        return;
+      }
+
+      rex::input::X_INPUT_GAMEPAD collision{};
+      collision.right_trigger = 255;
+      collision.thumb_lx = 32767;
+      if (!rex::audio::BeginAudioEventPhase(
+              rex::audio::AudioEventPhase::kCollision)) {
+        MCLA_AUDIO_ERROR("MCLA audio event: collision window failed");
+        return;
+      }
+      MCLA_AUDIO_INFO(
+          "MCLA_AUDIO_EVENT_WINDOW v=1 phase=collision event=LISTEN");
+      if (!set_gamepad(collision, 103) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 15s) ||
+          !release_gamepad(103) ||
+          !rex::audio::EndAudioEventPhase(
+              rex::audio::AudioEventPhase::kCollision)) {
+        MCLA_AUDIO_ERROR("MCLA audio event: collision window failed");
+        return;
+      }
+
+      if (!rex::audio::BeginAudioEventPhase(rex::audio::AudioEventPhase::kUi)) {
+        MCLA_AUDIO_ERROR("MCLA audio event: UI window failed");
+        return;
+      }
+      MCLA_AUDIO_INFO("MCLA_AUDIO_EVENT_WINDOW v=1 phase=ui event=LISTEN");
+      if (!press_and_release(rex::input::X_INPUT_GAMEPAD_START, 104) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 2s) ||
+          !press_and_release(rex::input::X_INPUT_GAMEPAD_DPAD_DOWN, 105) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 2s) ||
+          !rex::audio::EndAudioEventPhase(rex::audio::AudioEventPhase::kUi)) {
+        MCLA_AUDIO_ERROR("MCLA audio event: UI window failed");
+        return;
+      }
+      rex::audio::EmitAudioEventAuditSummary();
+      if (REXCVAR_GET(sdl_audio_route_audit)) {
+        rex::audio::EmitAudioRouteAuditSummary("title");
+      }
+      MCLA_AUDIO_INFO(
+          "MCLA_AUDIO_EVENT_SUMMARY v=1 status=COMPLETE phases=6 "
+          "external_listening_required=1 external_close_required=1");
+      return;
     }
     if (REXCVAR_GET(mcla_gameplay_input_probe) ||
         REXCVAR_GET(mcla_physics_timing_probe)) {

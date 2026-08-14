@@ -52,7 +52,7 @@ try{
   Assert-Source ($graphics.Contains('presenter_->NotifyGuestVblank();')) 'vblank producer updates presenter diagnostic'
   Assert-Source (-not$presenterH.Contains('virtual uint64_t GetGuestOutputSequence')) 'diagnostic getter does not change vtable'
   Assert-Source ($runner.Contains("--log_level=info")) 'canonical gate excludes trace overhead'
-  Assert-Source ($runner.Contains("v0.9.0.19")) 'runner pins exact SDK release'
+  Assert-Source ($runner.Contains("v0.9.0.20")) 'runner pins exact SDK release'
   Assert-Source ($runner.Contains("BuildRoot='out/build/win-amd64-release'")) 'canonical timing gate uses optimized Release build'
   Assert-Source ($runner.Contains("'rexruntime.dll','TracyClient.dll','rexgpu-xenos.dll'")) 'runtime manifest uses Release artifacts'
   Assert-Source ($runner.Contains("'--async_shader_compilation=false'")-and$runner.Contains("'--d3d12_pipeline_creation_threads=0'")) 'canonical timing gate excludes asynchronous pipeline noise'

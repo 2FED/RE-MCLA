@@ -38,6 +38,7 @@ void EmitSchemaProbe();
 #define MCLA_GPU_INFO(...) REXLOG_CAT_INFO(::mcla::logging::Gpu(), __VA_ARGS__)
 #define MCLA_GPU_ERROR(...) REXLOG_CAT_ERROR(::mcla::logging::Gpu(), __VA_ARGS__)
 #define MCLA_AUDIO_INFO(...) REXLOG_CAT_INFO(::mcla::logging::Audio(), __VA_ARGS__)
+#define MCLA_AUDIO_ERROR(...) REXLOG_CAT_ERROR(::mcla::logging::Audio(), __VA_ARGS__)
 #define MCLA_INPUT_INFO(...)                                                   \
   REXLOG_CAT_INFO(::mcla::logging::Input(), __VA_ARGS__)
 #define MCLA_INPUT_ERROR(...)                                                  \

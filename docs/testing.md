@@ -800,7 +800,7 @@ the gate.
 
 The final verifier separately re-runs the immutable M4-006 recovered hotplug
 gate and source-compares the accepted ReXGlue `v0.9.0.13` input implementation
-with current `v0.9.0.19`. This binds the current autonomous gameplay response to
+with current `v0.9.0.20`. This binds the current autonomous gameplay response to
 the previously observed physical SDL digital, analog, focus, disconnect, and
 reconnect route without pretending that synthetic input is a new physical-pad
 test. The result covers one default-layout controller in saved free roam. It
@@ -871,6 +871,37 @@ It remains useful for correctness diagnostics. The accepted stock-speed claim
 is therefore limited to the optimized Release configuration, the pinned save,
 and the observed free-roam route; it does not claim arbitrary host hardware,
 race logic, traffic density, or unlocked/high-refresh behavior.
+
+## M5-009 six-class audio-event gate
+
+```powershell
+scripts/test-audio-event-smoke.ps1
+scripts/run-audio-event-smoke.ps1
+scripts/verify-audio-event-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The runner clean-installs exact ReXGlue v0.9.0.20, requires the focused eight
+audio-audit cases and 30 assertions, clean-builds RelWithDebInfo, and copies the
+pinned post-OOBE save into isolated user/cache roots. Its synthetic route emits
+status lines for fixed music, ambient, voice, engine, collision, and UI
+listening windows. The operator judges only whether the named class is present;
+other simultaneous sounds are explicitly permitted.
+
+Machine acceptance requires the six allowlisted windows exactly once and in
+order, calibrated device-frame duration floors, at least 900,000 ppm nonzero
+output in every window, bounded per-class peaks, zero invalid frames or submit
+failures, and a healthy current XMA/XAudio/SDL summary. After external
+exact-window `WM_CLOSE`, exit 0, and process cleanup, the runner accepts only the
+exact confirmation `PASS MUSIC AMBIENT VOICE ENGINE COLLISION UI`.
+
+The final verifier reopens the physical logs and canonical 1280x720 title BMP,
+rehashes the source-game manifest, pinned save/header, four runtime artifacts,
+three build/test logs, and complete contained non-reparse evidence tree. Raw PCM
+and audio-device identity are never captured. The result proves bounded event-
+class presence, not isolation, mix balance, exact asset identity, spatial
+fidelity, exhaustive coverage, XMP decoding, or long-session/device-transition
+stability.
 
 ## M4-012 frontend parity gate
 
