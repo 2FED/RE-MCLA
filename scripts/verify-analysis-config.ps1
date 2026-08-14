@@ -23,6 +23,7 @@ $expected = [ordered]@{
     '824B0DE8' = @{ end='824B0DF8'; parent='824B0CC0'; name='sub_824B0DE8' }
     '8249CBF0' = @{ end='8249CC00'; parent=''; name='sub_8249CBF0' }
     '8249CC00' = @{ end='8249CC10'; parent=''; name='sub_8249CC00' }
+    '82554080' = @{ end='8255409C'; parent=''; name='sub_82554080' }
     '827A7FD0' = @{ end='827A7FF0'; parent=''; name='sub_827A7FD0' }
     '827A8220' = @{ end='827A8240'; parent=''; name='sub_827A8220' }
     '827AD168' = @{ end='827AD178'; parent=''; name='sub_827AD168' }

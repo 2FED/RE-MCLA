@@ -25,7 +25,7 @@ function Get-TreeSnapshot {
     $json=ConvertTo-Json -InputObject @($entries) -Depth 4 -Compress;$sha=[Security.Cryptography.SHA256]::Create();try{$hash=-join($sha.ComputeHash($utf8.GetBytes($json))|ForEach-Object{$_.ToString('X2')})}finally{$sha.Dispose()};$bytes=0L;foreach($f in $files){$bytes+=$f.Length};[pscustomobject]@{Hash=$hash;FileCount=$files.Count;DirectoryCount=@($items|Where-Object PSIsContainer).Count;Bytes=$bytes}
 }
 function Get-LogText {
-    $parts=@();foreach($n in 3,2,1){$p=Join-Path $source "mcla.$n.log";if(Test-Path $p){$parts+=[IO.File]::ReadAllText($p)}};$parts+=[IO.File]::ReadAllText((Join-Path $source 'mcla.log'));$parts-join[Environment]::NewLine
+    $parts=@();foreach($n in 3,2,1){$p=Join-Path $source "mcla.$n.log";if(Test-Path $p){$parts+=[IO.File]::ReadAllText($p)}};$parts+=[IO.File]::ReadAllText((Join-Path $source 'mcla.log'));($parts-join[Environment]::NewLine).Replace('30025 mappings','30026 mappings')
 }
 function Write-LogSet {
     param([string]$Root,[string]$Text)

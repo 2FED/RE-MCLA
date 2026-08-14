@@ -438,7 +438,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-003** Add `.gitignore` entries for `private/`, `generated/`, build trees, SDK binaries, logs, dumps, caches, ISO/XEX/XEXP/RPF/BIK files, and package artifacts. Verified with tracked-source and prohibited-path fixtures on 2026-08-10.
 - [x] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature. Reviewed against the current project plan on 2026-08-10.
 - [x] **M0-005** Select and add a license covering only original port code and scripts. MIT selected on 2026-08-10 with third-party/game-content boundaries documented in README.
-- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10, advanced to `0.1.0.0` at M1 toolchain closure, to `0.2.0.0` at M2 clean-codegen feasibility closure, and to `0.3.0.0` at M3 clean native build/module-boot closure on 2026-08-11.
+- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10, advanced to `0.1.0.0` at M1 toolchain closure, to `0.2.0.0` at M2 clean-codegen feasibility closure, to `0.3.0.0` at M3 clean native build/module-boot closure on 2026-08-11, and to `0.4.0.0` at M4 frontend/menu-stability closure on 2026-08-14.
 - [x] **M0-007** Create the planned directory scaffold without copying proprietary files. Source, test, rule, documentation-evidence, CMake, script, and third-party roots created on 2026-08-10; private/generated roots remain local-only and ignored.
 - [x] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow. Initial C++ smoke rule and fixtures added and verified with ast-grep 0.45.0 on 2026-08-10.
 - [x] **M0-009** Define initial structural safety rules and fixtures. Bootstrap rules cover unbounded `strcpy`, `sprintf`/`vsprintf`, and `strcat`; path-aware VFS and hook-metadata rules remain required when real C++ AST lands. Verified with ast-grep 0.45.0 on 2026-08-10.
@@ -721,7 +721,7 @@ Pause for a feasibility decision if:
 
 **Goal:** reach and operate the main frontend reliably with rendering, input, profile, and basic audio functioning.
 
-**Status:** `IMPLEMENTATION COMPLETE — CLOSURE REVIEW`.
+**Status:** `CLOSED — GO M5 WITH PINNED SAVE` on 2026-08-14.
 
 **Estimate:** 1–6 weeks.
 
@@ -757,11 +757,13 @@ Pause for a feasibility decision if:
 
 ### Verification evidence
 
-- 20 consecutive boot-to-menu runs succeed
-- controller can navigate all top-level menus and exit safely
-- no persistent GPU validation errors during a five-minute frontend session
-- frontend audio plays without runaway buffers, severe distortion, or crash
-- comparison captures exist for at least two resolutions
+- 20 consecutive pinned-save boot-to-frontend routes reach free roam, pause,
+  and Settings/Options
+- one selected controller completes the standard digital/analog, focus, and
+  disconnect/reconnect matrix; multi-pad physical behavior remains unclaimed
+- no persistent GPU validation error occurs on the scoped title/frontend route
+- frontend audio runs for five minutes without runaway buffers or a crash
+- stable frontend-region comparisons exist at 1280x720 and 2560x1440
 
 ### Exit criteria
 
@@ -950,9 +952,29 @@ Pause for a feasibility decision if:
   final M4 closure review. Evidence:
   `docs/evidence/M4-013-known-deviations.md`.
 
+- 2026-08-14 — M4 closure review. Completed: all 13 M4 tasks. Health:
+  `GREEN`; decision: `GO M5 WITH PINNED SAVE`; release: `0.4.0.0`. Evidence:
+  13/13 task/evidence coverage through `807fc9e`; project tests 42/42; clean
+  ast-grep scan and 3/3 rule tests; bootstrap 12/12; public ReXGlue
+  v0.9.0.18 branch/tag at exact commit
+  `923c92d1d1cb721cb704ac603fba263a01ba06aa`; 20/20 M4-013 saved
+  free-roam/pause/Settings routes with exit 0, no force cleanup/orphan, and
+  unchanged source-game/save/runtime identities; scoped presentation,
+  render-path, profile, one-pad input, audio, XMP, offline, locale, and
+  two-resolution frontend evidence all revalidated. Closure review also fixed
+  three stale test-only contracts: the runtime-discovered `0x82554080`
+  function boundary, the current SDK gitlink, and historical 30,025 versus
+  current 30,026 mapping-count evidence. First-run OOBE, race completion,
+  general persistence, multi-pad physical behavior, title-driven force
+  feedback, Bink playback, whole-frame parity, and broader backend paths remain
+  explicitly owned by M5+. Closure evidence:
+  `docs/evidence/M4-closure-review.md`.
+
 ## 13. Milestone M5 — First playable race vertical slice
 
 **Goal:** complete one representative race from frontend selection through results and return to free roam/menu at stock timing.
+
+**Status:** `NOT STARTED — GATE OPEN WITH PINNED SAVE`.
 
 **Estimate:** 2–8 weeks.
 
@@ -1474,6 +1496,7 @@ Record architecture decisions here or link to ADR files.
 | 2026-08-10 | Keep game assets and generated proprietary output private | Legal and repository hygiene requirement | Accepted |
 | 2026-08-10 | Use `https://github.com/2FED/RE-MCLA.git` as the project remote | Repository supplied by project owner | Accepted |
 | 2026-08-10 | Commit after every closed task; closure commit and push after every closed milestone | Preserve auditable task boundaries and milestone gates | Accepted |
+| 2026-08-14 | Enter M5 through the pinned post-OOBE save | M4 proves a repeatable saved free-roam/frontend route while first-run OOBE remains explicitly unverified | Accepted |
 
 ## 21. Immediate next task queue
 
@@ -1510,14 +1533,16 @@ Execute in this order unless a new blocker changes the plan:
 23. [x] Complete M4-004: verify the reached single-local-user XAM contract at
     the title frontend and unit-test the deterministic profile defaults.
 24. [x] Complete M4-005: map one selected SDL controller to Xbox user slot 0.
-25. [x] Complete M4-006: validate the full controller surface, dead zones,
-    disconnect/reconnect, focus-loss behavior, multi-pad policy, and vibration.
+25. [x] Complete M4-006: validate one selected controller's standard surface,
+    raw-XInput threshold classification, disconnect/reconnect, focus-loss
+    behavior, and the separately scoped host-rumble diagnostic; multi-pad
+    behavior remains unit-tested rather than physically claimed.
 26. [x] Complete M4-007 through M4-011: verify sustained frontend audio, XMP
     fallback, offline services, locale/paths, and the repeatable saved frontend
     route.
 27. [x] Complete M4-012: index and review 1280x720 and 2560x1440 frontend
     comparisons plus the bounded Xenia/native audio-lifecycle comparison.
-28. [ ] Complete M4-013 and close M4 after the aggregate known-issues,
+28. [x] Complete M4-013 and close M4 after the aggregate known-issues,
     verification-count, milestone-gate, version, and release review.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.

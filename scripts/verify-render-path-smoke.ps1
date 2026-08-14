@@ -84,11 +84,12 @@ $bannedPatterns = @(
     '(?i)XENOS_AUDIT_.*(?:unknown|overflow|fail)=[1-9][0-9]*'
 )
 
+$expectedMappingCount = if ($HistoricalEvidenceOnly) { 30025 } else { 30026 }
 $startupMarkers = [ordered]@{
     lifecycle = 'MCLA lifecycle: logging ready'
     gpu_selection = "MCLA graphics: selected GPU plugin 'xenos'"
     gpu_loaded = "GPU plugin 'xenos' loaded (rexgpu-xenosrd.dll)"
-    static_image = 'MCLA module config: static image 82000000-829E0000, code 82130000-827CD054, 30026 mappings'
+    static_image = "MCLA module config: static image 82000000-829E0000, code 82130000-827CD054, $expectedMappingCount mappings"
     runtime = 'Runtime initialized successfully'
     xex_load = 'Loading XEX image: game:\default.xex'
     identity = 'MCLA module identity: title 545407F8, media 5940C9DB, image 82000000-829E0000, entry 821322B8'
