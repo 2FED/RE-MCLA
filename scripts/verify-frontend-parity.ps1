@@ -187,12 +187,18 @@ function Get-Scale1Metrics([string]$User) {
 
 function Get-Probe([string]$Log, [string]$User) {
     $logSet = Get-LogSet $Log; $text = $logSet.Text
-    if ([regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_CONFIG v=1 slot=0 hold_ms=200 gameplay_wait_seconds=30 intertab_wait_seconds=2\s*$').Count -ne 1 -or [regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_TIMING v=1 first_frame_settle_seconds=45 gameplay_wait_seconds=45\s*$').Count -ne 1) { throw 'Frontend parity config/timing markers are invalid.' }
+    if ([regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_CONFIG v=1 slot=0 hold_ms=200 gameplay_wait_seconds=30 intertab_wait_seconds=2\s*$').Count -ne 1 -or [regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_TIMING v=1 first_frame_settle_seconds=45 gameplay_wait_seconds=45(?: pause_wait_seconds=2)?\s*$').Count -ne 1) { throw 'Frontend parity config/timing markers are invalid.' }
     $frames = [regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_FRAME v=1 phase=(?<phase>gameplay|pause|options) width=2560 height=1440 status=PASS\s*$')
     if ($frames.Count -ne 3 -or ($frames | ForEach-Object { $_.Groups['phase'].Value }) -join ',' -cne 'gameplay,pause,options') { throw 'Two-resolution frame markers are invalid.' }
     $summary = [regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_SUMMARY v=1 status=PASS pulses=4 source_records=8 guest_records=8 frames=3 gameplay=1 pause=1 options=1 external_close_required=1\s*$'); if ($summary.Count -ne 1) { throw 'Frontend parity summary is invalid.' }
     $close = $text.IndexOf('Window closing, shutting down...'); $complete = $text.IndexOf('Execution complete'); $hard = $text.IndexOf('Title terminated; hard-exiting process.')
-    if ($close -lt 0 -or $complete -le $close -or $hard -le $complete -or $summary[0].Index -ge $close) { throw 'Frontend parity lifecycle is invalid.' }
+    if ($close -lt 0 -or $complete -le $close -or $hard -le $close -or $summary[0].Index -ge $close) { throw 'Frontend parity lifecycle is invalid.' }
+    $afterHard = $text.Substring($hard + 'Title terminated; hard-exiting process.'.Length).Trim()
+    foreach ($tailLine in @($afterHard -split '\r?\n' | Where-Object Length)) {
+        if ($tailLine -match '^\[[^\r\n]+\] \[info\] \[core\] \[t[0-9]+\] Execution complete$') { continue }
+        if ($tailLine -match '^\[[^\r\n]+\] \[trace\] \[gpu\] \[t[0-9]+\] .+$') { continue }
+        throw 'Frontend parity lifecycle tail is invalid.'
+    }
     if ($text -match '(?i)(REX_GUEST_CRASH|GUEST_CRASH_REPORT|PPC_UNIMPLEMENTED|\[fatal\]|assertion failed|D3D12.*device (?:lost|removed))') { throw 'Fatal/unsupported marker found.' }
     $visual = Get-Metrics $User
     [pscustomobject]@{ Passed = $true; LogSet = $logSet; Captures = $visual.Captures; Metrics = $visual.Metrics }

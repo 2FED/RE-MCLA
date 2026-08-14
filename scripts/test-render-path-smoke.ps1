@@ -307,6 +307,24 @@ function Assert-BenignPostHardExitTraceAccepted {
     } finally { [System.IO.Directory]::Delete($root, $true) }
 }
 
+function Assert-PostHardExitExecutionCompleteAccepted {
+    $line = '[00:00:42.000] [info] [core] [t1234] Execution complete'
+    $mutated = $script:validLog.Replace($line + [Environment]::NewLine, '') +
+        [Environment]::NewLine + $line
+    $root = Join-Path $fixtureRoot 'post-hard-exit-complete-positive'
+    [System.IO.Directory]::CreateDirectory($root) | Out-Null
+    $path = Join-Path $root 'mcla.log'
+    [System.IO.File]::WriteAllText($path, $mutated, $utf8)
+    try {
+        $value = & $verifier -ProbeOnly -RuntimeLogPath $path -BmpPath $script:templateBmp `
+            -ReferencePngPath $reference
+        if ($value.Log.ExecutionCompleteMarkers -ne 1 -or
+            $value.Log.PostHardExitExecutionCompleteMarkers -ne 1) {
+            throw 'Post-hard-exit Execution complete marker was not classified exactly.'
+        }
+    } finally { [System.IO.Directory]::Delete($root, $true) }
+}
+
 function Get-Emulated2xFallbackLog {
     param([string]$LogText)
     $value = $LogText.Replace('native_2x_supported=1', 'native_2x_supported=0').Replace(
@@ -474,6 +492,7 @@ try {
     $script:templateBmp = $firstBmp
     Assert-OutOfOrderConcurrentIdsAccepted
     Assert-BenignPostHardExitTraceAccepted
+    Assert-PostHardExitExecutionCompleteAccepted
     Assert-Emulated2xFallbackAccepted
     Assert-DirectResolveAccepted -Name all-direct -RejectedCalls 0
     Assert-DirectResolveAccepted -Name rejected-fallback -RejectedCalls 1000
@@ -655,11 +674,6 @@ try {
         $v.Replace($line + [Environment]::NewLine, '') + [Environment]::NewLine + $line
     }
     Assert-ProbeRejected capture-watermark { param($v) $v.Replace('sequence=100 last_presented_sequence=100', 'sequence=100 last_presented_sequence=99') }
-    Assert-ProbeRejected post-hard-exit-execution-complete {
-        param($v)
-        $line = '[00:00:42.000] [info] [core] [t1234] Execution complete'
-        $v.Replace($line + [Environment]::NewLine, '') + [Environment]::NewLine + $line
-    }
     Assert-ProbeRejected fatal-tail { param($v) $v + "`n[00:00:43.000] [fatal] [gpu] synthetic fatal" }
     Assert-ProbeRejected device-loss { param($v) $v + "`nDXGI_ERROR_DEVICE_REMOVED" }
 
@@ -758,10 +772,11 @@ try {
 
     [pscustomobject]@{
         Passed = $true
-        PositiveFixtures = 6
+        PositiveFixtures = 7
         ConcurrentRecordOrderingAccepted = $true
         AnimatedBackgroundDifferenceAccepted = $true
         BenignPostHardExitTraceAccepted = $true
+        PostHardExitExecutionCompleteAccepted = $true
         Emulated2xFallbackAccepted = $true
         DirectResolveAndRejectedFallbackAccepted = $true
         ModalFloorTruncationVerified = $true

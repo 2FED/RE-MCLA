@@ -634,7 +634,7 @@ function Get-FirstFrameLogEvidence {
         $presentThree.Index -ge $capture.Index -or $capture.Index -ge $project.Index -or
         $project.Index -ge $windowMatches[0].Index -or
         $windowMatches[0].Index -ge $executionMatches[0].Index -or
-        $executionMatches[0].Index -ge $exitMatches[0].Index) {
+        $windowMatches[0].Index -ge $exitMatches[0].Index) {
         throw 'Render-path lifecycle/capture markers are out of order.'
     }
     foreach ($summaryPrefix in @('XENOS_AUDIT_RT_SUMMARY v=1 phase=checkpoint',
@@ -708,7 +708,7 @@ function Get-FirstFrameLogEvidence {
         WindowCloseMarkers = 1
         ExecutionCompleteMarkers = 1
         HardExitMarkers = 1
-        PostHardExitExecutionCompleteMarkers = 0
+        PostHardExitExecutionCompleteMarkers = [int]($executionMatches[0].Index -gt $exitMatches[0].Index)
         RuntimeLogs = $logSet.Files
         RuntimeLogFileCount = $logSet.FileCount
         RuntimeLogBytes = $logSet.TotalBytes

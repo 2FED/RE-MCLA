@@ -632,3 +632,42 @@ sample route; the baseline contains no individual UI/music event identity, so
 none is claimed. The final verifier binds clean-build output, rotated logs,
 captures, contact sheet, prior results, source-game/save trees, runtime
 artifacts, controlled external close, and exact process cleanup.
+
+## M4-013 milestone closure gate
+
+```powershell
+scripts/test-frontend-smoke.ps1
+scripts/run-frontend-smoke.ps1 -CycleCount 20 -MilestoneClosure
+scripts/verify-frontend-smoke.ps1 -ResultPath <private-result.json> -MilestoneClosure
+```
+
+Closure mode keeps the exact saved title-to-gameplay-to-pause-to-Options route
+but requires twenty consecutive isolated cycles after one clean SDK/app build.
+It pins 45-second title/gameplay waits and a four-second pause-animation
+settle, physically re-verifies every
+rotated log set and four-frame capture set, uses the bounded pause-panel
+registration established by M4-012, and rejects any force cleanup, orphan,
+source-game/save mutation, runtime-artifact drift, fatal marker, or failed
+cycle. The game is closed externally through exact-window `WM_CLOSE`; MCLA has
+no internal Exit action, and the gate does not invent one.
+
+If all twenty physical cycles and controlled exits completed but the original
+runner stopped on a subsequently repaired verifier-only false negative, finalize
+that exact pre-result root without replaying the title:
+
+```powershell
+scripts/run-frontend-smoke.ps1 -CycleCount 20 -MilestoneClosure `
+  -FinalizeExistingClosureRun <run-id>
+```
+
+This recovery mode accepts only the exact four-child pre-result topology,
+cycles `01` through `20`, the pinned focused-test totals, no live canonical
+process, and the canonical seed/game/runtime identities. It reconstructs every
+cycle record from physical logs, captures, and tree hashes, records that elapsed
+stopwatch metrics are unavailable, and then runs the complete result verifier.
+If final verification fails, it removes the provisional aggregate.
+
+The accompanying M4-013 report audits every remaining frontend limitation by
+severity, workaround, and target milestone. Closure is `GO M5 WITH PINNED
+SAVE`: it supplies a deterministic saved free-roam prerequisite for M5, not a
+clean-new-game, race-completion, persistence, or general-playability claim.

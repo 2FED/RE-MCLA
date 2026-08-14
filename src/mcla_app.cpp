@@ -211,6 +211,12 @@ REXCVAR_DEFINE_UINT32(
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_UINT32(
+    mcla_frontend_pause_wait_seconds, 2, "MCLA",
+    "Seconds to wait for the pause panel animation before capture")
+    .range(2, 10)
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_UINT32(
     mcla_first_frame_settle_seconds, 3, "MCLA",
     "Seconds to wait after the first guest output before capture")
     .range(1, 60)
@@ -902,9 +908,10 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
     if (REXCVAR_GET(mcla_frontend_smoke_probe)) {
       MCLA_INPUT_INFO(
           "MCLA_FRONTEND_SMOKE_TIMING v=1 first_frame_settle_seconds={} "
-          "gameplay_wait_seconds={}",
+          "gameplay_wait_seconds={} pause_wait_seconds={}",
           REXCVAR_GET(mcla_first_frame_settle_seconds),
-          REXCVAR_GET(mcla_frontend_gameplay_wait_seconds));
+          REXCVAR_GET(mcla_frontend_gameplay_wait_seconds),
+          REXCVAR_GET(mcla_frontend_pause_wait_seconds));
       auto *frontend_driver =
           static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
       if (!frontend_driver ||
@@ -951,7 +958,9 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
         return;
       }
       if (!SleepUntilOrStop(stop_token,
-                            std::chrono::steady_clock::now() + 2s) ||
+                            std::chrono::steady_clock::now() +
+                                std::chrono::seconds(REXCVAR_GET(
+                                    mcla_frontend_pause_wait_seconds))) ||
           !capture_frontend_frame("pause", "mcla-frontend-pause.bmp")) {
         return;
       }

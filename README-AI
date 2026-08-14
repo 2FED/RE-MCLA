@@ -193,14 +193,17 @@ Resolved M2 feasibility questions:
 - eight M2 analysis entries plus twelve runtime-discovered M3 callable entries are required; switch-table, exception, invalid-data, and setjmp/longjmp overrides remain zero
 - all load-time variables and the 26-import pre-main function set have SDK registrations
 
-Post-M4-004 unknowns:
+Post-M4 unknowns entering the first-race slice:
 
 - M4-001 proves guest-backed successful D3D12 presents and a nontrivial private
   readback; M4-002 additionally proves autonomous title reach and the scoped
   host-RTV frontend render path, but not general render correctness
 - the reached single-local-user identity contract is verified, but profile
   writes/persistence and zero-hit optional XAM routes remain unverified
-- the post-OOBE saved route through free-roam, pause, and Settings/Options is repeatable; first-run OOBE, races, detailed gameplay correctness, and frontend parity remain unverified
+- the post-OOBE saved route through free roam, pause, and Settings/Options is
+  repeatable, and M4-012 compares stable frontend regions at 1280x720 and
+  2560x1440; first-run OOBE, races, detailed gameplay correctness, whole-frame
+  parity, persistence, and event-level audio identity remain unverified
 - runtime semantics of conditional/error-path imports not exercised on the stock pre-main route remain unverified
 
 Host GitHub CLI authentication was user-verified on 2026-08-10:
@@ -718,7 +721,7 @@ Pause for a feasibility decision if:
 
 **Goal:** reach and operate the main frontend reliably with rendering, input, profile, and basic audio functioning.
 
-**Status:** `ACTIVE — GO M4`.
+**Status:** `IMPLEMENTATION COMPLETE — CLOSURE REVIEW`.
 
 **Estimate:** 1–6 weeks.
 
@@ -743,7 +746,7 @@ Pause for a feasibility decision if:
 - [x] **M4-010** Validate locale/language selection and guest path handling. ReXGlue v0.9.0.17 returns the configured Xbox language through both locale routes, audits the title-reached XConfig value, and converts all UTF-8 path CVars plus log filenames to native Windows paths without mojibake. One clean-build EN/US, FR/FR, and RU/RU matrix passed exact locale records, pinned title/logo and localized-prompt ROI checks, real Cyrillic/accented user/cache/log roots, controlled `WM_CLOSE`, no orphan, and unchanged source-game/runtime artifacts. The title route physically reached XConfig language 25 times per cycle; `XGetLanguage` and country were zero-hit and remain static/unit-proven, not runtime-proven. This does not claim complete localized content or gameplay. Evidence: `scripts/run-locale-path-smoke.ps1`, `scripts/verify-locale-path-smoke.ps1`, `scripts/test-locale-path-smoke.ps1`, `docs/evidence/M4-010-locale-paths.md`.
 - [x] **M4-011** Automate the supported saved frontend route. ReXGlue v0.9.0.18 fixes trailing-separator VFS mounted-root resolution, and the project adds a bounded synthetic slot-0 probe with 200-ms holds and a two-second tab debounce. One exact-release clean build followed by three isolated cycles from the pinned post-OOBE save: title `START` reached active nighttime free roam, gameplay `START` reached pause, and two `RB` presses reached Modes then Settings/Options. Every cycle produced four distinct 1280x720 captures, passed pinned title plus pause/options ROI classification, preserved the save seed, source-game tree, and runtime artifacts, and exited 0 through external exact-window `WM_CLOSE` without force cleanup or an orphan. MCLA has no internal Exit command, and none is claimed. First-run OOBE, race flow, gameplay correctness, and detailed parity remain open. Evidence: `scripts/run-frontend-smoke.ps1`, `scripts/verify-frontend-smoke.ps1`, `scripts/test-frontend-smoke.ps1`, `docs/evidence/M4-011-frontend-smoke.md`.
 - [x] **M4-012** Compare frontend frames and audio events with the pinned Xenia baseline. The canonical clean-build run reverified all three accepted 1280x720 M4-011 cycles and added a complete 2560x1440 scale-2 title, saved gameplay, pause, and Options cycle. Stable title/logo, prompt, HUD, pause-footer, and native Options regions passed normalized edge gates (0.751092-0.946633), with pause allowing only a bounded -5/+1-pixel registration; a private contact sheet was reviewed. The Xenia log and M4-007 route share one decoder/worker/client lifecycle, while the native five-minute route retains its nonzero XMA/XAudio/SDL counts. Whole-frame equivalence and individual UI/music event identity are explicitly not claimed. Evidence: `scripts/run-frontend-parity.ps1`, `scripts/verify-frontend-parity.ps1`, `scripts/test-frontend-parity.ps1`, `docs/evidence/M4-012-frontend-parity.md`.
-- [ ] **M4-013** Document all remaining frontend deviations and workarounds.
+- [x] **M4-013** Document all remaining frontend deviations and workarounds. The accepted clean-build closure gate completed 20/20 consecutive isolated routes from the pinned post-OOBE save through active free roam, pause, and Settings/Options, followed by external exact-window `WM_CLOSE`, exit 0, no force cleanup/orphan, and unchanged source-game/seed/runtime identities. The deviation register records every remaining M4 boundary with severity, supported workaround, and owning milestone. First-run OOBE, race completion, general persistence, whole-frame parity, Bink playback, event-level audio identity, multi-pad physical behavior, title-driven force feedback, and broader render/backend variants remain explicitly unclaimed. Decision: `GO M5 WITH PINNED SAVE`. Evidence: `scripts/run-frontend-smoke.ps1`, `scripts/verify-frontend-smoke.ps1`, `scripts/test-frontend-smoke.ps1`, `docs/evidence/M4-013-known-deviations.md`.
 
 ### Deliverables
 
@@ -929,6 +932,23 @@ Pause for a feasibility decision if:
   Whole-frame equality and event-level audio identity remain explicitly
   unclaimed. Gate readiness: not ready. Active next task: M4-013. Evidence:
   `docs/evidence/M4-012-frontend-parity.md`.
+
+- 2026-08-14 — M4 checkpoint 13. Completed: M4-013 (13/13). Health:
+  `GREEN — 20 CONSECUTIVE SAVED FRONTEND ROUTES PASS`. Evidence: canonical
+  clean-build run `20260814-023505-e69d76a2`; 20/20 isolated pinned-save routes
+  reached active free roam, pause, and Settings/Options; pause ROI
+  0.926480-0.932330 and Options ROI 0.984124-0.999391; external exact-window
+  `WM_CLOSE`, exit 0, zero force cleanup/orphans, and unchanged source-game,
+  seed, and four runtime-artifact identities in every cycle. The recovered
+  aggregate SHA-256 is
+  `2CF4BE3210C260181F7C2CF9C00D07667ED12D6CA644B4E06ECBF12D7A9B0A28`;
+  recovery was required only because two valid shutdown-flush tails exposed
+  verifier ordering assumptions after all 20 routes had already completed.
+  The final gate physically reconstructed and reverified every log/capture/tree
+  twice. All remaining frontend boundaries are severity/workaround/target
+  classified. Decision: `GO M5 WITH PINNED SAVE`. Gate readiness: ready for
+  final M4 closure review. Evidence:
+  `docs/evidence/M4-013-known-deviations.md`.
 
 ## 13. Milestone M5 — First playable race vertical slice
 

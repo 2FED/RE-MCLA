@@ -4,7 +4,9 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Probe')][string]$UserRoot,
     [Parameter(ParameterSetName = 'Probe')][switch]$ProbeOnly,
     [Parameter(ParameterSetName = 'Probe')][switch]$FixtureMode,
-    [Parameter(Mandatory, ParameterSetName = 'Result')][string]$ResultPath
+    [Parameter(ParameterSetName = 'Probe')][switch]$ClosureProbe,
+    [Parameter(Mandatory, ParameterSetName = 'Result')][string]$ResultPath,
+    [Parameter(ParameterSetName = 'Result')][switch]$MilestoneClosure
 )
 
 Set-StrictMode -Version Latest
@@ -89,9 +91,8 @@ function Get-Bmp([string]$Path) {
     [pscustomobject]@{ Bytes = $bytes.Length; Sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash; OccupiedBins = $bins.Count; LumaRange = $lumaMax - $lumaMin }
 }
 
-function Get-Edge([string]$Path) {
+function Get-Edge([string]$Path, [Drawing.Rectangle]$Roi = [Drawing.Rectangle]::new(210, 325, 330, 155)) {
     Add-Type -AssemblyName System.Drawing
-    $roi = [Drawing.Rectangle]::new(210, 325, 330, 155)
     $bitmap = [Drawing.Bitmap]::new((Resolve-Safe $Path 'ROI image'))
     try {
         $values = [double[]]::new(($roi.Width - 2) * ($roi.Height - 2)); $index = 0
@@ -105,6 +106,44 @@ function Get-Edge([string]$Path) {
     } finally { $bitmap.Dispose() }
 }
 
+function Get-RegisteredCorrelationPpm([string]$Candidate, [string]$Reference, [int]$MaxX, [int]$MaxY) {
+    $referenceRoi = [Drawing.Rectangle]::new(210, 325, 330, 155)
+    $candidateBounds = [Drawing.Rectangle]::new(
+        $referenceRoi.X - $MaxX, $referenceRoi.Y - $MaxY,
+        $referenceRoi.Width + 2 * $MaxX, $referenceRoi.Height + 2 * $MaxY)
+    $candidateEdges = Get-Edge $Candidate $candidateBounds
+    $referenceEdges = Get-Edge $Reference $referenceRoi
+    $candidateStride = $candidateBounds.Width - 2
+    $roiWidth = $referenceRoi.Width - 2
+    $roiHeight = $referenceRoi.Height - 2
+    $referenceMean = ($referenceEdges | Measure-Object -Average).Average
+    $best = $null
+    for ($dy = -$MaxY; $dy -le $MaxY; $dy++) {
+        for ($dx = -$MaxX; $dx -le $MaxX; $dx++) {
+            $candidateValues = [double[]]::new($roiWidth * $roiHeight)
+            $target = 0; $sourceX = $dx + $MaxX; $sourceY = $dy + $MaxY
+            for ($y = 0; $y -lt $roiHeight; $y++) {
+                [Array]::Copy($candidateEdges, ($sourceY + $y) * $candidateStride + $sourceX,
+                    $candidateValues, $target, $roiWidth)
+                $target += $roiWidth
+            }
+            $candidateMean = ($candidateValues | Measure-Object -Average).Average
+            $numerator = 0.0; $candidateDeviation = 0.0; $referenceDeviation = 0.0
+            for ($i = 0; $i -lt $candidateValues.Count; $i++) {
+                $left = $candidateValues[$i] - $candidateMean
+                $right = $referenceEdges[$i] - $referenceMean
+                $numerator += $left * $right
+                $candidateDeviation += $left * $left
+                $referenceDeviation += $right * $right
+            }
+            if ($candidateDeviation -le 0 -or $referenceDeviation -le 0) { throw 'Registered pause ROI has zero variance.' }
+            $ppm = [int][Math]::Floor(1000000.0 * $numerator / [Math]::Sqrt($candidateDeviation * $referenceDeviation))
+            if ($null -eq $best -or $ppm -gt $best.Ppm) { $best = [pscustomobject]@{ Ppm = $ppm; Dx = $dx; Dy = $dy } }
+        }
+    }
+    $best
+}
+
 function Get-CorrelationPpm([string]$Candidate, [string]$Reference) {
     $left = Get-Edge $Candidate; $right = Get-Edge $Reference
     $leftMean = ($left | Measure-Object -Average).Average; $rightMean = ($right | Measure-Object -Average).Average
@@ -115,7 +154,7 @@ function Get-CorrelationPpm([string]$Candidate, [string]$Reference) {
 
 function One([regex]$Regex, [string]$Text, [string]$Name) { $matches = $Regex.Matches($Text); if ($matches.Count -ne 1) { throw "$Name must occur exactly once." }; $matches[0] }
 
-function Get-Probe([string]$Log, [string]$User, [bool]$SkipTitleGate = $false) {
+function Get-Probe([string]$Log, [string]$User, [bool]$SkipTitleGate = $false, [bool]$RegisterPause = $false) {
     $user = Resolve-Safe $User 'User root'; $logSet = Get-LogSet $Log; $text = $logSet.Text
     $config = One ([regex]'(?m)^.*MCLA_FRONTEND_SMOKE_CONFIG v=1 slot=0 hold_ms=200 gameplay_wait_seconds=30 intertab_wait_seconds=2\s*$') $text 'Frontend config'
     $inputs = [regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_INPUT v=1 side=(?<side>source|guest) sequence=(?<seq>[1-4]) buttons=(?<buttons>[0-9A-F]{4})\s*$')
@@ -127,31 +166,84 @@ function Get-Probe([string]$Log, [string]$User, [bool]$SkipTitleGate = $false) {
     $summary = One ([regex]'(?m)^.*MCLA_FRONTEND_SMOKE_SUMMARY v=1 status=PASS pulses=4 source_records=8 guest_records=8 frames=3 gameplay=1 pause=1 options=1 external_close_required=1\s*$') $text 'Frontend summary'
     $title = One ([regex]'(?m)^.*MCLA graphics: nontrivial guest frame captured 1280x720,.*$') $text 'Title capture'
     $close = One ([regex]'(?m)^.*Window closing, shutting down\.\.\.\s*$') $text 'WM_CLOSE'; $complete = One ([regex]'(?m)^.*Execution complete\s*$') $text 'Execution complete'; $hard = One ([regex]'(?m)^.*Title terminated; hard-exiting process\.\s*$') $text 'Hard exit'
-    if (-not ($config.Index -lt $title.Index -and $title.Index -lt $inputs[0].Index -and $inputs[3].Index -lt $frames[0].Index -and $frames[0].Index -lt $inputs[4].Index -and $inputs[7].Index -lt $frames[1].Index -and $frames[1].Index -lt $inputs[8].Index -and $inputs[15].Index -lt $frames[2].Index -and $frames[2].Index -lt $summary.Index -and $summary.Index -lt $close.Index -and $close.Index -lt $complete.Index -and $complete.Index -lt $hard.Index)) { throw 'Frontend/lifecycle chronology failed.' }
+    # The module thread writes Execution complete after guest termination while
+    # the UI thread writes the hard-exit marker immediately before flushing and
+    # _Exit. Their final two records may therefore race. A GPU worker may also
+    # finish already-queued trace logging during that flush. Accept only exact
+    # Execution complete or trace-level GPU records after the marker; the whole
+    # bounded log still receives the fatal/device-loss scan below.
+    $afterHard = $text.Substring($hard.Index + $hard.Length).Trim()
+    foreach ($tailLine in @($afterHard -split '\r?\n' | Where-Object Length)) {
+        if ($tailLine -match '^\[[^\r\n]+\] \[info\] \[core\] \[t[0-9]+\] Execution complete$') { continue }
+        if ($tailLine -match '^\[[^\r\n]+\] \[trace\] \[gpu\] \[t[0-9]+\] .+$') { continue }
+        throw 'Unexpected log content follows the hard-exit marker.'
+    }
+    if (-not ($config.Index -lt $title.Index -and $title.Index -lt $inputs[0].Index -and $inputs[3].Index -lt $frames[0].Index -and $frames[0].Index -lt $inputs[4].Index -and $inputs[7].Index -lt $frames[1].Index -and $frames[1].Index -lt $inputs[8].Index -and $inputs[15].Index -lt $frames[2].Index -and $frames[2].Index -lt $summary.Index -and $summary.Index -lt $close.Index -and $close.Index -lt $complete.Index -and $close.Index -lt $hard.Index)) { throw 'Frontend/lifecycle chronology failed.' }
     if ($text -match '(?i)(REX_GUEST_CRASH|GUEST_CRASH_REPORT|PPC_UNIMPLEMENTED|\[fatal\]|assertion failed|D3D12.*device (?:lost|removed))') { throw 'Fatal or unsupported marker found.' }
     $paths = [ordered]@{ title = Join-Path $user 'mcla-first-frame.bmp'; gameplay = Join-Path $user 'mcla-frontend-gameplay.bmp'; pause = Join-Path $user 'mcla-frontend-pause.bmp'; options = Join-Path $user 'mcla-frontend-options.bmp' }
     $bmps = [ordered]@{}; foreach ($name in $paths.Keys) { $bmps[$name] = Get-Bmp $paths[$name] }
     if (@($bmps.Values | ForEach-Object Sha256 | Sort-Object -Unique).Count -ne 4) { throw 'Frontend captures are not four distinct frames.' }
-    $pausePpm = Get-CorrelationPpm $paths.pause (Join-Path $referenceRoot 'pause.bmp'); $optionsPpm = Get-CorrelationPpm $paths.options (Join-Path $referenceRoot 'options.bmp')
-    if ($pausePpm -lt 550000 -or $optionsPpm -lt 550000) { throw 'Pause/options menu ROI classification failed.' }
+    # Closure runs use the same tight bounded pause-panel registration already
+    # established by M4-012. Historical M4-011 probe semantics remain exact so
+    # its immutable result can still be reverified without rewriting evidence.
+    $pause = if ($RegisterPause) {
+        Get-RegisteredCorrelationPpm $paths.pause (Join-Path $referenceRoot 'pause.bmp') 8 4
+    } else {
+        [pscustomobject]@{ Ppm = Get-CorrelationPpm $paths.pause (Join-Path $referenceRoot 'pause.bmp'); Dx = 0; Dy = 0 }
+    }
+    $pausePpm = $pause.Ppm; $optionsPpm = Get-CorrelationPpm $paths.options (Join-Path $referenceRoot 'options.bmp')
+    if ($pausePpm -lt 500000 -or $optionsPpm -lt 550000) { throw 'Pause/options menu ROI classification failed.' }
     if (-not $SkipTitleGate) { $null = & (Join-Path $PSScriptRoot 'verify-render-path-smoke.ps1') -ProbeOnly -RuntimeLogPath $Log -BmpPath $paths.title }
-    [pscustomobject]@{ Passed = $true; LogSet = $logSet; Bmps = $bmps; PauseCorrelationPpm = $pausePpm; OptionsCorrelationPpm = $optionsPpm }
+    [pscustomobject]@{ Passed = $true; LogSet = $logSet; Bmps = $bmps; PauseCorrelationPpm = $pausePpm; PauseRegistrationDx = $pause.Dx; PauseRegistrationDy = $pause.Dy; OptionsCorrelationPpm = $optionsPpm }
 }
 
-if ($PSCmdlet.ParameterSetName -eq 'Probe') { if (-not $ProbeOnly) { throw 'Probe mode requires -ProbeOnly.' }; Get-Probe $RuntimeLogPath $UserRoot $FixtureMode.IsPresent; return }
+function Get-ClosureProbe([string]$Log, [string]$User) {
+    $probe = Get-Probe $Log $User $false $true
+    $text = $probe.LogSet.Text
+    if ([regex]::Matches($text, '(?m)^.*MCLA_FRONTEND_SMOKE_TIMING v=1 first_frame_settle_seconds=45 gameplay_wait_seconds=45 pause_wait_seconds=4\s*$').Count -ne 1) {
+        throw 'Closure timing marker is missing or duplicated.'
+    }
+    $probe
+}
+
+if ($PSCmdlet.ParameterSetName -eq 'Probe') { if (-not $ProbeOnly) { throw 'Probe mode requires -ProbeOnly.' }; Get-Probe $RuntimeLogPath $UserRoot $FixtureMode.IsPresent $ClosureProbe.IsPresent; return }
 
 $result = Resolve-Safe $ResultPath 'Result'; $json = [IO.File]::ReadAllText($result)
 if ($json -match '(?i)([A-Z]:[\\/]|\\\\[^"\s]+[\\/]|(?:^|["\\/])private[\\/])') { throw 'Result contains a private or absolute path.' }
 $record = $json | ConvertFrom-Json
-if ($record.schema -ne 1 -or $record.task -cne 'M4-011' -or $record.decision -cne 'saved-gameplay-pause-options-external-exit-pass' -or $record.sdk_version -cne '0.9.0.18' -or $record.cycle_count -ne 3 -or $record.route -cne 'startup-title-START-saved-gameplay-START-pause-RB-modes-RB-settings-options-external-WM_CLOSE' -or $record.internal_exit_claimed -ne $false -or $record.external_wm_close_verified -ne $true -or $record.data_integrity_preserved -ne $true -or $record.no_surviving_processes -ne $true) { throw 'Result identity/scope failed.' }
+$expectedTask = if ($MilestoneClosure) { 'M4-013' } else { 'M4-011' }
+$expectedDecision = if ($MilestoneClosure) { 'twenty-consecutive-boot-to-frontend-routes-pass' } else { 'saved-gameplay-pause-options-external-exit-pass' }
+$expectedCycles = if ($MilestoneClosure) { 20 } else { 3 }
+if ($record.schema -ne 1 -or $record.task -cne $expectedTask -or $record.decision -cne $expectedDecision -or $record.sdk_version -cne '0.9.0.18' -or $record.cycle_count -ne $expectedCycles -or $record.route -cne 'startup-title-START-saved-gameplay-START-pause-RB-modes-RB-settings-options-external-WM_CLOSE' -or $record.internal_exit_claimed -ne $false -or $record.external_wm_close_verified -ne $true -or $record.data_integrity_preserved -ne $true -or $record.no_surviving_processes -ne $true) { throw 'Result identity/scope failed.' }
+if ($MilestoneClosure) {
+    $topLevel = @('schema', 'task', 'decision', 'sdk_version', 'cycle_count', 'route', 'internal_exit_claimed', 'external_wm_close_verified', 'recovery', 'seed', 'build', 'game_identity', 'artifacts', 'cycles', 'no_surviving_processes', 'data_integrity_preserved')
+    if (($record.PSObject.Properties.Name -join ',') -cne ($topLevel -join ',')) { throw 'Closure result properties are not exact.' }
+    if (($record.recovery.PSObject.Properties.Name -join ',') -cne 'finalized_after_verifier_false_negative,reason,elapsed_stopwatch_metrics_available' -or $record.recovery.finalized_after_verifier_false_negative -isnot [bool] -or $record.recovery.elapsed_stopwatch_metrics_available -isnot [bool]) { throw 'Closure recovery schema is invalid.' }
+    if ($record.recovery.finalized_after_verifier_false_negative) {
+        if ($record.recovery.reason -cne 'execution-complete-post-hard-exit-race' -or $record.recovery.elapsed_stopwatch_metrics_available) { throw 'Recovered closure provenance is invalid.' }
+    } elseif ($record.recovery.reason -cne 'none' -or -not $record.recovery.elapsed_stopwatch_metrics_available) { throw 'Fresh closure provenance is invalid.' }
+}
 $buildFields = @($record.build.focused_test_cases, $record.build.focused_test_assertions)
 if ($buildFields[0] -ne 2 -or $buildFields[1] -ne 33) { throw 'Focused VFS test totals mismatch.' }
-$root = Split-Path $result; $seed = Get-Tree $seedRoot
+$root = Split-Path $result
+if ($MilestoneClosure) {
+    if ((Split-Path $result -Leaf) -cne 'result.json') { throw 'Closure aggregate must use result.json.' }
+    $rootChildren = @(Get-ChildItem $root -Force | Sort-Object Name)
+    if (($rootChildren.Name -join ',') -cne 'relwithdebinfo-clean-build.log,result.json,runs,sdk-install.log,sdk-vfs-test.log' -or @($rootChildren | Where-Object PSIsContainer).Count -ne 1) { throw 'Closure evidence-root topology is not exact.' }
+    $runDirectories = @(Get-ChildItem (Resolve-Safe (Join-Path $root 'runs') 'Closure runs') -Directory -Force | Sort-Object Name)
+    if ($runDirectories.Count -ne 20 -or ($runDirectories.Name -join ',') -cne ((1..20 | ForEach-Object { '{0:D2}' -f $_ }) -join ',')) { throw 'Closure cycle-root topology is not exact.' }
+}
+$seed = Get-Tree $seedRoot
 if ($record.seed.tree_sha256 -cne $seed.Hash -or $record.seed.file_count -ne 2 -or $seed.FileCount -ne 2) { throw 'Pinned post-OOBE seed mismatch.' }
 if ((Get-FileHash (Join-Path $seedRoot 'B13EBABEBABEBABE\545407F8\00000001\mc4.sav\mc4.sav') -Algorithm SHA256).Hash -cne 'E8B559E1F2D03341B1147CAB4F5A3F3C778E6E9633B0B04B9908360FA2C67D68' -or (Get-FileHash (Join-Path $seedRoot 'B13EBABEBABEBABE\545407F8\Headers\00000001\mc4.sav.header') -Algorithm SHA256).Hash -cne '1DAEF55FA78BDD3F1AA75A36772B801C6C714B6D1A115A97904F3D1C957BC4C9') { throw 'Pinned seed file hash mismatch.' }
-if (@($record.cycles).Count -ne 3) { throw 'Cycle count mismatch.' }
-for ($index = 0; $index -lt 3; $index++) {
-    $name = '{0:D2}' -f ($index + 1); $cycleRoot = Resolve-Safe (Join-Path $root "runs\$name") 'Cycle'; $probe = Get-Probe (Join-Path $cycleRoot 'mcla.log') (Join-Path $cycleRoot 'user'); $cycle = $record.cycles[$index]
+if (@($record.cycles).Count -ne $expectedCycles) { throw 'Cycle count mismatch.' }
+for ($index = 0; $index -lt $expectedCycles; $index++) {
+    $name = '{0:D2}' -f ($index + 1); $cycleRoot = Resolve-Safe (Join-Path $root "runs\$name") 'Cycle'; $probe = if ($MilestoneClosure) { Get-ClosureProbe (Join-Path $cycleRoot 'mcla.log') (Join-Path $cycleRoot 'user') } else { Get-Probe (Join-Path $cycleRoot 'mcla.log') (Join-Path $cycleRoot 'user') }; $cycle = $record.cycles[$index]
+    if ($MilestoneClosure) {
+        $cycleFields = @('index') + $(if ($record.recovery.finalized_after_verifier_false_negative) { @() } else { @('route_elapsed_milliseconds', 'exit_elapsed_milliseconds') }) + @('exit_code', 'close_requested', 'harness_force_cleanup', 'runtime_logs', 'runtime_log_set_sha256', 'captures', 'pause_menu_correlation_ppm', 'options_menu_correlation_ppm', 'cycle_tree_sha256', 'cycle_file_count', 'cycle_bytes')
+        if (($cycle.PSObject.Properties.Name -join ',') -cne ($cycleFields -join ',') -or $cycle.index -isnot [int] -or $cycle.exit_code -isnot [int] -or $cycle.close_requested -isnot [bool] -or $cycle.harness_force_cleanup -isnot [bool] -or $cycle.pause_menu_correlation_ppm -isnot [int] -or $cycle.options_menu_correlation_ppm -isnot [int] -or $cycle.cycle_file_count -isnot [int] -or $cycle.cycle_bytes -isnot [int]) { throw 'Closure cycle schema/types are invalid.' }
+        if (-not $record.recovery.finalized_after_verifier_false_negative -and ($cycle.route_elapsed_milliseconds -isnot [long] -and $cycle.route_elapsed_milliseconds -isnot [int] -or $cycle.exit_elapsed_milliseconds -isnot [long] -and $cycle.exit_elapsed_milliseconds -isnot [int])) { throw 'Fresh closure elapsed metrics are invalid.' }
+    }
     if ($cycle.index -ne $index + 1 -or $cycle.exit_code -ne 0 -or $cycle.close_requested -ne $true -or $cycle.harness_force_cleanup -ne $false -or $cycle.runtime_log_set_sha256 -cne $probe.LogSet.Hash -or $cycle.pause_menu_correlation_ppm -ne $probe.PauseCorrelationPpm -or $cycle.options_menu_correlation_ppm -ne $probe.OptionsCorrelationPpm) { throw 'Cycle/result mismatch.' }
     foreach ($phase in @('title', 'gameplay', 'pause', 'options')) { if ($cycle.captures.$phase.sha256 -cne $probe.Bmps[$phase].Sha256 -or $cycle.captures.$phase.bytes -ne $probe.Bmps[$phase].Bytes) { throw 'Capture/result mismatch.' } }
     if (@($cycle.runtime_logs).Count -ne $probe.LogSet.Count) { throw 'Runtime-log manifest count mismatch.' }
@@ -168,4 +260,4 @@ foreach ($pair in @(@('sdk-install.log', 'sdk_install_log_sha256'), @('sdk-vfs-t
 $canonicalExe = (Resolve-Safe (Join-Path $canonicalBuild 'mcla.exe') 'Canonical executable').ToLowerInvariant()
 $survivors = @(Get-Process -Name mcla -ErrorAction SilentlyContinue | Where-Object { try { $_.Path -and ([IO.Path]::GetFullPath($_.Path).ToLowerInvariant() -ceq $canonicalExe) } catch { $false } })
 if ($survivors.Count -ne 0) { throw 'Canonical MCLA process is still running.' }
-[pscustomobject]@{ Passed = $true; Decision = $record.decision; Cycles = 3; SavedGameplayVerified = $true; PauseVerified = $true; OptionsVerified = $true; ExternalWmCloseVerified = $true; DataIntegrityVerified = $true }
+[pscustomobject]@{ Passed = $true; Decision = $record.decision; Cycles = $expectedCycles; SavedGameplayVerified = $true; PauseVerified = $true; OptionsVerified = $true; ExternalWmCloseVerified = $true; DataIntegrityVerified = $true }
