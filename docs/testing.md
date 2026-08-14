@@ -706,6 +706,37 @@ AI traffic, night sky, shadows, particles, and HUD in this bounded night
 free-roam slice. It does not claim whole-frame Xenia parity, all locations,
 weather/daylight, ROV/PWL/true-direct paths, or complete post-processing quality.
 
+## M5-004 EDRAM/depth validation report
+
+```powershell
+scripts/test-edram-depth-report.ps1
+scripts/run-edram-depth-report.ps1
+scripts/verify-edram-depth-report.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This is a report gate, not a second gameplay launch. It physically re-verifies
+the immutable accepted M5-003 result and then re-parses its complete rotated log
+set. Acceptance requires the D3D12 host-RTV path, all ownership mode IDs `0..7`,
+exact native 1x/2x/4x sample mapping, depth bindings and depth resolves at all
+three sample counts, more than 500,000 ownership draws, more than 10,000
+host-depth-store dispatches, and balanced successful resolve summaries with no
+render-target, binding, resolve, device-loss, fatal, or snapshot-route marker.
+
+The source contract verifies that host depth is stored into EDRAM before the
+subsequent ownership-transfer phase and that the external snapshot-restoration
+entry remains confined to the trace player. The accepted gameplay evidence has
+1,599 draws with guest depth/stencil state but no host depth target; the report
+records and caps this count instead of treating it as a failed binding or hiding
+it. Owner review is cited only for the eight M5-003 rendering categories.
+
+The result is deliberately `accepted-s2-bounded-host-rtv`: it says no target
+defect was reproduced on the reached host-RTV gameplay path and therefore no
+behavior patch is justified. It does not claim that ROV/interlock rendering,
+trace-player EDRAM snapshot restoration, PWL gamma, or true-direct resolve was
+executed or fixed. Those paths remain later diagnostic/coverage work if a
+canonical route actually depends on them.
+
 ## M4-012 frontend parity gate
 
 ```powershell
