@@ -974,7 +974,7 @@ Pause for a feasibility decision if:
 
 **Goal:** complete one representative race from frontend selection through results and return to free roam/menu at stock timing.
 
-**Status:** `ACTIVE — M5-001 CANONICAL ROUTE DEFINED`.
+**Status:** `ACTIVE — M5-002 WORLD RPF STREAMING VERIFIED`.
 
 **Estimate:** 2–8 weeks.
 
@@ -987,7 +987,7 @@ Pause for a feasibility decision if:
 ### Tasks
 
 - [x] **M5-001** Define the canonical first-race test route, vehicle, weather/time, controller, and expected outcome. The fail-closed `pinned-save-sunset-strip-race-v1` contract fixes the supported image/runtime, exact post-OOBE seed, white 1998 Nissan 240SX at dry night on Sunset Blvd, one default-layout SDL controller in slot 0, `Sunset Strip Race` against Trevor's 1975 Datsun 280Z, a required `1/2` finish, results, return to controllable free roam, and external `WM_CLOSE`. The seed plus three private stock-Xenia free-roam/race/pause frames are physically rehashed. Event identity is normative and must be calibrated from this seed before a native route can pass; persistence and whole-frame parity remain unclaimed. Evidence: `config/first-race-route.json`, `scripts/verify-first-race-route.ps1`, `scripts/test-first-race-route.ps1`, `docs/evidence/M5-001-first-race-route.md`.
-- [ ] **M5-002** Load world streaming data from RPF without missing-file or path-case failures.
+- [x] **M5-002** Load world streaming data from RPF without missing-file or path-case failures. The native VFS preflight resolves lowercase, uppercase, and mixed-case cache-RPF paths to one entry. One clean isolated pinned-save route reaches gameplay/pause/Options and exits by external `WM_CLOSE`; private noisy I/O proves 8,011 cache reads (262,821,908 bytes, 999,707-ppm highest-end coverage) and 41 audlo reads (3,290,825 bytes, 999,149 ppm), with no archive failure and exactly seven allowlisted retail development-path misses. Physical result, game/save/runtime/capture hashes, focused VFS tests, and 30 fail-closed fixtures are bound by `scripts/run-world-streaming-smoke.ps1`, `scripts/verify-world-streaming-smoke.ps1`, and `scripts/test-world-streaming-smoke.ps1`. Evidence: `docs/evidence/M5-002-world-streaming.md`.
 - [ ] **M5-003** Validate road, building, vehicle, traffic, sky, shadow, particle, and HUD rendering.
 - [ ] **M5-004** Fix required EDRAM/ROV-like ordering behavior and depth restore issues.
 - [ ] **M5-005** Validate shader translation and texture tiling/deswizzling for representative materials.
@@ -1029,6 +1029,7 @@ Pause for a feasibility decision if:
 ### Checkpoint log
 
 - 2026-08-14 — M5 checkpoint 1. Completed: M5-001; total 1/14. Health: `GREEN — CANONICAL FIRST-RACE ROUTE DEFINED, NATIVE EVENT CALIBRATION PENDING`. Evidence: exact image/runtime, pinned seed, three private Xenia state frames, fixed vehicle/night/dry/controller/event/action/outcome contract, fail-closed physical verifier and fixtures. Scope remains honest: the event identity is normative rather than native-proven, and no race completion or persistence is claimed. Next task: M5-002.
+- 2026-08-14 — M5 checkpoint 2. Completed: M5-002; total 2/14. Health: `GREEN — PINNED-SAVE WORLD RPF STREAMING VERIFIED`. Evidence: clean native title-to-saved-gameplay route, mixed-case VFS preflight, 8,011 cache and 41 audlo reads with near-end archive coverage, exactly seven allowlisted retail development-path misses, zero unexpected archive failures/fatal markers, external `WM_CLOSE`, physical game/save/runtime/log/capture binding, focused VFS tests, and 30 fail-closed fixtures. Scope is the canonical saved free-roam route; all-region, first-run, race, and long-session streaming remain open. Next task: M5-003.
 
 ## 14. Milestone M6 — Core systems and repeatable gameplay alpha
 

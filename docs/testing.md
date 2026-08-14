@@ -633,6 +633,36 @@ alternate events or controls, reordered actions, relaxed timeouts, second
 place, omitted results/return, and claims of persistence or whole-frame parity.
 Raw saves and frames remain ignored below `private/`.
 
+## M5-002 world-streaming RPF gate
+
+```powershell
+scripts/test-world-streaming-smoke.ps1
+scripts/run-world-streaming-smoke.ps1
+scripts/verify-world-streaming-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The runner clean-builds the host, copies the exact pinned post-OOBE save into
+an isolated user root, enables private noisy kernel I/O tracing, and executes
+the established title to saved-gameplay to pause to Options route. It then
+closes the game externally by exact PID/window `WM_CLOSE`; there is no in-game
+Exit command to test or claim.
+
+Before guest launch the host must resolve lowercase, uppercase, and deliberately
+mixed-case spellings of `xarchive_cache.rpf` through both `game:` and `D:` to
+the same VFS entry. The physical trace must contain exactly two successful
+opens for the cache and audlo RPFs, at least 4,000/10 successful reads,
+100,000,000/50,000 bytes read, and at least 95% highest-end coverage. Zero-length
+guest requests are legal; a positive-length request returning zero, any failed
+read, implicit offset, overrun, missing completion, or archive open failure is
+rejected.
+
+Exactly five railyard and two exposition-park requests may fail under the
+absent retail `t:\mc4\art\city` development device. Every other guest open
+failure is rejected. Raw noisy logs contain guest handles and private paths and
+remain ignored. The sanitized result stores only counts, coverage, relative
+evidence names, hashes, and booleans and rebinds the complete source-game tree,
+pinned save, four runtime artifacts, rotated logs, and four frontend captures.
+
 ## M4-012 frontend parity gate
 
 ```powershell

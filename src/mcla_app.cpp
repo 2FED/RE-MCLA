@@ -485,6 +485,14 @@ bool MclaApp::ValidateGameVfsContract() {
   MCLA_VFS_INFO("MCLA VFS: game: and d: resolve 3/3 expected disc files on {}",
                 kMount);
 
+  auto *lowercase_archive = vfs->ResolvePath("game:\\xarchive_cache.rpf");
+  if (!lowercase_archive ||
+      vfs->ResolvePath("GAME:\\XARCHIVE_CACHE.RPF") != lowercase_archive ||
+      vfs->ResolvePath("D:\\XaRcHiVe_CaChE.RpF") != lowercase_archive) {
+    return false;
+  }
+  MCLA_VFS_INFO("MCLA VFS: mixed-case RPF path resolution verified");
+
   if (vfs->ResolvePath("game:\\..\\default.xex") ||
       vfs->ResolvePath(
           "\\Device\\Harddisk0\\Partition1\\..\\Partition1\\default.xex")) {
