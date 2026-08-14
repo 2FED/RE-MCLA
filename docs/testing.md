@@ -737,6 +737,39 @@ trace-player EDRAM snapshot restoration, PWL gamma, or true-direct resolve was
 executed or fixed. Those paths remain later diagnostic/coverage work if a
 canonical route actually depends on them.
 
+## M5-005 representative material-pipeline report
+
+```powershell
+scripts/test-material-pipeline-report.ps1
+scripts/run-material-pipeline-report.ps1
+scripts/verify-material-pipeline-report.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This report gate does not launch the title again. It physically re-verifies the
+immutable accepted M5-003 route and re-parses its complete rotated log set. The
+shader gate requires at least 150 successful vertex translations, 190 pixel
+translations, 300 successful PSOs, zero translation/PSO failure, 256 unique
+bounded shader records, explicit nonzero shader-record overflow, and unique
+successful PSO descriptions. Record overflow is preserved as a bounded-evidence
+fact; it is not presented as complete enumeration of every translated shader.
+
+Only successful `Loaded` texture events count toward coverage. Production floors
+require 100,000 successful loads, 100,000 tiled loads, at least one linear load,
+30,000 packed-mip loads, 80,000 unpacked-mip loads, all nine observed
+representative formats, and at least 40 dimension classes. Any invalid fetch,
+texture creation/load failure, Xenos audit failure, fatal marker, or D3D12 device
+loss fails the report. The source contract additionally verifies that the common
+`Loaded` marker follows successful load completion and that the D3D12 tiled path
+orders compute dispatch, texture copy, and successful return.
+
+Raw texture logs include guest addresses and remain private. The sanitized result
+contains only aggregate counts and format names. The accepted owner visual pass
+is inherited only for the eight labeled M5-003 categories: road, buildings,
+player vehicle, traffic, night sky, shadows, particles, and HUD. The report does
+not claim every guest texture format, every material/location/weather condition,
+raw texture correctness in isolation, or whole-frame Xenia equivalence.
+
 ## M4-012 frontend parity gate
 
 ```powershell
