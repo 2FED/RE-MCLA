@@ -1021,6 +1021,25 @@ isolated working save/header, runtime logs, Release artifacts, controlled
 external close, and evidence tree are reverified. Acceptance is a five-race
 regression bound, not a general or lifetime leak-freedom claim.
 
+## M5-014 vertical-slice regression report
+
+```powershell
+scripts/test-vertical-slice-report.ps1
+scripts/run-vertical-slice-report.ps1 `
+  -ResourceResultPath <accepted-M5-013-result.json>
+scripts/verify-vertical-slice-report.ps1 `
+  -ResultPath <private-M5-014-result.json> `
+  -ResourceResultPath <accepted-M5-013-result.json>
+```
+
+The report gate revalidates M5-001 and all eleven immutable M5-002 through
+M5-012 result files, then binds the dynamic accepted M5-013 result. It emits a
+sanitized 14-task Markdown checklist containing only public evidence names,
+accepted decisions, and explicit scope. Host paths, private evidence paths,
+save identity, raw logs, captures, and proprietary content are rejected from
+the report. M5-014 closure requires the physical M5-013 result to pass again;
+fixture mode is confined to contained M5-014 test roots.
+
 ## M4-012 frontend parity gate
 
 ```powershell
