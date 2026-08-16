@@ -30,9 +30,11 @@ Physical and visual evidence:
   the owner confirmed visible burnout dust/smoke;
 - the labeled Xenia/native contact sheet has SHA-256
   `9AA610D659AF0B95F12B0546B54A911FAAB9DF7CDBCF35039999BBCCFECD0D4A`;
-- the owner gave a PASS for road, buildings, player vehicle, AI traffic, night
-  sky, shadows, particles, and HUD. KI-013's minor green title-vehicle shadow is
-  explicitly non-blocking and is not claimed fixed.
+- the owner gave a PASS for the presence/usability of road, buildings, player
+  vehicle, AI traffic, night sky, shadows, particles, and HUD. A later
+  fixed-camera daylight repro reclassified KI-013 from a supposed minor green
+  shadow to an open S2 saturated local-light/specular defect on vehicle paint;
+  reflection parity was outside this gate and is not claimed fixed.
 
 The gameplay-timed frozen Xenos checkpoint records 332/332 successful PSOs,
 6,195,685 issued draws, 39/39 render targets, 536,929 ownership draws, active
@@ -53,5 +55,11 @@ clean for all three scripts; ast-grep passes 3/3 rule tests and bootstrap passes
 
 This evidence does not establish whole-frame Xenia parity, every city region,
 daylight/weather rendering, long-session stability, ROV/interlock rendering,
-PWL gamma, true-direct resolves, or complete reflection/post-processing quality.
+PWL gamma, true-direct resolves, complete reflection/post-processing quality,
+or stable alpha-tested/alpha-to-coverage silhouettes for foliage and signals.
 Those remain M5-004/M5-010 and M6-004 scope.
+
+The KI-013 reclassification and its three private fixed-camera captures are
+documented in `docs/evidence/KI-013-colored-vehicle-reflections.md`.
+The separate stipple/shimmer observation is documented in
+`docs/evidence/KI-015-alpha-coverage-shimmer.md`.

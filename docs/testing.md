@@ -956,6 +956,37 @@ This is the required persistence API prerequisite. It deliberately records
 survival across a fresh process remain M5-012 and must not be inferred from the
 focused metadata roundtrip.
 
+## M5-012 race-results and Release-restart gate
+
+```powershell
+scripts/test-race-results-smoke.ps1
+scripts/test-race-restart-smoke.ps1
+scripts/verify-race-results-smoke.ps1 `
+  -RunPath <private-completed-route-cycle>
+scripts/verify-race-restart-smoke.ps1 `
+  -ResultPath <private-restart-result.json>
+```
+
+The physical route runner is intentionally a one-series evidence collector. An
+operator confirms the two-car start, the final results/rewards state after every
+`NEXT RACE` event in that series, and return to controllable free roam. Each
+confirmation creates a request in the isolated user root; the guest-output
+probe consumes it, captures one 1280x720 frame, and records an ordered present
+sequence. Invalid console input is ignored without touching the game.
+
+The final acceptance gate is the separate optimized Release restart. It
+cryptographically binds the completed-route evidence tree and exact completed
+save, copies that save into a fresh user root, autonomously reaches controllable
+gameplay, and records the stock fixed-step sample: approximately 300 presents
+and 600 vblanks over ten seconds, with simulated time tracking wall time. Both
+processes must close externally through exact-window `WM_CLOSE` with no fatal,
+unregistered-function, assertion, device-loss, or forced-cleanup marker.
+
+This closes one complete Ian event series, results-to-free-roam transition, and
+fresh-process save load. It does not claim a fixed series length, whole-frame
+parity, five repeated races, or bounded resource growth; the latter repeated
+race/resource work remains M5-013.
+
 ## M4-012 frontend parity gate
 
 ```powershell

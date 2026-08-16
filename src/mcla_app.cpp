@@ -409,6 +409,11 @@ REXCVAR_DEFINE_BOOL(
     "Exercise bounded saved-gameplay audio event listening windows")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_race_route_probe, false, "MCLA",
+                    "Capture operator-confirmed first-race checkpoints from "
+                    "fixed user-root requests")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_UINT32(
     mcla_frontend_gameplay_wait_seconds, 30, "MCLA",
     "Seconds to wait for the saved frontend route to enter gameplay")
@@ -1059,7 +1064,8 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
       REXCVAR_GET(mcla_gameplay_input_probe) ||
       REXCVAR_GET(mcla_physics_timing_probe) ||
-      REXCVAR_GET(mcla_audio_event_probe)) {
+      REXCVAR_GET(mcla_audio_event_probe) ||
+      REXCVAR_GET(mcla_race_route_probe)) {
     first_frame_probe_thread_ = std::jthread(
         [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
@@ -1119,6 +1125,61 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
         image.width, image.height, metrics.occupied_rgb555_bins,
         metrics.luma_p05, metrics.luma_p95, metrics.modal_per_mille,
         metrics.nonmodal_grid_cells);
+    if (REXCVAR_GET(mcla_race_route_probe)) {
+      MCLA_INPUT_INFO(
+          "MCLA_RACE_ROUTE_CONFIG v=1 phases=race-start,results,return "
+          "operator_confirmed=1 external_close_required=1");
+      constexpr std::array<std::string_view, 3> kRacePhases = {
+          "race-start", "results", "return"};
+      uint32_t captured = 0;
+      for (std::string_view phase : kRacePhases) {
+        const auto request_path =
+            runtime()->user_data_root() /
+            (".mcla-race-" + std::string(phase) + ".request");
+        while (!stop_token.stop_requested() &&
+               !std::filesystem::exists(request_path)) {
+          std::this_thread::sleep_for(100ms);
+        }
+        if (stop_token.stop_requested()) {
+          return;
+        }
+
+        const auto frame_path = runtime()->user_data_root() /
+                                ("mcla-race-" + std::string(phase) + ".bmp");
+        rex::ui::RawImage race_image;
+        const auto race_capture_deadline =
+            std::chrono::steady_clock::now() + 10s;
+        bool race_capture_succeeded = false;
+        while (!stop_token.stop_requested() &&
+               std::chrono::steady_clock::now() < race_capture_deadline) {
+          if (presenter->CaptureGuestOutput(race_image) &&
+              WriteFrameBmp(frame_path, race_image)) {
+            race_capture_succeeded = true;
+            break;
+          }
+          std::this_thread::sleep_for(100ms);
+        }
+        if (!race_capture_succeeded) {
+          MCLA_GPU_ERROR("MCLA race route: failed to capture {} frame", phase);
+          return;
+        }
+        std::error_code remove_error;
+        if (!std::filesystem::remove(request_path, remove_error) ||
+            remove_error) {
+          MCLA_GPU_ERROR("MCLA race route: failed to consume {} request",
+                         phase);
+          return;
+        }
+        ++captured;
+        MCLA_INPUT_INFO("MCLA_RACE_ROUTE_FRAME v=1 phase={} width={} height={} "
+                        "present_seq={} status=PASS",
+                        phase, race_image.width, race_image.height,
+                        presenter->GetGuestOutputSequence());
+      }
+      MCLA_INPUT_INFO("MCLA_RACE_ROUTE_SUMMARY v=1 status=PASS frames={} "
+                      "external_close_required=1",
+                      captured);
+    }
     if (REXCVAR_GET(sdl_audio_route_audit) &&
         !REXCVAR_GET(mcla_audio_event_probe)) {
       const uint32_t soak_seconds = REXCVAR_GET(mcla_audio_route_soak_seconds);

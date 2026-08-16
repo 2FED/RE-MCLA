@@ -65,11 +65,15 @@ Raw BMPs, logs, build logs, and result JSON remain ignored and private.
   oriented, readable logo and `PRESS`, with no obvious global corruption,
   severe tint/gamma banding, broken whole-frame compositing/depth, or
   catastrophic aliasing
-- noted deviation: a vehicle near the lower-left edge has a green-tinted
-  shadow; the owner classified it as minor and non-blocking at this stage
+- noted deviation at the time: a vehicle near the lower-left edge had a green
+  tint that the owner initially classified as minor and non-blocking for this
+  bounded frontend gate
 
-The shadow is tracked as KI-013 for M4-012. The visual PASS is not a claim of
-whole-frame equivalence.
+The visual PASS is not a claim of whole-frame equivalence. A later fixed-camera
+gameplay repro demonstrated that KI-013 is not a shadow: saturated red/green
+local lights are transferred too strongly onto vehicle paint. That S2 renderer
+defect remains open for M6-004 and does not alter this historical UI/frontend
+classification.
 
 ## Verification
 

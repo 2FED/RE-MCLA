@@ -95,6 +95,48 @@ the gameplay transition. It must pass non-force codegen and generated
 registration review before runtime acceptance; it does not by itself claim that
 the gameplay transition is otherwise functional.
 
+## M5 opponent-challenge runtime-discovered callable entry
+
+The first physical M5-012 route reached Ian in the pinned post-OOBE save and
+failed immediately after the owner flashed the headlights to challenge him.
+The runtime named the indirect target `0x822C9FE8`. A private Ghidra audit of
+the supported image shows a standalone executable PPC body beginning exactly
+at that address, tail-branching at `0x822CA048`, and followed by zero padding at
+`0x822CA04C`; `0x822CA050` is already a separate registered function. The
+minimal override is therefore `[0x822C9FE8, 0x822CA04C)`, with no parent. It is
+an alternate entry following the already registered four-instruction tail at
+`0x822C9FD8`, not permission to absorb the surrounding gap.
+
+The private audit is retained at
+`private/evidence/M5-012/address-audit-822C9FE8.tsv`. Acceptance requires a
+non-force codegen run, inspection of the generated terminal branch and exact
+dispatcher registration, then a runtime continuation through the same Ian or
+Martin challenge transition.
+
+The next physical attempt passed that entry and reached Ian's police-nearby
+alternate challenge flow. It failed while the title was about to show the GPS
+start point, naming `0x82264760`. The corresponding private audit shows an
+independent four-instruction tail to `0x822646E8`, exactly bounded by the next
+separate four-instruction tail at `0x82264770`. The accepted minimal interval is
+therefore `[0x82264760, 0x82264770)`. The audit is retained at
+`private/evidence/M5-012/address-audit-82264760.tsv`. The subsequent physical
+attempt passed the police/GPS path and reached the race-start transition, which
+then called the adjacent `0x82264770` tail directly. That runtime target closes
+the earlier evidence gap: the second independently audited half-open interval
+`[0x82264770, 0x82264780)` is now also justified, while the already recovered
+function at `0x82264780` remains separate.
+
+The repaired start transition then completed, and the next physical attempt
+captured the Ian-series countdown before the owner finished the first event in
+first place. During the post-finish transition, before any results checkpoint,
+the runtime named the missing indirect target `0x82262320`. The private audit at
+`private/evidence/M5-012/address-audit-82262320.tsv` shows a standalone
+seven-instruction body ending in `blr` at `0x82262338`, zero padding at
+`0x8226233C`, and a different known function beginning at `0x82262340`. The
+minimal interval is therefore `[0x82262320, 0x8226233C)`. The captured countdown
+is useful calibration evidence, but the crash means that run does not prove the
+results or return-to-free-roam criteria.
+
 ## Import map handoff
 
 M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

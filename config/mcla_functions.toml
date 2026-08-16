@@ -4,9 +4,13 @@
 [functions]
 "0x8220BF08" = { end = 0x8220C018, name = "sub_8220BF08" }
 "0x8220C018" = { end = 0x8220C0D0, name = "sub_8220C018" }
+"0x82262320" = { end = 0x8226233C, name = "sub_82262320" }
+"0x82264760" = { end = 0x82264770, name = "sub_82264760" }
+"0x82264770" = { end = 0x82264780, name = "sub_82264770" }
 "0x822C98B8" = { end = 0x822C9948, name = "sub_822C98B8" }
 "0x822C9948" = { end = 0x822C9A2C, name = "sub_822C9948" }
 "0x822C9DD8" = { end = 0x822C9DE8, name = "sub_822C9DD8" }
+"0x822C9FE8" = { end = 0x822CA04C, name = "sub_822C9FE8" }
 "0x823F32E8" = { end = 0x823F3300, name = "sub_823F32E8" }
 "0x823F3C68" = { end = 0x823F3C80, name = "sub_823F3C68" }
 "0x823F6EF8" = { end = 0x823F6F1C, name = "sub_823F6EF8" }

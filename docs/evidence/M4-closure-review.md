@@ -102,8 +102,10 @@ Decision: `GO M5 WITH PINNED SAVE`.
 - General save/profile persistence is unverified. Each accepted M4 route starts
   from a fresh copy of the pinned seed.
 - Broader world rendering, ROV/interlock behavior, PWL gamma, true-direct
-  resolves, whole-frame parity, and the minor green vehicle-shadow tint remain
-  gameplay/rendering work.
+  resolves, whole-frame parity, and the then-unlocalized green vehicle tint
+  remain gameplay/rendering work. A later fixed-camera gameplay repro
+  reclassified that tint as KI-013, an open S2 saturated local-light/specular
+  defect rather than a shadow.
 - Controller evidence covers one physical pad. Multi-pad physical policy,
   title-driven force feedback, and full gameplay control behavior remain open.
 - Bink decode/playback, event-level audio identity, and user-selected XMP music

@@ -54,7 +54,7 @@ events.
 No target failure was reproduced, so no behavior patch is justified. The task
 closes as a bounded no-defect report, not as a claim that allocation or file
 access can never fail. Long-session memory/resource leak checks remain
-M5-013; repeated complete races remain M5-012/M5-014; all-region streaming
+M5-013; repeated complete races remain M5-013/M5-014; all-region streaming
 remains M6-001 and M7-007.
 
 The verifier physically rehashes the exact accepted result files, the complete

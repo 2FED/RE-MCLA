@@ -31,8 +31,11 @@ different content. Animated world/camera regions are deliberately excluded,
 so this is not a whole-frame equivalence claim. The private 1280x800 contact
 sheet (`AF29FAA1...B444`) was reviewed: orientation, logo/prompt, HUD,
 pause compositing, and Options structure are recognizable and coherent at both
-native resolutions. The previously reported green vehicle-shadow tint remains
-a minor S3 deviation rather than a parity blocker.
+native resolutions. The previously reported green vehicle tint did not block
+these stable UI-region comparisons. A later fixed-camera gameplay repro
+reclassified it as KI-013, an open S2 saturated local-light/specular defect on
+vehicle paint rather than a shadow; whole-frame and reflection parity were not
+claimed by this task.
 
 The audio comparison binds the pinned Xenia log
 `0A7E5418...C4D0D` and its one XMA decoder, one audio worker, and one successful
@@ -47,4 +50,3 @@ The final verifier rehashes the three Xenia images and log, all M4-011 and
 M4-007 evidence, the scale-2 rotated-log set and captures, the clean-build log,
 contact sheet, source-game tree, save seed, and four runtime artifacts. Raw
 frames, logs, save data, and JSON remain ignored under `private/`.
-
