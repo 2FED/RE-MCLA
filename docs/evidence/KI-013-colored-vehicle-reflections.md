@@ -57,3 +57,16 @@ only proves successful execution of the reached host-RTV, table-gamma, shader,
 depth, ownership, and common-copy paths; it does not prove reflection parity or
 the unexercised PWL/ROV/true-direct variants. M6-004 owns a controlled
 single-variable comparison before any renderer behavior is changed.
+
+A read-only comparison against the current Xenia D3D12 implementation found no
+obvious project-only gamma fork: `gamma_render_target_as_unorm16` defaults true
+in both, and the accepted route's output audit selected table gamma. The next
+diagnostic should therefore keep gamma settings fixed and compare the same
+camera/signal phase with explicit `--render_target_path_d3d12=rtv` and `rov`.
+The capture burst must record the selected path and, for each bounded
+first-seen lighting tuple, the pixel-shader hash, guest and storage render-target
+formats, guest MSAA, color-write mask, blend enable/function/factors, ownership
+mode, and resolve source/destination formats. Enum values and hashes are enough;
+guest addresses, shader bytes, texture contents, and frame pixels remain
+private. A visual difference localizes the path boundary; if there is no
+difference, shared shader translation and game material data remain candidates.

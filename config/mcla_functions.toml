@@ -2,6 +2,7 @@
 # docs/reverse-engineering.md and must survive a non-force codegen rerun.
 
 [functions]
+"0x8220B810" = { end = 0x8220B834, name = "sub_8220B810" }
 "0x8220BF08" = { end = 0x8220C018, name = "sub_8220BF08" }
 "0x8220C018" = { end = 0x8220C0D0, name = "sub_8220C018" }
 "0x82262320" = { end = 0x8226233C, name = "sub_82262320" }

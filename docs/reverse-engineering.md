@@ -137,6 +137,25 @@ minimal interval is therefore `[0x82262320, 0x8226233C)`. The captured countdown
 is useful calibration evidence, but the crash means that run does not prove the
 results or return-to-free-roam criteria.
 
+## M5 repeated-race series-transition callable entry
+
+The first M5-013 five-race resource run completed and captured one race, then
+failed after the owner confirmed a three-race Hangout series. The runtime named
+the indirect target `0x8220B810`. A private Ghidra audit of the supported image
+shows an independent nine-instruction leaf starting exactly at that address and
+ending in `blr` at `0x8220B830`. The following word at `0x8220B834` is zero
+padding, and `0x8220B838` begins a different analyzed function. The instruction
+immediately before the new entry is a terminal `bctr` at `0x8220B80C`, so the
+minimal override is the standalone half-open interval
+`[0x8220B810, 0x8220B834)`, with no parent.
+
+The private audit is retained under the failed M5-013 run at
+`private/evidence/M5-013/20260817-013319-c2e7223f/address-audit-8220B810-window.tsv`.
+Acceptance requires non-force generation of the exact body and dispatcher
+registration, then a fresh physical route through the same or another
+multi-event series transition. The failed run proves checkpoint 1 only and is
+not a bounded-growth result.
+
 ## Import map handoff
 
 M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

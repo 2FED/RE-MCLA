@@ -987,6 +987,40 @@ fresh-process save load. It does not claim a fixed series length, whole-frame
 parity, five repeated races, or bounded resource growth; the latter repeated
 race/resource work remains M5-013.
 
+## M5-013 repeated-race resource-growth gate
+
+```powershell
+scripts/test-race-resource-smoke.ps1
+scripts/run-race-resource-smoke.ps1
+scripts/verify-race-resource-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The runner clean-builds Release, copies the exact completed M5-012 save into an
+isolated user root, and keeps one process alive across five real completed race
+events. At title/gameplay it records a baseline; after each exact operator
+confirmation it waits five seconds, consumes a numbered user-root request,
+captures one private guest frame, and records the median of three host process
+samples. Metrics are private bytes, working set, handles, host threads, and the
+Windows `GPU Process Memory` dedicated/shared counters for the exact PID.
+Transient counter samples with nonzero `Status` are ignored before reading
+`CookedValue`; the runner retries for up to ten seconds until both exact-PID
+counter classes are valid. Its focused self-test covers valid aggregation,
+invalid status, wrong PID, and incomplete-pair retry classification.
+The runner rewrites the bounded sample file after the baseline and every
+checkpoint so a later failed transition retains partial diagnostics; the
+verifier still accepts only the complete ordered six-sample set.
+
+The bounded-growth comparison uses race 1 through race 5, excluding normal
+title-to-gameplay warm-up. Limits are 512 MiB private memory, 512 MiB working
+set, 128 handles, 16 threads, 512 MiB dedicated GPU memory, and 256 MiB shared
+GPU memory. Both final and maximum sampled growth must stay inside those
+limits. All five frame markers and captures, six numeric samples, the exact
+completed M5-012 seed save/header, the shape and hashes of the possibly updated
+isolated working save/header, runtime logs, Release artifacts, controlled
+external close, and evidence tree are reverified. Acceptance is a five-race
+regression bound, not a general or lifetime leak-freedom claim.
+
 ## M4-012 frontend parity gate
 
 ```powershell

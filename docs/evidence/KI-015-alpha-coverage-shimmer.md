@@ -30,3 +30,16 @@ manually, so the mere presence of a dither pattern is not itself proof of which
 calculation is wrong. M6-004 should capture one affected draw/state tuple and a
 short fixed-camera temporal burst before changing alpha thresholds, coverage
 offsets, sample masks, texture LOD, or resolve behavior.
+
+The read-only pre-M6 source comparison found that the current DXBC translator
+uses the same Xenos 2x2 alpha-to-mask offset extraction and 1x/2x/4x threshold
+layout as current Xenia. The fork's optional fuzzy alpha-test epsilon is
+default-off, including in the accepted native and stock-Xenia configurations.
+The first controlled diagnostic should therefore leave that option false and
+capture identical short motion bursts on explicit host-RTV and ROV paths. A
+bounded draw-state record needs the pixel-shader hash, alpha-test function and
+reference class, alpha-to-mask enable and four offsets, guest/host sample count,
+native-versus-emulated 2x mapping, output coverage mode, color target format,
+and resolve path. If the affected draw is alpha-test-only, a later false/true
+fuzzy-epsilon comparison may be diagnostic, but it is not an acceptance fix and
+must not be mixed into the initial RTV/ROV comparison.

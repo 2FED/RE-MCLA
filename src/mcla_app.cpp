@@ -414,6 +414,11 @@ REXCVAR_DEFINE_BOOL(mcla_race_route_probe, false, "MCLA",
                     "fixed user-root requests")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(
+    mcla_race_resource_probe, false, "MCLA",
+    "Capture five operator-confirmed post-race resource checkpoints")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_UINT32(
     mcla_frontend_gameplay_wait_seconds, 30, "MCLA",
     "Seconds to wait for the saved frontend route to enter gameplay")
@@ -1065,7 +1070,8 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_gameplay_input_probe) ||
       REXCVAR_GET(mcla_physics_timing_probe) ||
       REXCVAR_GET(mcla_audio_event_probe) ||
-      REXCVAR_GET(mcla_race_route_probe)) {
+      REXCVAR_GET(mcla_race_route_probe) ||
+      REXCVAR_GET(mcla_race_resource_probe)) {
     first_frame_probe_thread_ = std::jthread(
         [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
@@ -1179,6 +1185,63 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       MCLA_INPUT_INFO("MCLA_RACE_ROUTE_SUMMARY v=1 status=PASS frames={} "
                       "external_close_required=1",
                       captured);
+    }
+    if (REXCVAR_GET(mcla_race_resource_probe)) {
+      MCLA_INPUT_INFO("MCLA_RACE_RESOURCE_CONFIG v=1 checkpoints=5 "
+                      "operator_confirmed=1 external_close_required=1");
+      uint32_t captured = 0;
+      for (uint32_t checkpoint = 1; checkpoint <= 5; ++checkpoint) {
+        const std::string checkpoint_text = std::to_string(checkpoint);
+        const auto request_path =
+            runtime()->user_data_root() /
+            (".mcla-race-resource-" + checkpoint_text + ".request");
+        while (!stop_token.stop_requested() &&
+               !std::filesystem::exists(request_path)) {
+          std::this_thread::sleep_for(100ms);
+        }
+        if (stop_token.stop_requested()) {
+          return;
+        }
+
+        const auto frame_path =
+            runtime()->user_data_root() /
+            ("mcla-race-resource-" + checkpoint_text + ".bmp");
+        rex::ui::RawImage checkpoint_image;
+        const auto capture_deadline = std::chrono::steady_clock::now() + 10s;
+        bool capture_succeeded = false;
+        while (!stop_token.stop_requested() &&
+               std::chrono::steady_clock::now() < capture_deadline) {
+          if (presenter->CaptureGuestOutput(checkpoint_image) &&
+              WriteFrameBmp(frame_path, checkpoint_image)) {
+            capture_succeeded = true;
+            break;
+          }
+          std::this_thread::sleep_for(100ms);
+        }
+        if (!capture_succeeded) {
+          MCLA_GPU_ERROR("MCLA race resource: failed to capture checkpoint {}",
+                         checkpoint);
+          return;
+        }
+        std::error_code remove_error;
+        if (!std::filesystem::remove(request_path, remove_error) ||
+            remove_error) {
+          MCLA_GPU_ERROR(
+              "MCLA race resource: failed to consume checkpoint {} request",
+              checkpoint);
+          return;
+        }
+        ++captured;
+        MCLA_INPUT_INFO(
+            "MCLA_RACE_RESOURCE_FRAME v=1 checkpoint={} width={} height={} "
+            "present_seq={} status=PASS",
+            checkpoint, checkpoint_image.width, checkpoint_image.height,
+            presenter->GetGuestOutputSequence());
+      }
+      MCLA_INPUT_INFO(
+          "MCLA_RACE_RESOURCE_SUMMARY v=1 status=PASS checkpoints={} "
+          "external_close_required=1",
+          captured);
     }
     if (REXCVAR_GET(sdl_audio_route_audit) &&
         !REXCVAR_GET(mcla_audio_event_probe)) {

@@ -10,11 +10,16 @@ $resolved = (Resolve-Path -LiteralPath $ConfigPath).Path
 if ((Get-Item -LiteralPath $resolved -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw 'Analysis config must not be a reparse point.' }
 
 $expected = [ordered]@{
+    '8220B810' = @{ end='8220B834'; parent=''; name='sub_8220B810' }
     '8220BF08' = @{ end='8220C018'; parent=''; name='sub_8220BF08' }
     '8220C018' = @{ end='8220C0D0'; parent=''; name='sub_8220C018' }
+    '82262320' = @{ end='8226233C'; parent=''; name='sub_82262320' }
+    '82264760' = @{ end='82264770'; parent=''; name='sub_82264760' }
+    '82264770' = @{ end='82264780'; parent=''; name='sub_82264770' }
     '822C98B8' = @{ end='822C9948'; parent=''; name='sub_822C98B8' }
     '822C9948' = @{ end='822C9A2C'; parent=''; name='sub_822C9948' }
     '822C9DD8' = @{ end='822C9DE8'; parent=''; name='sub_822C9DD8' }
+    '822C9FE8' = @{ end='822CA04C'; parent=''; name='sub_822C9FE8' }
     '823F32E8' = @{ end='823F3300'; parent=''; name='sub_823F32E8' }
     '823F3C68' = @{ end='823F3C80'; parent=''; name='sub_823F3C68' }
     '823F6EF8' = @{ end='823F6F1C'; parent=''; name='sub_823F6EF8' }

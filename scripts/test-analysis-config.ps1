@@ -13,8 +13,10 @@ try {
     & $validator -ConfigPath $source|Out-Null
     Assert-Rejected 'missing-function' ($content -replace '(?m)^"0x823FD718".*\r?\n','')
     Assert-Rejected 'missing-runtime-function' ($content -replace '(?m)^"0x827B4B78".*\r?\n','')
+    Assert-Rejected 'missing-race-runtime-function' ($content -replace '(?m)^"0x82262320".*\r?\n','')
     Assert-Rejected 'wrong-runtime-discovered-boundary' ($content -replace '"0x82554080" = \{ end = 0x8255409C', '"0x82554080" = { end = 0x825540A0')
+    Assert-Rejected 'wrong-race-series-boundary' ($content -replace '"0x8220B810" = \{ end = 0x8220B834', '"0x8220B810" = { end = 0x8220B838')
     Assert-Rejected 'wrong-parent' ($content -replace 'parent = 0x824B0CC0','parent = 0x824B0CC4')
     Assert-Rejected 'unreviewed-section' ($content+"`n[[switch_tables]]`naddress=1`n")
-    [pscustomobject]@{Passed=$true;PositiveCases=1;NegativeCases=5}
+    [pscustomobject]@{Passed=$true;PositiveCases=1;NegativeCases=7}
 } finally {[System.IO.Directory]::Delete($testRoot,$true)}
