@@ -14,7 +14,7 @@ if (-not (Test-Path -LiteralPath $ResultPath -PathType Leaf)) {
 
 $result = Get-Content -LiteralPath $ResultPath -Raw | ConvertFrom-Json
 if ($result.schema -ne 1 -or $result.task -ne 'M3-012' -or
-    $result.sdk_version -ne '0.9.0.21' -or $result.generated_cpp_expected -ne 65) {
+    $result.sdk_version -ne '0.9.0.22' -or $result.generated_cpp_expected -ne 65) {
     throw 'Build-matrix result header is invalid.'
 }
 

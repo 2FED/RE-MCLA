@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $utf8 = [Text.UTF8Encoding]::new($false)
-$sdkCommit = '3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05'
+$sdkCommit = '576b34fd233acf4579dd2375691dbe86fb4bf8e1'
 $pauseReferenceRelative = 'private/baseline/M4-011/frontend-reference/pause.bmp'
 $pauseReferenceHash = '61584464CB5D8B4C5296903CDBB4F5CD03B8A1639E751DCAB2D2BA5DA06F7D19'
 $seedSaveHash = 'E8B559E1F2D03341B1147CAB4F5A3F3C778E6E9633B0B04B9908360FA2C67D68'
@@ -356,7 +356,7 @@ function Assert-SourceContract {
   if ((& git -C $sdkRoot rev-parse HEAD).Trim() -cne $sdkCommit) {
     throw 'SDK commit changed.'
   }
-  & git -C $sdkRoot diff --quiet v0.9.0.13 v0.9.0.21 -- include/rex/input src/input src/kernel/xam/xam_input.cpp tests/unit/input
+  & git -C $sdkRoot diff --quiet v0.9.0.13 v0.9.0.22 -- include/rex/input src/input src/kernel/xam/xam_input.cpp tests/unit/input
   if ($LASTEXITCODE -ne 0) {
     throw 'M4-006 to current SDK input-source parity changed.'
   }

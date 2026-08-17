@@ -17,14 +17,18 @@ $manifestPath = (Resolve-Path -LiteralPath $ManifestPath).Path
 $sdkRoot = Join-Path $repoRoot 'third_party/rexglue-sdk'
 $configHeader = Join-Path $sdkRoot 'include/rex/codegen/config.h'
 $configSource = Join-Path $sdkRoot 'src/codegen/config.cpp'
-$expectedSdkCommit = '3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05'
+$expectedSdkCommit = '576b34fd233acf4579dd2375691dbe86fb4bf8e1'
 
-$gitlink = (& git -C $repoRoot ls-tree HEAD -- third_party/rexglue-sdk) -join ''
-if ($LASTEXITCODE -ne 0 -or $gitlink -notmatch '^160000 commit ([0-9a-f]{40})\s+third_party/rexglue-sdk$') { throw 'Could not resolve the pinned ReXGlue SDK gitlink.' }
-$actualSdkCommit = $Matches[1]
+$actualSdkCommit = ((& git -C $sdkRoot rev-parse HEAD) -join '').Trim()
+if ($LASTEXITCODE -ne 0 -or $actualSdkCommit -notmatch '^[0-9a-f]{40}$') {
+    throw 'Could not resolve the checked-out ReXGlue SDK commit.'
+}
 if ($actualSdkCommit -ne $expectedSdkCommit) {
     throw "ReXGlue SDK pin mismatch. Expected $expectedSdkCommit, got '$actualSdkCommit'."
 }
+$sdkStatus = (& git -C $sdkRoot status --porcelain) -join "`n"
+if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the checked-out ReXGlue SDK worktree.' }
+if ($sdkStatus) { throw 'The checked-out ReXGlue SDK worktree must be clean.' }
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $header = Get-Content -LiteralPath $configHeader -Raw

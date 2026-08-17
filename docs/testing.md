@@ -693,6 +693,57 @@ result rather than repeating its noisy multi-gigabyte RPF trace. This route
 proves geographic streaming coverage only: it does not claim completion of
 every road, event, collectible, opponent, or South Central campaign item.
 
+## M6-002 representative garage-lifecycle gate
+
+```powershell
+scripts/test-garage-lifecycle-smoke.ps1
+scripts/run-garage-lifecycle-smoke.ps1
+scripts/verify-garage-lifecycle-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The physical gate uses one clean Release build and two isolated processes. It
+starts from the exact post-race save in partial M5-013 run
+`20260817-013319-c2e7223f`, which the owner identified as the HANGOUT state
+with sufficient normal-play earnings. The runner binds that save/header plus
+the source run's single accepted race checkpoint and later known transition
+fatal; the partial source run is provenance only, not an accepted M5-013
+result.
+
+No operator interaction is required. A project-owned deterministic slot-0
+driver enters saved gameplay, opens the pause menu, selects `GO TO GARAGE`, and
+executes 69 fixed control steps. Every step must produce an ordered source-down,
+guest-down, source-up, guest-up quartet before its control marker is accepted.
+Cycle 1 purchases the unlocked 1983 Golf/GTI, a representative exterior item,
+the 5Zigen exhaust item, paint-shop access, and a visibly different dark-blue
+paint; it then switches back to the 1998 240SX and returns to free roam. The
+runner captures seven stable 1280x720 guest frames. It never patches money,
+progression, item prices, or availability.
+
+Both cycles explicitly request guest sign-in compatibility state `2`, because
+MCLA's own profile wrapper returns `ERROR_NOT_LOGGED_ON` for local state `1`
+on the save-permission path. This is an InitOnly, default-state-preserving SDK
+option. The log must contain exactly one `XAM_USER_SIGNIN_CONFIG` state-2
+marker before module launch. It enables the title's local save path only and
+does not claim Xbox Live, matchmaking, friends, messaging, or any other real
+network service.
+
+After cycle 1 exits through external `WM_CLOSE`, the runner requires the save
+to differ from the HANGOUT seed, copies the complete profile tree into a new
+cycle-2 user root, and verifies the handoff hashes before launching a fresh
+process. Cycle 2 automatically reloads free roam and re-enters the garage,
+confirms both vehicles are listed, selects the Golf to capture the persisted
+dark-blue paint and exterior item, switches back to the 240SX, returns to free
+roam, and exits externally. Twelve ordered captures, all 69 causal input steps,
+both controlled lifecycles, exact save/header shapes, the cycle-1-to-cycle-2
+hash chain, clean build, runtime artifacts, logs, and the evidence tree are
+re-bound by the final verifier. Raw frames, saves, logs, model/item/price text,
+process identifiers, and host paths remain private.
+
+This is one representative affordable lifecycle. It is not exhaustive vehicle,
+motorcycle, garage, item, economy, unlock, or campaign coverage; M7-004 owns
+the complete category matrix.
+
 ## M5-003 rendering-category gate
 
 ```powershell

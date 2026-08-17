@@ -13,7 +13,7 @@ $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $acceptedHash = '299392E59CB38AFB44256E773884856FF0C869A96D2045086A65396C1ED4EFCA'
 $acceptedRun = '20260814-104624-fde51a30'
 $evidenceSdkCommit = '923c92d1d1cb721cb704ac603fba263a01ba06aa'
-$currentSdkCommit = '3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05'
+$currentSdkCommit = '576b34fd233acf4579dd2375691dbe86fb4bf8e1'
 $mainCommit = 'c7ec3b672ff339228c5e53a805d8a92657642951'
 
 function Resolve-Safe([string]$Path, [string]$Description, [bool]$Directory = $false) {
@@ -118,7 +118,7 @@ function Get-Probe([string]$Log) {
 
 function Assert-SourceContract {
     if ((git -C (Join-Path $repo 'third_party/rexglue-sdk') rev-parse HEAD).Trim() -cne $currentSdkCommit) { throw 'SDK commit changed.' }
-    & git -C (Join-Path $repo 'third_party/rexglue-sdk') diff --quiet v0.9.0.18 v0.9.0.21 -- include/rex/graphics/d3d12/render_target_cache.h src/graphics/d3d12/render_target_cache.cpp src/graphics/pipeline/render_target/cache.cpp src/graphics/trace_player.cpp
+    & git -C (Join-Path $repo 'third_party/rexglue-sdk') diff --quiet v0.9.0.18 v0.9.0.22 -- include/rex/graphics/d3d12/render_target_cache.h src/graphics/d3d12/render_target_cache.cpp src/graphics/pipeline/render_target/cache.cpp src/graphics/trace_player.cpp
     if ($LASTEXITCODE -ne 0) { throw 'EDRAM/depth source changed after accepted evidence.' }
     $common = [IO.File]::ReadAllText((Resolve-Safe 'third_party/rexglue-sdk/src/graphics/pipeline/render_target/cache.cpp' 'Common RT cache'))
     $d3d = [IO.File]::ReadAllText((Resolve-Safe 'third_party/rexglue-sdk/src/graphics/d3d12/render_target_cache.cpp' 'D3D12 RT cache'))

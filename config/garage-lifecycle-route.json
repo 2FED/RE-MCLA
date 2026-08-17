@@ -1,0 +1,78 @@
+{
+  "schema": "mcla-garage-lifecycle-route-v1",
+  "route_id": "representative-two-process-garage-v1",
+  "scope": "One affordable unlocked second vehicle plus one representative visual item, performance item, paint color, vehicle switch, free-roam return, and fresh-process persistence check.",
+  "cycles": [
+    {
+      "cycle": 1,
+      "phases": [
+        {
+          "index": 1,
+          "id": "garage-main-before",
+          "instruction": "Enter any garage from saved free roam and stop on its stable main screen."
+        },
+        {
+          "index": 2,
+          "id": "showroom-purchase-confirmed",
+          "instruction": "Purchase any affordable unlocked second vehicle and show its completed ownership/vehicle-management state.",
+          "allows_insufficient_funds": true
+        },
+        {
+          "index": 3,
+          "id": "visual-purchase-confirmed",
+          "instruction": "Purchase and visibly apply one affordable visual customization item to the new vehicle."
+        },
+        {
+          "index": 4,
+          "id": "performance-purchase-confirmed",
+          "instruction": "Purchase and visibly confirm one affordable performance/tuning item."
+        },
+        {
+          "index": 5,
+          "id": "paint-purchase-confirmed",
+          "instruction": "Purchase and visibly apply a paint color clearly different from the vehicle's prior color."
+        },
+        {
+          "index": 6,
+          "id": "vehicle-switch-confirmed",
+          "instruction": "Switch to the other owned vehicle and show the stable vehicle-management view."
+        },
+        {
+          "index": 7,
+          "id": "free-roam-after-garage",
+          "instruction": "Exit the garage in the selected vehicle, regain control, and wait for any saving indicator to finish."
+        }
+      ]
+    },
+    {
+      "cycle": 2,
+      "phases": [
+        {
+          "index": 1,
+          "id": "restart-garage-main",
+          "instruction": "Load saved free roam in this fresh process and re-enter any garage."
+        },
+        {
+          "index": 2,
+          "id": "restart-purchased-vehicle",
+          "instruction": "Show that the vehicle purchased in cycle 1 remains owned and selectable."
+        },
+        {
+          "index": 3,
+          "id": "restart-customization-paint",
+          "instruction": "Show the cycle-1 visual customization and changed paint still applied to the purchased vehicle."
+        },
+        {
+          "index": 4,
+          "id": "restart-vehicle-switch",
+          "instruction": "Switch between the two owned vehicles once more and show the stable result."
+        },
+        {
+          "index": 5,
+          "id": "restart-free-roam",
+          "instruction": "Exit to controllable free roam in the selected vehicle and wait for any saving indicator to finish."
+        }
+      ]
+    }
+  ]
+}

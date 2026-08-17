@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.21`
-- Immutable project commit: `3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05`
+- Project release tag: `v0.9.0.22`
+- Immutable project commit: `576b34fd233acf4579dd2375691dbe86fb4bf8e1`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -29,6 +29,12 @@ header cannot be written, removes a partial header on write/close failure, and
 rolls back the newly mounted package. Focused tests verify that saved-game
 metadata survives reconstruction of the content manager and that truncated
 headers are rejected.
+
+The v0.9.0.22 delta adds an InitOnly, default-preserving guest sign-in-state
+selector. State `1` remains the default local profile; an explicit state `2`
+provides title-compatible offline save permission for MCLA and emits a bounded
+configuration marker. Invalid values fail closed to state `1`. This does not
+implement or claim Xbox Live or any network service.
 
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
@@ -49,19 +55,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.21^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.22^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `576b34fd233acf4579dd2375691dbe86fb4bf8e1`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.21 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.22 project-fork commit:
 
 ```text
-3ef5b4f143d56b57e3c0e539cb0009ffe3a67e05 third_party/rexglue-sdk
+576b34fd233acf4579dd2375691dbe86fb4bf8e1 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

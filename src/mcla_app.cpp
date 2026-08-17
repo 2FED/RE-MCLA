@@ -239,7 +239,7 @@ public:
     }
     std::unique_lock lock(mutex_);
     const bool observed = condition_.wait_for(
-        lock, std::chrono::seconds(5), [this, stop_token]() {
+        lock, kGuestInputObservationTimeout, [this, stop_token]() {
           return observed_ || stop_token.stop_requested();
         });
     if (!observed || stop_token.stop_requested()) {
@@ -264,7 +264,7 @@ public:
         "MCLA_FRONTEND_SMOKE_INPUT v=1 side=source sequence={} buttons=0000",
         sequence);
     return condition_.wait_for(
-        lock, std::chrono::seconds(5), [this, stop_token]() {
+        lock, kGuestInputObservationTimeout, [this, stop_token]() {
           return observed_ || stop_token.stop_requested();
         });
   }
@@ -293,7 +293,7 @@ public:
     }
     std::unique_lock lock(mutex_);
     return condition_.wait_for(
-        lock, std::chrono::seconds(5), [this, stop_token]() {
+        lock, kGuestInputObservationTimeout, [this, stop_token]() {
           return observed_ || stop_token.stop_requested();
         });
   }
@@ -327,7 +327,7 @@ public:
     }
     std::unique_lock lock(mutex_);
     return condition_.wait_for(
-        lock, std::chrono::seconds(5), [this, stop_token]() {
+        lock, kGuestInputObservationTimeout, [this, stop_token]() {
           return observed_ || stop_token.stop_requested();
         });
   }
@@ -338,6 +338,7 @@ public:
   }
 
 private:
+  static constexpr std::chrono::seconds kGuestInputObservationTimeout{20};
   std::mutex mutex_;
   std::condition_variable condition_;
   rex::input::X_INPUT_STATE state_{};
@@ -424,6 +425,15 @@ REXCVAR_DEFINE_BOOL(
     "Capture operator-confirmed GPS checkpoints across the city coverage route")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_garage_lifecycle_probe, false, "MCLA",
+                    "Run one deterministic representative garage lifecycle")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_UINT32(
+    mcla_garage_lifecycle_cycle, 1, "MCLA",
+    "Garage lifecycle capture cycle: 1 for purchases, 2 for persistence")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_UINT32(
     mcla_frontend_gameplay_wait_seconds, 30, "MCLA",
     "Seconds to wait for the saved frontend route to enter gameplay")
@@ -508,7 +518,8 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
       REXCVAR_GET(mcla_gameplay_input_probe) ||
       REXCVAR_GET(mcla_physics_timing_probe) ||
-      REXCVAR_GET(mcla_audio_event_probe)) {
+      REXCVAR_GET(mcla_audio_event_probe) ||
+      REXCVAR_GET(mcla_garage_lifecycle_probe)) {
     config.input_factory = [this](bool tool_mode) {
       (void)tool_mode;
       auto input_system = std::make_unique<rex::input::InputSystem>(nullptr);
@@ -1077,7 +1088,8 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_audio_event_probe) ||
       REXCVAR_GET(mcla_race_route_probe) ||
       REXCVAR_GET(mcla_race_resource_probe) ||
-      REXCVAR_GET(mcla_city_streaming_probe)) {
+      REXCVAR_GET(mcla_city_streaming_probe) ||
+      REXCVAR_GET(mcla_garage_lifecycle_probe)) {
     first_frame_probe_thread_ = std::jthread(
         [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
@@ -1318,6 +1330,168 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
           "MCLA_CITY_STREAMING_SUMMARY v=1 status=PASS checkpoints={} "
           "unique_regions=8 return_to_start=1 external_close_required=1",
           captured);
+    }
+    if (REXCVAR_GET(mcla_garage_lifecycle_probe)) {
+      constexpr std::array<std::string_view, 7> kPurchasePhaseIds = {
+          "garage-main-before",        "showroom-purchase-confirmed",
+          "visual-purchase-confirmed", "performance-purchase-confirmed",
+          "paint-purchase-confirmed",  "vehicle-switch-confirmed",
+          "free-roam-after-garage"};
+      constexpr std::array<std::string_view, 5> kPersistencePhaseIds = {
+          "restart-garage-main", "restart-purchased-vehicle",
+          "restart-customization-paint", "restart-vehicle-switch",
+          "restart-free-roam"};
+      const uint32_t cycle = REXCVAR_GET(mcla_garage_lifecycle_cycle);
+      const std::string_view *phase_ids = nullptr;
+      size_t phase_count = 0;
+      if (cycle == 1) {
+        phase_ids = kPurchasePhaseIds.data();
+        phase_count = kPurchasePhaseIds.size();
+      } else if (cycle == 2) {
+        phase_ids = kPersistencePhaseIds.data();
+        phase_count = kPersistencePhaseIds.size();
+      } else {
+        MCLA_GPU_ERROR("MCLA garage lifecycle: invalid cycle {}", cycle);
+        return;
+      }
+      MCLA_INPUT_INFO(
+          "MCLA_GARAGE_LIFECYCLE_CONFIG v=1 cycle={} phases={} "
+          "vehicle_purchase_required={} visual_purchase_required={} "
+          "performance_purchase_required={} paint_purchase_required={} "
+          "vehicle_switch_required=1 persistence_required={} "
+          "external_close_required=1",
+          cycle, phase_count, cycle == 1 ? 1 : 0, cycle == 1 ? 1 : 0,
+          cycle == 1 ? 1 : 0, cycle == 1 ? 1 : 0, cycle == 2 ? 1 : 0);
+      auto *garage_driver =
+          static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
+      if (!garage_driver) {
+        MCLA_INPUT_ERROR(
+            "MCLA garage lifecycle: synthetic input dependency missing");
+        return;
+      }
+      const auto control_request_path =
+          runtime()->user_data_root() / ".mcla-garage-control.request";
+      uint32_t next_control_sequence = 1;
+      auto process_control_request = [&]() {
+        std::ifstream stream(control_request_path, std::ios::binary);
+        uint32_t sequence = 0;
+        std::string action;
+        std::string trailing;
+        if (!stream || !(stream >> sequence >> action) ||
+            (stream >> trailing) || sequence != next_control_sequence) {
+          MCLA_INPUT_ERROR("MCLA garage lifecycle: invalid control request");
+          return false;
+        }
+        stream.close();
+
+        uint16_t buttons = 0;
+        if (action == "START") {
+          buttons = rex::input::X_INPUT_GAMEPAD_START;
+        } else if (action == "BACK") {
+          buttons = rex::input::X_INPUT_GAMEPAD_BACK;
+        } else if (action == "A") {
+          buttons = rex::input::X_INPUT_GAMEPAD_A;
+        } else if (action == "B") {
+          buttons = rex::input::X_INPUT_GAMEPAD_B;
+        } else if (action == "X") {
+          buttons = rex::input::X_INPUT_GAMEPAD_X;
+        } else if (action == "Y") {
+          buttons = rex::input::X_INPUT_GAMEPAD_Y;
+        } else if (action == "DPAD_UP") {
+          buttons = rex::input::X_INPUT_GAMEPAD_DPAD_UP;
+        } else if (action == "DPAD_DOWN") {
+          buttons = rex::input::X_INPUT_GAMEPAD_DPAD_DOWN;
+        } else if (action == "DPAD_LEFT") {
+          buttons = rex::input::X_INPUT_GAMEPAD_DPAD_LEFT;
+        } else if (action == "DPAD_RIGHT") {
+          buttons = rex::input::X_INPUT_GAMEPAD_DPAD_RIGHT;
+        } else if (action == "LB") {
+          buttons = rex::input::X_INPUT_GAMEPAD_LEFT_SHOULDER;
+        } else if (action == "RB") {
+          buttons = rex::input::X_INPUT_GAMEPAD_RIGHT_SHOULDER;
+        } else {
+          MCLA_INPUT_ERROR("MCLA garage lifecycle: unsupported control action");
+          return false;
+        }
+        if (!garage_driver->Pulse(stop_token, buttons, sequence)) {
+          MCLA_INPUT_ERROR(
+              "MCLA garage lifecycle: control input was not observed");
+          return false;
+        }
+        if (!SleepUntilOrStop(stop_token,
+                              std::chrono::steady_clock::now() + 2s)) {
+          return false;
+        }
+        std::error_code remove_error;
+        if (!std::filesystem::remove(control_request_path, remove_error) ||
+            remove_error) {
+          MCLA_INPUT_ERROR(
+              "MCLA garage lifecycle: failed to consume control request");
+          return false;
+        }
+        MCLA_INPUT_INFO(
+            "MCLA_GARAGE_CONTROL v=1 sequence={} action={} capture={} width={} "
+            "height={} present_seq={} status=PASS",
+            sequence, action, 0, 0, 0, presenter->GetGuestOutputSequence());
+        ++next_control_sequence;
+        return true;
+      };
+      uint32_t captured = 0;
+      for (size_t phase_index = 0; phase_index < phase_count; ++phase_index) {
+        const std::string phase_id(phase_ids[phase_index]);
+        const auto request_path =
+            runtime()->user_data_root() /
+            (".mcla-garage-lifecycle-" + phase_id + ".request");
+        while (!stop_token.stop_requested() &&
+               !std::filesystem::exists(request_path)) {
+          if (std::filesystem::exists(control_request_path) &&
+              !process_control_request()) {
+            return;
+          }
+          std::this_thread::sleep_for(100ms);
+        }
+        if (stop_token.stop_requested()) {
+          return;
+        }
+
+        const auto frame_path = runtime()->user_data_root() /
+                                ("mcla-garage-lifecycle-" + phase_id + ".bmp");
+        rex::ui::RawImage phase_image;
+        const auto capture_deadline = std::chrono::steady_clock::now() + 10s;
+        bool capture_succeeded = false;
+        while (!stop_token.stop_requested() &&
+               std::chrono::steady_clock::now() < capture_deadline) {
+          if (presenter->CaptureGuestOutput(phase_image) &&
+              WriteFrameBmp(frame_path, phase_image)) {
+            capture_succeeded = true;
+            break;
+          }
+          std::this_thread::sleep_for(100ms);
+        }
+        if (!capture_succeeded) {
+          MCLA_GPU_ERROR("MCLA garage lifecycle: failed to capture phase {}",
+                         phase_id);
+          return;
+        }
+        std::error_code remove_error;
+        if (!std::filesystem::remove(request_path, remove_error) ||
+            remove_error) {
+          MCLA_GPU_ERROR(
+              "MCLA garage lifecycle: failed to consume phase {} request",
+              phase_id);
+          return;
+        }
+        ++captured;
+        MCLA_INPUT_INFO(
+            "MCLA_GARAGE_LIFECYCLE_FRAME v=1 cycle={} phase={} id={} "
+            "width={} height={} present_seq={} status=PASS",
+            cycle, phase_index + 1, phase_id, phase_image.width,
+            phase_image.height, presenter->GetGuestOutputSequence());
+      }
+      MCLA_INPUT_INFO(
+          "MCLA_GARAGE_LIFECYCLE_SUMMARY v=1 status=PASS cycle={} phases={} "
+          "persistence_required={} external_close_required=1",
+          cycle, captured, cycle == 2 ? 1 : 0);
     }
     if (REXCVAR_GET(sdl_audio_route_audit) &&
         !REXCVAR_GET(mcla_audio_event_probe)) {
