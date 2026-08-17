@@ -663,6 +663,36 @@ remain ignored. The sanitized result stores only counts, coverage, relative
 evidence names, hashes, and booleans and rebinds the complete source-game tree,
 pinned save, four runtime artifacts, rotated logs, and four frontend captures.
 
+## M6-001 all-regions city-streaming gate
+
+```powershell
+scripts/run-city-streaming-smoke.ps1 -CounterSelfTest
+scripts/test-city-streaming-smoke.ps1
+scripts/run-city-streaming-smoke.ps1
+scripts/verify-city-streaming-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The physical gate uses the completed M5 save in one continuous optimized
+Release process. At each prompt, drive to the named coverage zone, stop safely,
+open the full GPS map with `BACK`, and only then type the exact confirmation
+shown by the runner. The runner accepts either the full `REGION N/9 ... READY`
+line or the shorter `<REGION-ID> READY` line. Blank or mistyped input keeps the
+game running and re-prompts instead of terminating the process. The
+project-owned route manifest is `config/city-streaming-route.json`:
+Hollywood/Sunset start,
+Beverly/Westwood, Santa Monica/Venice, Hollywood Hills/Valley,
+Downtown/industrial east, USC/Exposition, Crenshaw, the southern 105 boundary,
+and a return to Hollywood/Sunset.
+
+The nine private GPS captures bind the operator-confirmed geography to
+monotonic guest-present watermarks. The runner also records bounded process
+memory, handle/thread, and Win32 process-I/O samples at every checkpoint and
+requires controlled external `WM_CLOSE`; the console-style title has no
+in-game Exit command. The verifier re-binds the immutable M5-002 archive-read
+result rather than repeating its noisy multi-gigabyte RPF trace. This route
+proves geographic streaming coverage only: it does not claim completion of
+every road, event, collectible, opponent, or South Central campaign item.
+
 ## M5-003 rendering-category gate
 
 ```powershell

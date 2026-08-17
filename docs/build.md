@@ -29,7 +29,7 @@ Run the resolver from any PowerShell working directory:
 & C:\BDU\MCLA-Recomp\scripts\Resolve-Toolchain.ps1
 ```
 
-It uses the installed `vswhere.exe` to locate Visual Studio, resolves the bundled CMake and Ninja executables, resolves the standalone LLVM installation, and rejects unsupported versions. It does not install software or persist environment changes.
+It uses the installed `vswhere.exe` to locate Visual Studio, resolves the bundled CMake and Ninja executables, resolves the standalone LLVM installation, and rejects unsupported versions. Because Visual Studio Installer discovery may transiently return no installation while its state is refreshing, the resolver makes three bounded attempts separated by 500 milliseconds; all three must still satisfy the exact C++ x64 component requirement. It does not install software or persist environment changes.
 
 To prepend the verified tool directories to `PATH` for the current PowerShell session, dot-source it:
 

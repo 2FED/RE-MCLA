@@ -1059,7 +1059,7 @@ Pause for a feasibility decision if:
 
 ### Tasks
 
-- [ ] **M6-001** Stabilize free-roam world streaming across all major city regions.
+- [x] **M6-001** Stabilize free-roam world streaming across all major city regions. One continuous clean Release process used the completed M5 save to cross eight project-defined coverage zones and return to Hollywood/Sunset, with nine distinct operator-confirmed full-GPS captures, monotonic guest-present sequences, 4,920,118,313 bytes of process-read growth, and bounded peak growth of 264,323,072 private bytes, 183,648,256 working-set bytes, seven handles, and two host threads relative to the first regional checkpoint. The process exited cleanly through external `WM_CLOSE`; the persisted result rebinds the M5-002 archive prerequisite, exact save/header, Release artifacts, runtime log, numeric samples, captures, and evidence tree. The route proves broad geographic streaming coverage, not every road, event, collectible, or campaign item. Evidence: `scripts/run-city-streaming-smoke.ps1`, `scripts/verify-city-streaming-smoke.ps1`, `scripts/test-city-streaming-smoke.ps1`, `config/city-streaming-route.json`, `docs/evidence/M6-001-city-streaming.md`.
 - [ ] **M6-002** Validate garage, vehicle purchase, customization, tuning, paint, and vehicle switching.
 - [ ] **M6-003** Validate race types, opponents, traffic, police, checkpoints, finish conditions, and rewards.
 - [ ] **M6-004** Validate day/night, weather, reflections, post-processing, motion blur, shadows, and particle systems.
@@ -1102,7 +1102,7 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M6-001, M6-002.
+- 2026-08-17 — M6 checkpoint 1. Completed: M6-001; total 1/15. Health: `GREEN — ALL MAJOR CITY COVERAGE ZONES STREAMED IN ONE RELEASE PROCESS`. Evidence: the completed-save route crossed eight project-defined zones and returned to its start across nine distinct GPS captures and monotonic present watermarks; process-read I/O grew by 4,920,118,313 bytes while peak private/working-set/handle/thread growth remained within the declared bounds; controlled external close, save/header identity, Release artifacts, M5-002 archive prerequisite, logs, samples, captures, and evidence tree revalidate. Two fixture positives, fourteen fail-closed negatives, twenty-three source checks, counter self-test, Windows PowerShell 5.1 parsing regression, ast-grep, and bootstrap gates pass. Scope remains geographic coverage rather than exhaustive roads/content. Next task: M6-002.
 
 ## 15. Milestone M7 — Full campaign and Complete Edition compatibility
 

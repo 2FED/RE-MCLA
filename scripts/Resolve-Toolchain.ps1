@@ -78,9 +78,25 @@ $vswhere = Resolve-FirstExistingPath -ToolName 'vswhere.exe' -Candidates @(
     (Join-Path $programFilesX86 'Microsoft Visual Studio\Installer\vswhere.exe')
 )
 
-$global:LASTEXITCODE = 0
-$visualStudioRoot = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $visualStudioRoot) {
+$visualStudioRoot = $null
+$vswhereAttempts = 3
+for ($attempt = 1; $attempt -le $vswhereAttempts; $attempt++) {
+    $global:LASTEXITCODE = 0
+    $installationPaths = @(& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+    $vswhereExitCode = $LASTEXITCODE
+    $candidateRoot = $installationPaths | Where-Object { $_ } | Select-Object -First 1
+    if ($vswhereExitCode -eq 0 -and $candidateRoot) {
+        $visualStudioRoot = $candidateRoot.Trim()
+        break
+    }
+
+    if ($attempt -lt $vswhereAttempts) {
+        Write-Host "Toolchain discovery attempt $attempt/$vswhereAttempts returned no C++ x64 installation; retrying..."
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+if (-not $visualStudioRoot) {
     throw 'vswhere.exe did not find Visual Studio with the C++ x64 build tools component.'
 }
 

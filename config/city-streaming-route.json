@@ -1,0 +1,61 @@
+{
+  "schema": "mcla-city-streaming-route-v1",
+  "route_id": "major-city-regions-v1",
+  "coverage_definition": "Eight project-defined geographic coverage zones spanning the base city and the Complete Edition South Central map expansion; event and content completion are excluded.",
+  "checkpoints": [
+    {
+      "index": 1,
+      "id": "hollywood-sunset-start",
+      "label": "Hollywood / Sunset start",
+      "instruction": "Enter saved free roam near Sunset/Hollywood, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 2,
+      "id": "beverly-westwood",
+      "label": "Beverly Hills / Westwood",
+      "instruction": "Drive to the Beverly Hills or Westwood area, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 3,
+      "id": "santa-monica-venice",
+      "label": "Santa Monica / Venice beachfront",
+      "instruction": "Drive to the Santa Monica or Venice beachfront, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 4,
+      "id": "hollywood-hills-valley",
+      "label": "Hollywood Hills / Valley",
+      "instruction": "Drive through the Hollywood Hills into the Valley side, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 5,
+      "id": "downtown-industrial",
+      "label": "Downtown / industrial east",
+      "instruction": "Drive to Downtown or its industrial east side, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 6,
+      "id": "usc-exposition",
+      "label": "USC / Exposition Park",
+      "instruction": "Drive to USC or Exposition Park in South Central, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 7,
+      "id": "crenshaw",
+      "label": "Crenshaw",
+      "instruction": "Drive to the Crenshaw area, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 8,
+      "id": "south-105",
+      "label": "South Central / 105 boundary",
+      "instruction": "Drive to the southern South Central area near the 105 boundary, stop safely, open the full GPS map, then confirm."
+    },
+    {
+      "index": 9,
+      "id": "hollywood-sunset-return",
+      "label": "Hollywood / Sunset return",
+      "instruction": "Return to the Hollywood or Sunset area, stop safely, open the full GPS map, then confirm."
+    }
+  ]
+}
