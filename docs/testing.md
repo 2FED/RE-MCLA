@@ -805,6 +805,39 @@ Acceptance is representative presence/transition coverage. KI-013, KI-015, and
 KI-016 remain open S2; ROV, every weather/time combination, indefinite minimap
 stability, and whole-frame console parity are excluded.
 
+## M6-005 save interruption/corruption/storage-full matrix
+
+```powershell
+scripts/test-save-matrix-smoke.ps1
+scripts/run-save-matrix-smoke.ps1
+scripts/verify-save-matrix-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This is intentionally a build-only gate: it does not launch the title or ask an
+operator to repeat gameplay. It re-parses and rehashes the accepted M6-002
+physical save chain for native autosave overwrite, exact fresh-process
+handoff/load, and controlled external closes. Clean-save creation is classified
+separately as stock-Xenia baseline plus an isolated SDK creation/restart
+roundtrip. The gate then clean-builds ReXGlue
+v0.9.0.23, runs the isolated `[system][xam][content]` suite, and clean-builds the
+Release host against the same installed SDK.
+
+The focused 10-case/117-assertion matrix covers restart metadata, truncated and
+identity-mismatched headers, interrupted overwrite restoration, interrupted new
+save removal, recovery interrupted during restoration, the marker-removal commit
+point, enumeration during an active transaction, committed overwrite, and exact
+dummy-HDD full/oversize boundaries. Tests use temporary directories. The runner
+hashes the canonical HANGOUT save/header before and after and requires byte-exact
+identity; no destructive scenario touches user evidence.
+
+Final verification binds the prior M6-002 result and its physical logs/save
+chain, exact clean SDK tag/commit, focused test binary/log, Release build log and
+four runtime artifacts, nine SDK source files, and strict private evidence
+topology. The result explicitly records `manual_save_applicable=false` because
+the reached title route exposes autosave rather than a manual-save command. It
+also records no first-run/OOBE or generalized profile-persistence claim.
+
 ## M5-003 rendering-category gate
 
 ```powershell

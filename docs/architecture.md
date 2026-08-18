@@ -4,7 +4,7 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.9.0.22 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic crash path, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows, and saved frontend smoke route are verified independently.
+Current state: the canonical ReXGlue v0.9.0.23 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic crash path, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows, and saved frontend smoke route are verified independently.
 
 ## Consumer preparation model
 
@@ -38,7 +38,7 @@ distribution model.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.9.0.22, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
+- `CMakeLists.txt` pins ReXGlue 0.9.0.23, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
@@ -85,7 +85,7 @@ to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files
 through all aliases, rejects root traversal, and proves the game device is
 read-only across open/create/delete and writable-mapping paths. The
 `--mcla_vfs_probe` route exercises the same checks and exits before guest-thread
-creation. ReXGlue v0.9.0.22 supplies the fail-closed device boundary and explicit
+creation. ReXGlue v0.9.0.23 supplies the fail-closed device boundary and explicit
 offline results for the ten direct XONLINE/social/XHV imports reviewed in M3-007;
 user/cache writes remain on their separately configured roots.
 
@@ -126,7 +126,7 @@ save it applies two 200-ms `START` pulses and two 200-ms `RB` pulses, with a
 two-second inter-tab debounce, and captures title, free-roam gameplay, pause,
 and Settings/Options frames. The route closes through the exact native window's
 `WM_CLOSE`; the title has no internal Exit action and the evidence does not
-invent one. ReXGlue v0.9.0.22 canonicalizes only the relative suffix when
+invent one. ReXGlue v0.9.0.23 canonicalizes only the relative suffix when
 resolving mounted VFS roots, allowing saved-profile root opens with trailing
 separators without changing containment.
 
@@ -162,6 +162,20 @@ and runtime identities, and prior rendering/time/race evidence. It deliberately
 does not convert category presence into parity: colored vehicle reflections,
 alpha stipple/shimmer, and intermittent minimap flicker retain their separate
 open S2 issue boundaries.
+
+The M6-005 save boundary combines native title evidence with isolated platform
+fault tests. The accepted M6-002 save chain proves native autosave/overwrite,
+exact process-to-process handoff, and fresh-process load. Clean-save creation
+remains the stock-Xenia baseline plus an isolated SDK creation/restart roundtrip. ReXGlue
+v0.9.0.23 wraps saved-game creation and replacement in a marker-backed
+transaction: the old package/header are copied before mutation, marker removal
+is the commit point, and a later manager restores any still-marked transaction
+idempotently. In-process enumeration recognizes active transactions and cannot
+trigger recovery against a live write. Missing, truncated, or identity-mismatched
+headers are omitted rather than fabricated. An InitOnly dummy-HDD free-space
+boundary rejects create/overwrite/truncate before transaction start, while
+existing-content opens remain available. Destructive tests use temporary roots;
+the canonical HANGOUT save is only rehashed and never modified.
 
 The M4 XAM evidence boundary is opt-in and privacy-safe. ReXGlue records only
 semantic results for the reached local-user APIs: slot class, sign-in state,
