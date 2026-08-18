@@ -838,6 +838,32 @@ topology. The result explicitly records `manual_save_applicable=false` because
 the reached title route exposes autosave rather than a manual-save command. It
 also records no first-run/OOBE or generalized profile-persistence claim.
 
+## M6-006 profile/settings restart matrix
+
+```powershell
+scripts/test-profile-settings-smoke.ps1
+scripts/run-profile-settings-smoke.ps1
+scripts/verify-profile-settings-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This is a build-only, non-GUI gate. It clean-installs exact ReXGlue v0.9.0.24,
+runs the 7-case/40-assertion XAM profile suite and the 26-case/128-assertion
+CVar suite, then clean-builds the Release host. The profile matrix verifies
+typed scalar and Unicode restart, metadata rejection, interrupted-write backup
+recovery, and separation of title-specific binary settings from the global
+local-user profile root. The CVar matrix verifies save/load serialization;
+source checks bind the concrete `user_language`, `input_backend`, and `mnk_mode`
+flags to that mechanism.
+
+Final verification rehashes the immutable M4-004 local-profile, M4-010 locale,
+M5-006 controller, and M6-005 save results, the exact SDK tag/commit, focused
+logs/binary, Release artifacts, source manifest, and canonical HANGOUT
+save/header. MCLA does not import `XamUserWriteProfileSettings`, so the result
+claims isolated platform persistence plus prior physical-route binding—not a
+native title write, profile-read runtime hit, first-run OOBE, account picker,
+multiple profiles, or the general host-configuration surface owned by M6-011.
+
 ## M5-003 rendering-category gate
 
 ```powershell
