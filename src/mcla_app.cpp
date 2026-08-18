@@ -661,6 +661,10 @@ REXCVAR_DEFINE_BOOL(
     "Capture bounded saved-gameplay world, street, and particle frames")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_environment_effects_probe, false, "MCLA",
+                    "Capture a bounded Rain and Dawn Arcade rendering matrix")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_BOOL(
     mcla_gameplay_input_probe, false, "MCLA",
     "Exercise bounded saved-gameplay steering, pedals, and pause input")
@@ -787,6 +791,7 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   REXCVAR_SET(rtl_allow_cross_thread_critical_section_leave, true);
   if (REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
+      REXCVAR_GET(mcla_environment_effects_probe) ||
       REXCVAR_GET(mcla_gameplay_input_probe) ||
       REXCVAR_GET(mcla_physics_timing_probe) ||
       REXCVAR_GET(mcla_audio_event_probe) ||
@@ -1413,6 +1418,7 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_controller_matrix_probe) ||
       REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
+      REXCVAR_GET(mcla_environment_effects_probe) ||
       REXCVAR_GET(mcla_gameplay_input_probe) ||
       REXCVAR_GET(mcla_physics_timing_probe) ||
       REXCVAR_GET(mcla_audio_event_probe) ||
@@ -2400,6 +2406,124 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
       MCLA_INPUT_INFO("MCLA_RENDER_SMOKE_SUMMARY v=1 status=PASS frames=36 "
                       "frontend_input_records=28 render_input_records=8 "
                       "external_close_required=1");
+      return;
+    }
+    if (REXCVAR_GET(mcla_environment_effects_probe)) {
+      MCLA_INPUT_INFO(
+          "MCLA_ENVIRONMENT_EFFECTS_CONFIG v=1 route=arcade-ordered-sunset-and-"
+          "vine weather=rain time=dawn frames=6 external_close_required=1");
+      auto *environment_driver =
+          static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
+      auto *presenter = graphics->presenter();
+      if (!environment_driver || !presenter) {
+        MCLA_INPUT_ERROR(
+            "MCLA environment effects: probe dependencies missing");
+        return;
+      }
+      auto pulse = [&](uint16_t buttons, uint32_t sequence) {
+        return environment_driver->Pulse(stop_token, buttons, sequence) &&
+               SleepUntilOrStop(stop_token,
+                                std::chrono::steady_clock::now() + 2s);
+      };
+      auto capture_environment_frame = [&](std::string_view phase,
+                                           std::string_view file_name) {
+        const auto deadline = std::chrono::steady_clock::now() + 5s;
+        while (!stop_token.stop_requested() &&
+               std::chrono::steady_clock::now() < deadline) {
+          rex::ui::RawImage environment_image;
+          const auto path = runtime()->user_data_root() / file_name;
+          if (presenter->CaptureGuestOutput(environment_image) &&
+              WriteFrameBmp(path, environment_image)) {
+            MCLA_INPUT_INFO(
+                "MCLA_ENVIRONMENT_EFFECTS_FRAME v=1 phase={} width={} "
+                "height={} present_seq={} status=PASS",
+                phase, environment_image.width, environment_image.height,
+                presenter->GetGuestOutputSequence());
+            return true;
+          }
+          std::this_thread::sleep_for(100ms);
+        }
+        MCLA_GPU_ERROR("MCLA environment effects: failed to capture {} frame",
+                       phase);
+        return false;
+      };
+
+      if (!pulse(rex::input::X_INPUT_GAMEPAD_START, 1) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() +
+                                std::chrono::seconds(REXCVAR_GET(
+                                    mcla_frontend_gameplay_wait_seconds))) ||
+          !capture_environment_frame("dry-night-baseline",
+                                     "mcla-environment-dry-night.bmp") ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_START, 2) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_RIGHT_SHOULDER, 3) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_A, 4) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 8s) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_A, 5) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_A, 6)) {
+        MCLA_INPUT_ERROR("MCLA environment effects: Arcade navigation failed");
+        return;
+      }
+      for (uint32_t sequence = 7; sequence <= 10; ++sequence) {
+        if (!pulse(rex::input::X_INPUT_GAMEPAD_DPAD_DOWN, sequence)) {
+          MCLA_INPUT_ERROR(
+              "MCLA environment effects: weather row navigation failed");
+          return;
+        }
+      }
+      if (!pulse(rex::input::X_INPUT_GAMEPAD_DPAD_RIGHT, 11) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_DPAD_RIGHT, 12) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_DPAD_RIGHT, 13) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_DPAD_RIGHT, 14) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_DPAD_DOWN, 15) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_DPAD_RIGHT, 16) ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_DPAD_RIGHT, 17) ||
+          !capture_environment_frame("rain-dawn-options",
+                                     "mcla-environment-options.bmp") ||
+          !pulse(rex::input::X_INPUT_GAMEPAD_A, 18) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 20s) ||
+          !capture_environment_frame("rain-dawn-stationary",
+                                     "mcla-environment-stationary.bmp")) {
+        MCLA_INPUT_ERROR(
+            "MCLA environment effects: condition selection failed");
+        return;
+      }
+
+      rex::input::X_INPUT_GAMEPAD moving{};
+      moving.right_trigger = 192;
+      if (!environment_driver->SetRenderGamepad(stop_token, moving, 1) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 3s) ||
+          !capture_environment_frame("rain-dawn-moving",
+                                     "mcla-environment-moving.bmp") ||
+          !environment_driver->ReleaseRenderGamepad(stop_token, 1) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 2s) ||
+          !capture_environment_frame("rain-dawn-stopped",
+                                     "mcla-environment-stopped.bmp")) {
+        MCLA_INPUT_ERROR("MCLA environment effects: moving comparison failed");
+        return;
+      }
+
+      rex::input::X_INPUT_GAMEPAD particle{};
+      particle.left_trigger = 255;
+      particle.right_trigger = 255;
+      if (!environment_driver->SetRenderGamepad(stop_token, particle, 2) ||
+          !SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 4s) ||
+          !capture_environment_frame("rain-dawn-particle",
+                                     "mcla-environment-particle.bmp") ||
+          !environment_driver->ReleaseRenderGamepad(stop_token, 2)) {
+        MCLA_INPUT_ERROR(
+            "MCLA environment effects: particle comparison failed");
+        return;
+      }
+      MCLA_INPUT_INFO(
+          "MCLA_ENVIRONMENT_EFFECTS_SUMMARY v=1 status=PASS frames=6 "
+          "frontend_input_records=72 render_input_records=8 "
+          "weather=rain time=dawn external_close_required=1");
       return;
     }
     if (REXCVAR_GET(mcla_frontend_smoke_probe)) {

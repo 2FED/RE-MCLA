@@ -775,6 +775,36 @@ binary, and rehashes the original build/log/capture/artifact identities. It
 never invents an event-process shutdown marker or asks the owner to replay the
 race.
 
+## M6-004 representative environment-effects matrix
+
+```powershell
+scripts/test-environment-effects-smoke.ps1
+scripts/run-environment-effects-smoke.ps1
+scripts/verify-environment-effects-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The runner clean-builds Release and uses the completed save with the explicit
+guest sign-in compatibility state. A default-off InitOnly synthetic slot-0
+probe enters saved dry-night free roam, opens Arcade, selects Ordered Race ->
+Sunset and Vine, changes the menu to `RAINY` / `DAWN`, then captures options,
+stationary rain, movement, stopped motion, and a particle-input state. The title
+closes externally through exact-PID `WM_CLOSE`; no internal Exit action is
+invented.
+
+Probe acceptance requires exactly 72 ordered source/guest frontend records,
+eight ordered render-input records, six monotonic successful-present captures,
+one PASS summary, and one complete shutdown tail. Independent BMP decoding
+requires 1280x720 output and four sampled comparison floors. The options frame
+is retained as physical selection evidence; the verifier does not claim OCR.
+
+The result also rehashes the M5-003, M6-001, M5-012, and M5-013 results, three
+fixed-camera KI-013/KI-015 frames, current game/save/runtime/SDK identities,
+build log, rotated logs, capture hashes, cycle tree, and process cleanup.
+Acceptance is representative presence/transition coverage. KI-013, KI-015, and
+KI-016 remain open S2; ROV, every weather/time combination, indefinite minimap
+stability, and whole-frame console parity are excluded.
+
 ## M5-003 rendering-category gate
 
 ```powershell

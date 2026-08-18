@@ -151,6 +151,18 @@ immutable Ian-series, repeated-race reward/resource, and traffic evidence.
 Operator completion and police observations are stored separately as external,
 non-machine provenance.
 
+The M6-004 environment-effects boundary reuses the project-owned synthetic
+slot-0 driver without changing normal input or renderer behavior. A default-off
+InitOnly probe performs one deterministic saved-game/Arcade route, records all
+18 frontend pulses and two render challenges at both source and guest
+boundaries, and writes six bounded private presenter readbacks. The verifier
+binds the exact `RAINY` / `DAWN` selection sequence, successful-present
+watermarks, sampled frame differences, external shutdown, current game/save/SDK
+and runtime identities, and prior rendering/time/race evidence. It deliberately
+does not convert category presence into parity: colored vehicle reflections,
+alpha stipple/shimmer, and intermittent minimap flicker retain their separate
+open S2 issue boundaries.
+
 The M4 XAM evidence boundary is opt-in and privacy-safe. ReXGlue records only
 semantic results for the reached local-user APIs: slot class, sign-in state,
 XUID nonzero/mask agreement, name/profile consistency, and distinct absent-slot
