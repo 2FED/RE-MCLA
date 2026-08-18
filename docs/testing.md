@@ -744,6 +744,37 @@ This is one representative affordable lifecycle. It is not exhaustive vehicle,
 motorcycle, garage, item, economy, unlock, or campaign coverage; M7-004 owns
 the complete category matrix.
 
+## M6-003 representative race-system matrix
+
+```powershell
+scripts/test-race-system-smoke.ps1
+scripts/run-race-system-smoke.ps1
+scripts/verify-race-system-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The physical gate starts from the exact HANGOUT save with guest sign-in
+compatibility state 2. The owner selects one available Ian or Martin two-car
+event and confirms only the start opponent and whether police were present.
+The default-off InitOnly audit captures start/reward frames and records the
+reached `Race_Finish` wrapper. It combines the current event with immutable
+accepted traffic, complete Ian-series, and five-race reward/resource results.
+
+Description, checkpoint, and UI-result wrapper counters remain in the schema,
+but the accepted Martin route reached none of them. Zero hits are valid and
+must remain visible; they are neither a gameplay failure nor current machine
+evidence. Current event completion/police presence are external owner
+observations with `recorded_in_runtime_log=false` and
+`machine_verified=false`.
+
+The accepted run may be recovered only by its pinned identifier because the
+original gate captured the complete reward state and then timed out on the old
+over-strict summary. Recovery preserves `event_process_controlled_exit=false`,
+requires an independently controlled lifecycle cycle from the same physical
+binary, and rehashes the original build/log/capture/artifact identities. It
+never invents an event-process shutdown marker or asks the owner to replay the
+race.
+
 ## M5-003 rendering-category gate
 
 ```powershell

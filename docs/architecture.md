@@ -140,6 +140,17 @@ input protocol, so only the twelve requested state frames are retained. The
 second process receives an exact copy of the changed profile tree, making the
 garage persistence result a save/restart proof rather than same-process state.
 
+The M6-003 race-system boundary is a project-owned default-off InitOnly audit
+around seven known guest script wrappers plus two requested frame captures. It
+records only bounded scalar classifications and counters; no guest pointers,
+race names, save content, or host paths are emitted. The reached retail Martin
+route invokes `Race_Finish` but not the optional description, checkpoint, or
+UI-result wrappers, so those zero-hit counters remain explicit limitations.
+The accepted matrix combines this current physical finish/reward route with
+immutable Ian-series, repeated-race reward/resource, and traffic evidence.
+Operator completion and police observations are stored separately as external,
+non-machine provenance.
+
 The M4 XAM evidence boundary is opt-in and privacy-safe. ReXGlue records only
 semantic results for the reached local-user APIs: slot class, sign-in state,
 XUID nonzero/mask agreement, name/profile consistency, and distinct absent-slot

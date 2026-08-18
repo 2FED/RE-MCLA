@@ -52,6 +52,13 @@ constexpr uint32_t kExpectedCodeBase = 0x82130000;
 constexpr uint32_t kExpectedCodeSize = 0x0069D054;
 constexpr uint32_t kExpectedEntryPoint = 0x821322B8;
 constexpr uint32_t kPhysicsTimerAddress = 0x821BDA90;
+constexpr uint32_t kRaceDescriptionTypeAddress = 0x822C9230;
+constexpr uint32_t kRaceDescriptionSubtypeAddress = 0x822C9270;
+constexpr uint32_t kRaceDescriptionCopZonesAddress = 0x822C92B0;
+constexpr uint32_t kCheckpointListCountAddress = 0x82267528;
+constexpr uint32_t kCheckpointHitAddress = 0x82263930;
+constexpr uint32_t kRaceFinishAddress = 0x82256BE0;
+constexpr uint32_t kRaceResultAddress = 0x821FBB40;
 constexpr uint32_t kExpectedTitleId = 0x545407F8;
 constexpr uint32_t kExpectedMediaId = 0x5940C9DB;
 constexpr rex::X_STATUS kAccessDenied = 0xC0000022u;
@@ -79,6 +86,265 @@ std::mutex physics_timer_mutex;
 PPCFunc *physics_timer_original = nullptr;
 bool physics_timer_sampling = false;
 PhysicsTimerSnapshot physics_timer_snapshot;
+
+struct RaceDescriptionAuditState {
+  uint32_t guest_object = 0;
+  uint32_t race_type = UINT32_MAX;
+  uint32_t race_subtype = UINT32_MAX;
+  uint32_t cop_zones = UINT32_MAX;
+  uint64_t last_update = 0;
+
+  bool IsComplete() const {
+    return race_type != UINT32_MAX && race_subtype != UINT32_MAX &&
+           cop_zones != UINT32_MAX;
+  }
+};
+
+struct RaceSystemAuditSnapshot {
+  uint64_t description_getter_calls = 0;
+  uint64_t description_complete = 0;
+  uint64_t checkpoint_count_calls = 0;
+  uint64_t checkpoint_hit_calls = 0;
+  uint64_t finish_calls = 0;
+  uint64_t result_calls = 0;
+  uint64_t arrested_finishes = 0;
+  uint32_t checkpoint_count_max = 0;
+  uint32_t latest_category = UINT32_MAX;
+  uint32_t latest_race_type = UINT32_MAX;
+  uint32_t latest_race_subtype = UINT32_MAX;
+  uint32_t latest_cop_zones = UINT32_MAX;
+  uint32_t latest_winning_time = UINT32_MAX;
+  uint32_t detail_records = 0;
+  uint32_t dropped_records = 0;
+};
+
+constexpr size_t kRaceDescriptionAuditCapacity = 64;
+constexpr uint32_t kRaceSystemDetailCapacity = 32;
+std::mutex race_system_audit_mutex;
+std::array<RaceDescriptionAuditState, kRaceDescriptionAuditCapacity>
+    race_description_audit_states{};
+RaceSystemAuditSnapshot race_system_audit_snapshot;
+uint64_t race_system_audit_sequence = 0;
+bool race_system_audit_enabled = false;
+PPCFunc *race_description_type_original = nullptr;
+PPCFunc *race_description_subtype_original = nullptr;
+PPCFunc *race_description_cop_zones_original = nullptr;
+PPCFunc *checkpoint_list_count_original = nullptr;
+PPCFunc *checkpoint_hit_original = nullptr;
+PPCFunc *race_finish_original = nullptr;
+PPCFunc *race_result_original = nullptr;
+
+RaceDescriptionAuditState *FindRaceDescriptionAuditState(uint32_t object) {
+  RaceDescriptionAuditState *empty = nullptr;
+  RaceDescriptionAuditState *oldest = &race_description_audit_states.front();
+  for (auto &state : race_description_audit_states) {
+    if (state.guest_object == object) {
+      return &state;
+    }
+    if (!state.guest_object && !empty) {
+      empty = &state;
+    }
+    if (state.last_update < oldest->last_update) {
+      oldest = &state;
+    }
+  }
+  RaceDescriptionAuditState *state = empty ? empty : oldest;
+  *state = {};
+  state->guest_object = object;
+  state->race_type = UINT32_MAX;
+  state->race_subtype = UINT32_MAX;
+  state->cop_zones = UINT32_MAX;
+  return state;
+}
+
+const RaceDescriptionAuditState *GetLatestCompleteRaceDescriptionAuditState() {
+  const RaceDescriptionAuditState *latest = nullptr;
+  for (const auto &state : race_description_audit_states) {
+    if (state.IsComplete() &&
+        (!latest || state.last_update > latest->last_update)) {
+      latest = &state;
+    }
+  }
+  return latest;
+}
+
+enum class RaceDescriptionAuditField { kType, kSubtype, kCopZones };
+
+void RecordRaceDescriptionAudit(uint32_t object,
+                                RaceDescriptionAuditField field,
+                                uint32_t value) {
+  std::lock_guard lock(race_system_audit_mutex);
+  if (!race_system_audit_enabled || !object) {
+    return;
+  }
+  auto *state = FindRaceDescriptionAuditState(object);
+  const bool was_complete = state->IsComplete();
+  switch (field) {
+  case RaceDescriptionAuditField::kType:
+    state->race_type = value;
+    break;
+  case RaceDescriptionAuditField::kSubtype:
+    state->race_subtype = value;
+    break;
+  case RaceDescriptionAuditField::kCopZones:
+    state->cop_zones = value;
+    break;
+  }
+  state->last_update = ++race_system_audit_sequence;
+  ++race_system_audit_snapshot.description_getter_calls;
+  if (!was_complete && state->IsComplete()) {
+    ++race_system_audit_snapshot.description_complete;
+    if (race_system_audit_snapshot.detail_records < kRaceSystemDetailCapacity) {
+      ++race_system_audit_snapshot.detail_records;
+      MCLA_INPUT_INFO(
+          "MCLA_RACE_SYSTEM_DESC v=1 record={} race_type={} race_subtype={} "
+          "cop_zones={}",
+          race_system_audit_snapshot.detail_records, state->race_type,
+          state->race_subtype, state->cop_zones);
+    } else {
+      ++race_system_audit_snapshot.dropped_records;
+    }
+  }
+}
+
+void RecordRaceDescriptionWrapperAudit(PPCContext &ctx, uint8_t *base,
+                                       PPCFunc *original,
+                                       RaceDescriptionAuditField field) {
+  const uint32_t call_context = ctx.r3.u32;
+  uint32_t object = 0;
+  uint32_t output = 0;
+  if (call_context) {
+    output = REX_LOAD_U32(call_context);
+    const uint32_t arguments = REX_LOAD_U32(call_context + 8);
+    if (arguments) {
+      object = REX_LOAD_U32(arguments);
+    }
+  }
+  original(ctx, base);
+  if (object && output) {
+    RecordRaceDescriptionAudit(object, field, REX_LOAD_U32(output));
+  }
+}
+
+void RaceDescriptionTypeProbe(PPCContext &ctx, uint8_t *base) {
+  RecordRaceDescriptionWrapperAudit(ctx, base, race_description_type_original,
+                                    RaceDescriptionAuditField::kType);
+}
+
+void RaceDescriptionSubtypeProbe(PPCContext &ctx, uint8_t *base) {
+  RecordRaceDescriptionWrapperAudit(ctx, base,
+                                    race_description_subtype_original,
+                                    RaceDescriptionAuditField::kSubtype);
+}
+
+void RaceDescriptionCopZonesProbe(PPCContext &ctx, uint8_t *base) {
+  RecordRaceDescriptionWrapperAudit(ctx, base,
+                                    race_description_cop_zones_original,
+                                    RaceDescriptionAuditField::kCopZones);
+}
+
+void CheckpointListCountProbe(PPCContext &ctx, uint8_t *base) {
+  const uint32_t call_context = ctx.r3.u32;
+  checkpoint_list_count_original(ctx, base);
+  if (!call_context) {
+    return;
+  }
+  const uint32_t output = REX_LOAD_U32(call_context);
+  if (!output) {
+    return;
+  }
+  const uint32_t count = REX_LOAD_U32(output);
+  std::lock_guard lock(race_system_audit_mutex);
+  if (!race_system_audit_enabled) {
+    return;
+  }
+  ++race_system_audit_snapshot.checkpoint_count_calls;
+  if (count > race_system_audit_snapshot.checkpoint_count_max) {
+    race_system_audit_snapshot.checkpoint_count_max = count;
+    if (race_system_audit_snapshot.detail_records < kRaceSystemDetailCapacity) {
+      ++race_system_audit_snapshot.detail_records;
+      MCLA_INPUT_INFO("MCLA_RACE_SYSTEM_CHECKPOINTS v=1 record={} count={}",
+                      race_system_audit_snapshot.detail_records, count);
+    } else {
+      ++race_system_audit_snapshot.dropped_records;
+    }
+  }
+}
+
+void CheckpointHitProbe(PPCContext &ctx, uint8_t *base) {
+  const uint32_t call_context = ctx.r3.u32;
+  checkpoint_hit_original(ctx, base);
+  if (!call_context) {
+    return;
+  }
+  const uint32_t output = REX_LOAD_U32(call_context);
+  if (!output || !REX_LOAD_U32(output)) {
+    return;
+  }
+  std::lock_guard lock(race_system_audit_mutex);
+  if (race_system_audit_enabled) {
+    ++race_system_audit_snapshot.checkpoint_hit_calls;
+  }
+}
+
+void RaceFinishProbe(PPCContext &ctx, uint8_t *base) {
+  const uint32_t call_context = ctx.r3.u32;
+  uint32_t race = 0;
+  if (call_context) {
+    const uint32_t arguments = REX_LOAD_U32(call_context + 8);
+    if (arguments) {
+      race = REX_LOAD_U32(arguments);
+    }
+  }
+  race_finish_original(ctx, base);
+  std::lock_guard lock(race_system_audit_mutex);
+  if (!race_system_audit_enabled || !race) {
+    return;
+  }
+  ++race_system_audit_snapshot.finish_calls;
+  race_system_audit_snapshot.latest_category = REX_LOAD_U32(race + 0xC18);
+  race_system_audit_snapshot.latest_winning_time = REX_LOAD_U32(race + 0xEB0);
+  if (REX_LOAD_U8(race + 0xEBF)) {
+    ++race_system_audit_snapshot.arrested_finishes;
+  }
+  const auto *description = GetLatestCompleteRaceDescriptionAuditState();
+  if (description) {
+    race_system_audit_snapshot.latest_race_type = description->race_type;
+    race_system_audit_snapshot.latest_race_subtype = description->race_subtype;
+    race_system_audit_snapshot.latest_cop_zones = description->cop_zones;
+  }
+  if (race_system_audit_snapshot.detail_records < kRaceSystemDetailCapacity) {
+    ++race_system_audit_snapshot.detail_records;
+    MCLA_INPUT_INFO(
+        "MCLA_RACE_SYSTEM_FINISH v=1 record={} category={} finished={} "
+        "arrested={} winning_time={} desc_known={} race_type={} "
+        "race_subtype={} cop_zones={} checkpoint_max={}",
+        race_system_audit_snapshot.detail_records,
+        race_system_audit_snapshot.latest_category,
+        REX_LOAD_U8(race + 0xEBD) ? 1 : 0, REX_LOAD_U8(race + 0xEBF) ? 1 : 0,
+        race_system_audit_snapshot.latest_winning_time, description ? 1 : 0,
+        race_system_audit_snapshot.latest_race_type,
+        race_system_audit_snapshot.latest_race_subtype,
+        race_system_audit_snapshot.latest_cop_zones,
+        race_system_audit_snapshot.checkpoint_count_max);
+  } else {
+    ++race_system_audit_snapshot.dropped_records;
+  }
+}
+
+void RaceResultProbe(PPCContext &ctx, uint8_t *base) {
+  race_result_original(ctx, base);
+  std::lock_guard lock(race_system_audit_mutex);
+  if (race_system_audit_enabled) {
+    ++race_system_audit_snapshot.result_calls;
+  }
+}
+
+RaceSystemAuditSnapshot FreezeRaceSystemAudit() {
+  std::lock_guard lock(race_system_audit_mutex);
+  race_system_audit_enabled = false;
+  return race_system_audit_snapshot;
+}
 
 bool PhysicsTimerBitsToMicros(uint32_t bits, uint32_t &micros_out) {
   const float seconds = std::bit_cast<float>(bits);
@@ -418,6 +684,11 @@ REXCVAR_DEFINE_BOOL(mcla_race_route_probe, false, "MCLA",
 REXCVAR_DEFINE_BOOL(
     mcla_race_resource_probe, false, "MCLA",
     "Capture five operator-confirmed post-race resource checkpoints")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_race_system_probe, false, "MCLA",
+    "Audit a representative race finish with start and reward captures")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(
@@ -857,6 +1128,65 @@ void MclaApp::LaunchModule() {
                     kPhysicsTimerAddress);
   }
 
+  if (REXCVAR_GET(mcla_race_system_probe)) {
+    auto *dispatcher = runtime()->function_dispatcher();
+    race_description_type_original =
+        dispatcher->GetFunction(kRaceDescriptionTypeAddress);
+    race_description_subtype_original =
+        dispatcher->GetFunction(kRaceDescriptionSubtypeAddress);
+    race_description_cop_zones_original =
+        dispatcher->GetFunction(kRaceDescriptionCopZonesAddress);
+    checkpoint_list_count_original =
+        dispatcher->GetFunction(kCheckpointListCountAddress);
+    checkpoint_hit_original = dispatcher->GetFunction(kCheckpointHitAddress);
+    race_finish_original = dispatcher->GetFunction(kRaceFinishAddress);
+    race_result_original = dispatcher->GetFunction(kRaceResultAddress);
+    const bool originals_valid =
+        race_description_type_original && race_description_subtype_original &&
+        race_description_cop_zones_original && checkpoint_list_count_original &&
+        checkpoint_hit_original && race_finish_original &&
+        race_result_original &&
+        race_description_type_original != RaceDescriptionTypeProbe &&
+        race_description_subtype_original != RaceDescriptionSubtypeProbe &&
+        race_description_cop_zones_original != RaceDescriptionCopZonesProbe &&
+        checkpoint_list_count_original != CheckpointListCountProbe &&
+        checkpoint_hit_original != CheckpointHitProbe &&
+        race_finish_original != RaceFinishProbe &&
+        race_result_original != RaceResultProbe;
+    if (!originals_valid ||
+        !dispatcher->SetFunction(kRaceDescriptionTypeAddress,
+                                 RaceDescriptionTypeProbe) ||
+        !dispatcher->SetFunction(kRaceDescriptionSubtypeAddress,
+                                 RaceDescriptionSubtypeProbe) ||
+        !dispatcher->SetFunction(kRaceDescriptionCopZonesAddress,
+                                 RaceDescriptionCopZonesProbe) ||
+        !dispatcher->SetFunction(kCheckpointListCountAddress,
+                                 CheckpointListCountProbe) ||
+        !dispatcher->SetFunction(kCheckpointHitAddress, CheckpointHitProbe) ||
+        !dispatcher->SetFunction(kRaceFinishAddress, RaceFinishProbe) ||
+        !dispatcher->SetFunction(kRaceResultAddress, RaceResultProbe)) {
+      MCLA_INPUT_ERROR("MCLA race system: one or more audit hooks rejected");
+      app_context().CallInUIThreadDeferred(
+          [this]() { app_context().QuitFromUIThread(); });
+      return;
+    }
+    {
+      std::lock_guard lock(race_system_audit_mutex);
+      race_description_audit_states = {};
+      race_system_audit_snapshot = {};
+      race_system_audit_sequence = 0;
+      race_system_audit_enabled = true;
+    }
+    MCLA_INPUT_INFO(
+        "MCLA_RACE_SYSTEM_CONFIG v=1 enabled=1 desc_type={:08X} "
+        "desc_subtype={:08X} cop_zones={:08X} checkpoint_count={:08X} "
+        "checkpoint_hit={:08X} finish={:08X} result={:08X} detail_cap={}",
+        kRaceDescriptionTypeAddress, kRaceDescriptionSubtypeAddress,
+        kRaceDescriptionCopZonesAddress, kCheckpointListCountAddress,
+        kCheckpointHitAddress, kRaceFinishAddress, kRaceResultAddress,
+        kRaceSystemDetailCapacity);
+  }
+
   rex::ReXApp::LaunchModule();
 }
 
@@ -1088,6 +1418,7 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_audio_event_probe) ||
       REXCVAR_GET(mcla_race_route_probe) ||
       REXCVAR_GET(mcla_race_resource_probe) ||
+      REXCVAR_GET(mcla_race_system_probe) ||
       REXCVAR_GET(mcla_city_streaming_probe) ||
       REXCVAR_GET(mcla_garage_lifecycle_probe)) {
     first_frame_probe_thread_ = std::jthread(
@@ -1260,6 +1591,80 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
           "MCLA_RACE_RESOURCE_SUMMARY v=1 status=PASS checkpoints={} "
           "external_close_required=1",
           captured);
+    }
+    if (REXCVAR_GET(mcla_race_system_probe)) {
+      MCLA_INPUT_INFO("MCLA_RACE_SYSTEM_READY v=1 phases=start,rewards "
+                      "external_close_required=1");
+      constexpr std::array<std::string_view, 2> kRaceSystemPhases = {"start",
+                                                                     "rewards"};
+      uint32_t captured = 0;
+      for (std::string_view phase : kRaceSystemPhases) {
+        const auto request_path =
+            runtime()->user_data_root() /
+            (".mcla-race-system-" + std::string(phase) + ".request");
+        while (!stop_token.stop_requested() &&
+               !std::filesystem::exists(request_path)) {
+          std::this_thread::sleep_for(100ms);
+        }
+        if (stop_token.stop_requested()) {
+          return;
+        }
+        rex::ui::RawImage race_image;
+        const auto frame_path =
+            runtime()->user_data_root() /
+            ("mcla-race-system-" + std::string(phase) + ".bmp");
+        const auto capture_deadline = std::chrono::steady_clock::now() + 10s;
+        bool capture_succeeded = false;
+        while (!stop_token.stop_requested() &&
+               std::chrono::steady_clock::now() < capture_deadline) {
+          if (presenter->CaptureGuestOutput(race_image) &&
+              WriteFrameBmp(frame_path, race_image)) {
+            capture_succeeded = true;
+            break;
+          }
+          std::this_thread::sleep_for(100ms);
+        }
+        if (!capture_succeeded) {
+          MCLA_GPU_ERROR("MCLA race system: failed to capture {} frame", phase);
+          return;
+        }
+        std::error_code remove_error;
+        if (!std::filesystem::remove(request_path, remove_error) ||
+            remove_error) {
+          MCLA_GPU_ERROR("MCLA race system: failed to consume {} request",
+                         phase);
+          return;
+        }
+        ++captured;
+        MCLA_INPUT_INFO(
+            "MCLA_RACE_SYSTEM_FRAME v=1 phase={} width={} height={} "
+            "present_seq={} status=PASS",
+            phase, race_image.width, race_image.height,
+            presenter->GetGuestOutputSequence());
+      }
+      const RaceSystemAuditSnapshot audit = FreezeRaceSystemAudit();
+      // The retail Martin route invokes the Race_Finish script wrapper, but
+      // not the optional description/checkpoint/UI-result script wrappers.
+      // Keep their zero-hit counters visible without making them a false
+      // failure condition. The two requested frames bind the physical start
+      // and reward states; prior accepted evidence owns the broader matrix.
+      const bool passed = captured == kRaceSystemPhases.size() &&
+                          audit.finish_calls != 0 && audit.dropped_records == 0;
+      MCLA_INPUT_INFO(
+          "MCLA_RACE_SYSTEM_SUMMARY v=1 status={} frames={} "
+          "desc_calls={} desc_complete={} checkpoint_count_calls={} "
+          "checkpoint_max={} checkpoint_hits={} finish_calls={} "
+          "result_calls={} arrested_finishes={} category={} race_type={} "
+          "race_subtype={} cop_zones={} winning_time={} detail_records={} "
+          "dropped_records={} external_close_required=1",
+          passed ? "PASS" : "FAIL", captured, audit.description_getter_calls,
+          audit.description_complete, audit.checkpoint_count_calls,
+          audit.checkpoint_count_max, audit.checkpoint_hit_calls,
+          audit.finish_calls, audit.result_calls, audit.arrested_finishes,
+          audit.latest_category, audit.latest_race_type,
+          audit.latest_race_subtype, audit.latest_cop_zones,
+          audit.latest_winning_time, audit.detail_records,
+          audit.dropped_records);
     }
     if (REXCVAR_GET(mcla_city_streaming_probe)) {
       constexpr std::array<std::string_view, 9> kCheckpointIds = {
