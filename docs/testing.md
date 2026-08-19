@@ -898,6 +898,32 @@ default-device recovery, not XMP decoding, selected system music, exact mix,
 or a monolithic two-hour device-switch session. The accepted metrics and
 scope are recorded in `docs/evidence/M6-007-audio-stability.md`.
 
+## M6-008 offline progression and retired-service matrix
+
+```powershell
+scripts/test-offline-progression-report.ps1
+scripts/run-offline-progression-report.ps1
+scripts/verify-offline-progression-report.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This non-GUI gate clean-builds and installs exact ReXGlue v0.9.0.26 in both
+RelWithDebInfo and Release configurations, runs 15 focused cases / 107
+assertions, and clean-builds the Release host. It checks the six-row policy for
+local achievements, unavailable presence, valid-empty leaderboards,
+unavailable Rate My Ride, title-save Driving Test progression, and unavailable
+voice. Explicit return-bearing hooks must replace the generic achievements UI,
+stats-enumerator, and voice-submit stubs, and the leaderboard result buffer must
+stay within the bounded title-compatible layout.
+
+Final verification rehashes the SDK and Release build/test logs, unit binary,
+runtime artifacts, source manifest, and immutable M4-004/M4-009/M5-012/M6-003/
+M6-005 results. The gate is deliberately build-only: it does not claim that the
+current title process called every service export, nor does it claim guide UI,
+Live presence, real leaderboard rows, Rate My Ride backend, voice transport,
+the exact Driving Test unlock point, or any retired-service vehicle unlock.
+M6-009 remains the owner of the latter policy decision.
+
 ## M5-003 rendering-category gate
 
 ```powershell
