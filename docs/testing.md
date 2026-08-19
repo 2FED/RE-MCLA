@@ -947,6 +947,33 @@ achievement evidence. M6-009 does not implement that branch and does not claim
 that the supported save owns the Audi R8 entitlement. The fixture suite contains
 one positive and forty fail-closed semantic mutations.
 
+## M6-010 window and device lifecycle gate
+
+```powershell
+scripts/test-window-device-lifecycle-smoke.ps1
+scripts/run-window-device-lifecycle-smoke.ps1
+scripts/verify-window-device-lifecycle-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The gate is autonomous. It rebinds accepted gameplay-pause, controller-focus,
+controller-hotplug, audio-device-recovery, and repeated external-close evidence,
+then clean-builds Release for the one missing physical row. The current process
+must reach a nontrivial guest frame, remain alive while its exact window is
+minimized for at least five seconds, restore to a nontrivial 1280x720 normalized
+desktop capture with at least 128 sampled RGB555 bins and a p05-p95 luma range
+of at least 40, minimize again, and exit 0 within ten seconds after external
+`WM_CLOSE` without force cleanup.
+
+Final verification binds the exact matrix JSON, prior result hashes, recovered
+hotplug tree, complete runtime-log manifest, both physical BMPs, clean-build
+log, four Release artifacts, source-game identity, and the isolated non-capture
+user tree. The runtime log must contain the nontrivial-frame marker and ordered
+window-close/hard-exit tail and must contain no guest crash, unimplemented PPC,
+device-removal, or D3D12 device-loss marker. The result is a split matrix: it
+does not claim OS suspend/hibernate, graceful subsystem teardown, display-
+adapter removal, multi-controller identity, or one monolithic all-rows process.
+
 ## M5-003 rendering-category gate
 
 ```powershell

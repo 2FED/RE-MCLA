@@ -1,0 +1,21 @@
+{
+  "schema": "mcla-window-device-lifecycle-matrix-v1",
+  "task": "M6-010",
+  "decision": "split-window-device-lifecycle-matrix-pass",
+  "rows": [
+    { "row": "gameplay-pause", "source": "M5-006", "physical": true },
+    { "row": "focus-loss-neutral-recovery", "source": "M4-006", "physical": true },
+    { "row": "controller-disconnect-reconnect", "source": "M4-006", "physical": true },
+    { "row": "audio-pause-default-device-recovery", "source": "M6-007", "physical": true },
+    { "row": "twenty-controlled-external-closes", "source": "M4-013", "physical": true },
+    { "row": "minimize-restore-render-recovery-close-minimized", "source": "M6-010", "physical": true }
+  ],
+  "scope": {
+    "external_wm_close_is_console_title_exit": true,
+    "graceful_subsystem_teardown_claimed": false,
+    "os_suspend_hibernate_claimed": false,
+    "multi_controller_identity_claimed": false,
+    "display_adapter_removal_claimed": false,
+    "monolithic_all_rows_claimed": false
+  }
+}
