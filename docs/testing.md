@@ -924,6 +924,29 @@ Live presence, real leaderboard rows, Rate My Ride backend, voice transport,
 the exact Driving Test unlock point, or any retired-service vehicle unlock.
 M6-009 remains the owner of the latter policy decision.
 
+## M6-009 retired-service unlock policy
+
+```powershell
+scripts/test-retired-service-unlock-policy.ps1
+scripts/run-retired-service-unlock-policy.ps1
+scripts/verify-retired-service-unlock-policy.ps1 `
+  -ResultPath <private-result.json>
+```
+
+This is a non-GUI decision gate. It binds the accepted M6-008 offline-service
+matrix, validates the exact JSON policy, scans owned runtime source for an Audi
+R8/Driving Test unlock implementation, and persists a one-file private result.
+The verifier requires canonical compatibility to preserve the retail lock and
+any authentic existing entitlement while forbidding fake service completion,
+new entitlement fabrication, save mutation, and source-game mutation.
+
+The optional-cheat branch is policy only: a future implementation must be
+explicitly enabled by the user, default false, InitOnly, separately named and
+documented, non-persistent, and excluded from canonical progression and
+achievement evidence. M6-009 does not implement that branch and does not claim
+that the supported save owns the Audi R8 entitlement. The fixture suite contains
+one positive and forty fail-closed semantic mutations.
+
 ## M5-003 rendering-category gate
 
 ```powershell

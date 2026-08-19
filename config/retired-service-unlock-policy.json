@@ -1,0 +1,50 @@
+{
+  "schema": "mcla-retired-service-unlock-policy-v1",
+  "task": "M6-009",
+  "decision": "retail-preserving-compatibility-with-explicit-cheat-separation",
+  "historical_basis": [
+    {
+      "claim": "rate-my-ride-and-driving-test-unlocks-are-retired-and-unavailable",
+      "source_kind": "publisher",
+      "url": "https://www.rockstargames.com/games/midnightclubLA"
+    },
+    {
+      "claim": "audi-r8-purchase-required-all-12-social-club-tasks",
+      "source_kind": "contemporaneous-guide",
+      "url": "https://www.gamesradar.com/midnight-club-los-angeles-guide/"
+    }
+  ],
+  "canonical_compatibility": {
+    "classification": "compatibility",
+    "retired_service_behavior": "preserve-retail-lock-and-existing-authentic-entitlement",
+    "offline_or_on_disc_contract_required": true,
+    "new_entitlement_fabricated": false,
+    "fake_service_completion": false,
+    "save_mutation": false,
+    "source_game_mutation": false,
+    "canonical_evidence_allowed": true
+  },
+  "optional_cheat": {
+    "classification": "cheat",
+    "implementation_status": "not-implemented",
+    "future_surface_allowed": true,
+    "explicit_user_opt_in_required": true,
+    "default_enabled": false,
+    "init_only_required": true,
+    "separate_namespace_and_documentation_required": true,
+    "save_mutation_allowed": false,
+    "source_game_mutation_allowed": false,
+    "canonical_progression_evidence_allowed": false,
+    "achievement_or_progression_claims_allowed": false
+  },
+  "asset_decisions": [
+    {
+      "asset": "audi-r8-4.2-fsi-quattro",
+      "historical_gate": "all-12-social-club-driving-test-tasks",
+      "current_service_state": "retired-unavailable",
+      "canonical_action": "remain-locked-unless-authentic-entitlement-already-exists",
+      "cheat_action": "none-implemented",
+      "exact_entitlement_state_in_supported_save_claimed": false
+    }
+  ]
+}

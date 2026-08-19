@@ -208,6 +208,15 @@ and sign-in UI were not reached in that route; deterministic voice defaults are
 covered by focused SDK tests, while generalized writes and persistence remain
 later scope.
 
+Retired-service entitlements are not part of the compatibility layer. The
+canonical M6-009 policy preserves the title's retail lock and any authentic
+entitlement already present, but it never synthesizes Social Club completion,
+rewrites a save, or edits source game data. Compatibility fixes remain limited
+to restoring observable local/on-disc platform contracts. A future convenience
+unlock must live in an explicitly named default-off InitOnly cheat surface,
+remain non-persistent, and be excluded from canonical progression evidence.
+The current tree intentionally implements no such cheat.
+
 Generated functions retain metadata-only crash breadcrumbs: current PPC function,
 the last tracked function/basic-block guest PC, and the last typed, raw, or stubbed
 import. C++ exceptions escaping guest execution are caught at the `XThread`
