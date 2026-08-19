@@ -1,0 +1,44 @@
+# MCLA-R host configuration example.
+# Copy this file beside mcla.exe as mcla.toml. Values in mcla.toml are loaded
+# after command-line and environment values, so the file wins on conflicts.
+# F4 opens the ReXGlue settings overlay; settings changed there are persisted
+# to mcla.toml. Options marked restart-required take effect on the next launch.
+
+# Guest video mode and host window. An empty resolution uses the explicit
+# video_mode_* and window_* values below. Examples: "720p", "1080p", "4k".
+resolution = ""
+video_mode_width = 1280
+video_mode_height = 720
+video_mode_refresh_rate = 60.0
+window_width = 0
+window_height = 0
+fullscreen = true
+monitor = 0
+
+# Host audio. audio_device is either "default" or the exact SDL playback
+# device name. Device and volume changes require a restart.
+audio_device = "default"
+audio_volume = 1.0
+audio_mute = false
+
+# Controller backend. Physical controller identity and assignment remain an
+# operating-system / SDL concern and are intentionally not persisted here.
+input_backend = "sdl"
+mnk_mode = false
+
+# Logging. An empty log_file uses the runtime default next to the executable.
+log_level = "info"
+log_file = ""
+log_verbose = false
+log_noisy = false
+log_flush_interval = 0
+log_max_file_size_mb = 5
+log_max_files = 20
+
+# Data roots. Empty user/cache roots use the platform defaults. game_data_root
+# must be supplied either here or by the launcher/command line for guest boot.
+game_data_root = ""
+user_data_root = ""
+update_data_root = ""
+cache_root = ""
+metadata_root = ""

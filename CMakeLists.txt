@@ -8,7 +8,7 @@ project(mcla LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(MCLA_REXGLUE_VERSION "0.9.0.26")
+set(MCLA_REXGLUE_VERSION "0.9.0.27")
 if(DEFINED REXSDK_VERSION AND
    NOT REXSDK_VERSION STREQUAL "" AND
    NOT REXSDK_VERSION STREQUAL "${MCLA_REXGLUE_VERSION}")
@@ -78,3 +78,11 @@ else()
 endif()
 
 rexglue_setup_target(mcla GPU_PLUGINS xenos)
+
+# Ship a discoverable host-configuration template without overwriting the
+# user's mcla.toml or changing command-line-driven test roots.
+add_custom_command(TARGET mcla POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/mcla.toml.example"
+        "$<TARGET_FILE_DIR:mcla>/mcla.toml.example"
+    VERBATIM)
