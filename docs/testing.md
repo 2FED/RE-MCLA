@@ -1025,6 +1025,29 @@ fourteen fail-closed malformed/accounting/order/failure cases, and fifteen
 source contracts. The accepted result is a boot/title sample, not a gameplay
 benchmark, FPS promise, or diagnosis of the open music-continuity issue.
 
+## M6-013 reached unsupported-operation report
+
+```powershell
+scripts/test-reached-unsupported-report.ps1
+scripts/run-reached-unsupported-report.ps1
+scripts/verify-reached-unsupported-report.ps1 -ResultPath <private-result.json>
+```
+
+The runner clean-installs exact ReXGlue v0.9.0.29, runs the focused 2-case /
+5-assertion reached-compatibility suite, clean-builds the RelWithDebInfo host,
+and autonomously reaches the third successful guest present. It requires one
+explicit unavailable-console-key result and one validated file-dismount
+compatibility result in order, then performs external `WM_CLOSE` with exit 0.
+
+The verifier binds six accepted broad-play results, the current runtime-log
+manifest, executable and build/test logs, six exact generated function repairs,
+twelve not-observed/deferred xboxkrnl imports, and eight deliberately unadvertised
+advanced FFB imports. It rejects legacy or generic reached stubs,
+`PPC_UNIMPLEMENTED`, invalid targets, crashes, fatal/device-loss markers,
+malformed chronology, drifted prior evidence, and claims that the whole SDK
+stub inventory is complete. Fixtures contain one positive, fourteen fail-closed
+negatives, and eighteen source checks. No operator input or save is required.
+
 ## M5-003 rendering-category gate
 
 ```powershell

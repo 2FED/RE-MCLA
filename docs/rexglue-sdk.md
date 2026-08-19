@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.28`
-- Immutable project commit: `6354bbe2150c7ce06bee5ffe399f17a94c948616`
+- Project release tag: `v0.9.0.29`
+- Immutable project commit: `5a7fc75713d1d43188b7574349f44a7e7923033d`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -86,6 +86,13 @@ time. Audit-off file and pipeline hot paths use an atomic check and do not take
 the telemetry mutex or timestamp work. Focused coverage is 2 cases / 7
 assertions.
 
+The v0.9.0.29 delta replaces the two import stubs actually reached during
+broad MCLA play. `IoDismountVolumeByFileHandle` validates a real file handle
+and acknowledges the operation while retaining the runtime-owned host VFS
+mount. `XeKeysConsolePrivateKeySign` fails explicitly when no console private
+key exists, preserves the caller buffer, and rejects null inputs rather than
+reporting false signing success. Focused coverage is 2 cases / 5 assertions.
+
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
 filtered `[offline]` suite passes 3/3 cases and 10/10 assertions without
@@ -105,19 +112,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.28^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.29^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `6354bbe2150c7ce06bee5ffe399f17a94c948616`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `5a7fc75713d1d43188b7574349f44a7e7923033d`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.28 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.29 project-fork commit:
 
 ```text
-6354bbe2150c7ce06bee5ffe399f17a94c948616 third_party/rexglue-sdk
+5a7fc75713d1d43188b7574349f44a7e7923033d third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11
