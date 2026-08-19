@@ -3,6 +3,7 @@
 #include "mcla_app.h"
 
 #include <rex/audio/audio_route_audit.h>
+#include <rex/audio/audio_system.h>
 #include <rex/chrono/clock.h>
 #include <rex/cvar.h>
 #include <rex/filesystem/file.h>
@@ -678,6 +679,11 @@ REXCVAR_DEFINE_BOOL(
 REXCVAR_DEFINE_BOOL(
     mcla_audio_event_probe, false, "MCLA",
     "Exercise bounded saved-gameplay audio event listening windows")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_audio_stability_probe, false, "MCLA",
+    "Exercise title audio pause/resume and an external default-device switch")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(mcla_race_route_probe, false, "MCLA",
@@ -1422,6 +1428,7 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
       REXCVAR_GET(mcla_gameplay_input_probe) ||
       REXCVAR_GET(mcla_physics_timing_probe) ||
       REXCVAR_GET(mcla_audio_event_probe) ||
+      REXCVAR_GET(mcla_audio_stability_probe) ||
       REXCVAR_GET(mcla_race_route_probe) ||
       REXCVAR_GET(mcla_race_resource_probe) ||
       REXCVAR_GET(mcla_race_system_probe) ||
@@ -1904,8 +1911,88 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
           "persistence_required={} external_close_required=1",
           cycle, captured, cycle == 2 ? 1 : 0);
     }
+    if (REXCVAR_GET(mcla_audio_stability_probe)) {
+      auto *audio_system = static_cast<rex::audio::AudioSystem *>(
+          runtime() ? runtime()->audio_system() : nullptr);
+      if (!audio_system) {
+        MCLA_AUDIO_ERROR("MCLA audio stability: audio system unavailable");
+        return;
+      }
+      MCLA_AUDIO_INFO(
+          "MCLA_AUDIO_STABILITY_CONFIG v=1 pause_cycles=2 pause_ms=2000 "
+          "recovery_ms=5000 device_switch=external identity=redacted");
+      if (!SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 5s)) {
+        return;
+      }
+      for (uint32_t cycle = 1; cycle <= 2; ++cycle) {
+        MCLA_AUDIO_INFO("MCLA_AUDIO_STABILITY_PROBE v=1 cycle={} event=PAUSE",
+                        cycle);
+        audio_system->Pause();
+        if (!SleepUntilOrStop(stop_token,
+                              std::chrono::steady_clock::now() + 2s)) {
+          return;
+        }
+        MCLA_AUDIO_INFO("MCLA_AUDIO_STABILITY_PROBE v=1 cycle={} event=RESUME",
+                        cycle);
+        audio_system->Resume();
+        if (!SleepUntilOrStop(stop_token,
+                              std::chrono::steady_clock::now() + 5s)) {
+          return;
+        }
+      }
+      if (!rex::audio::ArmAudioStabilityDeviceSwitch()) {
+        MCLA_AUDIO_ERROR(
+            "MCLA audio stability: pause/resume recovery did not arm");
+        return;
+      }
+      MCLA_AUDIO_INFO(
+          "MCLA_AUDIO_STABILITY_READY v=1 phase=device-switch status=READY "
+          "external_confirmation_required=1");
+      const auto request_path =
+          runtime()->user_data_root() / ".mcla-audio-device-confirm.request";
+      while (!stop_token.stop_requested() &&
+             !std::filesystem::exists(request_path)) {
+        audio_system->PollDefaultDeviceChanges();
+        std::this_thread::sleep_for(100ms);
+      }
+      if (stop_token.stop_requested()) {
+        return;
+      }
+      std::ifstream request_stream(request_path, std::ios::binary);
+      const std::string confirmation(
+          (std::istreambuf_iterator<char>(request_stream)),
+          std::istreambuf_iterator<char>());
+      request_stream.close();
+      if (confirmation != "AUDIO DEVICE RECOVERED") {
+        MCLA_AUDIO_ERROR(
+            "MCLA audio stability: invalid device confirmation request");
+        return;
+      }
+      std::error_code remove_error;
+      if (!std::filesystem::remove(request_path, remove_error) ||
+          remove_error) {
+        MCLA_AUDIO_ERROR(
+            "MCLA audio stability: failed to consume device confirmation");
+        return;
+      }
+      MCLA_AUDIO_INFO("MCLA_AUDIO_STABILITY_CONFIRM v=1 machine_recovered=1 "
+                      "operator_heard=1 identity=redacted");
+      rex::audio::EmitAudioStabilityAuditSummary("title");
+      if (REXCVAR_GET(sdl_audio_route_audit)) {
+        rex::audio::EmitAudioRouteAuditSummary("title");
+      }
+      if (REXCVAR_GET(xmp_route_audit)) {
+        rex::kernel::xam::EmitXmpRouteAuditSummary("title");
+      }
+      MCLA_AUDIO_INFO(
+          "MCLA_AUDIO_STABILITY_SUMMARY v=1 status=COMPLETE pause_cycles=2 "
+          "device_switch=external prior_routes_bound=1");
+      return;
+    }
     if (REXCVAR_GET(sdl_audio_route_audit) &&
-        !REXCVAR_GET(mcla_audio_event_probe)) {
+        !REXCVAR_GET(mcla_audio_event_probe) &&
+        !REXCVAR_GET(mcla_audio_stability_probe)) {
       const uint32_t soak_seconds = REXCVAR_GET(mcla_audio_route_soak_seconds);
       MCLA_AUDIO_INFO("MCLA audio: title soak started seconds {}",
                       soak_seconds);

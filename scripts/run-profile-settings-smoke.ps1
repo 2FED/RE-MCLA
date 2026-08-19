@@ -6,7 +6,7 @@ $ErrorActionPreference='Stop'
 $repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $sdk=Join-Path $repo 'third_party/rexglue-sdk'
 $verify=Join-Path $PSScriptRoot 'verify-profile-settings-smoke.ps1'
-$sdkVersion='0.9.0.24';$sdkCommit='1e4dbc0040c1eebbf78dca0b5679ac64f99b9f4d'
+$sdkVersion='0.9.0.25';$sdkCommit='f28ddabbae3bca56ddf5ffea067982c49c9549b7'
 $seedRelative='private/evidence/M5-013/20260817-013319-c2e7223f/runs/01/user/B13EBABEBABEBABE/545407F8/00000001/mc4.sav/mc4.sav'
 $headerRelative='private/evidence/M5-013/20260817-013319-c2e7223f/runs/01/user/B13EBABEBABEBABE/545407F8/Headers/00000001/mc4.sav.header'
 $prior=@(

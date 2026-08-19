@@ -8,7 +8,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path;$sdk=Join-Path $repo 'third_party/rexglue-sdk'
-$sdkVersion='0.9.0.24';$sdkCommit='1e4dbc0040c1eebbf78dca0b5679ac64f99b9f4d'
+$sdkVersion='0.9.0.25';$sdkCommit='f28ddabbae3bca56ddf5ffea067982c49c9549b7'
 $seedSaveSha='126F7482878C7AACB09AA6795331C906DFB9C4218BE94EDB1D8E51B27CA78AB2';$seedHeaderSha='5827A913515AC0E5D55BB56AEC56DE99CACC0ABB7C8061F59336DF4CEA4A8731'
 $prior=@(
   [ordered]@{task='M4-004';run_id='20260812-123316-db0f1cf4';sha256='388F2FC350C43149CA6E5AD4E24A1B743F18CFE3A450C6D80962099F73C89AE0';decision='single-local-offline-profile'},

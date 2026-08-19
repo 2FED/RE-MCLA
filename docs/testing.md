@@ -847,7 +847,7 @@ scripts/verify-profile-settings-smoke.ps1 `
   -ResultPath <private-result.json>
 ```
 
-This is a build-only, non-GUI gate. It clean-installs exact ReXGlue v0.9.0.24,
+This is a build-only, non-GUI gate. It clean-installs exact ReXGlue v0.9.0.25,
 runs the 7-case/40-assertion XAM profile suite and the 26-case/128-assertion
 CVar suite, then clean-builds the Release host. The profile matrix verifies
 typed scalar and Unicode restart, metadata rejection, interrupted-write backup
@@ -863,6 +863,40 @@ save/header. MCLA does not import `XamUserWriteProfileSettings`, so the result
 claims isolated platform persistence plus prior physical-route binding—not a
 native title write, profile-read runtime hit, first-run OOBE, account picker,
 multiple profiles, or the general host-configuration surface owned by M6-011.
+
+## M6-007 long-session audio stability
+
+```powershell
+scripts/test-audio-stability-smoke.ps1
+scripts/run-audio-stability-smoke.ps1 -LongSoakOnly
+scripts/run-audio-stability-smoke.ps1 -ResumeRun <run-id>
+scripts/verify-audio-stability-smoke.ps1 `
+  -ResultPath <private-result.json>
+```
+
+The first physical stage clean-installs exact ReXGlue v0.9.0.25, runs the
+10-case/42-assertion focused audio suite, clean-builds the RelWithDebInfo host,
+and holds the verified title route for exactly 7200 seconds. Thirteen process
+samples cover baseline plus twelve ten-minute checkpoints. The fail-closed
+bounds are 1 GiB peak private growth, 512 MiB peak working-set growth, 128
+handles, and 16 threads; the larger private bound includes measured animated
+title shader/pipeline warm-up and is not a claim of zero allocation growth.
+The SDL/XMA summary must report sustained nonzero frames, queue depth at most
+64, no invalid sample, submission failure, or run of more than two starvation
+fills, followed by an external `WM_CLOSE` and exit 0.
+
+The resume stage rebuilds the same exact artifacts, performs two physical
+two-second pause/resume cycles, and waits for nonzero device output after each.
+It then asks the operator to change the Windows default playback endpoint and
+confirm only that audio is audible. The machine independently requires a
+privacy-safe SDL default-endpoint migration plus recovered nonzero output;
+endpoint name, id, and other identity are never logged. The final result binds
+both separate physical stages, immutable M4-007/M4-008/M5-009/M5-013 audio
+routes, focused build/test logs, runtime artifacts, source-game identity, and
+the complete private evidence tree. This proves title-route audio stability and
+default-device recovery, not XMP decoding, selected system music, exact mix,
+or a monolithic two-hour device-switch session. The accepted metrics and
+scope are recorded in `docs/evidence/M6-007-audio-stability.md`.
 
 ## M5-003 rendering-category gate
 
