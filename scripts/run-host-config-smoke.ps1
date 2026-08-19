@@ -50,7 +50,7 @@ if ($appExit -ne 0) { throw "App clean build failed. Private run: '$runRoot'." }
 $template = Join-Path $repoRoot 'config/mcla.toml.example'
 $result = [ordered]@{
     schema=1; task='M6-011'; decision='host-config-contract-pass'
-    sdk_version='0.9.0.27'; sdk_install_exit_code=$sdkExit
+    sdk_version='0.9.0.28'; sdk_install_exit_code=$sdkExit
     focused_test_exit_code=$testExit; focused_test_cases=3; focused_test_assertions=27
     app_clean_build_exit_code=$appExit
     template_sha256=(Get-FileHash -LiteralPath $template -Algorithm SHA256).Hash

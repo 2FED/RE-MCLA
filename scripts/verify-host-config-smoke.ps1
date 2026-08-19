@@ -93,7 +93,7 @@ if ($ResultPath) {
         if ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Host config evidence contains a reparse point.' }
     }
     $result = Get-Content -LiteralPath $ResultPath -Raw | ConvertFrom-Json
-    if ($result.schema -ne 1 -or $result.task -ne 'M6-011' -or $result.decision -ne 'host-config-contract-pass' -or $result.sdk_version -ne '0.9.0.27') { throw 'Invalid host config result identity.' }
+    if ($result.schema -ne 1 -or $result.task -ne 'M6-011' -or $result.decision -ne 'host-config-contract-pass' -or $result.sdk_version -ne '0.9.0.28') { throw 'Invalid host config result identity.' }
     if ($result.sdk_install_exit_code -ne 0 -or $result.focused_test_exit_code -ne 0 -or $result.app_clean_build_exit_code -ne 0) { throw 'Host config build/test result is not clean.' }
     if ($result.focused_test_cases -ne 3 -or $result.focused_test_assertions -ne 27) { throw 'Unexpected focused audio config test totals.' }
     $templateHash = (Get-FileHash -LiteralPath $TemplatePath -Algorithm SHA256).Hash

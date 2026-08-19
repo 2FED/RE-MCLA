@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.27`
-- Immutable project commit: `8cc7c272035a3bb4124d15060694943f848d9ee1`
+- Project release tag: `v0.9.0.28`
+- Immutable project commit: `6354bbe2150c7ce06bee5ffe399f17a94c948616`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -77,6 +77,15 @@ than silently changing output. `audio_volume` is bounded to 0.0–1.0 and scales
 converted host PCM without changing guest audio buffers. Focused coverage is
 3 cases / 27 assertions.
 
+The v0.9.0.28 delta adds default-off, InitOnly, privacy-safe performance
+telemetry correlated by guest frame and monotonic host timestamp. A bounded
+300-sample trace records host command-thread CPU frame time, real D3D12
+timestamp-query GPU time, host streaming reads and 5-ms stalls, SDL silence-fill
+underruns, and shader-translation/PSO-creation counts, failures, and elapsed
+time. Audit-off file and pipeline hot paths use an atomic check and do not take
+the telemetry mutex or timestamp work. Focused coverage is 2 cases / 7
+assertions.
+
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
 filtered `[offline]` suite passes 3/3 cases and 10/10 assertions without
@@ -96,19 +105,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.27^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.28^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `8cc7c272035a3bb4124d15060694943f848d9ee1`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `6354bbe2150c7ce06bee5ffe399f17a94c948616`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.27 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.28 project-fork commit:
 
 ```text
-8cc7c272035a3bb4124d15060694943f848d9ee1 third_party/rexglue-sdk
+6354bbe2150c7ce06bee5ffe399f17a94c948616 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

@@ -1000,6 +1000,31 @@ configuration contract and build integration; it does not claim a physical
 alternate playback device, perceived loudness, persisted controller identity,
 or a launcher UI.
 
+## M6-012 performance-telemetry gate
+
+```powershell
+scripts/test-performance-telemetry-smoke.ps1
+scripts/run-performance-telemetry-smoke.ps1
+scripts/verify-performance-telemetry-smoke.ps1 -ResultPath <private-result.json>
+```
+
+The runner clean-installs exact ReXGlue v0.9.0.28, runs the focused 2-case /
+7-assertion frame-audit suite, clean-builds the RelWithDebInfo host, and starts
+one autonomous D3D12 title route. The default-off InitOnly audit freezes after
+exactly 300 complete CPU/GPU samples, each carrying a monotonic host timestamp
+and guest-frame correlation plus per-frame streaming, audio-underrun, shader,
+and PSO deltas. The process closes through external `WM_CLOSE`; no controller
+or owner input is required.
+
+The verifier parses a bounded contiguous rotated-log set, requires exact
+CONFIG/SAMPLE/SUMMARY grammar and cardinality, recomputes p50/p95/max values,
+balances every summary aggregate, rejects post-summary records and fatal/device
+loss, and physically rehashes the runtime manifest, executable, SDK install,
+focused-test, and clean-app-build logs. Fixture coverage includes one positive,
+fourteen fail-closed malformed/accounting/order/failure cases, and fifteen
+source contracts. The accepted result is a boot/title sample, not a gameplay
+benchmark, FPS promise, or diagnosis of the open music-continuity issue.
+
 ## M5-003 rendering-category gate
 
 ```powershell
