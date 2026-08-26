@@ -803,8 +803,10 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
       REXCVAR_GET(mcla_audio_event_probe) ||
       REXCVAR_GET(mcla_garage_lifecycle_probe)) {
     config.input_factory = [this](bool tool_mode) {
-      (void)tool_mode;
-      auto input_system = std::make_unique<rex::input::InputSystem>(nullptr);
+      // Keep the configured host input backend available during interactive
+      // probe routes. The deterministic driver is an overlay for bounded menu
+      // navigation, not a replacement for the operator's physical controller.
+      auto input_system = rex::input::CreateDefaultInputSystem(tool_mode);
       auto driver = std::make_unique<FrontendSmokeInputDriver>();
       frontend_smoke_input_ = driver.get();
       if (driver->Setup() != rex::X_STATUS{0}) {

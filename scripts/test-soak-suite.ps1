@@ -1,0 +1,68 @@
+[CmdletBinding()]
+param()
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$verify=Join-Path $PSScriptRoot 'verify-soak-suite.ps1'
+$runner=Join-Path $PSScriptRoot 'run-soak-suite.ps1'
+$utf8=[Text.UTF8Encoding]::new($false)
+$root=Join-Path $repo ('private/evidence/M6-014/test-'+[guid]::NewGuid().ToString('N').Substring(0,8));[IO.Directory]::CreateDirectory($root)|Out-Null
+
+function WriteJson([string]$Path,$Value){[IO.File]::WriteAllText($Path,((ConvertTo-Json $Value -Depth 15)+[Environment]::NewLine),$utf8)}
+function BaseResult{
+  $names=@('frontend','free-roam','races','garage','lifecycle');$primary=@(0,8,10,20,30);$secondary=@(0,0,2,10,1);$scenarios=@()
+  for($i=0;$i-lt5;$i++){$name=$names[$i];$seedClass=if($name-eq'frontend'){'frontend'}else{'gameplay'};$labels=if($name-eq'free-roam'){@('HOLLYWOOD','BEVERLY','SANTA-MONICA','DOWNTOWN','CRENSHAW')}else{@('title-frontend')};$saveBefore=if($name-eq'frontend'){('C'*64)}else{('D'*64)};$saveAfter=if($name-eq'frontend'){$saveBefore}else{('E'*64)};$headerBefore=if($name-eq'frontend'){('8'*64)}else{('9'*64)};$headerAfter=if($name-eq'frontend'){$headerBefore}else{('A'*64)};$scenarios+=[ordered]@{name=$name;seed_class=$seedClass;decision="two-hour-$name-soak-pass";duration_seconds=7201L;sample_count=25;capture_count=9;activity_primary=$primary[$i];activity_secondary=$secondary[$i];distinct_labels=$labels;resource_bounds=[ordered]@{private_growth_bytes=100;working_growth_bytes=100;handle_growth=1;thread_growth=1;io_read_growth_bytes=1000;private_peak_growth_bytes=200;working_peak_growth_bytes=200};runtime_log_set_sha256=('A'*64);scenario_tree_sha256=('B'*64);save_before_sha256=$saveBefore;save_after_sha256=$saveAfter;header_before_sha256=$headerBefore;header_after_sha256=$headerAfter;controlled_exit=$true;exit_code=0;force_cleanup=$false;fatal_markers=0;stage_path="scenarios/$name/stage.json"}}
+  $priors=@([ordered]@{task='M6-001';path='private/evidence/M6-001/20260817-115619-d269e2a9/result.json';decision='all-major-city-regions-streaming-pass';sha256='519B84FF456BDD3220BFC8BE3DD230CCB209A56CF2B203D51CFF5454729E178F'},[ordered]@{task='M6-002';path='private/evidence/M6-002/20260817-155005-1dd57bd3/result.json';decision='representative-garage-purchase-customization-persistence-pass';sha256='21FCBE38695B45D22AE516E33E51AD0A292286985549673811E0FE3E33900644'},[ordered]@{task='M6-003';path='private/evidence/M6-003/20260818-180605-e3b74fb5/result.json';decision='representative-race-system-matrix-pass';sha256='AD3573B56412D7DBC10650BE0D250AFD4AACA22EB8EEEB6F9816E94EC3007E3A'},[ordered]@{task='M6-005';path='private/evidence/M6-005/20260818-201702-5d089d9c/result.json';decision='native-autosave-load-overwrite-plus-isolated-creation-destructive-save-matrix-pass';sha256='5F46FA6657F39EE5AF990BD505B67D5EDBE6A781E8283D1D51BE07F3543F169E'},[ordered]@{task='M6-007';path='private/evidence/M6-007/20260819-122150-2ad3b961/result.json';decision='two-hour-audio-and-device-recovery-pass';sha256='CE4B4700CEA1108243989165211A8C70AC0C67F72130708A129C1BD834948B5B'},[ordered]@{task='M6-010';path='private/evidence/M6-010/20260819-180446-730942f2/result.json';decision='split-window-device-lifecycle-matrix-pass';sha256='746D7DAECD475E48EEA9EE8342319A84CC2E059992A635579AB55AF7A719C71B'},[ordered]@{task='M6-012';path='private/evidence/M6-012/20260819-192540-2a9e82fe/result.json';decision='timestamped-performance-telemetry-pass';sha256='BFEA11FB1A7E8C5D380343C252612BC3BCBE471F0DC1BFB1FCA56B771FB27CB3'},[ordered]@{task='M6-013';path='private/evidence/M6-013/20260819-200712-a4cc8715/result.json';decision='reached-unsupported-surface-fixed-or-bounded-nonblocking';sha256='279DA2FDEDF20D8C69D3DE6B5993A26AC625FBA9B624BF52BC3F800F8F1BC4ED'})
+  $seeds=@([ordered]@{role='frontend';source='private/evidence/M5-013/20260817-013319-c2e7223f/runs/01/user';source_context='immutable-five-race-resource-seed';upstream_result_path='private/evidence/M5-013/20260817-013319-c2e7223f/result.json';upstream_result_sha256='D890A903775A3B53262B9957E7B7DC1D4B76B49B8735360BECD8233842446298';tree_sha256=('E'*64);save_sha256=('C'*64);header_sha256=('8'*64)},[ordered]@{role='gameplay';source='private/evidence/M6-002/20260817-155005-1dd57bd3/runs/02/user';source_context='latest-verified-persisted-hangout-plus-garage-progression';upstream_result_path='private/evidence/M6-002/20260817-155005-1dd57bd3/result.json';upstream_result_sha256='21FCBE38695B45D22AE516E33E51AD0A292286985549673811E0FE3E33900644';tree_sha256=('F'*64);save_sha256=('D'*64);header_sha256=('9'*64)})
+  [ordered]@{schema='mcla-two-hour-soak-suite-v2';task='M6-014';decision='five-two-hour-soak-suite-pass';suite_id='20260819-210000-1234abcd';sdk_version='0.9.0.29';sdk_commit=('a'*40);build_configuration='Release';duration_seconds_per_scenario=7200;sample_interval_seconds=300;capture_interval_seconds=900;game=[ordered]@{file_count=1L;payload_bytes=1L;source_iso_sha256=('7'*64)};seeds=$seeds;build=[ordered]@{clean_build_log_sha256=('2'*64);artifacts=@([ordered]@{name='mcla.exe';sha256=('3'*64)},[ordered]@{name='rexruntime.dll';sha256=('4'*64)},[ordered]@{name='TracyClient.dll';sha256=('5'*64)},[ordered]@{name='rexgpu-xenos.dll';sha256=('6'*64)})};prior_evidence=$priors;scenarios=$scenarios;scope=[ordered]@{five_independent_processes=$true;same_release_artifacts=$true;two_explicit_seed_lineages=$true;same_gameplay_seed_identity=$true;same_seed_identity=$false;frontend_two_hours=$true;free_roam_two_hours=$true;races_two_hours=$true;garage_two_hours=$true;lifecycle_two_hours=$true;monolithic_ten_hour_run_claimed=$false;full_campaign_claimed=$false;music_continuity_claimed=$false}}
+}
+function Clone($Value){(($Value|ConvertTo-Json -Depth 15)|ConvertFrom-Json)}
+function ExpectFail([string]$Name,[scriptblock]$Mutate){$v=Clone (BaseResult);&$Mutate $v;$path=Join-Path $root "$Name.json";WriteJson $path $v;$failed=$false;try{&$verify -FixturePath $path -Fixture|Out-Null}catch{$failed=$true};if(-not$failed){throw "Negative fixture passed: $Name"};$script:negative++}
+
+try{
+  $positive=Join-Path $root 'positive.json';WriteJson $positive (BaseResult);$probe=&$verify -FixturePath $positive -Fixture;if($probe.Decision-cne'five-two-hour-soak-suite-pass'-or$probe.ScenariosVerified-ne5){throw 'Positive fixture failed.'};$negative=0
+  ExpectFail bad-schema {param($r)$r.schema='bad'}
+  ExpectFail bad-task {param($r)$r.task='M6-015'}
+  ExpectFail bad-decision {param($r)$r.decision='partial'}
+  ExpectFail bad-suite-id {param($r)$r.suite_id='../escape'}
+  ExpectFail bad-sdk {param($r)$r.sdk_version='main'}
+  ExpectFail bad-game {param($r)$r.game.source_iso_sha256='bad'}
+  ExpectFail missing-prior {param($r)$r.prior_evidence=@($r.prior_evidence|Select-Object -First 7)}
+  ExpectFail drifted-prior {param($r)$r.prior_evidence[0].sha256=('0'*64)}
+  ExpectFail short-duration {param($r)$r.scenarios[0].duration_seconds=7199}
+  ExpectFail too-few-samples {param($r)$r.scenarios[1].sample_count=24}
+  ExpectFail too-few-captures {param($r)$r.scenarios[2].capture_count=8}
+  ExpectFail free-roam-count {param($r)$r.scenarios[1].activity_primary=7}
+  ExpectFail free-roam-diversity {param($r)$r.scenarios[1].distinct_labels=@('A','B','C','D')}
+  ExpectFail race-count {param($r)$r.scenarios[2].activity_primary=9}
+  ExpectFail race-series {param($r)$r.scenarios[2].activity_secondary=1}
+  ExpectFail garage-entry {param($r)$r.scenarios[3].activity_primary=19}
+  ExpectFail garage-change {param($r)$r.scenarios[3].activity_secondary=9}
+  ExpectFail lifecycle-count {param($r)$r.scenarios[4].activity_primary=29}
+  ExpectFail lifecycle-long {param($r)$r.scenarios[4].activity_secondary=0}
+  ExpectFail memory-growth {param($r)$r.scenarios[0].resource_bounds.private_growth_bytes=1073741825L}
+  ExpectFail working-growth {param($r)$r.scenarios[0].resource_bounds.working_growth_bytes=536870913L}
+  ExpectFail handle-growth {param($r)$r.scenarios[0].resource_bounds.handle_growth=129}
+  ExpectFail thread-growth {param($r)$r.scenarios[0].resource_bounds.thread_growth=33}
+  ExpectFail uncontrolled-exit {param($r)$r.scenarios[0].controlled_exit=$false}
+  ExpectFail forced-cleanup {param($r)$r.scenarios[0].force_cleanup=$true}
+  ExpectFail fatal {param($r)$r.scenarios[0].fatal_markers=1}
+  ExpectFail frontend-save-mutation {param($r)$r.scenarios[0].save_after_sha256=('D'*64)}
+  ExpectFail wrong-stage {param($r)$r.scenarios[0].stage_path='scenarios/races/stage.json'}
+  ExpectFail reordered {param($r)$t=$r.scenarios[0];$r.scenarios[0]=$r.scenarios[1];$r.scenarios[1]=$t}
+  ExpectFail missing-scenario {param($r)$r.scenarios=@($r.scenarios|Select-Object -First 4)}
+  ExpectFail forged-monolith {param($r)$r.scope.monolithic_ten_hour_run_claimed=$true}
+  ExpectFail campaign-overclaim {param($r)$r.scope.full_campaign_claimed=$true}
+  ExpectFail music-overclaim {param($r)$r.scope.music_continuity_claimed=$true}
+  ExpectFail wrong-gameplay-seed {param($r)$r.seeds[1].source=$r.seeds[0].source}
+  ExpectFail wrong-seed-class {param($r)$r.scenarios[1].seed_class='frontend'}
+  ExpectFail forged-same-seed {param($r)$r.scope.same_seed_identity=$true}
+  ExpectFail private-path {param($r)$r.seeds[1].source='C:\Users\owner\save'}
+  ExpectFail private-label {param($r)$r.scenarios[1].distinct_labels[0]='C:\Users\owner'}
+  $runnerText=[IO.File]::ReadAllText($runner);$verifierText=[IO.File]::ReadAllText($verify);$watcherText=[IO.File]::ReadAllText((Join-Path $repo 'scripts/watch-soak-save.ps1'));$appText=[IO.File]::ReadAllText((Join-Path $repo 'src/mcla_app.cpp'));$needles=@('DurationSeconds=7200','sampleInterval=300','captureInterval=900','GetProcessIoCounters','CopyFromScreen','GetForegroundWindow','UtcNow.AddSeconds(20)','did not yield a nontrivial physical capture within 20 seconds','if($activity.Count)','MigrateCompletedStages','header_before_sha256=(Hash','SOAK $($Name.ToUpperInvariant()) READY','RACES <completed> <series-completed>','GARAGE <entries> <committed-changes>','LIFECYCLE <complete-cycles> [LONG]','--xam_user_signin_state=1','--input_backend=sdl','Enter-Gameplay $process $runRoot $user','MCLA_GARAGE_CONTROL v=1 sequence=1 action=START','AUTO START','watch-soak-save.ps1','SAVE WATCHER','-WindowStyle Hidden','WaitForExit(15000)','--sdl_audio_route_audit=true','mcla_audio_route_soak_seconds','Close-Exact','force cleanup','five-two-hour-soak-suite-pass','music_continuity_claimed=$false','private/evidence/M5-013/20260817-013319-c2e7223f/runs/01/user','private/evidence/M6-002/20260817-155005-1dd57bd3/runs/02/user','two_explicit_seed_lineages=$true','same_seed_identity=$false');foreach($needle in $needles){if(-not$runnerText.Contains($needle)){throw "Runner source contract missing: $needle"}}
+  foreach($needle in @('rex::input::CreateDefaultInputSystem(tool_mode)','std::make_unique<FrontendSmokeInputDriver>()','input_system->AddDriver(std::move(driver))','not a replacement for the operator''s physical controller')){if(-not$appText.Contains($needle)){throw "Physical-plus-synthetic input overlay contract missing: $needle"}}
+  foreach($needle in @('mcla-soak-save-snapshot-v1','Start-Sleep -Seconds 2','Copied soak save snapshot failed hash verification.','complete_profile_tree=$true','process-exit')){if(-not$watcherText.Contains($needle)){throw "Save watcher source contract missing: $needle"}}
+  foreach($needle in @('scenarioNames','duration_seconds_per_scenario','sample_count','capture_count','Free-roam region diversity','resource growth exceeds bounds','capture sequence lacks temporal variation','runtime health contract failed','SDK identity drifted','Canonical MCLA process remains')){if(-not$verifierText.Contains($needle)){throw "Verifier source contract missing: $needle"}}
+  [pscustomobject][ordered]@{PositiveFixtures=1;FailClosedNegatives=$negative;SourceContractChecks=$needles.Count+14;SuiteVerified=$true}
+}finally{if(Test-Path $root){Remove-Item -LiteralPath $root -Recurse -Force}}

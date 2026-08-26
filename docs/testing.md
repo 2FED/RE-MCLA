@@ -1048,6 +1048,84 @@ malformed chronology, drifted prior evidence, and claims that the whole SDK
 stub inventory is complete. Fixtures contain one positive, fourteen fail-closed
 negatives, and eighteen source checks. No operator input or save is required.
 
+## M6-014 five-scenario two-hour soak suite
+
+```powershell
+scripts/test-soak-suite.ps1
+
+# Creates one shared clean Release build and prints the suite ID.
+scripts/run-soak-suite.ps1 -InitializeOnly
+
+# Run these separately, preserving the same suite ID.
+scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario frontend
+scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario free-roam
+scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario races
+scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario garage
+scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario lifecycle
+
+scripts/verify-soak-suite.ps1 `
+  -ResultPath private/evidence/M6-014/<suite-id>/result.json
+```
+
+The five scenarios are five independent continuous 7,200-second processes on
+one hash-pinned Release artifact set. The already accepted autonomous frontend
+stage retains its immutable M5-013 seed. The four interactive stages use
+isolated copies of the latest verified persisted gameplay profile from the
+second M6-002 garage-lifecycle process (the prior HANGOUT progression plus its
+persisted purchases/customization). Both seed lineages and their upstream
+results are explicit and hash-bound; the result never claims one common seed
+across all five processes. A generic ten-hour idle process is not an acceptable
+substitute. Free roam is normal play, not aimless driving: races, story
+progression, police encounters, and travel between events are allowed and count
+as active city streaming. Avoid spending most of the interval paused or in the
+garage. Every fifteen minutes the runner asks for the current region label while
+five-minute process/I/O samples and private 1280x720 captures are collected
+automatically.
+
+Interactive stages use the SDK's default local signed-in state `1`. MCLA's
+frontend user-selection wrapper recognizes that state and loads the isolated
+save without the nonfunctional `YES` sign-in alert produced by forcing online-
+compatible state `2`. The runner adds the existing deterministic slot-0
+control probe on top of the configured physical SDL backend, sends one
+causally observed `START` pulse, waits thirty seconds for saved gameplay, and
+asks for `SOAK ... READY` only after that automatic handoff. The overlay no
+longer replaces or disconnects the operator's physical controller. SDL guest
+slot 0 follows the physical pad with the latest meaningful button-down or
+analog movement regardless of its SDL player index; stick noise inside the
+standard XInput deadzones cannot steal selection. Physical and synthetic
+states receive one guest-visible monotonic packet sequence, and rumble follows
+the selected physical pad. This is local profile compatibility; it does not
+implement or claim Xbox Live. The soak contract records the working
+save/header hashes
+after each process but does not require campaign progress to be persisted.
+For every interactive stage, a hidden exact-PID watcher also copies each stable
+new save/header pair and the complete profile tree under
+`private/save-archive/M6-014/<suite-id>/<scenario>/`. It performs a final
+snapshot after process exit, so operator campaign progress remains recoverable
+even when the soak harness or final verifier fails. These recovery copies are
+private convenience archives, not substitutes for the immutable stage evidence.
+
+The required semantic floors are eight free-roam route checkpoints spanning at
+least five labels, ten race completions including two completed series, twenty
+garage entries with ten committed changes or vehicle switches, and thirty
+lifecycle cycles including one long dwell. Each stage preserves its journal so
+a harness failure remains classifiable but cannot be resumed as one continuous
+two-hour process. The title is closed externally through exact-window
+`WM_CLOSE`; it has no internal Exit command.
+
+The final verifier recomputes each sample timeline and resource distribution,
+rejects gaps over eight minutes, binds every capture hash and activity record,
+reparses the complete rotated logs, and requires exit 0 with no force cleanup,
+fatal, guest crash, unsupported PPC, invalid function, device loss, SDK drift,
+or artifact/seed drift. It also rehashes the accepted city-streaming, garage,
+race-system, save, long-audio, lifecycle, performance-telemetry, and reached-
+unsupported-surface results that define the exercised semantic routes.
+Private/working-set final growth is bounded at 1 GiB / 512 MiB, with
+128-handle and 32-thread ceilings; peak growth is retained in the result rather
+than hidden by a low final sample. The suite does not claim a full-campaign
+soak or uninterrupted music: KI-017 remains open even when the broader audio
+route and background SFX remain alive.
+
 ## M5-003 rendering-category gate
 
 ```powershell

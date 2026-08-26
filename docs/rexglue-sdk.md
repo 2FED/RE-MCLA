@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.29`
-- Immutable project commit: `5a7fc75713d1d43188b7574349f44a7e7923033d`
+- Project release tag: `v0.9.0.30`
+- Immutable project commit: `c16af0890babfbda24b7a58cf63c6573a702c581`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -93,6 +93,19 @@ mount. `XeKeysConsolePrivateKeySign` fails explicitly when no console private
 key exists, preserves the caller buffer, and rejects null inputs rather than
 reporting false signing success. Focused coverage is 2 cases / 5 assertions.
 
+The v0.9.0.30 delta routes Xbox user slot zero to the connected SDL controller
+with the latest meaningful button-down or analog activity, regardless of its
+physical SDL player index. Standard XInput deadzones suppress drift-based
+ownership changes; disconnect falls back to the most recently active remaining
+controller; capabilities, keystrokes, and rumble follow the same mapping. The
+selected physical controller is hidden at its original nonzero guest index to
+avoid duplicate exposure. InputSystem now publishes a merged monotonic packet
+sequence when physical and synthetic drivers coexist. Focused coverage is 21
+SDL cases / 124 assertions, including 7 slot cases / 23 assertions and the
+15-case controller/RTL selection / 104-assertion gate. A physical Steam Input
+probe observed native Steam Controller slot 0 plus XInput wrapper slot 1,
+selected physical slot 1 for guest slot 0, and received owner-confirmed input.
+
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
 filtered `[offline]` suite passes 3/3 cases and 10/10 assertions without
@@ -112,19 +125,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.29^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.30^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `5a7fc75713d1d43188b7574349f44a7e7923033d`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `c16af0890babfbda24b7a58cf63c6573a702c581`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.29 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.30 project-fork commit:
 
 ```text
-5a7fc75713d1d43188b7574349f44a7e7923033d third_party/rexglue-sdk
+c16af0890babfbda24b7a58cf63c6573a702c581 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11
