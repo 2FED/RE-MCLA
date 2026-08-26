@@ -54,10 +54,16 @@ public static class MclaSoakNative{
   [DllImport("user32.dll")]static extern bool ClientToScreen(IntPtr h,ref POINT p);
   [DllImport("user32.dll")]public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")]static extern bool BringWindowToTop(IntPtr h);
+  [DllImport("user32.dll")]static extern bool ShowWindow(IntPtr h,int command);
+  [DllImport("user32.dll")]static extern IntPtr SetFocus(IntPtr h);
+  [DllImport("user32.dll")]static extern bool AttachThreadInput(uint attach,uint attachTo,bool value);
+  [DllImport("kernel32.dll")]static extern uint GetCurrentThreadId();
   [DllImport("user32.dll")]public static extern bool PostMessage(IntPtr h,uint m,IntPtr w,IntPtr l);
   [DllImport("kernel32.dll",SetLastError=true)]public static extern bool GetProcessIoCounters(IntPtr h,out IO c);
   public static IntPtr[] Handles(int pid){var a=new List<IntPtr>();EnumWindows(delegate(IntPtr h,IntPtr x){uint p;GetWindowThreadProcessId(h,out p);if(p==(uint)pid&&IsWindowVisible(h))a.Add(h);return true;},IntPtr.Zero);return a.ToArray();}
   public static string Title(IntPtr h){var s=new StringBuilder(1024);int n=GetWindowText(h,s,s.Capacity);return n>0?s.ToString(0,n):String.Empty;}
+  public static bool FocusWindow(IntPtr h){IntPtr foreground=GetForegroundWindow();uint unused;uint foregroundThread=foreground==IntPtr.Zero?0:GetWindowThreadProcessId(foreground,out unused);uint targetThread=GetWindowThreadProcessId(h,out unused);uint currentThread=GetCurrentThreadId();bool foregroundAttached=foregroundThread!=0&&foregroundThread!=currentThread&&AttachThreadInput(currentThread,foregroundThread,true);bool targetAttached=targetThread!=0&&targetThread!=currentThread&&targetThread!=foregroundThread&&AttachThreadInput(currentThread,targetThread,true);try{ShowWindow(h,9);BringWindowToTop(h);SetForegroundWindow(h);SetFocus(h);return GetForegroundWindow()==h;}finally{if(targetAttached)AttachThreadInput(currentThread,targetThread,false);if(foregroundAttached)AttachThreadInput(currentThread,foregroundThread,false);}}
   public static int[] Client(IntPtr h){RECT r;if(!GetClientRect(h,out r))return new int[0];var p=new POINT();if(!ClientToScreen(h,ref p))return new int[0];return new[]{p.X,p.Y,r.Right-r.Left,r.Bottom-r.Top};}
 }
 '@}
@@ -78,7 +84,7 @@ function Close-Exact([Diagnostics.Process]$Process){$h=Window $Process;if(-not[M
 function Capture([Diagnostics.Process]$Process,[string]$Path){
   $h=Window $Process;$deadline=[DateTime]::UtcNow.AddSeconds(20)
   do{
-    do{$null=[MclaSoakNative]::SetForegroundWindow($h);Start-Sleep -Milliseconds 250}while([MclaSoakNative]::GetForegroundWindow()-ne$h-and[DateTime]::UtcNow-lt$deadline)
+    do{$null=[MclaSoakNative]::FocusWindow($h);Start-Sleep -Milliseconds 250}while([MclaSoakNative]::GetForegroundWindow()-ne$h-and[DateTime]::UtcNow-lt$deadline)
     if([MclaSoakNative]::GetForegroundWindow()-ne$h){break}
     Start-Sleep -Milliseconds 500;$r=[MclaSoakNative]::Client($h);if($r.Count-ne4-or$r[2]-lt640-or$r[3]-lt360){throw 'MCLA client geometry is invalid.'}
     $source=[Drawing.Bitmap]::new($r[2],$r[3]);try{$g=[Drawing.Graphics]::FromImage($source);try{$g.CopyFromScreen($r[0],$r[1],0,0,[Drawing.Size]::new($r[2],$r[3]))}finally{$g.Dispose()};$bmp=[Drawing.Bitmap]::new(1280,720);try{$g2=[Drawing.Graphics]::FromImage($bmp);try{$g2.DrawImage($source,0,0,1280,720)}finally{$g2.Dispose()};$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Bmp)}finally{$bmp.Dispose()}}finally{$source.Dispose()}
@@ -111,7 +117,7 @@ function PromptActivity([string]$Name,[int]$Checkpoint){
     default{[ordered]@{primary=0;secondary=0;label='title-frontend'}}
   }
 }
-function Bounds($Samples){$first=$Samples[0];$last=$Samples[-1];$maxPrivate=[long](($Samples|Measure-Object private_bytes -Maximum).Maximum);$maxWorking=[long](($Samples|Measure-Object working_set_bytes -Maximum).Maximum);[ordered]@{private_growth_bytes=[Math]::Max(0L,[long]$last.private_bytes-[long]$first.private_bytes);working_growth_bytes=[Math]::Max(0L,[long]$last.working_set_bytes-[long]$first.working_set_bytes);handle_growth=[Math]::Max(0L,[long]$last.handle_count-[long]$first.handle_count);thread_growth=[Math]::Max(0L,[long]$last.thread_count-[long]$first.thread_count);io_read_growth_bytes=[Math]::Max(0L,[long]$last.io_read_bytes-[long]$first.io_read_bytes);private_peak_growth_bytes=[Math]::Max(0L,$maxPrivate-[long]$first.private_bytes);working_peak_growth_bytes=[Math]::Max(0L,$maxWorking-[long]$first.working_set_bytes)}}
+function Bounds($Samples){$first=$Samples[0];$last=$Samples[-1];$maxPrivate=[long](($Samples|ForEach-Object{[long]$_.private_bytes}|Measure-Object -Maximum).Maximum);$maxWorking=[long](($Samples|ForEach-Object{[long]$_.working_set_bytes}|Measure-Object -Maximum).Maximum);[ordered]@{private_growth_bytes=[Math]::Max(0L,[long]$last.private_bytes-[long]$first.private_bytes);working_growth_bytes=[Math]::Max(0L,[long]$last.working_set_bytes-[long]$first.working_set_bytes);handle_growth=[Math]::Max(0L,[long]$last.handle_count-[long]$first.handle_count);thread_growth=[Math]::Max(0L,[long]$last.thread_count-[long]$first.thread_count);io_read_growth_bytes=[Math]::Max(0L,[long]$last.io_read_bytes-[long]$first.io_read_bytes);private_peak_growth_bytes=[Math]::Max(0L,$maxPrivate-[long]$first.private_bytes);working_peak_growth_bytes=[Math]::Max(0L,$maxWorking-[long]$first.working_set_bytes)}}
 
 $evidenceRoot=Safe 'private/evidence/M6-014' 'M6-014 evidence root';[IO.Directory]::CreateDirectory($evidenceRoot)|Out-Null
 $build=Safe 'out/build/win-amd64-release' 'Release build';$game=Safe 'private/game' 'Game root' -Exists;$frontendSeed=Safe $frontendSeedRelative 'Frontend save root' -Exists;$gameplaySeed=Safe $gameplaySeedRelative 'Gameplay save root' -Exists;$seedRoots=@{frontend=$frontendSeed;gameplay=$gameplaySeed}
@@ -120,7 +126,8 @@ $expectedSeeds=@(
   (SeedRecord 'gameplay' $gameplaySeedRelative 'latest-verified-persisted-hangout-plus-garage-progression' 'private/evidence/M6-002/20260817-155005-1dd57bd3/result.json' '21FCBE38695B45D22AE516E33E51AD0A292286985549673811E0FE3E33900644' $gameplaySeed)
 )
 $sdkVersion=(&git -C $sdk describe --tags --exact-match HEAD 2>$null).Trim().TrimStart('v');$sdkCommit=(&git -C $sdk rev-parse HEAD).Trim();if($LASTEXITCODE-ne0-or$sdkVersion-cnotmatch'^0\.9\.0\.[0-9]+$'-or(git -C $sdk status --porcelain)){throw 'M6-014 requires a clean exact tagged SDK.'}
-if($SuiteRun){$suiteRoot=Safe (Join-Path $evidenceRoot $SuiteRun) 'Suite root' -Exists}else{$SuiteRun=(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8);$suiteRoot=Safe (Join-Path $evidenceRoot $SuiteRun) 'Suite root';[IO.Directory]::CreateDirectory($suiteRoot)|Out-Null}
+if($SuiteRun){$suiteRoot=Safe (Join-Path $evidenceRoot $SuiteRun) 'Suite root'}else{$SuiteRun=(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8);$suiteRoot=Safe (Join-Path $evidenceRoot $SuiteRun) 'Suite root'}
+[IO.Directory]::CreateDirectory($suiteRoot)|Out-Null
 $suitePath=Join-Path $suiteRoot 'suite.json';$buildLog=Join-Path $suiteRoot 'release-clean-build.log'
 if(-not(Test-Path $suitePath)){
   Write-Host 'M6-014 [1/4]: clean-building one shared Release artifact set...' -ForegroundColor Cyan;$cmake=(& (Join-Path $PSScriptRoot 'Resolve-Toolchain.ps1') -ExportPath).CMakePath

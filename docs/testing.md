@@ -1082,6 +1082,16 @@ garage. Every fifteen minutes the runner asks for the current region label while
 five-minute process/I/O samples and private 1280x720 captures are collected
 automatically.
 
+An explicit new `-SuiteRun` name is allowed to create its bounded private suite
+root; an existing name resumes only its immutable build and completed-stage
+journal. Physical screen capture uses a bounded Windows foreground-thread
+handoff before `CopyFromScreen`, so an agent-started background PowerShell does
+not silently capture the Codex window. Resource peaks are computed from the
+ordered-dictionary samples emitted in memory rather than relying on
+`Measure-Object` property adaptation. A 60-second calibration must exercise
+both physical captures and the final bounds calculation before a canonical
+7,200-second process is accepted.
+
 Interactive stages use the SDK's default local signed-in state `1`. MCLA's
 frontend user-selection wrapper recognizes that state and loads the isolated
 save without the nonfunctional `YES` sign-in alert produced by forcing online-
