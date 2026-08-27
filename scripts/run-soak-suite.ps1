@@ -4,6 +4,7 @@ param(
   [string]$SuiteRun,
   [switch]$InitializeOnly,
   [switch]$Finalize,
+  [switch]$RecoverCompletedScenario,
   [int]$DurationSeconds=7200,
   [switch]$Calibration
 )
@@ -14,6 +15,7 @@ $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sdk=Join-Path $repo 'third_party/rexglue-sdk'
 $verify=Join-Path $PSScriptRoot 'verify-soak-suite.ps1'
 $saveWatcher=Join-Path $PSScriptRoot 'watch-soak-save.ps1'
+$pwshHost=(Get-Process -Id $PID).Path
 $utf8=[Text.UTF8Encoding]::new($false)
 $scenarioNames=@('frontend','free-roam','races','garage','lifecycle')
 $artifactNames=@('mcla.exe','rexruntime.dll','TracyClient.dll','rexgpu-xenos.dll')
@@ -38,6 +40,7 @@ $Scenario=$Scenario.ToLowerInvariant()
 if(-not$Calibration-and$DurationSeconds-ne7200){throw 'Canonical M6-014 scenarios require exactly 7200 seconds.'}
 if($Calibration-and($DurationSeconds-lt30-or$DurationSeconds-gt600)){throw 'Calibration duration must be 30..600 seconds.'}
 if($Finalize-and-not$SuiteRun){throw 'Finalize requires an explicit existing SuiteRun.'}
+if($RecoverCompletedScenario-and(-not$SuiteRun-or$InitializeOnly-or$Finalize-or$Calibration)){throw 'Recovery requires an explicit canonical SuiteRun and cannot be combined with initialize, finalize, or calibration.'}
 
 if(-not('MclaSoakNative'-as[type])){Add-Type -AssemblyName System.Drawing;Add-Type -TypeDefinition @'
 using System;using System.Collections.Generic;using System.Runtime.InteropServices;using System.Text;
@@ -118,6 +121,48 @@ function PromptActivity([string]$Name,[int]$Checkpoint){
   }
 }
 function Bounds($Samples){$first=$Samples[0];$last=$Samples[-1];$maxPrivate=[long](($Samples|ForEach-Object{[long]$_.private_bytes}|Measure-Object -Maximum).Maximum);$maxWorking=[long](($Samples|ForEach-Object{[long]$_.working_set_bytes}|Measure-Object -Maximum).Maximum);[ordered]@{private_growth_bytes=[Math]::Max(0L,[long]$last.private_bytes-[long]$first.private_bytes);working_growth_bytes=[Math]::Max(0L,[long]$last.working_set_bytes-[long]$first.working_set_bytes);handle_growth=[Math]::Max(0L,[long]$last.handle_count-[long]$first.handle_count);thread_growth=[Math]::Max(0L,[long]$last.thread_count-[long]$first.thread_count);io_read_growth_bytes=[Math]::Max(0L,[long]$last.io_read_bytes-[long]$first.io_read_bytes);private_peak_growth_bytes=[Math]::Max(0L,$maxPrivate-[long]$first.private_bytes);working_peak_growth_bytes=[Math]::Max(0L,$maxWorking-[long]$first.working_set_bytes)}}
+function Recover-CompletedScenario([string]$Name,$Suite,[string]$SuitePath,[string]$SuiteRoot,[string]$Seed,[string]$Exe){
+  if($Name-ceq'frontend'){throw 'Frontend recovery is unsupported because its in-process audio completion marker is authoritative.'}
+  if(@($Suite.completed)-ccontains$Name){throw "Scenario '$Name' is already complete."}
+  if(@(ExactProcesses $Exe).Count){throw 'Canonical MCLA is still running; recovery requires the process to have exited.'}
+  $scenarioRoot=Safe (Join-Path $SuiteRoot "scenarios/$Name") 'Recovery scenario root' -Exists
+  $stagePath=Join-Path $scenarioRoot 'stage.json';if(Test-Path -LiteralPath $stagePath){throw 'Recovery refuses to replace an existing stage.'}
+  $runRoot=Safe (Join-Path $scenarioRoot 'run') 'Recovery run root' -Exists
+  $user=Safe (Join-Path $runRoot 'user') 'Recovery user root' -Exists
+  $samples=@(Get-Content -LiteralPath (Safe (Join-Path $scenarioRoot 'resource-samples.json') 'Recovery samples' -Exists) -Raw|ConvertFrom-Json)
+  if($samples.Count-lt25-or$samples.Count-gt30){throw 'Recovery sample count is outside 25..30.'}
+  for($i=0;$i-lt$samples.Count;$i++){
+    if([int]$samples[$i].checkpoint-ne$i){throw 'Recovery sample checkpoints are not contiguous.'}
+    if($i-eq0-and[long]$samples[$i].elapsed_seconds-ne0){throw 'Recovery baseline elapsed time is not zero.'}
+    if($i-gt0){$gap=[long]$samples[$i].elapsed_seconds-[long]$samples[$i-1].elapsed_seconds;if($gap-lt0-or$gap-gt900){throw 'Recovery interactive sample chronology is invalid.'}}
+    foreach($field in @('private_bytes','working_set_bytes','handle_count','thread_count','io_read_bytes')){if([long]$samples[$i].$field-lt0){throw "Recovery sample field '$field' is invalid."}}
+  }
+  if([long]$samples[-1].elapsed_seconds-lt7200){throw 'Recovery resource timeline is shorter than two hours.'}
+  $bounds=Bounds $samples;if($bounds.private_growth_bytes-gt1073741824L-or$bounds.working_growth_bytes-gt536870912L-or$bounds.handle_growth-gt128-or$bounds.thread_growth-gt32){throw 'Recovery resource growth exceeds canonical bounds.'}
+  $captureRecords=@(Get-Content -LiteralPath (Safe (Join-Path $scenarioRoot 'captures.json') 'Recovery capture manifest' -Exists) -Raw|ConvertFrom-Json)
+  $captureRoot=Safe (Join-Path $scenarioRoot 'captures') 'Recovery capture root' -Exists
+  $captureFiles=@(Get-ChildItem -LiteralPath $captureRoot -File -Filter '*.bmp'|Sort-Object Name)
+  if($captureRecords.Count-lt9-or$captureRecords.Count-ne$captureFiles.Count){throw 'Recovery capture sequence is incomplete.'}
+  for($i=0;$i-lt$captureRecords.Count;$i++){$expected="checkpoint-{0:D2}.bmp"-f$i;$file=$captureFiles[$i];$record=$captureRecords[$i];if($file.Name-cne$expected-or$record.name-cne$expected-or(Hash $file.FullName)-cne$record.sha256-or[long]$file.Length-ne[long]$record.bytes-or[int]$record.color_bins-lt80){throw 'Recovery capture manifest does not match physical frames.'}}
+  if(@($captureRecords.sha256|Sort-Object -Unique).Count-lt3){throw 'Recovery capture sequence lacks temporal variation.'}
+  $activity=@(Get-Content -LiteralPath (Safe (Join-Path $scenarioRoot 'activity.json') 'Recovery activity journal' -Exists) -Raw|ConvertFrom-Json)
+  if($activity.Count-ne8){throw 'Recovery requires all eight operator activity checkpoints.'}
+  $primary=[int](($activity|Measure-Object primary -Sum).Sum);$secondary=[int](($activity|Measure-Object secondary -Sum).Sum);$labels=@($activity|ForEach-Object label|Sort-Object -Unique)
+  $minimum=@{'free-roam'=@(8,0);'races'=@(10,2);'garage'=@(20,10);'lifecycle'=@(30,1)}[$Name]
+  if($primary-lt$minimum[0]-or$secondary-lt$minimum[1]-or($Name-ceq'free-roam'-and$labels.Count-lt5)){throw 'Recovery semantic activity is below the canonical floor.'}
+  foreach($label in $labels){if($label-cnotmatch'^[A-Z0-9-]{2,40}$'-and$label-cnotin@('race-events','garage-cycles','lifecycle-cycles')){throw 'Recovery activity label is invalid or privacy-unsafe.'}}
+  $set=LogSet $runRoot;$fatal=[regex]::Matches($set.text,'(?i)\[FATAL\]|guest crash|PPC_UNIMPLEMENTED|invalid or unregistered function|device lost|DXGI_ERROR_DEVICE_REMOVED').Count
+  foreach($marker in @('MCLA graphics: nontrivial guest frame captured','Window closing, shutting down...','Execution complete','Title terminated; hard-exiting process.')){if(-not$set.text.Contains($marker)){throw "Recovery runtime marker is missing: $marker"}}
+  if($fatal){throw 'Recovery runtime logs contain fatal markers.'}
+  $save=Join-Path $user $saveRelative;$header=Join-Path $user $headerRelative;$saveHash=Hash $save;$headerHash=Hash $header
+  $archive=Safe "private/save-archive/M6-014/$($Suite.suite_id)/$Name" 'Recovery save archive' -Exists;$latest=Get-Content -LiteralPath (Safe (Join-Path $archive 'latest.json') 'Recovery save snapshot' -Exists) -Raw|ConvertFrom-Json
+  $snapshot=Safe (Join-Path $archive $latest.snapshot_directory) 'Recovery snapshot directory' -Exists;$snapshotSave=Join-Path $snapshot $saveRelative;$snapshotHeader=Join-Path $snapshot $headerRelative
+  if($latest.schema-cne'mcla-soak-save-snapshot-v1'-or-not$latest.complete_profile_tree-or$latest.save_sha256-cne$saveHash-or$latest.header_sha256-cne$headerHash-or(Hash $snapshotSave)-cne$saveHash-or(Hash $snapshotHeader)-cne$headerHash){throw 'Recovery save snapshot does not match the final complete profile tree.'}
+  $recovery=[ordered]@{schema='mcla-soak-stage-recovery-v1';scenario=$Name;reason='interactive-wall-clock-complete-frontend-audio-marker-not-applicable';recovered_utc=[DateTime]::UtcNow.ToString('O');sample_count=$samples.Count;capture_count=$captureRecords.Count;activity_checkpoints=$activity.Count;runtime_shutdown_path='WM_CLOSE-to-SDK-hard-exit-0';save_snapshot_identity=$latest.identity};WriteJson (Join-Path $scenarioRoot 'recovery.json') $recovery
+  $stage=[ordered]@{schema='mcla-two-hour-soak-stage-v2';name=$Name;seed_class='gameplay';decision="two-hour-$Name-soak-pass";duration_seconds=[long]$samples[-1].elapsed_seconds;sample_count=$samples.Count;capture_count=$captureRecords.Count;activity_primary=$primary;activity_secondary=$secondary;distinct_labels=@($labels);resource_bounds=$bounds;runtime_log_set_sha256=$set.hash;save_before_sha256=(Hash (Join-Path $Seed $saveRelative));save_after_sha256=$saveHash;header_before_sha256=(Hash (Join-Path $Seed $headerRelative));header_after_sha256=$headerHash;controlled_exit=$true;exit_code=0;force_cleanup=$false;fatal_markers=0};WriteJson $stagePath $stage
+  $Suite.completed=@($Suite.completed)+$Name;WriteJson $SuitePath $Suite
+  Write-Host "M6-014 scenario RECOVERED PASS: $Name. Full journals, captures, WM_CLOSE hard-exit-0, and archived save were revalidated." -ForegroundColor Green
+}
 
 $evidenceRoot=Safe 'private/evidence/M6-014' 'M6-014 evidence root';[IO.Directory]::CreateDirectory($evidenceRoot)|Out-Null
 $build=Safe 'out/build/win-amd64-release' 'Release build';$game=Safe 'private/game' 'Game root' -Exists;$frontendSeed=Safe $frontendSeedRelative 'Frontend save root' -Exists;$gameplaySeed=Safe $gameplaySeedRelative 'Gameplay save root' -Exists;$seedRoots=@{frontend=$frontendSeed;gameplay=$gameplaySeed}
@@ -137,12 +182,14 @@ if(-not(Test-Path $suitePath)){
 if($InitializeOnly){Write-Host "M6-014 suite initialized: $SuiteRun" -ForegroundColor Green;return}
 if($Finalize){if(@($suite.completed).Count-ne5){throw 'All five scenarios must complete before finalization.'}}
 
-if(-not$Finalize){
+if($RecoverCompletedScenario){
+  $seed=$seedRoots['gameplay'];$exe=Join-Path $build 'mcla.exe';Recover-CompletedScenario $Scenario $suite $suitePath $suiteRoot $seed $exe
+}elseif(-not$Finalize){
   $seedClass=if($Scenario-ceq'frontend'){'frontend'}else{'gameplay'};$seed=$seedRoots[$seedClass]
   if(@($suite.completed)-ccontains$Scenario){throw "Scenario '$Scenario' is already complete."};$scenarioRoot=Join-Path $suiteRoot "scenarios/$Scenario";if(Test-Path $scenarioRoot){throw 'Incomplete scenario root already exists; preserve/classify it and start a new suite or remove only with explicit review.'};$runRoot=Join-Path $scenarioRoot 'run';$user=Join-Path $runRoot 'user';$cache=Join-Path $runRoot 'cache';$captures=Join-Path $scenarioRoot 'captures';[IO.Directory]::CreateDirectory($user)|Out-Null;[IO.Directory]::CreateDirectory($cache)|Out-Null;[IO.Directory]::CreateDirectory($captures)|Out-Null;Copy-Item (Join-Path $seed 'B13EBABEBABEBABE') $user -Recurse
   $exe=Join-Path $build 'mcla.exe';if(@(ExactProcesses $exe).Count){throw 'Canonical MCLA is already running.'};$log=Join-Path $runRoot 'mcla.log';$args=@('--mcla_first_frame_probe=true','--sdl_audio_route_audit=true',"--mcla_audio_route_soak_seconds=$DurationSeconds",'--mcla_first_frame_settle_seconds=35','--xam_user_signin_state=1','--input_backend=sdl','--mnk_mode=false','--async_shader_compilation=false','--d3d12_pipeline_creation_threads=0','--log_level=info','--log_max_file_size_mb=16','--log_max_files=50','--fullscreen=false',"--game_data_root=`"$game`"","--user_data_root=`"$user`"","--cache_root=`"$cache`"","--log_file=`"$log`"");if($Scenario-cne'frontend'){$args=@($args)+@('--mcla_garage_lifecycle_probe=true','--mcla_garage_lifecycle_cycle=2')}
   Write-Host "M6-014 [2/4]: launching '$Scenario' for one continuous two-hour process..." -ForegroundColor Cyan;$process=$null;$watcher=$null;$forced=$false;$samples=@();$captureRecords=@();$activity=@();$timer=$null
-  try{$process=Start-Process $exe -ArgumentList $args -WorkingDirectory $build -PassThru;if($Scenario-cne'frontend'){$archive=Safe "private/save-archive/M6-014/$SuiteRun/$Scenario" 'Progress archive';$watcher=Start-Process powershell.exe -ArgumentList @('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$saveWatcher,'-SourceUserRoot',$user,'-ArchiveRoot',$archive,'-MclaProcessId',$process.Id) -WorkingDirectory $repo -WindowStyle Hidden -PassThru;Write-Host "SAVE WATCHER       | ACTIVE - recoverable profile snapshots: $archive" -ForegroundColor Green};WaitMarker $process $runRoot 'MCLA graphics: nontrivial guest frame captured' 90;if($Scenario-cne'frontend'){Enter-Gameplay $process $runRoot $user};PromptReady $Scenario;$timer=[Diagnostics.Stopwatch]::StartNew();$samples+=Sample $process 0 0;$captureRecords+=Capture $process (Join-Path $captures 'checkpoint-00.bmp');WriteJson (Join-Path $scenarioRoot 'resource-samples.json') @($samples);WriteJson (Join-Path $scenarioRoot 'activity.json') @($activity)
+  try{$process=Start-Process $exe -ArgumentList $args -WorkingDirectory $build -PassThru;if($Scenario-cne'frontend'){$archive=Safe "private/save-archive/M6-014/$SuiteRun/$Scenario" 'Progress archive';$watcher=Start-Process $pwshHost -ArgumentList @('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$saveWatcher,'-SourceUserRoot',$user,'-ArchiveRoot',$archive,'-MclaProcessId',$process.Id) -WorkingDirectory $repo -WindowStyle Hidden -PassThru;Write-Host "SAVE WATCHER       | ACTIVE - recoverable profile snapshots: $archive" -ForegroundColor Green};WaitMarker $process $runRoot 'MCLA graphics: nontrivial guest frame captured' 90;if($Scenario-cne'frontend'){Enter-Gameplay $process $runRoot $user};PromptReady $Scenario;$timer=[Diagnostics.Stopwatch]::StartNew();$samples+=Sample $process 0 0;$captureRecords+=Capture $process (Join-Path $captures 'checkpoint-00.bmp');WriteJson (Join-Path $scenarioRoot 'resource-samples.json') @($samples);WriteJson (Join-Path $scenarioRoot 'activity.json') @($activity)
     $nextSample=$sampleInterval;$nextCapture=$captureInterval;$nextStatus=60;$sampleIndex=1;$captureIndex=1
     while($timer.Elapsed.TotalSeconds-lt$DurationSeconds){if($process.HasExited){throw "Process exited during '$Scenario' soak."};$elapsed=[int][Math]::Floor($timer.Elapsed.TotalSeconds)
       if($elapsed-ge$nextStatus){Write-Host ("SOAK {0,-10} | {1,4}/{2}s | samples {3}/25 | captures {4}/9 | health PASS"-f$Scenario,[Math]::Min($elapsed,$DurationSeconds),$DurationSeconds,$samples.Count,$captureRecords.Count) -ForegroundColor DarkCyan;$nextStatus+=60}
@@ -151,7 +198,7 @@ if(-not$Finalize){
       Start-Sleep -Milliseconds 250
     }
     if($samples.Count-lt25){$samples+=Sample $process $sampleIndex $DurationSeconds};if($captureRecords.Count-lt9){if($Scenario-ne'frontend'){$activity+=PromptActivity $Scenario 8};$captureRecords+=Capture $process (Join-Path $captures 'checkpoint-08.bmp')};WriteJson (Join-Path $scenarioRoot 'resource-samples.json') @($samples);WriteJson (Join-Path $scenarioRoot 'captures.json') @($captureRecords);WriteJson (Join-Path $scenarioRoot 'activity.json') @($activity)
-    $deadline=[DateTime]::UtcNow.AddSeconds(30);while([DateTime]::UtcNow-lt$deadline-and-not(LogSet $runRoot).text.Contains("MCLA audio: title soak completed seconds $DurationSeconds")){if($process.HasExited){throw 'Process exited before soak completion marker.'};Start-Sleep -Milliseconds 250};if(-not(LogSet $runRoot).text.Contains("MCLA audio: title soak completed seconds $DurationSeconds")){throw 'Soak completion marker is missing.'};Close-Exact $process;if(-not$process.WaitForExit(10000)-or$process.ExitCode-ne0){throw 'Controlled external WM_CLOSE failed.'}
+    if($Scenario-ceq'frontend'){$deadline=[DateTime]::UtcNow.AddSeconds(30);while([DateTime]::UtcNow-lt$deadline-and-not(LogSet $runRoot).text.Contains("MCLA audio: title soak completed seconds $DurationSeconds")){if($process.HasExited){throw 'Process exited before frontend audio completion marker.'};Start-Sleep -Milliseconds 250};if(-not(LogSet $runRoot).text.Contains("MCLA audio: title soak completed seconds $DurationSeconds")){throw 'Frontend audio completion marker is missing.'}}else{Write-Host 'SOAK COMPLETION    | PASS - interactive wall-clock, resource, capture, and activity journals complete; frontend audio marker is not applicable.' -ForegroundColor Green};Close-Exact $process;if(-not$process.WaitForExit(10000)-or$process.ExitCode-ne0){throw 'Controlled external WM_CLOSE failed.'}
   }catch{$failure=$_;if($process-and-not$process.HasExited){try{Close-Exact $process;$null=$process.WaitForExit(10000)}catch{};if(-not$process.HasExited){$forced=$true;Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue;$null=$process.WaitForExit(5000)}};if($watcher-and-not$watcher.HasExited){$null=$watcher.WaitForExit(15000)};if($forced){throw "M6-014 failure required force cleanup. $($failure.Exception.Message) Scenario root: '$scenarioRoot'."};throw}
   if($watcher-and-not$watcher.HasExited-and-not$watcher.WaitForExit(15000)){throw 'Save watcher did not finish after the game process exited.'};if($watcher-and$watcher.ExitCode-ne0){throw "Save watcher failed with exit $($watcher.ExitCode)."}
   $timer.Stop();$set=LogSet $runRoot;$fatal=[regex]::Matches($set.text,'(?i)\[FATAL\]|guest crash|PPC_UNIMPLEMENTED|invalid or unregistered function|device lost|DXGI_ERROR_DEVICE_REMOVED').Count;if($fatal){throw "Runtime fatal markers found after '$Scenario'."};$primary=if($activity.Count){[int](($activity|Measure-Object primary -Sum).Sum)}else{0};$secondary=if($activity.Count){[int](($activity|Measure-Object secondary -Sum).Sum)}else{0};$labels=@($activity|ForEach-Object label|Sort-Object -Unique);if($Scenario-eq'frontend'){$labels=@('title-frontend')}

@@ -1063,6 +1063,10 @@ scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario races
 scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario garage
 scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario lifecycle
 
+# Only after a completed process was closed by a classified harness failure:
+scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario <interactive-scenario> `
+  -RecoverCompletedScenario
+
 scripts/verify-soak-suite.ps1 `
   -ResultPath private/evidence/M6-014/<suite-id>/result.json
 ```
@@ -1081,6 +1085,14 @@ as active city streaming. Avoid spending most of the interval paused or in the
 garage. Every fifteen minutes the runner asks for the current region label while
 five-minute process/I/O samples and private 1280x720 captures are collected
 automatically.
+
+Only the autonomous `frontend` stage requires the in-process
+`MCLA audio: title soak completed` marker. Interactive stages keep the garage
+control worker alive so the deterministic initial `START` pulse can coexist
+with physical SDL input; that worker intentionally prevents the later
+frontend-only audio timer branch from running. Their authoritative completion
+contract is therefore the 7,200-second wall clock plus the complete resource,
+capture, activity, shutdown, and save journals before external `WM_CLOSE`.
 
 An explicit new `-SuiteRun` name is allowed to create its bounded private suite
 root; an existing name resumes only its immutable build and completed-stage
@@ -1114,6 +1126,16 @@ new save/header pair and the complete profile tree under
 snapshot after process exit, so operator campaign progress remains recoverable
 even when the soak harness or final verifier fails. These recovery copies are
 private convenience archives, not substitutes for the immutable stage evidence.
+The watcher runs under the same PowerShell host as the suite instead of legacy
+`powershell.exe`, preventing a hidden `Get-FileHash` capability mismatch.
+
+`-RecoverCompletedScenario` is deliberately limited to an existing incomplete
+interactive root with no live canonical process and no stage file. It rehashes
+all physical captures, checks the full two-hour resource chronology and semantic
+floors, rejects runtime fatal markers or an incomplete shutdown, and requires a
+matching complete-profile save archive before it writes a recovery provenance
+record and stage. It cannot recover `frontend`, overwrite a stage, or excuse a
+short/incomplete process.
 
 The required semantic floors are eight free-roam route checkpoints spanning at
 least five labels, ten race completions including two completed series, twenty
@@ -1124,7 +1146,8 @@ two-hour process. The title is closed externally through exact-window
 `WM_CLOSE`; it has no internal Exit command.
 
 The final verifier recomputes each sample timeline and resource distribution,
-rejects gaps over eight minutes, binds every capture hash and activity record,
+rejects frontend gaps over eight minutes and interactive gaps over one
+fifteen-minute operator/capture window, binds every capture hash and activity record,
 reparses the complete rotated logs, and requires exit 0 with no force cleanup,
 fatal, guest crash, unsupported PPC, invalid function, device loss, SDK drift,
 or artifact/seed drift. It also rehashes the accepted city-streaming, garage,
