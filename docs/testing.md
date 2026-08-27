@@ -1067,12 +1067,24 @@ scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario lifecycle
 scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario <interactive-scenario> `
   -RecoverCompletedScenario
 
+# If the accepted two-hour free-roam process itself exceeded the race floor,
+# bind its save deltas plus the owner's exact series/event attestation instead
+# of replaying the same physical two hours:
+scripts/run-soak-suite.ps1 -SuiteRun <suite-id> -Scenario races `
+  -RecoverMixedRaceCoverage -SeriesCompleted 2 `
+  -FreewayDriversCompleted 2 -PinkSlipSeriesCompleted 1
+
 scripts/verify-soak-suite.ps1 `
   -ResultPath private/evidence/M6-014/<suite-id>/result.json
 ```
 
-The five scenarios are five independent continuous 7,200-second processes on
-one hash-pinned Release artifact set. The already accepted autonomous frontend
+The suite covers five continuous 7,200-second scenario categories on one
+hash-pinned Release artifact set. Normally these are five independent physical
+processes. A completed free-roam process may also satisfy repeated-race coverage
+when it actually contained at least ten machine-observed race completions and
+two owner-attested completed series; that accepted shape is explicitly four
+physical processes / eight physical hours for ten category-hours, never five
+independent processes or ten physical hours. The already accepted autonomous frontend
 stage retains its immutable M5-013 seed. The four interactive stages use
 isolated copies of the latest verified persisted gameplay profile from the
 second M6-002 garage-lifecycle process (the prior HANGOUT progression plus its
@@ -1136,6 +1148,16 @@ floors, rejects runtime fatal markers or an incomplete shutdown, and requires a
 matching complete-profile save archive before it writes a recovery provenance
 record and stage. It cannot recover `frontend`, overwrite a stage, or excuse a
 short/incomplete process.
+
+`-RecoverMixedRaceCoverage` is narrower. It never launches the title and accepts
+only the existing completed `free-roam` stage while `races` is still open. The
+runner reparses the exact gameplay seed and final physical save (`gRCP` race
+completions and `gWIN` wins), requires deltas of at least ten completions and one
+win plus at least two owner-attested series, and binds the active-race capture,
+source-stage hash, and optional freeway-driver/pink-slip counts in a separate
+coverage record. Final verification recomputes those save deltas and hashes.
+The free-roam and races result records truthfully share one physical stage tree;
+their resource/capture evidence is not presented as two processes.
 
 The required semantic floors are eight free-roam route checkpoints spanning at
 least five labels, ten race completions including two completed series, twenty

@@ -5,6 +5,10 @@ param(
   [switch]$InitializeOnly,
   [switch]$Finalize,
   [switch]$RecoverCompletedScenario,
+  [switch]$RecoverMixedRaceCoverage,
+  [ValidateRange(2,99)][int]$SeriesCompleted=2,
+  [ValidateRange(0,99)][int]$FreewayDriversCompleted=0,
+  [ValidateRange(0,99)][int]$PinkSlipSeriesCompleted=0,
   [int]$DurationSeconds=7200,
   [switch]$Calibration
 )
@@ -41,6 +45,7 @@ if(-not$Calibration-and$DurationSeconds-ne7200){throw 'Canonical M6-014 scenario
 if($Calibration-and($DurationSeconds-lt30-or$DurationSeconds-gt600)){throw 'Calibration duration must be 30..600 seconds.'}
 if($Finalize-and-not$SuiteRun){throw 'Finalize requires an explicit existing SuiteRun.'}
 if($RecoverCompletedScenario-and(-not$SuiteRun-or$InitializeOnly-or$Finalize-or$Calibration)){throw 'Recovery requires an explicit canonical SuiteRun and cannot be combined with initialize, finalize, or calibration.'}
+if($RecoverMixedRaceCoverage-and(-not$SuiteRun-or$InitializeOnly-or$Finalize-or$Calibration-or$RecoverCompletedScenario-or$Scenario-cne'races')){throw 'Mixed race recovery requires Scenario races, an explicit canonical SuiteRun, and no other mode switch.'}
 
 if(-not('MclaSoakNative'-as[type])){Add-Type -AssemblyName System.Drawing;Add-Type -TypeDefinition @'
 using System;using System.Collections.Generic;using System.Runtime.InteropServices;using System.Text;
@@ -99,6 +104,16 @@ function Capture([Diagnostics.Process]$Process,[string]$Path){
 }
 function Sample([Diagnostics.Process]$Process,[int]$Checkpoint,[long]$Elapsed){if($Process.HasExited){throw 'Process exited during resource sampling.'};$Process.Refresh();$io=[MclaSoakNative+IO]::new();if(-not[MclaSoakNative]::GetProcessIoCounters($Process.Handle,[ref]$io)){throw 'GetProcessIoCounters failed.'};[ordered]@{checkpoint=$Checkpoint;elapsed_seconds=$Elapsed;private_bytes=[long]$Process.PrivateMemorySize64;working_set_bytes=[long]$Process.WorkingSet64;handle_count=[long]$Process.HandleCount;thread_count=[long]$Process.Threads.Count;io_read_bytes=[long]$io.ReadTransferCount}}
 function WriteJson([string]$Path,$Value){[IO.File]::WriteAllText($Path,((ConvertTo-Json $Value -Depth 12)+[Environment]::NewLine),$utf8)}
+function Read-SaveStatU32([string]$Path,[string]$Tag){
+  if($Tag-cnotmatch'^[A-Za-z0-9]{4}$'){throw 'Save-stat tag is invalid.'}
+  $bytes=[IO.File]::ReadAllBytes((Safe $Path 'Save-stat source' -Exists));$needle=[Text.Encoding]::ASCII.GetBytes($Tag);$hits=@()
+  for($i=0;$i-le$bytes.Length-16;$i++){
+    $match=$true;for($j=0;$j-lt4;$j++){if($bytes[$i+$j]-ne$needle[$j]){$match=$false;break}}
+    if($match-and$bytes[$i+4]-eq0-and$bytes[$i+5]-eq0-and$bytes[$i+6]-eq0-and$bytes[$i+7]-eq0){$hits+=$i}
+  }
+  if($hits.Count-ne1){throw "Save-stat tag '$Tag' is not unique."};$offset=$hits[0]
+  [uint32](([uint32]$bytes[$offset+12]-shl24)-bor([uint32]$bytes[$offset+13]-shl16)-bor([uint32]$bytes[$offset+14]-shl8)-bor[uint32]$bytes[$offset+15])
+}
 function SeedRecord([string]$Role,[string]$Source,[string]$Context,[string]$PriorPath,[string]$PriorHash,[string]$Root){[ordered]@{role=$Role;source=$Source;source_context=$Context;upstream_result_path=$PriorPath;upstream_result_sha256=$PriorHash;tree_sha256=(Tree $Root).hash;save_sha256=(Hash (Join-Path $Root $saveRelative));header_sha256=(Hash (Join-Path $Root $headerRelative))}}
 function MigrateCompletedStages($Suite,[string]$SuiteRoot,[hashtable]$SeedRoots){foreach($name in @($Suite.completed)){$stagePath=Join-Path $SuiteRoot "scenarios/$name/stage.json";if(-not(Test-Path -LiteralPath $stagePath)){continue};$old=Get-Content -LiteralPath $stagePath -Raw|ConvertFrom-Json;$seedClass=if($name-ceq'frontend'){'frontend'}else{'gameplay'};$seed=$SeedRoots[$seedClass];$user=Join-Path $SuiteRoot "scenarios/$name/run/user";$stage=[ordered]@{schema='mcla-two-hour-soak-stage-v2';name=$old.name;seed_class=$seedClass;decision=$old.decision;duration_seconds=[long]$old.duration_seconds;sample_count=[int]$old.sample_count;capture_count=[int]$old.capture_count;activity_primary=[int]$old.activity_primary;activity_secondary=[int]$old.activity_secondary;distinct_labels=@($old.distinct_labels);resource_bounds=$old.resource_bounds;runtime_log_set_sha256=$old.runtime_log_set_sha256;save_before_sha256=(Hash (Join-Path $seed $saveRelative));save_after_sha256=(Hash (Join-Path $user $saveRelative));header_before_sha256=(Hash (Join-Path $seed $headerRelative));header_after_sha256=(Hash (Join-Path $user $headerRelative));controlled_exit=[bool]$old.controlled_exit;exit_code=[int]$old.exit_code;force_cleanup=[bool]$old.force_cleanup;fatal_markers=[int]$old.fatal_markers};WriteJson $stagePath $stage}}
 function WaitMarker([Diagnostics.Process]$Process,[string]$Root,[string]$Needle,[int]$Seconds){$deadline=[DateTime]::UtcNow.AddSeconds($Seconds);while([DateTime]::UtcNow-lt$deadline){if($Process.HasExited){throw 'Process exited before startup marker.'};if((LogSet $Root).text.Contains($Needle)){return};Start-Sleep -Milliseconds 250};throw "Startup marker timed out: $Needle"}
@@ -163,6 +178,24 @@ function Recover-CompletedScenario([string]$Name,$Suite,[string]$SuitePath,[stri
   $Suite.completed=@($Suite.completed)+$Name;WriteJson $SuitePath $Suite
   Write-Host "M6-014 scenario RECOVERED PASS: $Name. Full journals, captures, WM_CLOSE hard-exit-0, and archived save were revalidated." -ForegroundColor Green
 }
+function Recover-MixedRaceCoverage($Suite,[string]$SuitePath,[string]$SuiteRoot,[string]$Seed,[string]$Exe,[int]$Series,[int]$FreewayDrivers,[int]$PinkSlipSeries){
+  if(@($Suite.completed)-cnotcontains'free-roam'){throw 'Mixed race recovery requires the completed free-roam stage.'}
+  if(@($Suite.completed)-ccontains'races'){throw "Scenario 'races' is already complete."}
+  if(@(ExactProcesses $Exe).Count){throw 'Canonical MCLA is still running; mixed race recovery requires the process to have exited.'}
+  $root=Safe (Join-Path $SuiteRoot 'scenarios/free-roam') 'Mixed race physical source' -Exists;$stagePath=Safe (Join-Path $root 'stage.json') 'Mixed race source stage' -Exists
+  $stage=Get-Content -LiteralPath $stagePath -Raw|ConvertFrom-Json
+  if($stage.schema-cne'mcla-two-hour-soak-stage-v2'-or$stage.name-cne'free-roam'-or-not$stage.controlled_exit-or$stage.exit_code-ne0-or$stage.force_cleanup-or$stage.fatal_markers-ne0-or[long]$stage.duration_seconds-lt7200){throw 'Mixed race source stage is not an accepted two-hour free-roam stage.'}
+  $coveragePath=Join-Path $root 'race-coverage.json';if(Test-Path -LiteralPath $coveragePath){throw 'Mixed race recovery refuses to replace existing coverage.'}
+  $seedSave=Join-Path $Seed $saveRelative;$finalSave=Join-Path $root "run/user/$saveRelative"
+  $raceBefore=Read-SaveStatU32 $seedSave 'gRCP';$raceAfter=Read-SaveStatU32 $finalSave 'gRCP';$winBefore=Read-SaveStatU32 $seedSave 'gWIN';$winAfter=Read-SaveStatU32 $finalSave 'gWIN'
+  $raceDelta=[long]$raceAfter-[long]$raceBefore;$winDelta=[long]$winAfter-[long]$winBefore
+  if($raceDelta-lt10-or$winDelta-lt1-or$Series-lt2){throw 'Mixed race recovery is below the 10-completion / 2-series semantic floor.'}
+  $captures=@(Get-Content -LiteralPath (Safe (Join-Path $root 'captures.json') 'Mixed race captures' -Exists) -Raw|ConvertFrom-Json);if($captures.Count-lt9){throw 'Mixed race capture sequence is incomplete.'}
+  $active=$captures[0];if($active.name-cne'checkpoint-00.bmp'-or(Hash (Join-Path $root "captures/$($active.name)"))-cne$active.sha256){throw 'Mixed race active-race capture identity is invalid.'}
+  $coverage=[ordered]@{schema='mcla-soak-mixed-race-coverage-v1';physical_scenario='free-roam';decision='two-hour-races-soak-pass';duration_seconds=[long]$stage.duration_seconds;race_completions_before=[long]$raceBefore;race_completions_after=[long]$raceAfter;race_completions_delta=$raceDelta;wins_before=[long]$winBefore;wins_after=[long]$winAfter;wins_delta=$winDelta;operator_series_completed=$Series;operator_freeway_drivers_completed=$FreewayDrivers;operator_pink_slip_series_completed=$PinkSlipSeries;operator_attestation=$true;reviewed_active_race_capture=$active.name;reviewed_active_race_capture_sha256=$active.sha256;source_stage_sha256=(Hash $stagePath);shared_physical_session=$true};WriteJson $coveragePath $coverage
+  $Suite.completed=@($Suite.completed)+'races';WriteJson $SuitePath $Suite
+  Write-Host "M6-014 mixed races RECOVERED PASS: $raceDelta completions, $winDelta wins, $Series+ series in the accepted two-hour free-roam process." -ForegroundColor Green
+}
 
 $evidenceRoot=Safe 'private/evidence/M6-014' 'M6-014 evidence root';[IO.Directory]::CreateDirectory($evidenceRoot)|Out-Null
 $build=Safe 'out/build/win-amd64-release' 'Release build';$game=Safe 'private/game' 'Game root' -Exists;$frontendSeed=Safe $frontendSeedRelative 'Frontend save root' -Exists;$gameplaySeed=Safe $gameplaySeedRelative 'Gameplay save root' -Exists;$seedRoots=@{frontend=$frontendSeed;gameplay=$gameplaySeed}
@@ -182,7 +215,9 @@ if(-not(Test-Path $suitePath)){
 if($InitializeOnly){Write-Host "M6-014 suite initialized: $SuiteRun" -ForegroundColor Green;return}
 if($Finalize){if(@($suite.completed).Count-ne5){throw 'All five scenarios must complete before finalization.'}}
 
-if($RecoverCompletedScenario){
+if($RecoverMixedRaceCoverage){
+  $seed=$seedRoots['gameplay'];$exe=Join-Path $build 'mcla.exe';Recover-MixedRaceCoverage $suite $suitePath $suiteRoot $seed $exe $SeriesCompleted $FreewayDriversCompleted $PinkSlipSeriesCompleted
+}elseif($RecoverCompletedScenario){
   $seed=$seedRoots['gameplay'];$exe=Join-Path $build 'mcla.exe';Recover-CompletedScenario $Scenario $suite $suitePath $suiteRoot $seed $exe
 }elseif(-not$Finalize){
   $seedClass=if($Scenario-ceq'frontend'){'frontend'}else{'gameplay'};$seed=$seedRoots[$seedClass]
@@ -207,6 +242,11 @@ if($RecoverCompletedScenario){
 }
 
 $suite=Get-Content $suitePath -Raw|ConvertFrom-Json;if(@($suite.completed).Count-eq5){
-  $records=@();foreach($name in $scenarioNames){$root=Join-Path $suiteRoot "scenarios/$name";$stage=Get-Content (Join-Path $root 'stage.json') -Raw|ConvertFrom-Json;$records+=[ordered]@{name=$name;seed_class=$stage.seed_class;decision=$stage.decision;duration_seconds=[long]$stage.duration_seconds;sample_count=[int]$stage.sample_count;capture_count=[int]$stage.capture_count;activity_primary=[int]$stage.activity_primary;activity_secondary=[int]$stage.activity_secondary;distinct_labels=@($stage.distinct_labels);resource_bounds=$stage.resource_bounds;runtime_log_set_sha256=$stage.runtime_log_set_sha256;scenario_tree_sha256=(Tree $root).hash;save_before_sha256=$stage.save_before_sha256;save_after_sha256=$stage.save_after_sha256;header_before_sha256=$stage.header_before_sha256;header_after_sha256=$stage.header_after_sha256;controlled_exit=$true;exit_code=0;force_cleanup=$false;fatal_markers=0;stage_path="scenarios/$name/stage.json"}}
-  $result=[ordered]@{schema='mcla-two-hour-soak-suite-v2';task='M6-014';decision='five-two-hour-soak-suite-pass';suite_id=$SuiteRun;sdk_version=$suite.sdk_version;sdk_commit=$suite.sdk_commit;build_configuration='Release';duration_seconds_per_scenario=7200;sample_interval_seconds=300;capture_interval_seconds=900;game=$suite.game;seeds=@($suite.seeds);build=$suite.build;prior_evidence=@($priorEvidence);scenarios=@($records);scope=[ordered]@{five_independent_processes=$true;same_release_artifacts=$true;two_explicit_seed_lineages=$true;same_gameplay_seed_identity=$true;same_seed_identity=$false;frontend_two_hours=$true;free_roam_two_hours=$true;races_two_hours=$true;garage_two_hours=$true;lifecycle_two_hours=$true;monolithic_ten_hour_run_claimed=$false;full_campaign_claimed=$false;music_continuity_claimed=$false}};WriteJson (Join-Path $suiteRoot 'result.json') $result;Write-Host 'M6-014 [3/4]: verifying all five physical scenario roots...' -ForegroundColor Cyan;$final=&$verify -ResultPath (Join-Path $suiteRoot 'result.json');Write-Host 'M6-014 [4/4]: persisted suite revalidated.' -ForegroundColor Cyan;Write-Host "M6-014 PASS: '$suiteRoot/result.json'." -ForegroundColor Green;$final
+  $records=@();foreach($name in $scenarioNames){
+    $physicalName=if($name-ceq'races' -and (Test-Path -LiteralPath (Join-Path $suiteRoot 'scenarios/free-roam/race-coverage.json'))){'free-roam'}else{$name};$root=Join-Path $suiteRoot "scenarios/$physicalName";$stage=Get-Content (Join-Path $root 'stage.json') -Raw|ConvertFrom-Json
+    if($name-ceq'races' -and $physicalName-ceq'free-roam'){$coverage=Get-Content (Join-Path $root 'race-coverage.json') -Raw|ConvertFrom-Json;$decision=$coverage.decision;$primary=[int]$coverage.race_completions_delta;$secondary=[int]$coverage.operator_series_completed;$labels=@('race-events');$stageRel='scenarios/free-roam/race-coverage.json'}else{$decision=$stage.decision;$primary=[int]$stage.activity_primary;$secondary=[int]$stage.activity_secondary;$labels=@($stage.distinct_labels);$stageRel="scenarios/$name/stage.json"}
+    $records+=[ordered]@{name=$name;seed_class=$stage.seed_class;decision=$decision;duration_seconds=[long]$stage.duration_seconds;sample_count=[int]$stage.sample_count;capture_count=[int]$stage.capture_count;activity_primary=$primary;activity_secondary=$secondary;distinct_labels=$labels;resource_bounds=$stage.resource_bounds;runtime_log_set_sha256=$stage.runtime_log_set_sha256;scenario_tree_sha256=(Tree $root).hash;save_before_sha256=$stage.save_before_sha256;save_after_sha256=$stage.save_after_sha256;header_before_sha256=$stage.header_before_sha256;header_after_sha256=$stage.header_after_sha256;controlled_exit=$true;exit_code=0;force_cleanup=$false;fatal_markers=0;stage_path=$stageRel}
+  }
+  $mixed=(Test-Path -LiteralPath (Join-Path $suiteRoot 'scenarios/free-roam/race-coverage.json'))
+  $result=[ordered]@{schema='mcla-two-hour-soak-suite-v2';task='M6-014';decision='five-two-hour-soak-suite-pass';suite_id=$SuiteRun;sdk_version=$suite.sdk_version;sdk_commit=$suite.sdk_commit;build_configuration='Release';duration_seconds_per_scenario=7200;sample_interval_seconds=300;capture_interval_seconds=900;game=$suite.game;seeds=@($suite.seeds);build=$suite.build;prior_evidence=@($priorEvidence);scenarios=@($records);scope=[ordered]@{five_independent_processes=(-not$mixed);four_physical_processes=$mixed;mixed_free_roam_races_session=$mixed;same_release_artifacts=$true;two_explicit_seed_lineages=$true;same_gameplay_seed_identity=$true;same_seed_identity=$false;frontend_two_hours=$true;free_roam_two_hours=$true;races_two_hours=$true;garage_two_hours=$true;lifecycle_two_hours=$true;monolithic_ten_hour_run_claimed=$false;full_campaign_claimed=$false;music_continuity_claimed=$false}};WriteJson (Join-Path $suiteRoot 'result.json') $result;Write-Host 'M6-014 [3/4]: verifying five categories across the accepted physical scenario roots...' -ForegroundColor Cyan;$final=&$verify -ResultPath (Join-Path $suiteRoot 'result.json');Write-Host 'M6-014 [4/4]: persisted suite revalidated.' -ForegroundColor Cyan;Write-Host "M6-014 PASS: '$suiteRoot/result.json'." -ForegroundColor Green;$final
 }elseif($Finalize){throw 'Suite is not complete.'}
