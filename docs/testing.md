@@ -1079,8 +1079,11 @@ scripts/verify-soak-suite.ps1 `
 ```
 
 The suite covers five continuous 7,200-second scenario categories on one
-hash-pinned Release artifact set. Normally these are five independent physical
-processes. A completed free-roam process may also satisfy repeated-race coverage
+hash-pinned Release artifact set. The runner derives the required clean SDK
+version, exact tag, and commit from the project CMake/bootstrap pins and rejects
+any checked-out or recorded SDK drift; the fixture verifier follows those same
+pins instead of embedding a release-line pattern. Normally these are five
+independent physical processes. A completed free-roam process may also satisfy repeated-race coverage
 when it actually contained at least ten machine-observed race completions and
 two owner-attested completed series; that accepted shape is explicitly four
 physical processes / eight physical hours for ten category-hours, never five
