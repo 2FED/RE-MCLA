@@ -19,6 +19,16 @@ $expected = [ordered]@{
     window_width='0'; window_height='0'; fullscreen='true'; monitor='0'
     audio_device='"default"'; audio_volume='1.0'; audio_mute='false'
     input_backend='"sdl"'; mnk_mode='false'
+    wheel_steering_axis='0'; wheel_brake_axis='1'; wheel_accelerator_axis='2'
+    wheel_steering_inverted='false'; wheel_brake_inverted='true'; wheel_accelerator_inverted='true'
+    wheel_force_feedback='true'; wheel_force_feedback_gain='100'; wheel_force_feedback_continuous_periodic_gain='40'
+    wheel_force_feedback_continuous_constant_gain='0'
+    wheel_force_feedback_minimum_transient_strength='75'
+    wheel_button_left_shoulder='0'; wheel_button_right_shoulder='1'
+    wheel_button_y='2'; wheel_button_x='3'; wheel_button_b='4'; wheel_button_a='5'
+    wheel_button_back='6'; wheel_button_start='7'; wheel_button_left_thumb='10'
+    wheel_button_right_thumb='11'; wheel_button_guide='12'
+    wheel_button_dpad_up='-1'; wheel_button_dpad_down='-1'; wheel_button_dpad_left='-1'; wheel_button_dpad_right='-1'
     log_level='"info"'; log_file='""'; log_verbose='false'; log_noisy='false'
     log_flush_interval='0'; log_max_file_size_mb='5'; log_max_files='20'
     game_data_root='""'; user_data_root='""'; update_data_root='""'; cache_root='""'; metadata_root='""'
@@ -50,6 +60,7 @@ if (-not $TemplateOnly) {
     $audio = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/audio/sdl/sdl_audio_driver.cpp'))
     $window = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/ui/window.cpp'))
     $input = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/input/input_system.cpp'))
+    $sdlInput = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp'))
     $logging = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/core/logging.cpp'))
     $runtime = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/system/runtime.cpp'))
     $app = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/ui/rex_app.cpp'))
@@ -64,6 +75,12 @@ if (-not $TemplateOnly) {
         @($window, 'REXCVAR_DEFINE_BOOL(fullscreen, true'),
         @($window, 'REXCVAR_DEFINE_STRING(resolution, ""'),
         @($input, 'REXCVAR_DEFINE_STRING(input_backend, "sdl"'),
+        @($sdlInput, 'REXCVAR_DEFINE_BOOL(wheel_force_feedback, true'),
+        @($sdlInput, 'kMaximumWheelForceFeedbackGainPercent'),
+        @($sdlInput, 'REXCVAR_DEFINE_INT32(wheel_force_feedback_continuous_periodic_gain,'),
+        @($sdlInput, 'REXCVAR_DEFINE_INT32(wheel_force_feedback_continuous_constant_gain,'),
+        @($sdlInput, 'wheel_force_feedback_minimum_transient_strength,'),
+        @($sdlInput, 'REXCVAR_DEFINE_INT32(wheel_button_guide, 12'),
         @($logging, 'REXCVAR_DEFINE_STRING(log_level, "info"'),
         @($runtime, 'REXCVAR_DEFINE_STRING(game_data_root, ""'),
         @($app, 'cvar::LoadConfig(config_path_)'),

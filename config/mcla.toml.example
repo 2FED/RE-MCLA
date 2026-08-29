@@ -26,6 +26,47 @@ audio_mute = false
 input_backend = "sdl"
 mnk_mode = false
 
+# Racing wheels. SDL-classified wheels are admitted without a model allowlist;
+# the defaults match the physically verified Thrustmaster T300 PlayStation rim
+# and two-pedal set. Use -1 to disable an absent axis or button. POV-hat D-pad
+# input is automatic; the four button overrides default to disabled. Title
+# force feedback uses the full requested overall strength, while infinite
+# periodic engine/road texture defaults to 40 percent so it does not mask
+# finite curb/collision transients. Infinite directional constant force
+# defaults to zero because the title can leave it pulling toward one edge;
+# finite collision constants still use the full overall gain. All gains are
+# configurable from 0 through 100 percent. Nonzero finite curb/collision
+# primary amplitudes have a 75-percent minimum within the current overall gain
+# so weak title events remain perceptible without amplifying directional offsets.
+# Wheel-driver effect and global-gain limits
+# still apply, and force feedback may be disabled without wheel input.
+wheel_steering_axis = 0
+wheel_brake_axis = 1
+wheel_accelerator_axis = 2
+wheel_steering_inverted = false
+wheel_brake_inverted = true
+wheel_accelerator_inverted = true
+wheel_force_feedback = true
+wheel_force_feedback_gain = 100
+wheel_force_feedback_continuous_periodic_gain = 40
+wheel_force_feedback_continuous_constant_gain = 0
+wheel_force_feedback_minimum_transient_strength = 75
+wheel_button_left_shoulder = 0
+wheel_button_right_shoulder = 1
+wheel_button_y = 2
+wheel_button_x = 3
+wheel_button_b = 4
+wheel_button_a = 5
+wheel_button_back = 6
+wheel_button_start = 7
+wheel_button_left_thumb = 10
+wheel_button_right_thumb = 11
+wheel_button_guide = 12
+wheel_button_dpad_up = -1
+wheel_button_dpad_down = -1
+wheel_button_dpad_left = -1
+wheel_button_dpad_right = -1
+
 # Logging. An empty log_file uses the runtime default next to the executable.
 log_level = "info"
 log_file = ""

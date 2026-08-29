@@ -1,0 +1,67 @@
+{
+  "schema": "mcla-wheel-input-reference-v1",
+  "guest_subtype": "xbox-360-wheel",
+  "selection_policy": "latest-meaningful-active-device",
+  "admission": {
+    "primary": "SDL_JOYSTICK_TYPE_WHEEL",
+    "fallback_vendor_id": "044F",
+    "fallback_product_ids": ["B66D", "B66E", "B66F"]
+  },
+  "axes": {
+    "steering": 0,
+    "brake": 1,
+    "accelerator": 2,
+    "unused": 3
+  },
+  "buttons": {
+    "left_paddle_lb": 0,
+    "right_paddle_rb": 1,
+    "triangle_y": 2,
+    "square_x": 3,
+    "circle_b": 4,
+    "cross_a": 5,
+    "share_back": 6,
+    "options_start": 7,
+    "r2_unmapped": 8,
+    "l2_unmapped": 9,
+    "l3_left_thumb": 10,
+    "r3_right_thumb": 11,
+    "ps_guide": 12
+  },
+  "force_feedback": {
+    "guest_effect_slots": 64,
+    "implemented_effects": [
+      "constant",
+      "ramp",
+      "square",
+      "sine",
+      "triangle",
+      "sawtooth-up",
+      "sawtooth-down",
+      "spring",
+      "damper"
+    ],
+    "physically_verified_effects": ["constant", "square", "spring", "damper"],
+    "title_event_physically_verified_effects": ["square"],
+    "event_effects_physical_verification_pending": false,
+    "curb_effect_consistency": "intermittent-title-submission",
+    "default_gain_percent": 100,
+    "continuous_periodic_default_gain_percent": 40,
+    "continuous_constant_default_gain_percent": 0,
+    "minimum_transient_strength_percent": 75,
+    "condition_translation": "sign-preserving-sdl-condition-coefficient",
+    "minimum_gain_percent": 0,
+    "maximum_gain_percent": 100,
+    "resume_after_focus_gain": true,
+    "wheel_basic_rumble_suppressed": true
+  },
+  "physical_reference": {
+    "model": "Thrustmaster T300RS Racing Wheel",
+    "vendor_id": "044F",
+    "product_id": "B66E",
+    "axes": 4,
+    "buttons": 13,
+    "hats": 1,
+    "pedal_set": "two-pedal-no-clutch"
+  }
+}

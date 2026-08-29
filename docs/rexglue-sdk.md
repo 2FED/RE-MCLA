@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.9.0.30`
-- Immutable project commit: `c16af0890babfbda24b7a58cf63c6573a702c581`
+- Project release tag: `v0.10.0.0`
+- Immutable project commit: `5d3e98c064c38e0769b4f59d11729c8f6270eb83`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -106,6 +106,23 @@ SDL cases / 124 assertions, including 7 slot cases / 23 assertions and the
 probe observed native Steam Controller slot 0 plus XInput wrapper slot 1,
 selected physical slot 1 for guest slot 0, and received owner-confirmed input.
 
+The v0.10.0.0 delta adds a public model-agnostic racing-wheel input and force-
+feedback surface. SDL wheel classification, with bounded vendor/product
+fallbacks for drivers that omit the type, maps configurable steering, pedal,
+hat, and button controls to an Xbox 360 wheel guest identity. The existing
+latest-meaningful-device policy switches guest slot zero between wheel and
+gamepad without a brand allowlist. The title's 64 `XInputdFF` effect slots map
+constant, ramp, square, sine, triangle, both sawtooth families, spring, and
+damper effects into SDL haptics. Focus loss and latest-active switching stop
+wheel force and restore only valid current infinite effects. Host policy keeps
+overall gain at 100%, continuous periodic texture at 40%, neutralizes infinite
+directional constant force, and floors nonzero finite transient amplitudes at
+75% of current gain without altering zero or infinite effects. Focused coverage
+passes 227 assertions / 9 wheel cases and 358 assertions / 31 SDL input cases.
+Physical T300 evidence covers input, hotplug, centering, finite curb/collision
+events, focus recovery, and wheel-to-gamepad-to-wheel switching; other SDL
+wheel models are configuration-compatible but not physically verified.
+
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
 filtered `[offline]` suite passes 3/3 cases and 10/10 assertions without
@@ -125,19 +142,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.9.0.30^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.10.0.0^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `c16af0890babfbda24b7a58cf63c6573a702c581`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `5d3e98c064c38e0769b4f59d11729c8f6270eb83`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.9.0.30 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.10.0.0 project-fork commit:
 
 ```text
-c16af0890babfbda24b7a58cf63c6573a702c581 third_party/rexglue-sdk
+5d3e98c064c38e0769b4f59d11729c8f6270eb83 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11
