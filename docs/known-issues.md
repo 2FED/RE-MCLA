@@ -4,6 +4,10 @@ Owner: MCLA-R maintainers
 
 Purpose: maintain user-visible and developer-relevant limitations with severity, affected builds, workaround, owner, and target milestone.
 
+The tested-build and route-level support summary is maintained separately in
+[`alpha-compatibility.md`](alpha-compatibility.md). This file remains the
+canonical source for issue identity, severity, status, workaround, and target.
+
 ## Current limitations
 
 | ID | Severity | Status | Description | Workaround | Target |

@@ -6,7 +6,7 @@ The project aims to translate the original PowerPC executable ahead of time and 
 
 ## Status
 
-MCLA-R has completed its first-playable milestone and is active in M6 stable-gameplay validation. Version `0.7.0.0` reliably loads the exact supported image. Current evidence covers guest-backed presentation, local offline profiles and transactional saves, race progression, all major city regions, repeated races, two-hour mixed free-roam/race play, bounded audio and performance telemetry, standard controllers, and model-agnostic SDL racing-wheel input with physically verified Thrustmaster T300 force feedback. Garage/lifecycle soak coverage, full campaign correctness, cross-model wheel validation, remaining rendering defects, and public packaging are still open, so this remains an experimental developer build rather than a public game release.
+MCLA-R has completed its first-playable milestone and is active in M6 stable-gameplay validation. Version `0.7.1.0` publishes the reviewed alpha compatibility matrix for the unchanged `0.7.0.0` tested title/runtime route. Current evidence covers guest-backed presentation, local offline profiles and transactional saves, race progression, all major city regions, repeated races, two-hour mixed free-roam/race play, bounded audio and performance telemetry, standard controllers, and model-agnostic SDL racing-wheel input with physically verified Thrustmaster T300 force feedback. Garage/lifecycle soak coverage, full campaign correctness, cross-model wheel validation, remaining rendering defects, and public packaging are still open, so this remains an experimental developer build rather than a public game release.
 
 The initial target is:
 
@@ -48,6 +48,8 @@ The current repository already implements the underlying developer pipeline—ex
 The authoritative architecture, prerequisites, task ledger, milestone gates, acceptance criteria, risk register, and current decisions are maintained in [README-AI](README-AI).
 
 Rules for handling game dumps, generated code, logs, traces, and release artifacts are defined in [docs/source-data-policy.md](docs/source-data-policy.md).
+
+The bounded tested-build, reference-hardware, route, and limitation summary is maintained in [docs/alpha-compatibility.md](docs/alpha-compatibility.md); the full issue register is [docs/known-issues.md](docs/known-issues.md).
 
 Developers with the legally obtained supported dump can validate the complete local environment without installing or modifying anything:
 

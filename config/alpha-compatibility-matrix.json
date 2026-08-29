@@ -1,0 +1,164 @@
+{
+  "schema": "mcla-alpha-compatibility-matrix-v1",
+  "task": "M6-016",
+  "decision": "bounded-single-host-alpha-compatibility-matrix",
+  "tested_build": {
+    "project_version": "0.7.0.0",
+    "project_commit": "6c167fae0805d8f1417e8e0484c8614fef27f77a",
+    "configuration": "Release",
+    "sdk_version": "0.10.0.0",
+    "sdk_commit": "5d3e98c064c38e0769b4f59d11729c8f6270eb83",
+    "title_id": "545407F8",
+    "media_id": "5940C9DB",
+    "module_hash": "1984A3354B78CE19",
+    "source_iso_sha256": "AFCAAE68593246B1F83328681B690E254A13C37DD2E8DC34AB0DEB6C0F471FDB",
+    "stock_frame_rate": 30
+  },
+  "reference_host": {
+    "operating_system": "Windows 11 Pro x86-64",
+    "os_build": "26200",
+    "cpu": "AMD Ryzen 9 5900X 12-Core Processor",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_driver": "32.0.16.1088",
+    "graphics_api": "Direct3D 12",
+    "physically_verified_resolutions": ["1280x720", "2560x1440"],
+    "audio_output": "Windows default SDL playback endpoint; device identity withheld",
+    "physically_verified_gamepads": [
+      "Xbox-compatible SDL controller",
+      "Steam Controller through Steam Input/XInput wrapper"
+    ],
+    "physically_verified_wheels": [
+      "Thrustmaster T300RS Racing Wheel with PlayStation rim and two-pedal set"
+    ],
+    "remote_display_paths_observed": [
+      "Parsec",
+      "Sunshine/Moonlight"
+    ]
+  },
+  "rows": [
+    {
+      "id": "boot-frontend",
+      "status": "verified",
+      "scope": "Exact Complete Edition image reaches the recognizable title/frontend through the canonical unpatched guest-selected route.",
+      "evidence": ["docs/evidence/M4-003-intro-route-decision.md", "docs/evidence/M4-011-frontend-smoke.md", "docs/evidence/M4-012-frontend-parity.md"],
+      "limitations": ["Bink decode/playback fidelity is not verified.", "First-run OOBE and account selection are not verified."]
+    },
+    {
+      "id": "saved-single-player",
+      "status": "verified-with-limitations",
+      "scope": "A progressed local save loads across fresh Release processes; autosave overwrite and transactional recovery are verified.",
+      "evidence": ["docs/evidence/M5-011-save-content-contract.md", "docs/evidence/M6-005-save-matrix.md", "docs/evidence/M6-006-profile-settings.md"],
+      "limitations": ["The title exposes autosave rather than a manual-save command.", "Clean native first-run save creation and persistent player-name editing remain outside the alpha claim."]
+    },
+    {
+      "id": "gamepad-input",
+      "status": "verified",
+      "scope": "Digital controls, sticks, triggers, focus recovery, hotplug, and latest-active arbitrary-slot routing are physically verified.",
+      "evidence": ["docs/evidence/M4-006-controller-matrix.md", "docs/evidence/M5-006-gameplay-input.md", "docs/evidence/M6-010-window-device-lifecycle.md"],
+      "limitations": ["Prompt glyphs remain Xbox 360-style.", "Remote software may not forward rumble even when local rumble works."]
+    },
+    {
+      "id": "racing-wheel",
+      "status": "verified-with-limitations",
+      "scope": "Model-agnostic SDL wheel admission, configurable input, latest-active wheel/gamepad switching, and bounded title force feedback are verified on one T300.",
+      "evidence": ["docs/evidence/M6-015-wheel-input-ffb.md"],
+      "limitations": ["Only the Thrustmaster T300RS is physically verified.", "Other SDL wheels are configuration-compatible, not physically certified.", "Curb force is title-submission dependent and intermittent; exact Xbox 360 force fidelity is not claimed."]
+    },
+    {
+      "id": "graphics",
+      "status": "usable-with-open-s2-defects",
+      "scope": "D3D12 output covers frontend, HUD, city, day/night, rain, reflections, motion, shadows, particles, and garage scenes at stock timing.",
+      "evidence": ["docs/evidence/M5-003-rendering-categories.md", "docs/evidence/M6-004-environment-effects.md"],
+      "limitations": ["KI-013 colored vehicle-light amplification remains open.", "KI-015 alpha coverage shimmer/noise remains open.", "KI-016 minimap flicker remains open.", "KI-019 exposed neon projection geometry remains open.", "KI-020 white-paint overexposure remains open.", "Only the NVIDIA RTX 3090 D3D12 path is physically verified."]
+    },
+    {
+      "id": "audio",
+      "status": "verified-with-limitations",
+      "scope": "Music, ambient, voice, engine, collision, and UI classes are present; long XMA/XAudio/SDL output and default-device recovery are verified.",
+      "evidence": ["docs/evidence/M5-009-audio-event-matrix.md", "docs/evidence/M6-007-audio-stability.md"],
+      "limitations": ["Exact mix parity is not claimed.", "KI-017 tracks music stopping while ambient SFX remain.", "XMP-selected system music is unavailable."]
+    },
+    {
+      "id": "city-streaming",
+      "status": "verified",
+      "scope": "One continuous Release process crossed all project-defined major city coverage zones and returned to Hollywood/Sunset.",
+      "evidence": ["docs/evidence/M6-001-city-streaming.md"],
+      "limitations": ["This does not cover every road, collectible, event, or campaign item."]
+    },
+    {
+      "id": "race-systems",
+      "status": "verified-representative",
+      "scope": "Representative head-to-head and multi-event series, traffic, police observation, checkpoints, finishes, rewards, and repeated race completions are covered.",
+      "evidence": ["docs/evidence/M5-012-race-results.md", "docs/evidence/M5-013-race-resource-growth.md", "docs/evidence/M6-003-race-system-matrix.md"],
+      "limitations": ["This is not an exhaustive event/opponent/campaign matrix."]
+    },
+    {
+      "id": "garage-customization",
+      "status": "verified-representative",
+      "scope": "One purchase, exterior item, exhaust, paint, vehicle switch, autosave, and fresh-process reload lifecycle is verified.",
+      "evidence": ["docs/evidence/M6-002-garage-lifecycle.md"],
+      "limitations": ["Not every vehicle, part, tune, paint, or garage is covered."]
+    },
+    {
+      "id": "window-device-lifecycle",
+      "status": "verified-with-limitations",
+      "scope": "Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external window close are covered across bounded runs.",
+      "evidence": ["docs/evidence/M6-010-window-device-lifecycle.md"],
+      "limitations": ["OS suspend/hibernate, display-adapter removal, and graceful full guest teardown are not claimed."]
+    },
+    {
+      "id": "offline-services",
+      "status": "bounded-offline",
+      "scope": "Reached achievement/stat/voice/service calls fail or degrade deterministically without fabricated online state.",
+      "evidence": ["docs/evidence/M6-008-offline-progression.md", "docs/evidence/M6-009-retired-service-unlock-policy.md", "docs/evidence/M6-013-reached-unsupported-coverage.md"],
+      "limitations": ["Multiplayer, leaderboards, Rate My Ride, voice transport, and retired Social Club unlock services are unavailable.", "The canonical build does not grant retired-service vehicles as cheats."]
+    },
+    {
+      "id": "long-session-soak",
+      "status": "in-progress",
+      "scope": "Historical same-artifact frontend and mixed free-roam/race two-hour stages passed; a current-artifact five-category suite is being rebuilt.",
+      "evidence": ["README-AI"],
+      "limitations": ["M6-014 remains open until current-artifact frontend, free-roam/races, garage, and lifecycle coverage is complete.", "No ten-hour monolithic run is claimed."]
+    },
+    {
+      "id": "campaign-complete-edition",
+      "status": "not-verified",
+      "scope": "The exact Complete Edition image and South Central city data load in covered routes.",
+      "evidence": ["docs/evidence/M2-001-stock-xenia-gameplay.md", "docs/evidence/M6-001-city-streaming.md"],
+      "limitations": ["Full campaign completion, every event, every vehicle, every cutscene, every unlock, and all on-disc Complete Edition content are M7 scope."]
+    }
+  ],
+  "known_issue_inventory": [
+    {"id":"KI-001","severity":"S1","status":"Open"},
+    {"id":"KI-002","severity":"S1","status":"Closed"},
+    {"id":"KI-003","severity":"S2","status":"Open"},
+    {"id":"KI-004","severity":"S2","status":"Open"},
+    {"id":"KI-005","severity":"S1","status":"Closed"},
+    {"id":"KI-006","severity":"S1","status":"Closed"},
+    {"id":"KI-007","severity":"S2","status":"Open"},
+    {"id":"KI-008","severity":"S2","status":"Open"},
+    {"id":"KI-009","severity":"S2","status":"Open"},
+    {"id":"KI-010","severity":"S2","status":"Contained"},
+    {"id":"KI-011","severity":"S1","status":"Closed"},
+    {"id":"KI-012","severity":"S2","status":"Closed"},
+    {"id":"KI-013","severity":"S2","status":"Open"},
+    {"id":"KI-014","severity":"S2","status":"Contained"},
+    {"id":"KI-015","severity":"S2","status":"Open"},
+    {"id":"KI-016","severity":"S2","status":"Open"},
+    {"id":"KI-017","severity":"S2","status":"Open"},
+    {"id":"KI-018","severity":"S3","status":"Policy"},
+    {"id":"KI-019","severity":"S2","status":"Open"},
+    {"id":"KI-020","severity":"S2","status":"Open"}
+  ],
+  "claims": {
+    "single_reference_host_only": true,
+    "alternate_gpu_verified": false,
+    "alternate_os_verified": false,
+    "cross_model_wheel_physical_claim": false,
+    "full_campaign_claim": false,
+    "online_service_claim": false,
+    "rendering_parity_claim": false,
+    "exact_audio_mix_claim": false,
+    "current_five_stage_soak_complete": false
+  }
+}
