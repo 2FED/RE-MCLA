@@ -6,6 +6,7 @@ param(
   [switch]$Finalize,
   [switch]$RecoverCompletedScenario,
   [switch]$RecoverMixedRaceCoverage,
+  [switch]$RebindGameplaySeed,
   [ValidateRange(2,99)][int]$SeriesCompleted=2,
   [ValidateRange(0,99)][int]$FreewayDriversCompleted=0,
   [ValidateRange(0,99)][int]$PinkSlipSeriesCompleted=0,
@@ -34,7 +35,11 @@ $priorEvidence=@(
   [ordered]@{task='M6-013';path='private/evidence/M6-013/20260819-200712-a4cc8715/result.json';decision='reached-unsupported-surface-fixed-or-bounded-nonblocking';sha256='279DA2FDEDF20D8C69D3DE6B5993A26AC625FBA9B624BF52BC3F800F8F1BC4ED'}
 )
 $frontendSeedRelative='private/evidence/M5-013/20260817-013319-c2e7223f/runs/01/user'
-$gameplaySeedRelative='private/evidence/M6-002/20260817-155005-1dd57bd3/runs/02/user'
+$gameplaySeedRelative='private/save-archive/M6-014/progressed-gameplay-seed/20260829-204551Z-27992E6BC661ABA9-A5A662F728AB46D8'
+$gameplaySeedUpstreamRelative="$gameplaySeedRelative/snapshot.json"
+$gameplaySeedUpstreamSha256='9F074F1693C2B42ADF365E7EB4748F0AFF26AFCCCCBB84BA1B357CFC52871DF3'
+$gameplaySeedSaveSha256='27992E6BC661ABA917DE83C83E3F014584CB7CCC852413FAB6A28852DB9230B8'
+$gameplaySeedHeaderSha256='A5A662F728AB46D8E257B36B3DA10A4249149A695B6E85143377DB6F7E2C5B3C'
 $saveRelative='B13EBABEBABEBABE/545407F8/00000001/mc4.sav/mc4.sav'
 $headerRelative='B13EBABEBABEBABE/545407F8/Headers/00000001/mc4.sav.header'
 $sampleInterval=300
@@ -46,6 +51,7 @@ if($Calibration-and($DurationSeconds-lt30-or$DurationSeconds-gt600)){throw 'Cali
 if($Finalize-and-not$SuiteRun){throw 'Finalize requires an explicit existing SuiteRun.'}
 if($RecoverCompletedScenario-and(-not$SuiteRun-or$InitializeOnly-or$Finalize-or$Calibration)){throw 'Recovery requires an explicit canonical SuiteRun and cannot be combined with initialize, finalize, or calibration.'}
 if($RecoverMixedRaceCoverage-and(-not$SuiteRun-or$InitializeOnly-or$Finalize-or$Calibration-or$RecoverCompletedScenario-or$Scenario-cne'races')){throw 'Mixed race recovery requires Scenario races, an explicit canonical SuiteRun, and no other mode switch.'}
+if($RebindGameplaySeed-and(-not$SuiteRun-or$InitializeOnly-or$Finalize-or$Calibration-or$RecoverCompletedScenario-or$RecoverMixedRaceCoverage)){throw 'Gameplay-seed rebinding requires only an explicit existing SuiteRun.'}
 
 if(-not('MclaSoakNative'-as[type])){Add-Type -AssemblyName System.Drawing;Add-Type -TypeDefinition @'
 using System;using System.Collections.Generic;using System.Runtime.InteropServices;using System.Text;
@@ -199,9 +205,13 @@ function Recover-MixedRaceCoverage($Suite,[string]$SuitePath,[string]$SuiteRoot,
 
 $evidenceRoot=Safe 'private/evidence/M6-014' 'M6-014 evidence root';[IO.Directory]::CreateDirectory($evidenceRoot)|Out-Null
 $build=Safe 'out/build/win-amd64-release' 'Release build';$game=Safe 'private/game' 'Game root' -Exists;$frontendSeed=Safe $frontendSeedRelative 'Frontend save root' -Exists;$gameplaySeed=Safe $gameplaySeedRelative 'Gameplay save root' -Exists;$seedRoots=@{frontend=$frontendSeed;gameplay=$gameplaySeed}
+if((Hash (Join-Path $gameplaySeed $saveRelative))-cne$gameplaySeedSaveSha256-or(Hash (Join-Path $gameplaySeed $headerRelative))-cne$gameplaySeedHeaderSha256-or(Hash (Safe $gameplaySeedUpstreamRelative 'Gameplay seed snapshot manifest' -Exists))-cne$gameplaySeedUpstreamSha256){throw 'Progressed gameplay seed identity drifted.'}
+$gameplayRaceCompletions=Read-SaveStatU32 (Join-Path $gameplaySeed $saveRelative) 'gRCP';$gameplayWins=Read-SaveStatU32 (Join-Path $gameplaySeed $saveRelative) 'gWIN'
+if($gameplayRaceCompletions-ne24-or$gameplayWins-ne23){throw "Progressed gameplay seed statistics drifted: expected 24 races / 23 wins, got $gameplayRaceCompletions / $gameplayWins."}
+Write-Host "GAMEPLAY SEED      | PASS - owner-progressed save: $gameplayRaceCompletions races / $gameplayWins wins." -ForegroundColor Green
 $expectedSeeds=@(
   (SeedRecord 'frontend' $frontendSeedRelative 'immutable-five-race-resource-seed' 'private/evidence/M5-013/20260817-013319-c2e7223f/result.json' 'D890A903775A3B53262B9957E7B7DC1D4B76B49B8735360BECD8233842446298' $frontendSeed),
-  (SeedRecord 'gameplay' $gameplaySeedRelative 'latest-verified-persisted-hangout-plus-garage-progression' 'private/evidence/M6-002/20260817-155005-1dd57bd3/result.json' '21FCBE38695B45D22AE516E33E51AD0A292286985549673811E0FE3E33900644' $gameplaySeed)
+  (SeedRecord 'gameplay' $gameplaySeedRelative 'owner-progressed-save-24-races-23-wins' $gameplaySeedUpstreamRelative $gameplaySeedUpstreamSha256 $gameplaySeed)
 )
 $cmakePinText=Get-Content -LiteralPath (Join-Path $repo 'CMakeLists.txt') -Raw;$bootstrapPinText=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'bootstrap.ps1') -Raw
 $versionPin=[regex]::Match($cmakePinText,'set\(MCLA_REXGLUE_VERSION\s+"(?<v>[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)"\)');$commitPin=[regex]::Match($bootstrapPinText,"ReXGlueCommit\s*=\s*'(?<c>[0-9a-f]{40})'");$tagPin=[regex]::Match($bootstrapPinText,"ReXGlueTag\s*=\s*'(?<t>v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'")
@@ -214,7 +224,21 @@ if(-not(Test-Path $suitePath)){
   Write-Host 'M6-014 [1/4]: clean-building one shared Release artifact set...' -ForegroundColor Cyan;$cmake=(& (Join-Path $PSScriptRoot 'Resolve-Toolchain.ps1') -ExportPath).CMakePath
   if((Invoke-Logged {&$cmake --preset win-amd64-release} $buildLog)-ne0-or(Invoke-Logged {&$cmake --build --preset win-amd64-release --target mcla --clean-first --parallel 8} $buildLog -Append)-ne0){throw "Release clean build failed. Suite: '$suiteRoot'."}
   $suite=[ordered]@{schema='mcla-soak-suite-state-v2';suite_id=$SuiteRun;sdk_version=$sdkVersion;sdk_commit=$sdkCommit;build_configuration='Release';duration_seconds=$DurationSeconds;game=(GameIdentity $game);seeds=@($expectedSeeds);build=[ordered]@{clean_build_log_sha256=(Hash $buildLog);artifacts=@(Artifacts $build)};completed=@()};WriteJson $suitePath $suite
-}else{$suite=Get-Content $suitePath -Raw|ConvertFrom-Json;if($suite.suite_id-cne$SuiteRun-or$suite.sdk_commit-cne$sdkCommit-or$suite.duration_seconds-ne$DurationSeconds){throw 'Suite state identity changed.'};if((ConvertTo-Json @($suite.build.artifacts)-Compress)-cne(ConvertTo-Json @(Artifacts $build)-Compress)){throw 'Shared Release artifacts drifted.'};if('game'-notin$suite.PSObject.Properties.Name){$suite|Add-Member -NotePropertyName game -NotePropertyValue (GameIdentity $game)};if((ConvertTo-Json $suite.game -Compress)-cne(ConvertTo-Json (GameIdentity $game) -Compress)){throw 'Source-game identity drifted.'};if('seeds'-notin$suite.PSObject.Properties.Name){if('seed'-notin$suite.PSObject.Properties.Name-or(ConvertTo-Json $suite.seed -Compress)-cne(ConvertTo-Json ([ordered]@{source=$frontendSeedRelative;tree_sha256=$expectedSeeds[0].tree_sha256;save_sha256=$expectedSeeds[0].save_sha256;header_sha256=$expectedSeeds[0].header_sha256}) -Compress)){throw 'Legacy frontend seed identity drifted.'};$suite.PSObject.Properties.Remove('seed');$suite|Add-Member -NotePropertyName seeds -NotePropertyValue @($expectedSeeds);$suite.schema='mcla-soak-suite-state-v2'};if((ConvertTo-Json @($suite.seeds)-Compress)-cne(ConvertTo-Json @($expectedSeeds)-Compress)){throw 'Explicit seed lineage drifted.'};MigrateCompletedStages $suite $suiteRoot $seedRoots;WriteJson $suitePath $suite}
+}else{
+  $suite=Get-Content $suitePath -Raw|ConvertFrom-Json;if($suite.suite_id-cne$SuiteRun-or$suite.sdk_commit-cne$sdkCommit-or$suite.duration_seconds-ne$DurationSeconds){throw 'Suite state identity changed.'};if((ConvertTo-Json @($suite.build.artifacts)-Compress)-cne(ConvertTo-Json @(Artifacts $build)-Compress)){throw 'Shared Release artifacts drifted.'};if('game'-notin$suite.PSObject.Properties.Name){$suite|Add-Member -NotePropertyName game -NotePropertyValue (GameIdentity $game)};if((ConvertTo-Json $suite.game -Compress)-cne(ConvertTo-Json (GameIdentity $game) -Compress)){throw 'Source-game identity drifted.'};if('seeds'-notin$suite.PSObject.Properties.Name){if('seed'-notin$suite.PSObject.Properties.Name-or(ConvertTo-Json $suite.seed -Compress)-cne(ConvertTo-Json ([ordered]@{source=$frontendSeedRelative;tree_sha256=$expectedSeeds[0].tree_sha256;save_sha256=$expectedSeeds[0].save_sha256;header_sha256=$expectedSeeds[0].header_sha256}) -Compress)){throw 'Legacy frontend seed identity drifted.'};$suite.PSObject.Properties.Remove('seed');$suite|Add-Member -NotePropertyName seeds -NotePropertyValue @($expectedSeeds);$suite.schema='mcla-soak-suite-state-v2'}
+  $seedLineageMatches=(ConvertTo-Json @($suite.seeds)-Compress)-ceq(ConvertTo-Json @($expectedSeeds)-Compress)
+  if(-not$seedLineageMatches){
+    if(-not$RebindGameplaySeed){throw 'Explicit seed lineage drifted. Stop the old attempt and use -RebindGameplaySeed to preserve it and bind the progressed 24-race / 23-win save.'}
+    $nonFrontendComplete=@($suite.completed|Where-Object{$_-cne'frontend'});if($nonFrontendComplete.Count){throw 'Gameplay seed cannot be rebound after a gameplay scenario completed.'}
+    $exe=Join-Path $build 'mcla.exe';if(@(ExactProcesses $exe).Count){throw 'Gameplay seed cannot be rebound while canonical MCLA is running.'}
+    $oldSeeds=@($suite.seeds);$oldGameplay=@($oldSeeds|Where-Object{$_.role-ceq'gameplay'});if($oldGameplay.Count-ne1){throw 'Existing gameplay seed lineage is ambiguous.'}
+    $aborted=@();$scenarioParent=Join-Path $suiteRoot 'scenarios';$attemptRoot=Join-Path $suiteRoot 'aborted-attempts';foreach($name in @($scenarioNames|Where-Object{$_-cne'frontend'})){$source=Join-Path $scenarioParent $name;if(Test-Path -LiteralPath $source){[IO.Directory]::CreateDirectory($attemptRoot)|Out-Null;$stamp=[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssZ');$destination=Join-Path $attemptRoot "$name-$stamp-old-gameplay-seed";if(Test-Path -LiteralPath $destination){throw 'Aborted-attempt archive destination already exists.'};Move-Item -LiteralPath (Safe $source 'Incomplete old-seed scenario' -Exists) -Destination (Safe $destination 'Aborted-attempt archive destination');$aborted+=$destination.Substring($repo.TrimEnd('\').Length+1).Replace('\','/')}}
+    $record=[ordered]@{schema='mcla-soak-gameplay-seed-rebind-v1';rebound_utc=[DateTime]::UtcNow.ToString('O');reason='replace-stale-9-race-9-win-seed-with-owner-progressed-24-race-23-win-seed';old_seed=$oldGameplay[0];new_seed=$expectedSeeds[1];aborted_attempts=@($aborted)}
+    if('seed_rebindings'-notin$suite.PSObject.Properties.Name){$suite|Add-Member -NotePropertyName seed_rebindings -NotePropertyValue @($record)}else{$suite.seed_rebindings=@($suite.seed_rebindings)+$record};$suite.seeds=@($expectedSeeds);WriteJson $suitePath $suite;WriteJson (Join-Path $suiteRoot 'gameplay-seed-rebind.json') $record;$seedLineageMatches=$true
+  }
+  if(-not$seedLineageMatches){throw 'Explicit seed lineage drifted.'};MigrateCompletedStages $suite $suiteRoot $seedRoots;WriteJson $suitePath $suite
+}
+if($RebindGameplaySeed){Write-Host "M6-014 gameplay seed REBOUND: 24 races / 23 wins. Preserved old attempt under '$suiteRoot/aborted-attempts'." -ForegroundColor Green;return}
 if($InitializeOnly){Write-Host "M6-014 suite initialized: $SuiteRun" -ForegroundColor Green;return}
 if($Finalize){if(@($suite.completed).Count-ne5){throw 'All five scenarios must complete before finalization.'}}
 
