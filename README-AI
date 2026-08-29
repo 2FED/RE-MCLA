@@ -68,7 +68,8 @@ Primary target:
 Secondary targets, only after the primary target is stable:
 
 - Linux x86-64 with Vulkan
-- higher frame rates with correct delta-time behavior
+- native macOS ARM64 after a Darwin/ARM64 and Vulkan-portability feasibility gate
+- fixed and variable higher-frame-rate modes with correct delta-time behavior, including validated VSync-off/uncapped operation
 - ultrawide and modern resolution support
 - optional quality-of-life improvements
 
@@ -78,7 +79,7 @@ Secondary targets, only after the primary target is stable:
 - Shipping copyrighted game assets, XEX files, RPF archives, Bink videos, or generated proprietary game code
 - Replacing the RAGE engine with a new engine
 - Rewriting all RPF formats or converting all assets to native PC formats
-- Supporting macOS, ARM64, multiplayer, or modding APIs before the single-player Windows port is stable
+- Supporting macOS ARM64, multiplayer, or modding APIs before the single-player Windows port is stable; macOS additionally requires an explicit ReXGlue Darwin/ARM64 and GPU-capability feasibility gate
 - Enabling 60 FPS before stock 30 FPS gameplay is deterministic and validated
 
 ### 2.3 Recommended technical foundation
@@ -438,7 +439,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-003** Add `.gitignore` entries for `private/`, `generated/`, build trees, SDK binaries, logs, dumps, caches, ISO/XEX/XEXP/RPF/BIK files, and package artifacts. Verified with tracked-source and prohibited-path fixtures on 2026-08-10.
 - [x] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature. Reviewed against the current project plan on 2026-08-10.
 - [x] **M0-005** Select and add a license covering only original port code and scripts. MIT selected on 2026-08-10 with third-party/game-content boundaries documented in README.
-- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10, advanced to `0.1.0.0` at M1 toolchain closure, to `0.2.0.0` at M2 clean-codegen feasibility closure, to `0.3.0.0` at M3 clean native build/module-boot closure on 2026-08-11, to `0.4.0.0` at M4 frontend/menu-stability closure on 2026-08-14, to `0.5.0.0` at M5 first-playable-race closure on 2026-08-17, to `0.5.1.0` for the M6-005 transactional save/corruption/storage-full patch on 2026-08-18, to `0.6.0.0` for the M6 profile/settings feature line, to `0.6.1.0` for latest-active physical-controller routing during M6-014, to `0.6.1.1` for the named-suite, physical-capture focus, and ordered-resource-sample soak-harness hotfixes, to `0.6.1.2` for interactive completion, save-watcher host, and fail-closed stage-recovery fixes, to `0.6.2.0` for the expanded rendering-defect classification and evidence, to `0.6.3.0` for hash-bound mixed free-roam/race soak recovery without duplicate physical play, to `0.7.0.0` for model-agnostic racing-wheel input and bounded title force feedback, to `0.7.1.0` for the reviewed alpha compatibility matrix and synchronized known-issue inventory, and to `0.7.1.1` for exact project-pinned soak SDK identity and the fresh current-artifact frontend checkpoint.
+- [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10, advanced to `0.1.0.0` at M1 toolchain closure, to `0.2.0.0` at M2 clean-codegen feasibility closure, to `0.3.0.0` at M3 clean native build/module-boot closure on 2026-08-11, to `0.4.0.0` at M4 frontend/menu-stability closure on 2026-08-14, to `0.5.0.0` at M5 first-playable-race closure on 2026-08-17, to `0.5.1.0` for the M6-005 transactional save/corruption/storage-full patch on 2026-08-18, to `0.6.0.0` for the M6 profile/settings feature line, to `0.6.1.0` for latest-active physical-controller routing during M6-014, to `0.6.1.1` for the named-suite, physical-capture focus, and ordered-resource-sample soak-harness hotfixes, to `0.6.1.2` for interactive completion, save-watcher host, and fail-closed stage-recovery fixes, to `0.6.2.0` for the expanded rendering-defect classification and evidence, to `0.6.3.0` for hash-bound mixed free-roam/race soak recovery without duplicate physical play, to `0.7.0.0` for model-agnostic racing-wheel input and bounded title force feedback, to `0.7.1.0` for the reviewed alpha compatibility matrix and synchronized known-issue inventory, to `0.7.1.1` for exact project-pinned soak SDK identity and the fresh current-artifact frontend checkpoint, and to `0.7.2.0` for the reviewed variable-frame-rate and native macOS ARM64 future-work plan.
 - [x] **M0-007** Create the planned directory scaffold without copying proprietary files. Source, test, rule, documentation-evidence, CMake, script, and third-party roots created on 2026-08-10; private/generated roots remain local-only and ignored.
 - [x] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow. Initial C++ smoke rule and fixtures added and verified with ast-grep 0.45.0 on 2026-08-10.
 - [x] **M0-009** Define initial structural safety rules and fixtures. Bootstrap rules cover unbounded `strcpy`, `sprintf`/`vsprintf`, and `strcat`; path-aware VFS and hook-metadata rules remain required when real C++ AST lands. Verified with ast-grep 0.45.0 on 2026-08-10.
@@ -1208,9 +1209,9 @@ Pause for a feasibility decision if:
 
 ### Tasks
 
-- [ ] **M8-001** Port the known Complete Edition 60 FPS/delta-time patch behind an explicit option.
-- [ ] **M8-002** Audit physics, traffic, AI, animation, UI, audio, timers, and mission scripting at 60 FPS.
-- [ ] **M8-003** Define supported frame-rate modes; do not claim arbitrary unlocked FPS without validation.
+- [ ] **M8-001** Port the known Complete Edition 60 FPS/delta-time patch behind an explicit option, separating the guest timing fix from host presentation rate and VSync policy.
+- [ ] **M8-002** Implement and audit a variable-frame-rate route that keeps simulation time correct through sustained 40–59 FPS dips, fixed 60/90/120 FPS targets, VRR-like fluctuation, and VSync-off uncapped presentation. Validate physics, traffic, AI, animation, UI, audio, timers, streaming, input, race logic, cutscenes, and mission scripting rather than inferring correctness from average FPS.
+- [ ] **M8-003** Define supported frame-rate modes and their fallback policy: stock 30, validated fixed higher caps, validated dynamic/VRR range, and uncapped only if its full timing matrix passes. A missed target must reduce smoothness rather than slow simulation; UI/config must not expose unverified modes.
 - [ ] **M8-004** Add resolution and aspect-ratio controls with correct HUD, culling, projection, and presentation behavior.
 - [ ] **M8-005** Validate ultrawide modes and cutscene handling.
 - [ ] **M8-006** Add optional motion-blur, MSAA, and imposter-shadow controls using verified addresses or native runtime settings.
@@ -1220,6 +1221,8 @@ Pause for a feasibility decision if:
 - [ ] **M8-010** Create platform-specific build, input, audio, filesystem-case, and package tests for Linux.
 - [ ] **M8-011** Benchmark enhancements against the stock mode and document hardware requirements.
 - [ ] **M8-012** Run the M7 campaign regression matrix with every enhancement combination intended for release.
+- [ ] **M8-013** Run a native macOS ARM64 feasibility gate after the Windows port is stable and the Vulkan backend is validated on Linux. Remove the current ReXGlue `APPLE` hard rejection only on a dedicated branch; inventory Darwin/ARM64 compiler, generated-code model, executable-memory, windowing, input, wheel/FFB, audio, filesystem, crash-reporting, threading, timing, and packaging gaps; probe the Xenos Vulkan backend against MoltenVK portability features and fail closed on any required unsupported behavior.
+- [ ] **M8-014** If M8-013 passes, implement and validate a native Apple-silicon build using Vulkan over MoltenVK/Metal or a justified native Metal backend. Require clean-machine boot, frontend, saved gameplay, representative race/city/garage routes, save persistence, controller/audio/window lifecycle, resource telemetry, artifact signing/notarization strategy, and an asset-free package; do not substitute Rosetta-only execution or a window-only boot for native gameplay compatibility.
 
 ### Deliverables
 
@@ -1227,14 +1230,16 @@ Pause for a feasibility decision if:
 - preserved stock mode
 - documented performance and compatibility impact
 - Linux build only if it meets its own closure requirements
+- native macOS ARM64 build only if its platform/GPU feasibility and clean-machine gameplay gates pass
 
 ### Verification evidence
 
 - stock mode remains binary/config behaviorally unchanged where intended
-- 60 FPS mode passes timing-sensitive campaign scenarios
+- fixed 60 FPS and every claimed dynamic/uncapped range pass timing-sensitive campaign scenarios, target misses, and frame-pacing transitions without simulation slowdown
 - supported resolution/aspect combinations pass screenshot and input tests
 - enhancement combinations pass the defined regression subset
 - Linux claims are backed by clean-machine test evidence
+- macOS ARM64 claims are backed by a native executable, MoltenVK/Metal capability evidence, and clean Apple-silicon gameplay/package results
 
 ### Exit criteria
 
@@ -1478,9 +1483,9 @@ The criterion below is additional to the task wording and universal Definition o
 
 | ID | Individual acceptance criterion / minimum evidence |
 |---|---|
-| M8-001 | 60 FPS patch is byte-guarded, optional, and disabled by default / patch tests |
-| M8-002 | Timing-sensitive systems pass defined 30/60 comparison / timing matrix |
-| M8-003 | UI exposes only validated frame modes / config/UI tests |
+| M8-001 | 60 FPS/delta-time patch is byte-guarded, optional, disabled by default, and independent of host VSync/cap selection / patch and presentation-policy tests |
+| M8-002 | Timing-sensitive systems pass stock 30, sustained 40–59 dips, fixed 60/90/120, fluctuating/VRR-like, and VSync-off uncapped comparisons without simulation slowdown / timing and campaign matrix |
+| M8-003 | UI exposes only validated stock, fixed-cap, dynamic-range, or uncapped modes and falls back safely after missed targets / config/UI/frame-pacing tests |
 | M8-004 | Claimed aspect ratios render HUD/world correctly / capture matrix |
 | M8-005 | Ultrawide gameplay and cutscene policy are documented and tested / report |
 | M8-006 | Each graphics option independently toggles and restores stock behavior / option tests |
@@ -1490,6 +1495,8 @@ The criterion below is additional to the task wording and universal Definition o
 | M8-010 | Linux-specific filesystem/input/audio/package matrix passes / results |
 | M8-011 | Benchmarks are reproducible with hardware/build/config recorded / benchmark report |
 | M8-012 | Intended option combinations pass campaign regression scope / regression report |
+| M8-013 | ReXGlue Darwin/ARM64 and MoltenVK/Metal feasibility inventory closes every required CPU, OS, GPU, input/audio/storage, and packaging dependency as supported or an explicit blocker / feasibility report and compile/capability probes |
+| M8-014 | Native Apple-silicon package reaches representative gameplay and persistence on a clean Mac without Rosetta or proprietary bundled data / native artifact, route matrix, and package audit |
 
 ### M9 criteria
 
@@ -1530,6 +1537,8 @@ The criterion below is additional to the task wording and universal Definition o
 | R-010 | Build/generated code is too large for contributors | Medium | Disk check, split TUs, PCH, incremental presets | M1–M3 |
 | R-011 | Tooling paths depend on one developer machine | Medium | Bootstrap scripts and clean-environment tests | M1/M9 |
 | R-012 | External patches do not match the local XEX | High | Verify module hash and bytes before applying | M2/M8 |
+| R-013 | Variable or uncapped FPS leaves hidden fixed-step physics, scripting, streaming, input, audio, or cutscene assumptions | High | Preserve stock 30; separate delta-time from presentation pacing; test sustained dips, transitions, high caps, and campaign-critical sequences before exposing each mode | M8 |
+| R-014 | ReXGlue or the Xenos Vulkan backend depends on Windows/Linux behavior or Vulkan features unavailable through MoltenVK/Metal | High | Dedicated Darwin/ARM64 feasibility branch; capability inventory and shader/render-path probes before promising or packaging macOS support | M8 |
 
 ## 20. Decision log
 
@@ -1540,6 +1549,8 @@ Record architecture decisions here or link to ADR files.
 | 2026-08-10 | Use ReXGlue rather than bare XenonRecomp as primary base | ReXGlue supplies the runtime subsystems required by a full game | Accepted |
 | 2026-08-10 | Target Windows x86-64/D3D12 first | Best fit for current environment and MCLA's likely graphics requirements | Accepted |
 | 2026-08-10 | Preserve stock 30 FPS until gameplay correctness | Known 60 FPS mode requires delta-time changes and broader validation | Accepted |
+| 2026-08-29 | Treat variable/unlocked FPS as a separate validated timing mode, not merely a disabled present cap | The known Complete Edition patch enables delta-time, but missed targets and 40–120+ FPS transitions can still expose fixed-step game systems | Planned for M8 |
+| 2026-08-29 | Gate native macOS ARM64 behind ReXGlue Darwin/ARM64 and MoltenVK/Metal feasibility | Generated code and Vulkan are ARM64-capable in principle, while the current SDK explicitly supports only Windows/Linux and may require unavailable portability features | Planned for M8 |
 | 2026-08-10 | Keep game assets and generated proprietary output private | Legal and repository hygiene requirement | Accepted |
 | 2026-08-10 | Use `https://github.com/2FED/RE-MCLA.git` as the project remote | Repository supplied by project owner | Accepted |
 | 2026-08-10 | Commit after every closed task; closure commit and push after every closed milestone | Preserve auditable task boundaries and milestone gates | Accepted |

@@ -6,7 +6,7 @@ The project aims to translate the original PowerPC executable ahead of time and 
 
 ## Status
 
-MCLA-R has completed its first-playable milestone and is active in M6 stable-gameplay validation. Version `0.7.1.1` retains the reviewed alpha compatibility matrix for the unchanged `0.7.0.0` tested title/runtime route, binds the soak harness to the exact current project SDK pins, and records a fresh current-artifact two-hour frontend PASS. Current evidence covers guest-backed presentation, local offline profiles and transactional saves, race progression, all major city regions, repeated races, two-hour mixed free-roam/race play, bounded audio and performance telemetry, standard controllers, and model-agnostic SDL racing-wheel input with physically verified Thrustmaster T300 force feedback. Current-artifact free-roam/race/garage/lifecycle soak coverage, full campaign correctness, cross-model wheel validation, remaining rendering defects, and public packaging are still open, so this remains an experimental developer build rather than a public game release.
+MCLA-R has completed its first-playable milestone and is active in M6 stable-gameplay validation. Version `0.7.2.0` retains the reviewed alpha compatibility matrix for the unchanged `0.7.0.0` tested title/runtime route, the exact project-pinned soak harness and fresh current-artifact two-hour frontend PASS, and expands the post-compatibility plan with validated variable/unlocked frame-rate modes plus a gated native macOS ARM64 feasibility/port track. Current evidence covers guest-backed presentation, local offline profiles and transactional saves, race progression, all major city regions, repeated races, two-hour mixed free-roam/race play, bounded audio and performance telemetry, standard controllers, and model-agnostic SDL racing-wheel input with physically verified Thrustmaster T300 force feedback. Current-artifact free-roam/race/garage/lifecycle soak coverage, full campaign correctness, cross-model wheel validation, remaining rendering defects, higher/variable frame rates, secondary-platform builds, and public packaging are still open, so this remains an experimental developer build rather than a public game release.
 
 The initial target is:
 
@@ -15,7 +15,7 @@ The initial target is:
 - offline single-player
 - original 30 FPS behavior until compatibility is established
 
-Linux, higher frame rates, ultrawide support, and other enhancements are later goals and are not currently supported.
+Linux, native macOS ARM64, higher or variable frame rates, ultrawide support, and other enhancements are later gated goals and are not currently supported.
 
 ## Game data is not included
 
