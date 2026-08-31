@@ -22,6 +22,7 @@ class MclaApp : public rex::ReXApp {
 
   void OnPostInitLogging() override;
   void OnPreSetup(rex::RuntimeConfig& config) override;
+  void OnPostLoadGraphicsPlugin() override;
   std::optional<rex::PathConfig> OnFinalizePaths(
       const rex::PathConfig& defaults, std::function<void(rex::PathConfig)> resume) override;
   void LaunchModule() override;

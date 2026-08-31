@@ -28,7 +28,7 @@ function Expect-Fail([string]$Name, [scriptblock]$Mutate) {
 
 try {
     $positive = & $verify
-    if (-not $positive.Passed -or $positive.CompatibilityRows -ne 13 -or $positive.KnownIssues -ne 20) { throw 'Positive matrix verification failed.' }
+    if (-not $positive.Passed -or $positive.CompatibilityRows -ne 13 -or $positive.KnownIssues -ne 23) { throw 'Positive matrix verification failed.' }
     $negative = 0
     Expect-Fail bad-schema { param($m) $m.schema = 'bad' }
     Expect-Fail bad-task { param($m) $m.task = 'M6-015' }
@@ -54,14 +54,14 @@ try {
     Expect-Fail outside-evidence { param($m) $m.rows[0].evidence = @('../outside.md') }
     Expect-Fail missing-evidence-file { param($m) $m.rows[0].evidence = @('docs/evidence/does-not-exist.md') }
     Expect-Fail missing-limitation { param($m) $m.rows[0].limitations = @() }
-    Expect-Fail missing-known-issue { param($m) $m.known_issue_inventory = @($m.known_issue_inventory | Select-Object -First 19) }
+    Expect-Fail missing-known-issue { param($m) $m.known_issue_inventory = @($m.known_issue_inventory | Select-Object -First 22) }
     Expect-Fail bad-known-severity { param($m) $m.known_issue_inventory[12].severity = 'S0' }
     Expect-Fail bad-known-status { param($m) $m.known_issue_inventory[17].status = 'Open' }
     Expect-Fail broad-host-claim { param($m) $m.claims.single_reference_host_only = $false }
     Expect-Fail alternate-gpu-claim { param($m) $m.claims.alternate_gpu_verified = $true }
     Expect-Fail campaign-claim { param($m) $m.claims.full_campaign_claim = $true }
     Expect-Fail soak-complete-claim { param($m) $m.claims.current_five_stage_soak_complete = $true }
-    [pscustomobject]@{ PositiveFixtures = 1; FailClosedNegatives = $negative; CompatibilityRows = 13; KnownIssues = 20; Passed = $true }
+    [pscustomobject]@{ PositiveFixtures = 1; FailClosedNegatives = $negative; CompatibilityRows = 13; KnownIssues = 23; Passed = $true }
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force }

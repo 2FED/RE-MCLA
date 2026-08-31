@@ -86,7 +86,7 @@ for ($i = 0; $i -lt $rows.Count; $i++) {
 
 $knownText = Get-Content -LiteralPath (Join-Path $repo 'docs/known-issues.md') -Raw
 $matches = [regex]::Matches($knownText, '(?m)^\|\s*(KI-\d{3})\s*\|\s*(S\d)\s*\|\s*(Open|Closed|Contained|Policy)\s*\|')
-if ($matches.Count -ne 20) { throw 'Canonical known-issue register must contain exactly twenty rows.' }
+if ($matches.Count -ne 23) { throw 'Canonical known-issue register must contain exactly twenty-three rows.' }
 $inventory = @($matrix.known_issue_inventory)
 if ($inventory.Count -ne $matches.Count) { throw 'Known-issue inventory cardinality drifted.' }
 for ($i = 0; $i -lt $matches.Count; $i++) {
@@ -112,7 +112,12 @@ if (-not $Fixture) {
     }
     $cmake = Get-Content -LiteralPath (Join-Path $repo 'CMakeLists.txt') -Raw
     $bootstrap = Get-Content -LiteralPath (Join-Path $repo 'scripts/bootstrap.ps1') -Raw
-    if ($cmake -notmatch 'MCLA_REXGLUE_VERSION\s+"0\.10\.0\.0"' -or -not $bootstrap.Contains($build.sdk_commit, [StringComparison]::Ordinal)) { throw 'Current SDK pin does not match the tested matrix.' }
+    if ($cmake -notmatch 'MCLA_REXGLUE_VERSION\s+"0\.10\.0\.1"' -or
+        -not $bootstrap.Contains('7dd5cb33002a443b097c0f65d5566c0a0f2db838', [StringComparison]::Ordinal) -or
+        $build.sdk_version -cne '0.10.0.0' -or
+        $build.sdk_commit -cne '5d3e98c064c38e0769b4f59d11729c8f6270eb83') {
+        throw 'Tested alpha identity or its reviewed SDK hotfix successor drifted.'
+    }
 }
 
 [pscustomobject]@{

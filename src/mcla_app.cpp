@@ -828,6 +828,24 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   }
 }
 
+void MclaApp::OnPostLoadGraphicsPlugin() {
+  if (rex::cvar::HasNonDefaultValue("readback_resolve")) {
+    return;
+  }
+  // Photo Mode encodes its JPEG from a CPU-visible resolve buffer. Keep the
+  // delayed readback path enabled by default for this title so that buffer is
+  // populated without imposing the stalls of the fully synchronous mode.
+  if (rex::cvar::SetFlagByName("readback_resolve", "fast")) {
+    MCLA_GPU_INFO(
+        "MCLA graphics: enabled fast render-to-texture CPU readback for photo "
+        "mode");
+  } else {
+    MCLA_GPU_ERROR(
+        "MCLA graphics: readback_resolve is unavailable; photo mode cannot "
+        "capture a CPU-visible frame");
+  }
+}
+
 std::optional<rex::PathConfig>
 MclaApp::OnFinalizePaths(const rex::PathConfig &defaults,
                          std::function<void(rex::PathConfig)> resume) {

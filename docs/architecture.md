@@ -4,7 +4,7 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.10.0.0 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic crash path, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, latest-active controllers, model-agnostic wheel input, and bounded title force feedback are verified independently.
+Current state: the canonical ReXGlue v0.10.0.1 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic crash path, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, and bounded title force feedback are verified independently. The v0.10.0.1 Photo Mode readback and wheel-ownership repairs remain physically gated before the current soak can restart.
 
 ## Consumer preparation model
 
@@ -38,7 +38,7 @@ distribution model.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.10.0.0, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
+- `CMakeLists.txt` pins ReXGlue 0.10.0.1, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
@@ -61,6 +61,14 @@ and logging probes are deliberately exempt so their guest-free contracts do not
 acquire a graphics dependency. The final M3-013 dispatch map contains 30,025
 entries after five bounded post-GPU callable boundaries were added through
 non-force analysis configuration.
+
+After the selected GPU plugin has registered its CVars, `MclaApp` defaults
+`readback_resolve` to `fast` unless the user supplied an explicit override.
+That delayed render-to-texture readback keeps title-side CPU consumers coherent
+with GPU-resident surfaces; Photo Mode's JPEG encoder otherwise receives a
+zero-filled surface even though normal presentation remains visible. The
+non-black Photo Album verifier decodes the title-written JPEG payload rather
+than treating a successful file write as image evidence.
 
 Before Runtime construction, `MclaApp` fail-closes on any mismatch in the
 accepted image/code ranges, bounded ordered function map, sentinel, or entry
@@ -85,11 +93,11 @@ to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files
 through all aliases, rejects root traversal, and proves the game device is
 read-only across open/create/delete and writable-mapping paths. The
 `--mcla_vfs_probe` route exercises the same checks and exits before guest-thread
-creation. ReXGlue v0.10.0.0 supplies the fail-closed device boundary and explicit
+creation. ReXGlue v0.10.0.1 supplies the fail-closed device boundary and explicit
 offline results for the ten direct XONLINE/social/XHV imports reviewed in M3-007;
 user/cache writes remain on their separately configured roots.
 
-ReXGlue v0.10.0.0 extends that boundary to the return-bearing progression
+ReXGlue v0.10.0.1 extends that boundary to the return-bearing progression
 imports reached by MCLA. Achievement guide UI reports not signed in while the
 local achievement manager remains authoritative; leaderboard creation returns
 a bounded initialized enumerator with zero rows; and voice packet submission
@@ -146,14 +154,19 @@ save it applies two 200-ms `START` pulses and two 200-ms `RB` pulses, with a
 two-second inter-tab debounce, and captures title, free-roam gameplay, pause,
 and Settings/Options frames. The route closes through the exact native window's
 `WM_CLOSE`; the title has no internal Exit action and the evidence does not
-invent one. ReXGlue v0.10.0.0 canonicalizes only the relative suffix when
+invent one. ReXGlue v0.10.0.1 canonicalizes only the relative suffix when
 resolving mounted VFS roots, allowing saved-profile root opens with trailing
 separators without changing containment.
 
-ReXGlue v0.10.0.0 separates stable SDL physical storage slots from the guest's
+ReXGlue v0.10.0.1 separates stable SDL physical storage slots from the guest's
 logical controller selection. Xbox user slot zero follows the connected pad
-with the latest button-down or analog deadzone transition, while release edges
-and analog noise inside the standard XInput deadzones do not steal ownership.
+with the latest deliberate button or analog activity, while release edges,
+analog noise, and near-simultaneous identical Steam Input/XInput mirror states
+do not steal ownership. An inactive wheel can reclaim ownership through a
+small steering or pedal delta without requiring a new deadzone transition;
+gamepads must cross a larger deliberate-takeover threshold while a wheel is
+active. This prevents virtual-pad chatter from suspending wheel feedback while
+preserving explicit wheel -> gamepad -> wheel switching.
 Capabilities, keystrokes, and rumble resolve through the same selected pad;
 disconnect chooses the remaining controller with the newest activity. The
 selected pad is hidden at its original nonzero guest index so one device is not
@@ -209,7 +222,7 @@ existing-content opens remain available. Destructive tests use temporary roots;
 the canonical HANGOUT save is only rehashed and never modified.
 
 The M6-006 profile/settings boundary is also isolated from gameplay. ReXGlue
-v0.10.0.0 stores only known standard XAM settings under the local user's global
+v0.10.0.1 stores only known standard XAM settings under the local user's global
 profile root, with an explicit magic/id/type/size header, per-setting size
 bounds, temporary/backup recovery, and full-batch validation before any guest
 write is applied. Title-specific binary settings retain their existing

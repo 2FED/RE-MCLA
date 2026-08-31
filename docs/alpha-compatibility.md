@@ -29,13 +29,13 @@ and device identifiers remain private.
 | Boot and frontend | Verified | Exact Complete Edition image reaches the recognizable title/frontend through the unpatched guest-selected route. | Bink fidelity and first-run account/OOBE are not verified. |
 | Saved single player | Verified with limitations | Progressed local save, autosave overwrite, fresh-process reload, and transactional recovery. | Native clean first-run creation and player-name editing are not alpha claims. |
 | Gamepad input | Verified | Complete digital/analog matrix, focus recovery, hotplug, and latest-active arbitrary-slot selection. | Prompts are Xbox-style; remote software may not forward rumble. |
-| Racing wheel | Verified with limitations | T300 steering/pedals/buttons, hotplug, wheel/gamepad switching, centering, finite curb/collision force, and Alt-Tab recovery. | Only T300 is physically verified; curb submission is intermittent; exact Xbox 360 force fidelity is not claimed. |
-| Graphics | Usable with open S2 defects | Frontend, HUD, city, garage, day/night, rain, reflections, motion, shadows, and particles on RTX 3090/D3D12. | Colored light amplification, alpha shimmer, minimap flicker, neon projection geometry, and white-paint overexposure remain open. No alternate GPU or parity claim. |
+| Racing wheel | Verified with limitations | T300 steering/pedals/buttons, hotplug, wheel/gamepad switching, centering, finite curb/collision force, and Alt-Tab recovery. | Only T300 is physically verified; curb submission is intermittent; exact Xbox 360 force fidelity is not claimed. KI-022 remains open because centering can still disappear despite stable latest-active routing. |
+| Graphics | Usable with open S2 defects | Frontend, HUD, city, garage, day/night, rain, reflections, motion, shadows, particles, and current-artifact non-black Photo Mode capture on RTX 3090/D3D12. | Colored light amplification, alpha shimmer, minimap flicker, neon projection geometry, and white-paint overexposure remain open. The historical tested build had black Photo Mode JPEGs; KI-021 is closed only on the v0.10.0.1 successor. No alternate GPU or parity claim. |
 | Audio | Verified with limitations | Six audible classes, long XMA/XAudio/SDL output, pause/resume, and default-device recovery. | Exact mix and music continuity are not claimed; XMP system music is unavailable. |
 | City streaming | Verified | Continuous route through all project-defined major city zones and back to Hollywood/Sunset. | Not every road, collectible, event, or campaign item. |
 | Race systems | Representative coverage | Head-to-head and series events, traffic, police observation, checkpoints, finishes, rewards, and repeated completions. | Not an exhaustive opponent/event/campaign matrix. |
 | Garage/customization | Representative coverage | Vehicle/part/exhaust/paint purchase, switch, autosave, and fresh-process reload. | Not every vehicle, part, tune, paint, or garage. |
-| Window/device lifecycle | Verified with limitations | Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external close. | No OS suspend/hibernate or display-adapter-removal claim. |
+| Window/device lifecycle | Verified with limitations | Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external close. | No OS suspend/hibernate or display-adapter-removal claim; KI-023 records one separately classified host NVIDIA/Sunshine failure. |
 | Offline services | Bounded offline behavior | Reached achievement/stat/voice/service surfaces fail or degrade deterministically without fabricated online state. | Multiplayer, leaderboards, Rate My Ride, voice transport, and retired services are unavailable. |
 | Two-hour soak suite | In progress | Historical frontend plus mixed free-roam/race stages passed; current-artifact suite is being rebuilt. | M6-014 remains open. No monolithic ten-hour claim. |
 | Full campaign / all Complete Edition content | Not verified | Exact edition and South Central city data load in covered routes. | Full campaign, every event/vehicle/cutscene/unlock, and all content are M7 scope. |
@@ -49,7 +49,13 @@ visible current alpha limitations are:
 - `KI-003`: Bink decode/playback fidelity is not verified;
 - `KI-013`, `KI-015`, `KI-016`, `KI-019`, `KI-020`: open rendering defects;
 - `KI-017`: music may stop while ambient SFX continue;
-- `KI-018`: retired-service unlocks remain retail-locked by policy.
+- `KI-018`: retired-service unlocks remain retail-locked by policy;
+- `KI-021`: Photo Mode JPEGs were black on the historical tested build; the
+  current v0.10.0.1 successor is physically and machine verified non-black;
+- `KI-022`: stable Steam Input mirror routing reduced false ownership changes,
+  but wheel centering can still disappear from an unresolved FFB lifecycle fault;
+- `KI-023`: one long run ended in a host NVIDIA device removal during a Sunshine
+  crash storm, now classified separately by the soak harness.
 
 Closed issues remain in the register so compatibility claims retain their
 history and verification links.

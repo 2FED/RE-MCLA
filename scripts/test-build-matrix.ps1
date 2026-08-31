@@ -35,7 +35,7 @@ function New-Configuration {
 $baseline = [ordered]@{
     schema = 1
     task = 'M3-012'
-    sdk_version = '0.10.0.0'
+    sdk_version = '0.10.0.1'
     generated_cpp_expected = 65
     configurations = @(
         (New-Configuration Debug win-amd64-debug rexruntimed.dll TracyClientd.dll rexgpu-xenosd.dll),
