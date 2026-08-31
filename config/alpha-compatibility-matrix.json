@@ -116,9 +116,9 @@
     {
       "id": "long-session-soak",
       "status": "in-progress",
-      "scope": "Historical same-artifact frontend and mixed free-roam/race two-hour stages passed; a current-artifact five-category suite is being rebuilt.",
+      "scope": "Historical mixed free-roam/race coverage and a fresh ReXGlue v0.10.0.1 same-artifact frontend two-hour stage passed.",
       "evidence": ["README-AI"],
-      "limitations": ["M6-014 remains open until current-artifact frontend, free-roam/races, garage, and lifecycle coverage is complete.", "No ten-hour monolithic run is claimed."]
+      "limitations": ["M6-014 remains open until successor-artifact free-roam/races, garage, and lifecycle coverage is complete.", "No ten-hour monolithic run is claimed."]
     },
     {
       "id": "campaign-complete-edition",

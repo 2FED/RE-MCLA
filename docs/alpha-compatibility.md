@@ -37,7 +37,7 @@ and device identifiers remain private.
 | Garage/customization | Representative coverage | Vehicle/part/exhaust/paint purchase, switch, autosave, and fresh-process reload. | Not every vehicle, part, tune, paint, or garage. |
 | Window/device lifecycle | Verified with limitations | Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external close. | No OS suspend/hibernate or display-adapter-removal claim; KI-023 records one separately classified host NVIDIA/Sunshine failure. |
 | Offline services | Bounded offline behavior | Reached achievement/stat/voice/service surfaces fail or degrade deterministically without fabricated online state. | Multiplayer, leaderboards, Rate My Ride, voice transport, and retired services are unavailable. |
-| Two-hour soak suite | In progress | Historical frontend plus mixed free-roam/race stages passed; current-artifact suite is being rebuilt. | M6-014 remains open. No monolithic ten-hour claim. |
+| Two-hour soak suite | In progress | Historical mixed free-roam/race coverage and fresh ReXGlue v0.10.0.1 same-artifact frontend stage passed. | M6-014 remains open: current successor-artifact free-roam/races, garage, and lifecycle are incomplete. No monolithic ten-hour claim. |
 | Full campaign / all Complete Edition content | Not verified | Exact edition and South Central city data load in covered routes. | Full campaign, every event/vehicle/cutscene/unlock, and all content are M7 scope. |
 
 ## Known issues
