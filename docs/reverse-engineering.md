@@ -156,6 +156,32 @@ registration, then a fresh physical route through the same or another
 multi-event series transition. The failed run proves checkpoint 1 only and is
 not a bounded-growth result.
 
+## M6 delivery-transition constructor-registry entries
+
+The successor M6-014 free-roam process reached the start of a delivery mission
+and terminated on an indirect call to unregistered guest address `0x8220DA40`.
+The private Ghidra audit proves that this is a standalone four-instruction thunk
+over `[0x8220DA40, 0x8220DA50)`: it materializes `0x82203568` and tail-branches
+to the already reviewed dispatch entry at `0x8220BF08`. It sits between the
+separate generated thunks at `0x8220DA30` and `0x8220DA50`.
+
+The same analyzed constructor-registry routine statically registers 102 guest
+callbacks. Comparing those targets against the generated dispatcher found two
+additional omissions with equally exact boundaries: the vtable tail
+`[0x8220B7D0, 0x8220B810)` ending in `bctr`, and the five-instruction argument
+adapter `[0x8220DAA0, 0x8220DAB8)` tailing to `0x822048C0`. These are not
+speculative adjacent gap fill: all three addresses are explicit parameters to
+the constructor registration call, and each interval terminates immediately
+before an already distinct generated function.
+
+All three minimal entries are now in `config/mcla_functions.toml`. Non-force
+ReXGlue v0.10.0.1 codegen succeeds, emits the exact bodies and dispatcher
+registrations, and `scripts/verify-constructor-registry-coverage.ps1` confirms
+all 102 analyzed registry targets are present among 30,034 generated
+registrations. See `docs/evidence/M6-014-delivery-constructor-registry.md`.
+Runtime continuation through the delivery transition remains required before
+the user-visible crash is called closed.
+
 ## Import map handoff
 
 M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

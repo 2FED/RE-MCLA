@@ -90,7 +90,7 @@
       "status": "verified-representative",
       "scope": "Representative head-to-head and multi-event series, traffic, police observation, checkpoints, finishes, rewards, and repeated race completions are covered.",
       "evidence": ["docs/evidence/M5-012-race-results.md", "docs/evidence/M5-013-race-resource-growth.md", "docs/evidence/M6-003-race-system-matrix.md"],
-      "limitations": ["This is not an exhaustive event/opponent/campaign matrix."]
+      "limitations": ["This is not an exhaustive event/opponent/campaign matrix.", "KI-024 remains open until the rebuilt constructor-registry repair is physically continued through the delivery-mission transition."]
     },
     {
       "id": "garage-customization",
@@ -151,7 +151,8 @@
     {"id":"KI-020","severity":"S2","status":"Open"},
     {"id":"KI-021","severity":"S2","status":"Closed"},
     {"id":"KI-022","severity":"S2","status":"Open"},
-    {"id":"KI-023","severity":"S1","status":"Contained"}
+    {"id":"KI-023","severity":"S1","status":"Contained"},
+    {"id":"KI-024","severity":"S1","status":"Open"}
   ],
   "claims": {
     "single_reference_host_only": true,

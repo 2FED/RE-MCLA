@@ -55,7 +55,9 @@ visible current alpha limitations are:
 - `KI-022`: stable Steam Input mirror routing reduced false ownership changes,
   but wheel centering can still disappear from an unresolved FFB lifecycle fault;
 - `KI-023`: one long run ended in a host NVIDIA device removal during a Sunshine
-  crash storm, now classified separately by the soak harness.
+  crash storm, now classified separately by the soak harness;
+- `KI-024`: the delivery-mission transition reached an omitted constructor
+  callback; exact codegen repair exists, but physical continuation is pending.
 
 Closed issues remain in the register so compatibility claims retain their
 history and verification links.

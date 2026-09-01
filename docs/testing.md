@@ -1089,9 +1089,10 @@ two owner-attested completed series; that accepted shape is explicitly four
 physical processes / eight physical hours for ten category-hours, never five
 independent processes or ten physical hours. The already accepted autonomous frontend
 stage retains its immutable M5-013 seed. The four interactive stages use
-isolated copies of the latest verified persisted gameplay profile from the
-second M6-002 garage-lifecycle process (the prior HANGOUT progression plus its
-persisted purchases/customization). Both seed lineages and their upstream
+isolated copies of the latest complete profile retained by the save watcher;
+the current successor seed contains 37 completed races and 31 wins and was
+captured immediately before the classified delivery-transition failure. Both
+seed lineages and their upstream
 results are explicit and hash-bound; the result never claims one common seed
 across all five processes. A generic ten-hour idle process is not an acceptable
 substitute. Free roam is normal play, not aimless driving: races, story
@@ -1100,6 +1101,13 @@ as active city streaming. Avoid spending most of the interval paused or in the
 garage. Every fifteen minutes the runner asks for the current region label while
 five-minute process/I/O samples and private 1280x720 captures are collected
 automatically.
+
+Console prompts are process-aware rather than blocking `Read-Host` calls. If
+the exact title process exits while an answer is pending, the runner reports
+the crash immediately. After a delayed answer it advances sampling, capture,
+and status deadlines to the next real wall-clock boundary; if the interaction
+caused a required canonical interval to be missed, the stage fails instead of
+writing clustered catch-up evidence.
 
 Only the autonomous `frontend` stage requires the in-process
 `MCLA audio: title soak completed` marker. Interactive stages keep the garage

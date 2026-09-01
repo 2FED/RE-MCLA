@@ -31,9 +31,11 @@ keeps M6-014 soak completion false, full-campaign and online-service claims
 false, and alternate-OS/GPU, cross-model wheel, graphics-parity, and exact
 audio-mix claims false.
 
-All twenty `KI-001` through `KI-020` entries are mirrored by ID, severity, and
-status from `docs/known-issues.md`. The full descriptions remain in one
-canonical register rather than being duplicated into the matrix.
+All current `KI-001` through `KI-024` entries are mirrored by ID, severity, and
+status from `docs/known-issues.md`; the initial M6-016 closure covered the first
+twenty, and later M6-014 findings extend the same fail-closed inventory. The
+full descriptions remain in one canonical register rather than being
+duplicated into the matrix.
 
 ## Acceptance
 

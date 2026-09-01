@@ -30,7 +30,7 @@ try{
   $register=[IO.File]::ReadAllText((Join-Path $repo 'generated/default/mcla_register.cpp'))
   $generated10=[IO.File]::ReadAllText((Join-Path $repo 'generated/default/mcla_recomp.10.cpp'))
   $generated14=[IO.File]::ReadAllText((Join-Path $repo 'generated/default/mcla_recomp.14.cpp'))
-  $needles=@('mcla_race_route_probe','.mcla-race-','MCLA_RACE_ROUTE_CONFIG','MCLA_RACE_ROUTE_FRAME','MCLA_RACE_ROUTE_SUMMARY','race_capture_deadline','RACE START 2/2 IAN','RACE START 2/2 MARTIN','FINAL SERIES RESULTS','every NEXT RACE event','RETURN FREE ROAM','CycleCount = 1','InitialUserRoot','ReuseCurrentBuild','0x82264770','0x82262320','30030-entry build','IGNORED - game remains running','while ($Exact -cnotcontains $confirmation)','single-series-route-evidence-pass','repeated-race resource checks belong to M5-013','separate Release restart gate closes persistence')
+  $needles=@('mcla_race_route_probe','.mcla-race-','MCLA_RACE_ROUTE_CONFIG','MCLA_RACE_ROUTE_FRAME','MCLA_RACE_ROUTE_SUMMARY','race_capture_deadline','RACE START 2/2 IAN','RACE START 2/2 MARTIN','FINAL SERIES RESULTS','every NEXT RACE event','RETURN FREE ROAM','CycleCount = 1','InitialUserRoot','ReuseCurrentBuild','0x82264770','0x82262320','30034-entry build','IGNORED - game remains running','while ($Exact -cnotcontains $confirmation)','single-series-route-evidence-pass','repeated-race resource checks belong to M5-013','separate Release restart gate closes persistence')
   foreach($needle in $needles){if(-not($app.Contains($needle)-or$runner.Contains($needle)-or$validator.Contains($needle))){throw "Source contract missing '$needle'."}}
   $functionContracts=@(
     @('"0x82262320" = { end = 0x8226233C, name = "sub_82262320" }','DEFINE_REX_FUNC(sub_82262320)','// blr'),

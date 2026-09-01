@@ -2,7 +2,7 @@
 
 [project]
 name = "mcla"
-sdk_version = "0.9.0"
+sdk_version = "0.10.0"
 game_root = "private/game"
 
 [entrypoint]

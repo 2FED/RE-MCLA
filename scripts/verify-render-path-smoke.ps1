@@ -84,7 +84,7 @@ $bannedPatterns = @(
     '(?i)XENOS_AUDIT_.*(?:unknown|overflow|fail)=[1-9][0-9]*'
 )
 
-$expectedMappingCount = if ($HistoricalEvidenceOnly) { 30025 } else { 30026 }
+$expectedMappingCount = if ($HistoricalEvidenceOnly) { 30025 } else { 30034 }
 $startupMarkers = [ordered]@{
     lifecycle = 'MCLA lifecycle: logging ready'
     gpu_selection = "MCLA graphics: selected GPU plugin 'xenos'"

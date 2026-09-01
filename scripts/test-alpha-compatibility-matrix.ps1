@@ -28,7 +28,7 @@ function Expect-Fail([string]$Name, [scriptblock]$Mutate) {
 
 try {
     $positive = & $verify
-    if (-not $positive.Passed -or $positive.CompatibilityRows -ne 13 -or $positive.KnownIssues -ne 23) { throw 'Positive matrix verification failed.' }
+    if (-not $positive.Passed -or $positive.CompatibilityRows -ne 13 -or $positive.KnownIssues -ne 24) { throw 'Positive matrix verification failed.' }
     $negative = 0
     Expect-Fail bad-schema { param($m) $m.schema = 'bad' }
     Expect-Fail bad-task { param($m) $m.task = 'M6-015' }
@@ -61,7 +61,7 @@ try {
     Expect-Fail alternate-gpu-claim { param($m) $m.claims.alternate_gpu_verified = $true }
     Expect-Fail campaign-claim { param($m) $m.claims.full_campaign_claim = $true }
     Expect-Fail soak-complete-claim { param($m) $m.claims.current_five_stage_soak_complete = $true }
-    [pscustomobject]@{ PositiveFixtures = 1; FailClosedNegatives = $negative; CompatibilityRows = 13; KnownIssues = 23; Passed = $true }
+    [pscustomobject]@{ PositiveFixtures = 1; FailClosedNegatives = $negative; CompatibilityRows = 13; KnownIssues = 24; Passed = $true }
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force }

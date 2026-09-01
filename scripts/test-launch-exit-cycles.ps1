@@ -37,7 +37,7 @@ $positiveNormalLog = @'
 [info] [app] MCLA lifecycle: logging ready
 [info] [gpu] MCLA graphics: selected GPU plugin 'xenos'
 [info] [sys] GPU plugin 'xenos' loaded (rexgpu-xenosrd.dll)
-[info] [ppc] MCLA module config: static image 82000000-829E0000, code 82130000-827CD054, 30026 mappings
+[info] [ppc] MCLA module config: static image 82000000-829E0000, code 82130000-827CD054, 30034 mappings
 [info] [sys] Runtime initialized successfully
 [info] [sys] Loading XEX image: game:\default.xex
 [info] [ppc] MCLA module identity: title 545407F8, media 5940C9DB, image 82000000-829E0000, entry 821322B8

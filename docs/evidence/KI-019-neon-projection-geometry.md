@@ -15,6 +15,15 @@ The bright ground contribution has a readable polygonal boundary extending
 around the Camaro. The owner reports that the diamond/quad presentation is
 intermittent in normal play.
 
+The repaired Photo Mode route later captured the same defect in the album:
+the otherwise valid non-black 2026-08-31 image shows a hard triangular/diamond
+cyan footprint projected from the side sill rather than only soft underglow.
+The private 2411x1327 PNG is retained beside the original garage capture as
+`neon-projection-photo-album-20260831.png`, SHA-256
+`4C9DC91CB6F9EDF7AFF1F3484A723D2953B23BDAEF171E16BAEE99540A3622BA`.
+This second scene confirms KI-019 is independent of the former black-JPEG
+Photo Mode defect (KI-021), which is closed.
+
 This screenshot establishes the incorrect projected shape but not its temporal
 trigger. It is separate from KI-013 saturated local-light transfer because the
 artifact is on the ground projection rather than vehicle paint.

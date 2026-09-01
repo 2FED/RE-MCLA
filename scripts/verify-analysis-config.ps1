@@ -10,9 +10,12 @@ $resolved = (Resolve-Path -LiteralPath $ConfigPath).Path
 if ((Get-Item -LiteralPath $resolved -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw 'Analysis config must not be a reparse point.' }
 
 $expected = [ordered]@{
+    '8220B7D0' = @{ end='8220B810'; parent=''; name='sub_8220B7D0' }
     '8220B810' = @{ end='8220B834'; parent=''; name='sub_8220B810' }
     '8220BF08' = @{ end='8220C018'; parent=''; name='sub_8220BF08' }
     '8220C018' = @{ end='8220C0D0'; parent=''; name='sub_8220C018' }
+    '8220DA40' = @{ end='8220DA50'; parent=''; name='sub_8220DA40' }
+    '8220DAA0' = @{ end='8220DAB8'; parent=''; name='sub_8220DAA0' }
     '82262320' = @{ end='8226233C'; parent=''; name='sub_82262320' }
     '82264760' = @{ end='82264770'; parent=''; name='sub_82264760' }
     '82264770' = @{ end='82264780'; parent=''; name='sub_82264770' }
