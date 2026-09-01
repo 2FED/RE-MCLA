@@ -1,5 +1,10 @@
 # M6-011 host configuration
 
+Runtime note: startup `fullscreen = true/false` remains a valid host setting,
+but M6-011 did not claim live window-mode switching. KI-025 separately tracks
+the missing Alt+Enter and double-click toggle; deterministic evidence runners
+continue to force windowed mode for capture and focus control.
+
 M6-011 closes the documented host-configuration surface with a build-only,
 fail-closed contract gate. The accepted private result is
 `private/evidence/M6-011/20260819-184541-fa4b1cc6/result.json`, SHA-256

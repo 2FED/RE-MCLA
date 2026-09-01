@@ -86,7 +86,7 @@ for ($i = 0; $i -lt $rows.Count; $i++) {
 
 $knownText = Get-Content -LiteralPath (Join-Path $repo 'docs/known-issues.md') -Raw
 $matches = [regex]::Matches($knownText, '(?m)^\|\s*(KI-\d{3})\s*\|\s*(S\d)\s*\|\s*(Open|Closed|Contained|Policy)\s*\|')
-if ($matches.Count -ne 24) { throw 'Canonical known-issue register must contain exactly twenty-four rows.' }
+if ($matches.Count -ne 25) { throw 'Canonical known-issue register must contain exactly twenty-five rows.' }
 $inventory = @($matrix.known_issue_inventory)
 if ($inventory.Count -ne $matches.Count) { throw 'Known-issue inventory cardinality drifted.' }
 for ($i = 0; $i -lt $matches.Count; $i++) {

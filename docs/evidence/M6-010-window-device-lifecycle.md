@@ -1,5 +1,9 @@
 # M6-010 window and device lifecycle matrix
 
+Runtime fullscreen switching is outside this accepted minimize/restore/close
+matrix. KI-025 records that startup fullscreen configuration works while
+Alt+Enter and double-click do not toggle a running window.
+
 M6-010 closes the platform-lifecycle checklist with a split physical matrix.
 The accepted private result is
 `private/evidence/M6-010/20260819-180446-730942f2/result.json`, SHA-256

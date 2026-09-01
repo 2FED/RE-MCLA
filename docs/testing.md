@@ -1109,6 +1109,27 @@ and status deadlines to the next real wall-clock boundary; if the interaction
 caused a required canonical interval to be missed, the stage fails instead of
 writing clustered catch-up evidence.
 
+Focused delivery-transition regressions do not require replaying a two-hour
+scenario. `scripts/run-delivery-transition-regression.ps1` binds the current
+suite artifacts and progressed seed, automatically enters saved gameplay, and
+waits for exact owner confirmations at active delivery gameplay and after a
+300-second stability window. It preserves the evolving save, closes through
+external `WM_CLOSE`, and writes a bounded result that explicitly does not claim
+mission completion or a two-hour soak. Revalidate it with:
+
+```powershell
+scripts/verify-delivery-transition-regression.ps1 `
+  -ResultPath private/evidence/M6-014/delivery-regressions/<run-id>/result.json
+scripts/test-delivery-transition-regression.ps1
+```
+
+The runner hashes the complete canonical source-game payload before and after
+the session. The verifier independently matches that payload to `suite.game`
+and rehashes the suite artifacts, fixed seed snapshot, final save/header,
+runtime logs, latest complete save snapshot, and complete archive tree. Owner
+confirmation establishes mission state; logs establish process health and
+controlled exit, not machine-observed delivery semantics.
+
 Only the autonomous `frontend` stage requires the in-process
 `MCLA audio: title soak completed` marker. Interactive stages keep the garage
 control worker alive so the deterministic initial `START` pulse can coexist

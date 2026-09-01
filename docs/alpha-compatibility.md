@@ -56,8 +56,10 @@ visible current alpha limitations are:
   but wheel centering can still disappear from an unresolved FFB lifecycle fault;
 - `KI-023`: one long run ended in a host NVIDIA device removal during a Sunshine
   crash storm, now classified separately by the soak harness;
-- `KI-024`: the delivery-mission transition reached an omitted constructor
-  callback; exact codegen repair exists, but physical continuation is pending.
+- `KI-024`: the omitted delivery constructor callback is closed on the current
+  artifact by an owner-confirmed active transition and five playable minutes;
+- `KI-025`: startup fullscreen is configurable, but runtime Alt+Enter and
+  double-click window-mode switching are not implemented.
 
 Closed issues remain in the register so compatibility claims retain their
 history and verification links.

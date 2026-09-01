@@ -2,7 +2,7 @@
 
 Date: 2026-09-01
 
-Status: CODEGEN AND STATIC REGISTRY PASS; PHYSICAL DELIVERY RETEST PENDING
+Status: CURRENT-ARTIFACT PHYSICAL DELIVERY REGRESSION PASS
 
 ## Runtime failure
 
@@ -69,5 +69,26 @@ The runner now polls process exit while reading console input, immediately
 reports a title crash at a prompt, resynchronizes future schedule boundaries,
 and fails rather than backfilling missed canonical evidence.
 
-Static/codegen acceptance does not replace the physical criterion: KI-024 stays
-open until the rebuilt artifact continues through the same delivery transition.
+## Physical closure
+
+Current-artifact regression `20260901-203448-d31ab681` used the exact
+ReXGlue v0.10.0.1 suite `20260901-153415-d747cf2d`, executable SHA-256
+`669D9389CD9414958CF7631848281B5BE4A940DE03BF99D108672FCCFC330BE0`,
+and the archived 37-race/31-win seed. The owner confirmed only after the
+delivery objective was active and the car was controllable, then continued
+playing for a measured 300-second stability window. The active-to-stable
+attestations span 349 seconds.
+
+The process exited 0 through external `WM_CLOSE`, with zero force cleanup and
+zero fatal, invalid-function, `PPC_UNIMPLEMENTED`, device-loss, or guest-crash
+markers. The final complete save was preserved with SHA-256
+`FE788E35FDF69B59F10E404886A043109349B1CD85B71F9FDFE15AA8E9AB02A3`.
+The result SHA-256 is
+`E7200300CA38718DD6978C26E8F4CE5CF4EF1279441B5F032CE2075F387FF0F1`.
+`scripts/verify-delivery-transition-regression.ps1` revalidates the bound suite
+identity and rehashes the current source-game payload, artifacts, seed snapshot,
+final save, runtime logs, and save archive.
+
+This closes KI-024 for the delivery transition. It is owner-confirmed rather
+than machine-observed mission-state telemetry and does not claim delivery
+completion or a two-hour soak.

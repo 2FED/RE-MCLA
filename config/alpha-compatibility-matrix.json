@@ -89,8 +89,8 @@
       "id": "race-systems",
       "status": "verified-representative",
       "scope": "Representative head-to-head and multi-event series, traffic, police observation, checkpoints, finishes, rewards, and repeated race completions are covered.",
-      "evidence": ["docs/evidence/M5-012-race-results.md", "docs/evidence/M5-013-race-resource-growth.md", "docs/evidence/M6-003-race-system-matrix.md"],
-      "limitations": ["This is not an exhaustive event/opponent/campaign matrix.", "KI-024 remains open until the rebuilt constructor-registry repair is physically continued through the delivery-mission transition."]
+      "evidence": ["docs/evidence/M5-012-race-results.md", "docs/evidence/M5-013-race-resource-growth.md", "docs/evidence/M6-003-race-system-matrix.md", "docs/evidence/M6-014-delivery-constructor-registry.md"],
+      "limitations": ["This is not an exhaustive event/opponent/campaign matrix.", "KI-024 is closed by an owner-confirmed active delivery transition and five-minute stability window; full delivery completion is not claimed."]
     },
     {
       "id": "garage-customization",
@@ -104,7 +104,7 @@
       "status": "verified-with-limitations",
       "scope": "Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external window close are covered across bounded runs.",
       "evidence": ["docs/evidence/M6-010-window-device-lifecycle.md"],
-      "limitations": ["OS suspend/hibernate, display-adapter removal, and graceful full guest teardown are not claimed.", "KI-023 records one host NVIDIA device removal during a Sunshine crash storm; it is contained by classification, not claimed fixed by the title."]
+      "limitations": ["OS suspend/hibernate, display-adapter removal, and graceful full guest teardown are not claimed.", "KI-023 records one host NVIDIA device removal during a Sunshine crash storm; it is contained by classification, not claimed fixed by the title.", "KI-025 tracks the missing runtime Alt+Enter and double-click fullscreen toggle; startup fullscreen remains configuration-controlled."]
     },
     {
       "id": "offline-services",
@@ -152,7 +152,8 @@
     {"id":"KI-021","severity":"S2","status":"Closed"},
     {"id":"KI-022","severity":"S2","status":"Open"},
     {"id":"KI-023","severity":"S1","status":"Contained"},
-    {"id":"KI-024","severity":"S1","status":"Open"}
+    {"id":"KI-024","severity":"S1","status":"Closed"},
+    {"id":"KI-025","severity":"S3","status":"Open"}
   ],
   "claims": {
     "single_reference_host_only": true,

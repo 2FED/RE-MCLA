@@ -179,8 +179,10 @@ ReXGlue v0.10.0.1 codegen succeeds, emits the exact bodies and dispatcher
 registrations, and `scripts/verify-constructor-registry-coverage.ps1` confirms
 all 102 analyzed registry targets are present among 30,034 generated
 registrations. See `docs/evidence/M6-014-delivery-constructor-registry.md`.
-Runtime continuation through the delivery transition remains required before
-the user-visible crash is called closed.
+Current-artifact regression `20260901-203448-d31ab681` subsequently entered
+owner-confirmed active delivery gameplay and remained playable for 300 seconds
+before a controlled external exit, closing the exact callable-boundary defect.
+This does not claim machine-observed mission state or full delivery completion.
 
 ## Import map handoff
 
