@@ -15,9 +15,10 @@ function BaseResult{
   $samples=@()
   for($i=0;$i-lt13;$i++){$samples+=[ordered]@{checkpoint=$i;elapsed_seconds=if($i){$i*300}else{0};private_bytes=1000000+($i*100);working_set_bytes=2000000+($i*100);handle_count=100+$i;thread_count=20;io_read_bytes=3000000+($i*1000)}}
   $captures=@()
-  for($i=0;$i-lt5;$i++){$captures+=[ordered]@{name=('checkpoint-{0:D2}.bmp'-f$i);elapsed_seconds=$i*900;sha256=(([char](65+$i)).ToString()*64);bytes=1024;color_bins=100}}
+  $attempts=@()
+  for($i=0;$i-lt5;$i++){$capture=[ordered]@{name=('checkpoint-{0:D2}.bmp'-f$i);elapsed_seconds=$i*900;sha256=(([char](65+$i)).ToString()*64);bytes=1024;color_bins=100};$captures+=$capture;$attempts+=[ordered]@{status='captured';checkpoint=$i;scheduled_elapsed_seconds=$i*900;attempted_elapsed_seconds=$i*900;name=$capture.name;elapsed_seconds=$capture.elapsed_seconds;sha256=$capture.sha256;bytes=$capture.bytes;color_bins=$capture.color_bins}}
   [ordered]@{
-    schema='mcla-one-hour-mixed-gameplay-long-session-v1';task='M6-014';decision='one-hour-mixed-gameplay-long-session-pass';run_id='20260903-120000-1234abcd';target_duration_seconds=3600;actual_duration_seconds=3600
+    schema='mcla-one-hour-mixed-gameplay-long-session-v2';task='M6-014';decision='one-hour-mixed-gameplay-long-session-pass';run_id='20260903-120000-1234abcd';target_duration_seconds=3600;actual_duration_seconds=3600
     started_utc='2026-09-03T09:00:00.0000000Z';completed_utc='2026-09-03T10:00:05.0000000Z';attested_utc='2026-09-03T10:00:10.0000000Z'
     current_suite=[ordered]@{path='private/evidence/M6-014/20260901-153415-d747cf2d/suite.json';sha256='EB553F0B34F00837A7A0C2FA3FDDD4FBEA9444FE4268EAC266D889A80DCA37C6';sdk_version='0.10.0.1';sdk_commit='7dd5cb33002a443b097c0f65d5566c0a0f2db838'}
     historical_frontend=[ordered]@{suite_path='private/evidence/M6-014/20260831-133236-2cecb67b/suite.json';suite_sha256='009DB466CA39195C02B137C45F4A11EBA87080D1C60B15D54887C5CBD85E0F3C';stage_path='private/evidence/M6-014/20260831-133236-2cecb67b/scenarios/frontend/stage.json';stage_sha256='4E97A021296A0521F959CB9A37AE7BA1B0D3A93B6D311651E10DFCF75E39AC9C';tree_sha256='C44F1C9D0E47834BA745CE267500E826E490706B1BDFE4A081AE65FE88D6665D';duration_seconds=7202;executable_sha256='9202CDC09DA1402460312E0204AB0CF5B6D05D9C07B205CA136414CD1C655FD4'}
@@ -26,6 +27,7 @@ function BaseResult{
     release_artifacts=@([ordered]@{name='mcla.exe';sha256=('3'*64)},[ordered]@{name='rexruntime.dll';sha256=('4'*64)},[ordered]@{name='TracyClient.dll';sha256=('5'*64)},[ordered]@{name='rexgpu-xenos.dll';sha256=('6'*64)})
     resource_samples=$samples
     resource_bounds=[ordered]@{private_growth_bytes=1200;working_growth_bytes=1200;handle_growth=12;thread_growth=0;io_read_growth_bytes=12000;private_peak_growth_bytes=1200;working_peak_growth_bytes=1200}
+    capture_attempts=$attempts
     captures=$captures
     runtime_logs=@([ordered]@{name='mcla.log';sha256=('7'*64);bytes=1024})
     runtime_fatal_markers=0
@@ -41,6 +43,7 @@ function ExpectFail([string]$Name,[scriptblock]$Mutate){$value=Clone (BaseResult
 try{
   $positive=Join-Path $root 'positive.json';WriteJson $positive (BaseResult);$probe=&$verify -FixturePath $positive -Fixture
   if($probe.Decision-cne'one-hour-mixed-gameplay-long-session-pass'-or$probe.DurationSeconds-ne3600-or$probe.Samples-ne13-or$probe.Captures-ne5){throw 'Positive fixture failed.'}
+  $skipped=Clone (BaseResult);$skipped.capture_attempts[1]=[pscustomobject][ordered]@{status='skipped';checkpoint=1;scheduled_elapsed_seconds=900;attempted_elapsed_seconds=900;reason='mcla-window-not-foreground'};$skipped.captures=@($skipped.captures|Where-Object name -CNE 'checkpoint-01.bmp');$skippedPath=Join-Path $root 'positive-skipped-capture.json';WriteJson $skippedPath $skipped;$skippedProbe=&$verify -FixturePath $skippedPath -Fixture;if($skippedProbe.Captures-ne4){throw 'Recoverable skipped-capture fixture failed.'}
   $negative=0
   ExpectFail bad-schema {param($r)$r.schema='bad'}
   ExpectFail short-duration {param($r)$r.actual_duration_seconds=3599}
@@ -59,10 +62,16 @@ try{
   ExpectFail forged-bounds {param($r)$r.resource_bounds.private_growth_bytes=1199}
   ExpectFail memory-limit {param($r)$r.resource_samples[1].private_bytes=1074741825L}
   ExpectFail handle-limit {param($r)$r.resource_samples[12].handle_count=229}
-  ExpectFail missing-capture {param($r)$r.captures=@($r.captures|Select-Object -First 4)}
+  ExpectFail missing-capture-attempt {param($r)$r.capture_attempts=@($r.capture_attempts|Select-Object -First 4)}
+  ExpectFail missing-baseline-capture {param($r)$r.capture_attempts[0]=[pscustomobject][ordered]@{status='skipped';checkpoint=0;scheduled_elapsed_seconds=0;attempted_elapsed_seconds=0;reason='mcla-window-not-foreground'};$r.captures=@($r.captures|Select-Object -Skip 1)}
+  ExpectFail unbound-capture {param($r)$r.captures=@($r.captures|Select-Object -First 4)}
   ExpectFail black-capture {param($r)$r.captures[1].color_bins=1}
   ExpectFail late-capture {param($r)$r.captures[1].elapsed_seconds=931}
-  ExpectFail static-captures {param($r)foreach($c in $r.captures){$c.sha256=('A'*64)}}
+  ExpectFail bad-skip-reason {param($r)$r.capture_attempts[1]=[pscustomobject][ordered]@{status='skipped';checkpoint=1;scheduled_elapsed_seconds=900;attempted_elapsed_seconds=900;reason='bad'};$r.captures=@($r.captures|Where-Object name -CNE 'checkpoint-01.bmp')}
+  ExpectFail mismatched-attempt-time {param($r)$r.capture_attempts[1].elapsed_seconds=901}
+  ExpectFail string-capture-elapsed {param($r)$r.captures[1].elapsed_seconds='900'}
+  ExpectFail string-capture-bytes {param($r)$r.captures[1].bytes='1024'}
+  ExpectFail string-capture-bins {param($r)$r.captures[1].color_bins='100'}
   ExpectFail empty-logs {param($r)$r.runtime_logs=@()}
   ExpectFail host-driver-failure {param($r)$r.host_display_audit.nvidia_driver_errors=1}
   ExpectFail host-schema {param($r)$r.host_display_audit.schema='bad'}
@@ -79,11 +88,11 @@ try{
   ExpectFail wheel-overclaim {param($r)$r.scope.wheel_centering_stability_claimed=$true}
 
   $runnerText=[IO.File]::ReadAllText($runner);$verifierText=[IO.File]::ReadAllText($verify)
-  $runnerNeedles=@('[ValidateRange(3600,3600)][int]$DurationSeconds=3600','checkpoint-le12','$checkpoint*300','$checkpoint%3-eq0','elapsed_seconds=$Elapsed','MIXED GAMEPLAY READY','MIXED GAMEPLAY STABLE','GetProcessIoCounters','CopyFromScreen','AttachThreadInput','HostDisplayAudit','watch-soak-save.ps1','verify-delivery-transition-regression.ps1','Copied gameplay seed failed physical identity verification.','working_copy_tree_sha256','Final save archive does not match the complete physical profile snapshot.','-WindowStyle Hidden','--xam_user_signin_state=1','--fullscreen=false','Assertion failed','GUEST_CRASH_REPORT','DXGI_ERROR_DEVICE_(?:REMOVED|HUNG|RESET)','normal moving gameplay plus one garage enter/exit, pause/resume, and Alt-Tab return','same_release_artifacts=$false','current_five_stage_soak_complete=$false')
+  $runnerNeedles=@('[ValidateRange(3600,3600)][int]$DurationSeconds=3600','checkpoint-le12','$checkpoint*300','$checkpoint%3-eq0','elapsed_seconds=$Elapsed','MIXED GAMEPLAY READY','MIXED GAMEPLAY STABLE','GetProcessIoCounters','CopyFromScreen','mcla-window-not-foreground','session continues','capture-attempts.json','Recovery save snapshot confirmed','No recovery snapshot was confirmed','HostDisplayAudit','watch-soak-save.ps1','verify-delivery-transition-regression.ps1','Copied gameplay seed failed physical identity verification.','working_copy_tree_sha256','Final save archive does not match the complete physical profile snapshot.','-WindowStyle Hidden','--xam_user_signin_state=1','--fullscreen=false','Assertion failed','GUEST_CRASH_REPORT','DXGI_ERROR_DEVICE_(?:REMOVED|HUNG|RESET)','normal moving gameplay plus one garage enter/exit, pause/resume, and Alt-Tab return','same_release_artifacts=$false','current_five_stage_soak_complete=$false')
   foreach($needle in $runnerNeedles){if(-not$runnerText.Contains($needle)){throw "Runner source contract missing: $needle"}}
   if($runnerText.Contains('Read-Host')-or$runnerText.Contains('Get-FileHash')){throw 'Runner contains a blocking prompt or unavailable hash cmdlet.'}
-  $verifierNeedles=@('Exactly thirteen resource samples are required.','Exactly five captures are required.','Actual duration is not bound to the final sample.','Current physical artifact, game, or suite identity drifted.','Historical and current executable identities must remain distinct.','Capture sequence lacks temporal variation.','verify-delivery-transition-regression.ps1','Final archive physical snapshot drifted.','contains a reparse point.','Canonical MCLA process remains.')
+  $verifierNeedles=@('Exactly thirteen resource samples are required.','Exactly five capture attempts are required.','Captured frame count is outside the accepted range.','Captured frames do not match successful attempts.','Actual duration is not bound to the final sample.','Current physical artifact, game, or suite identity drifted.','Historical and current executable identities must remain distinct.','verify-delivery-transition-regression.ps1','Final archive physical snapshot drifted.','contains a reparse point.','Canonical MCLA process remains.')
   foreach($needle in $verifierNeedles){if(-not$verifierText.Contains($needle)){throw "Verifier source contract missing: $needle"}}
   if($verifierText.Contains('Get-FileHash')){throw 'Verifier uses an unavailable hash cmdlet.'}
-  [pscustomobject][ordered]@{PositiveFixtures=1;FailClosedNegatives=$negative;SourceContractChecks=$runnerNeedles.Count+$verifierNeedles.Count+3;OneHourGateVerified=$true}
+  [pscustomobject][ordered]@{PositiveFixtures=2;FailClosedNegatives=$negative;SourceContractChecks=$runnerNeedles.Count+$verifierNeedles.Count+3;OneHourGateVerified=$true}
 }finally{if(Test-Path $root){Remove-Item -LiteralPath $root -Recurse -Force}}

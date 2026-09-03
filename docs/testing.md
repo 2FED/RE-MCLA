@@ -1069,12 +1069,17 @@ pause/resume once, and Alt-Tab away and back once. The wheel is not required.
 
 The console asks only for `MIXED GAMEPLAY READY` after saved gameplay loads and
 `MIXED GAMEPLAY STABLE` after the measured hour. Baseline plus twelve five-minute
-process/I/O samples plus a baseline and four fifteen-minute 1280x720 captures
-are automatic. A
+process/I/O samples are automatic. One baseline 1280x720 desktop capture is
+mandatory; the four quarter-hour captures are best-effort and their exact
+`captured`/`skipped` outcomes are persisted. A missed foreground capture never
+closes a live title or delays the resource schedule. A
 hidden exact-PID watcher preserves every stable complete profile snapshot, and
 the final result binds the source game, current suite, Release artifacts,
 historical frontend, delivery regression, latest seed, runtime logs, host event
-audit, controlled external close, and final archive tree.
+audit, controlled external close, and final archive tree. On failure, the runner
+names a recovery snapshot only after revalidating the watcher exit, identical
+latest/snapshot manifests, and the physical save/header hashes; otherwise it
+truthfully points only to the isolated working profile for inspection.
 
 This split is intentionally narrow. The historical frontend and current
 gameplay executables differ, so the result cannot claim one same-artifact suite,

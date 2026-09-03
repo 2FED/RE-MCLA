@@ -12,10 +12,13 @@ by accepted delivery regression `20260901-203448-d31ab681`.
 The owner may play normally and progress the story, races, or deliveries. The
 hour also includes one garage enter/exit, one pause/resume, and one Alt-Tab
 away/return. The runner automatically records thirteen ordered process/I/O
-samples, one baseline plus four fifteen-minute nontrivial captures, runtime
-logs, host NVIDIA/Sunshine event
-health, controlled external close, and the final complete save archive. Only
-start and end attestations require console input.
+samples and attempts one baseline plus four fifteen-minute nontrivial desktop
+captures. The baseline is mandatory; quarter-hour attempts are best-effort and
+are recorded as either `captured` or `skipped`, so an unfocused, paused, hidden,
+or temporarily uncapturable window cannot terminate otherwise healthy gameplay.
+Runtime logs, host NVIDIA/Sunshine event health, controlled external close, and
+the final complete save archive remain mandatory. Only start and end
+attestations require console input.
 
 Before launch, the copied working profile is rehashed against the accepted
 post-delivery source and preserved as an immutable seed copy. After shutdown,
@@ -27,3 +30,12 @@ evidence will not claim that historical frontend and current gameplay used the
 same executable, that one process ran for three hours, that the legacy five-stage
 suite completed, that current gameplay ran for two hours, or that campaign,
 rendering, music, or wheel-centering behavior is fully correct.
+
+The first physical attempt (`20260903-135924-45456efb`) reached the fifteen-minute
+checkpoint with a live process. Its desktop capture could not reacquire the MCLA
+foreground window within twenty seconds, after which the old harness deliberately
+sent `WM_CLOSE`. Runtime logs contain clean shutdown markers and no guest crash,
+assertion, device-loss, Windows Error Reporting, NVIDIA, or Sunshine failure.
+The attempt is therefore a harness-capture failure, not a game crash. Resource
+samples through ten minutes and the save watcher's complete recovery snapshots
+remain private diagnostic evidence; no stability time from that run is credited.
