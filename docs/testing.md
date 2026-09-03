@@ -1048,6 +1048,26 @@ malformed chronology, drifted prior evidence, and claims that the whole SDK
 stub inventory is complete. Fixtures contain one positive, fourteen fail-closed
 negatives, and eighteen source checks. No operator input or save is required.
 
+## M6-014 focused Race Back camera diagnostic
+
+```powershell
+scripts/test-race-back-camera-diagnostic.ps1
+scripts/run-race-back-camera-diagnostic.ps1 -ValidateOnly
+scripts/run-race-back-camera-diagnostic.ps1
+```
+
+Use this short route before another one-hour attempt. It selects the newest
+complete hash-verified M6-014 recovery snapshot, clean-builds the Release title
+with the default-off `mcla_race_back_probe` enabled for that launch, and
+automatically enters saved gameplay. Lose one Red Light Driver event, choose
+`Race Back`, and report exactly `RACE BACK RETURNED` or `RACE BACK STUCK` after
+the map zoom resolves. The trace records the exact guest command producer at
+`0x82666C50`, `Racer_ApplyGameCamera` handler at `0x822AD640`, and the exact
+direct-call edge into camera apply function `0x822B0F10`. It then externally
+closes the exact title process and
+preserves the evolving profile. A reproduced softlock is a successful
+diagnostic outcome, not a compatibility PASS.
+
 ## M6-014 current one-hour mixed-gameplay gate
 
 ```powershell
@@ -1085,7 +1105,8 @@ This split is intentionally narrow. The historical frontend and current
 gameplay executables differ, so the result cannot claim one same-artifact suite,
 a continuous three-hour process, two current-artifact gameplay hours, the old
 five-category suite, full-campaign completion, rendering parity, music
-continuity, or wheel-centering stability.
+continuity, or wheel-centering stability. KI-026 currently blocks another full
+hour; run and resolve the focused Race Back diagnostic above first.
 
 ## M6-014 legacy five-scenario two-hour soak suite
 

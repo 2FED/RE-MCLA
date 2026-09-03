@@ -36,3 +36,11 @@
 "0x827B1068" = { end = 0x827B1088, name = "sub_827B1068" }
 "0x827B4B58" = { end = 0x827B4B78, name = "sub_827B4B58" }
 "0x827B4B78" = { end = 0x827B4B98, name = "sub_827B4B78" }
+
+# KI-026 diagnostic-only observation edge. The stock instruction still runs;
+# this records the direct Racer_ApplyGameCamera -> camera-apply call only when
+# the opt-in host probe has armed a Race Back sequence.
+[[midasm_hook]]
+address = 0x822AD698
+name = "MclaRaceBackCameraApplyEdge"
+registers = ["r3", "r4", "f1"]

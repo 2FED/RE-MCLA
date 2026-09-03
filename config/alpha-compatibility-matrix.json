@@ -90,7 +90,7 @@
       "status": "verified-representative",
       "scope": "Representative head-to-head and multi-event series, traffic, police observation, checkpoints, finishes, rewards, and repeated race completions are covered.",
       "evidence": ["docs/evidence/M5-012-race-results.md", "docs/evidence/M5-013-race-resource-growth.md", "docs/evidence/M6-003-race-system-matrix.md", "docs/evidence/M6-014-delivery-constructor-registry.md"],
-      "limitations": ["This is not an exhaustive event/opponent/campaign matrix.", "KI-024 is closed by an owner-confirmed active delivery transition and five-minute stability window; full delivery completion is not claimed."]
+      "limitations": ["This is not an exhaustive event/opponent/campaign matrix.", "KI-024 is closed by an owner-confirmed active delivery transition and five-minute stability window; full delivery completion is not claimed.", "KI-026 tracks a live camera/modal softlock after selecting Race Back in a lost Red Light Driver event."]
     },
     {
       "id": "garage-customization",
@@ -116,9 +116,9 @@
     {
       "id": "long-session-soak",
       "status": "in-progress",
-      "scope": "Historical mixed free-roam/race coverage and a ReXGlue v0.10.0.1 two-hour frontend stage passed; one current-artifact 60-minute mixed-gameplay acceptance process is prepared.",
+      "scope": "Historical mixed free-roam/race coverage and a ReXGlue v0.10.0.1 two-hour frontend stage passed; the current-artifact 60-minute mixed-gameplay acceptance process is blocked on focused KI-026 repair.",
       "evidence": ["docs/evidence/M6-014-one-hour-mixed-gameplay.md", "README-AI"],
-      "limitations": ["M6-014 remains open until the current 60-minute mixed-gameplay process physically passes.", "The historical frontend and current gameplay executables differ; no same-artifact, continuous three-hour, legacy five-stage, or ten-hour monolithic run is claimed."]
+      "limitations": ["M6-014 remains open until KI-026 is fixed and the current 60-minute mixed-gameplay process physically passes.", "The historical frontend and current gameplay executables differ; no same-artifact, continuous three-hour, legacy five-stage, or ten-hour monolithic run is claimed."]
     },
     {
       "id": "campaign-complete-edition",
@@ -153,7 +153,8 @@
     {"id":"KI-022","severity":"S2","status":"Open"},
     {"id":"KI-023","severity":"S1","status":"Contained"},
     {"id":"KI-024","severity":"S1","status":"Closed"},
-    {"id":"KI-025","severity":"S3","status":"Open"}
+    {"id":"KI-025","severity":"S3","status":"Open"},
+    {"id":"KI-026","severity":"S2","status":"Open"}
   ],
   "claims": {
     "single_reference_host_only": true,

@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -60,6 +61,9 @@ constexpr uint32_t kCheckpointListCountAddress = 0x82267528;
 constexpr uint32_t kCheckpointHitAddress = 0x82263930;
 constexpr uint32_t kRaceFinishAddress = 0x82256BE0;
 constexpr uint32_t kRaceResultAddress = 0x821FBB40;
+constexpr uint32_t kRaceBackCommandAddress = 0x82666C50;
+constexpr uint32_t kApplyGameCameraHandlerAddress = 0x822AD640;
+constexpr uint32_t kApplyGameCameraEdgeAddress = 0x822AD698;
 constexpr uint32_t kExpectedTitleId = 0x545407F8;
 constexpr uint32_t kExpectedMediaId = 0x5940C9DB;
 constexpr rex::X_STATUS kAccessDenied = 0xC0000022u;
@@ -134,6 +138,53 @@ PPCFunc *checkpoint_list_count_original = nullptr;
 PPCFunc *checkpoint_hit_original = nullptr;
 PPCFunc *race_finish_original = nullptr;
 PPCFunc *race_result_original = nullptr;
+
+std::atomic_bool race_back_probe_armed = false;
+std::atomic_uint64_t race_back_probe_sequence = 0;
+std::atomic_uint64_t race_back_camera_handler_calls = 0;
+std::atomic_uint64_t race_back_camera_apply_calls = 0;
+PPCFunc *race_back_command_original = nullptr;
+PPCFunc *apply_game_camera_handler_original = nullptr;
+
+void RaceBackCommandProbe(PPCContext &ctx, uint8_t *base) {
+  const uint64_t sequence = race_back_probe_sequence.fetch_add(1) + 1;
+  race_back_camera_handler_calls = 0;
+  race_back_camera_apply_calls = 0;
+  race_back_probe_armed = true;
+  MCLA_INPUT_INFO(
+      "MCLA_RACE_BACK_SELECT v=1 sequence={} callback={:08X} option={:08X}",
+      sequence, ctx.r3.u32, ctx.r4.u32);
+  race_back_command_original(ctx, base);
+  MCLA_INPUT_INFO(
+      "MCLA_RACE_BACK_COMMAND_RETURN v=1 sequence={} result={:08X}",
+      sequence, ctx.r3.u32);
+}
+
+void ApplyGameCameraHandlerProbe(PPCContext &ctx, uint8_t *base) {
+  uint32_t event_arguments = 0;
+  uint32_t racer = 0;
+  uint32_t camera = 0;
+  if (ctx.r3.u32) {
+    event_arguments = REX_LOAD_U32(ctx.r3.u32 + 8);
+    if (event_arguments) {
+      racer = REX_LOAD_U32(event_arguments);
+      if (racer) {
+        camera = REX_LOAD_U32(racer + 0x370);
+      }
+    }
+  }
+  const bool armed = race_back_probe_armed.load();
+  const uint64_t call = armed ? race_back_camera_handler_calls.fetch_add(1) + 1
+                              : 0;
+  if (armed && call <= 64) {
+    MCLA_INPUT_INFO(
+        "MCLA_RACE_BACK_CAMERA_HANDLER v=1 sequence={} call={} event={:08X} "
+        "arguments={:08X} racer={:08X} camera={:08X}",
+        race_back_probe_sequence.load(), call, ctx.r3.u32, event_arguments,
+        racer, camera);
+  }
+  apply_game_camera_handler_original(ctx, base);
+}
 
 RaceDescriptionAuditState *FindRaceDescriptionAuditState(uint32_t object) {
   RaceDescriptionAuditState *empty = nullptr;
@@ -618,6 +669,19 @@ private:
 
 } // namespace
 
+void MclaRaceBackCameraApplyEdge(PPCRegister &r3, PPCRegister &r4,
+                                 PPCRegister &f1) {
+  const bool armed = race_back_probe_armed.load();
+  const uint64_t call = armed ? race_back_camera_apply_calls.fetch_add(1) + 1
+                              : 0;
+  if (armed && call <= 64) {
+    MCLA_INPUT_INFO(
+        "MCLA_RACE_BACK_CAMERA_APPLY_EDGE v=1 sequence={} call={} "
+        "controller={:08X} mode={} duration={}",
+        race_back_probe_sequence.load(), call, r3.u32, r4.u32, f1.f64);
+  }
+}
+
 REXCVAR_DEFINE_BOOL(
     mcla_lifecycle_probe, false, "MCLA",
     "Exercise the host lifecycle without constructing the guest runtime")
@@ -699,6 +763,11 @@ REXCVAR_DEFINE_BOOL(
 REXCVAR_DEFINE_BOOL(
     mcla_race_system_probe, false, "MCLA",
     "Audit a representative race finish with start and reward captures")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_race_back_probe, false, "MCLA",
+    "Trace Race Back command and gameplay-camera restoration callbacks")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(
@@ -1216,6 +1285,37 @@ void MclaApp::LaunchModule() {
         kRaceDescriptionCopZonesAddress, kCheckpointListCountAddress,
         kCheckpointHitAddress, kRaceFinishAddress, kRaceResultAddress,
         kRaceSystemDetailCapacity);
+  }
+
+  if (REXCVAR_GET(mcla_race_back_probe)) {
+    auto *dispatcher = runtime()->function_dispatcher();
+    race_back_command_original =
+        dispatcher->GetFunction(kRaceBackCommandAddress);
+    apply_game_camera_handler_original =
+        dispatcher->GetFunction(kApplyGameCameraHandlerAddress);
+    const bool originals_valid =
+        race_back_command_original && apply_game_camera_handler_original &&
+        race_back_command_original != RaceBackCommandProbe &&
+        apply_game_camera_handler_original != ApplyGameCameraHandlerProbe;
+    if (!originals_valid ||
+        !dispatcher->SetFunction(kRaceBackCommandAddress,
+                                 RaceBackCommandProbe) ||
+        !dispatcher->SetFunction(kApplyGameCameraHandlerAddress,
+                                 ApplyGameCameraHandlerProbe)) {
+      MCLA_INPUT_ERROR("MCLA race back: one or more trace hooks rejected");
+      app_context().CallInUIThreadDeferred(
+          [this]() { app_context().QuitFromUIThread(); });
+      return;
+    }
+    race_back_probe_armed = false;
+    race_back_probe_sequence = 0;
+    race_back_camera_handler_calls = 0;
+    race_back_camera_apply_calls = 0;
+    MCLA_INPUT_INFO(
+        "MCLA_RACE_BACK_CONFIG v=1 command={:08X} handler={:08X} "
+        "apply_edge={:08X} status=READY",
+        kRaceBackCommandAddress, kApplyGameCameraHandlerAddress,
+        kApplyGameCameraEdgeAddress);
   }
 
   rex::ReXApp::LaunchModule();

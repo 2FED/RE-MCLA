@@ -1,6 +1,7 @@
 # M6-014 one-hour mixed-gameplay long-session gate
 
-Status: runner and fail-closed verifier ready; physical 60-minute result pending.
+Status: runner and fail-closed verifier ready; physical 60-minute result blocked
+on focused KI-026 repair and regression.
 
 The current M6-014 closure path deliberately limits new owner interaction to one
 continuous hour. It combines the immutable two-hour frontend stage from suite
@@ -39,3 +40,28 @@ assertion, device-loss, Windows Error Reporting, NVIDIA, or Sunshine failure.
 The attempt is therefore a harness-capture failure, not a game crash. Resource
 samples through ten minutes and the save watcher's complete recovery snapshots
 remain private diagnostic evidence; no stability time from that run is credited.
+
+The second physical attempt (`20260903-210859-8ac102d3`) exposed KI-026 before
+the first ten-minute resource boundary. After the owner lost a Red Light Driver
+event and selected `Race Back`, the transition zoomed to the aerial city view
+but never restored gameplay camera or pause control. Vehicle input continued to
+move the car, and RB/R1 did not change the view. The exact process remained
+responsive and its runtime log contains no guest crash, invalid target,
+assertion, device loss, NVIDIA event, or Sunshine failure. The operator stopped
+the console harness; the title was then closed through its exact window, and the
+watcher preserved a complete recovery snapshot with save SHA-256
+`5DEE5B6B2B107B17462F1D94EF404ABD676B94A7894CF740AB940C63450CE7CB`.
+No duration from this attempt is credited.
+
+Static XEX analysis binds the failing route to guest function `0x82666C50`,
+which produces `raceOverCommand("raceBack")` and emits `raceOverTrigger`.
+`Racer_ApplyGameCamera` is registered at `0x822AD640`; it conditionally calls
+the camera application function at `0x822B0F10` with mode 4. The default-off
+`mcla_race_back_probe` hooks the command and handler functions and observes the
+exact direct-call edge into `0x822B0F10` without changing stock behavior.
+`scripts/run-race-back-camera-diagnostic.ps1` clean-builds the traced
+title, selects the newest complete hash-verified M6-014 recovery profile,
+automatically loads gameplay, records whether the command, handler, and apply
+edges execute, preserves the evolving save, and ends after one focused Race
+Back outcome. Another one-hour run is blocked until this short diagnostic and a
+subsequent focused fix regression pass.
