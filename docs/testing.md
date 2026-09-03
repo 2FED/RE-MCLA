@@ -1048,7 +1048,41 @@ malformed chronology, drifted prior evidence, and claims that the whole SDK
 stub inventory is complete. Fixtures contain one positive, fourteen fail-closed
 negatives, and eighteen source checks. No operator input or save is required.
 
-## M6-014 five-scenario two-hour soak suite
+## M6-014 current one-hour mixed-gameplay gate
+
+```powershell
+scripts/test-mixed-gameplay-long-session.ps1
+scripts/run-mixed-gameplay-long-session.ps1 -ValidateOnly
+scripts/run-mixed-gameplay-long-session.ps1
+
+scripts/verify-mixed-gameplay-long-session.ps1 `
+  -ResultPath private/evidence/M6-014/final-hour/<run-id>/result.json
+```
+
+This is the current operator-facing M6-014 long-session gate. It reuses the
+immutable 7,202-second historical frontend result, then runs one continuous
+3,600-second process on the current repaired v0.10.0.1 artifact set and the
+latest complete post-delivery profile. Normal play is expected: story events,
+races, deliveries, police encounters, and free-roam travel are all allowed.
+During the hour the operator must also enter and leave the garage once,
+pause/resume once, and Alt-Tab away and back once. The wheel is not required.
+
+The console asks only for `MIXED GAMEPLAY READY` after saved gameplay loads and
+`MIXED GAMEPLAY STABLE` after the measured hour. Baseline plus twelve five-minute
+process/I/O samples plus a baseline and four fifteen-minute 1280x720 captures
+are automatic. A
+hidden exact-PID watcher preserves every stable complete profile snapshot, and
+the final result binds the source game, current suite, Release artifacts,
+historical frontend, delivery regression, latest seed, runtime logs, host event
+audit, controlled external close, and final archive tree.
+
+This split is intentionally narrow. The historical frontend and current
+gameplay executables differ, so the result cannot claim one same-artifact suite,
+a continuous three-hour process, two current-artifact gameplay hours, the old
+five-category suite, full-campaign completion, rendering parity, music
+continuity, or wheel-centering stability.
+
+## M6-014 legacy five-scenario two-hour soak suite
 
 ```powershell
 scripts/test-soak-suite.ps1
@@ -1078,7 +1112,9 @@ scripts/verify-soak-suite.ps1 `
   -ResultPath private/evidence/M6-014/<suite-id>/result.json
 ```
 
-The suite covers five continuous 7,200-second scenario categories on one
+This harness is preserved for historical evidence verification and optional
+future stress work; it is not the current operator acceptance path. The suite
+covers five continuous 7,200-second scenario categories on one
 hash-pinned Release artifact set. The runner derives the required clean SDK
 version, exact tag, and commit from the project CMake/bootstrap pins and rejects
 any checked-out or recorded SDK drift; the fixture verifier follows those same
