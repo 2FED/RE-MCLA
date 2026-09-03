@@ -68,8 +68,18 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 set(MCLA_SOURCES
     src/main.cpp
     src/mcla_app.cpp
+    src/mcla_diagnostics.cpp
     src/mcla_logging.cpp
 )
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" MCLA_VERSION)
+string(STRIP "${MCLA_VERSION}" MCLA_VERSION)
+
+if(WIN32)
+    list(APPEND MCLA_SOURCES src/mcla_native_crash_win.cpp)
+else()
+    list(APPEND MCLA_SOURCES src/mcla_native_crash_stub.cpp)
+endif()
 
 if(WIN32)
     add_executable(mcla WIN32 ${MCLA_SOURCES})
@@ -78,6 +88,17 @@ else()
 endif()
 
 rexglue_setup_target(mcla GPU_PLUGINS xenos)
+target_compile_definitions(mcla PRIVATE MCLA_VERSION="${MCLA_VERSION}")
+
+if(WIN32)
+    target_link_libraries(mcla PRIVATE psapi bcrypt gdi32 user32)
+    add_executable(mcla_crash_handler WIN32
+        src/mcla_crash_handler_win.cpp
+    )
+    target_compile_features(mcla_crash_handler PRIVATE cxx_std_23)
+    target_link_libraries(mcla_crash_handler PRIVATE dbghelp bcrypt shell32 user32)
+    add_dependencies(mcla mcla_crash_handler)
+endif()
 
 # Ship a discoverable host-configuration template without overwriting the
 # user's mcla.toml or changing command-line-driven test roots.

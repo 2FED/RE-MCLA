@@ -67,3 +67,11 @@ automatically loads gameplay, records whether the command, handler, and each
 camera-apply edge execute, preserves the evolving save, and ends after one
 focused Race Back outcome. Another one-hour run is blocked until this short
 diagnostic and a subsequent focused fix regression pass.
+
+Version `0.8.0.0` adds the local diagnostic prerequisite for that next
+reproduction. Pressing F10 while the camera is stuck now preserves bounded
+process/window/runtime state, the already-presented client frame, a runtime-log
+tail, normal minidump, and private save snapshot without waiting for a debugger.
+Unhandled native failures are captured automatically by a separate helper. See
+`docs/evidence/M6-014-live-crash-diagnostics.md`; this improves evidence capture
+but does not itself close KI-026 or the one-hour gate.

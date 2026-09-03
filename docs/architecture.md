@@ -4,7 +4,7 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.10.0.1 `mcla` application consumes the ignored generated corpus and produces a native Windows executable. Crash instrumentation expands the current corpus to 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic crash path, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, and bounded title force feedback are verified independently. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 now uses retained two-hour frontend evidence plus one pending current-artifact 60-minute mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities are kept explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, KI-025 runtime fullscreen switching, and KI-026 Race Back camera restoration remain open; KI-026 currently blocks another full-hour acceptance attempt.
+Current state: the canonical ReXGlue v0.10.0.1 `mcla` application consumes the ignored generated corpus and produces a native Windows executable plus a separate local crash helper. Crash instrumentation expands the current corpus to 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic and native crash paths, F10 live snapshots, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, and bounded title force feedback are verified independently. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 now uses retained two-hour frontend evidence plus one pending current-artifact 60-minute mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities are kept explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, KI-025 runtime fullscreen switching, and KI-026 Race Back camera restoration remain open; KI-026 currently blocks another full-hour acceptance attempt.
 
 ## Consumer preparation model
 
@@ -87,6 +87,30 @@ launches guest entry-point code, its callback emits the project shutdown
 marker, flushes logging, and hard-exits the process. Normal application closure
 does not use this probe shortcut: M3-015 separately drives the real window
 through `WM_CLOSE` and requires ReXGlue's ordered close/hard-exit markers.
+
+MCLA-R's native diagnostic boundary is separate from that guest-crash text
+report. Diagnostics start after logging and launch `mcla_crash_handler.exe`
+with only an explicit seven-handle allowlist: the parent process, one fixed IPC
+mapping, live/crash request-completion events, and a stop event. The application
+installs top-level SEH, terminate, and abort bridges, then reasserts the SEH
+filter after runtime/Tracy setup. A crash callback performs no filesystem or
+logging work; the helper writes a bounded normal minidump and signals dump
+completion before it copies the rotating runtime journal and a stable,
+size-bounded, reparse-safe save snapshot. Concurrent crashing threads wait on
+the same manual-reset dump-completion event, preventing one thread from killing
+the process while another is being dumped.
+
+The `F10` bind queues one background live snapshot and rejects overlap. Runtime
+counters are sampled without guest mutation; the screenshot uses the already
+presented Win32 client surface rather than the presenter's GPU readback path, so
+a wedged render fence cannot block diagnostic shutdown. A sequence-numbered IPC
+request obtains the same privacy-bounded normal minidump from the helper. Both
+live and crash packages stage below a `.partial` directory, write and hash all
+required metadata last, and atomically rename/publish a latest-package pointer.
+Package retention, runtime-log rotation, dump/save/file-count limits, stale
+partial cleanup, and reparse rejection are fail-closed. Nothing is uploaded.
+The complete package is private: dump, log, screenshot, and save inventory may
+contain memory, paths, or profile/gameplay data.
 
 Before every normal guest launch, `MclaApp` verifies that `game:` and `d:` map
 to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files

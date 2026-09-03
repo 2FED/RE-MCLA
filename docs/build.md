@@ -220,6 +220,22 @@ The synthetic probe loads the verified XEX but skips guest execution. Its report
 contains guest addresses, thread/import identifiers, and at most 16 host frames;
 it excludes guest memory, registers, stack data, and absolute host paths.
 
+The separate native diagnostic gate builds both `mcla.exe` and
+`mcla_crash_handler.exe`, verifies an on-demand live dump, and raises one real
+post-runtime exception for out-of-process capture:
+
+```powershell
+scripts\test-diagnostics-smoke.ps1
+scripts\run-diagnostics-smoke.ps1
+```
+
+Normal builds must ship the helper beside the title executable. It receives
+only a fixed inherited-handle allowlist and writes locally below the resolved
+user-data root; it has no network/upload path. This native package is broader
+and more private than the synthetic guest report because a normal minidump may
+contain host memory fragments. Do not stage or distribute diagnostic package
+contents.
+
 Verify independent structured logging filters without constructing Runtime:
 
 ```powershell

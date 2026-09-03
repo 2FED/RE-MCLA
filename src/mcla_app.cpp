@@ -25,6 +25,7 @@
 #include <rex/system/kernel_state.h>
 #include <rex/system/thread_state.h>
 #include <rex/system/user_module.h>
+#include <rex/ui/keybinds.h>
 #include <rex/ui/presenter.h>
 
 #include <algorithm>
@@ -44,7 +45,9 @@
 #include <vector>
 
 #include "generated/default/mcla_init.h"
+#include "mcla_diagnostics.h"
 #include "mcla_logging.h"
+#include "mcla_native_crash.h"
 
 namespace {
 
@@ -734,6 +737,30 @@ REXCVAR_DEFINE_BOOL(
     "Write a synthetic privacy-safe guest crash report without guest execution")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(
+    mcla_diagnostics_enabled, true, "MCLA Diagnostics",
+    "Enable F10 live snapshots and automatic native crash packages")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_crash_reporter_dialog, true, "MCLA Diagnostics",
+    "Show the local crash-package path after an automatic native crash")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(mcla_diagnostics_snapshot_probe, false, "MCLA Diagnostics",
+                    "Create one guest-free live diagnostic package and exit")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_native_crash_probe, false, "MCLA Diagnostics",
+    "Deliberately raise one native crash for crash-helper verification")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(mcla_native_crash_post_setup_probe, false,
+                    "MCLA Diagnostics",
+                    "Deliberately raise one native crash after runtime setup")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_BOOL(mcla_logging_probe, false, "MCLA",
                     "Emit one schema marker for every MCLA-R logging category")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -891,6 +918,22 @@ void MclaApp::OnPostInitLogging() {
   if (REXCVAR_GET(mcla_logging_probe)) {
     mcla::logging::EmitSchemaProbe();
   }
+  if (REXCVAR_GET(mcla_diagnostics_enabled) ||
+      REXCVAR_GET(mcla_diagnostics_snapshot_probe) ||
+      REXCVAR_GET(mcla_native_crash_probe) ||
+      REXCVAR_GET(mcla_native_crash_post_setup_probe)) {
+    diagnostics_ = std::make_unique<mcla::diagnostics::Manager>();
+    if (diagnostics_->Start(
+            user_data_root(), [this]() { return CaptureDiagnosticState(); },
+            REXCVAR_GET(mcla_crash_reporter_dialog))) {
+      rex::ui::RegisterBind("bind_mcla_debug_snapshot", "F10",
+                            "Capture an MCLA-R live diagnostic package",
+                            [this]() { QueueDiagnosticSnapshot("f10"); });
+      diagnostic_keybind_registered_ = true;
+    } else {
+      diagnostics_.reset();
+    }
+  }
   MCLA_APP_INFO("MCLA lifecycle: logging ready");
 }
 
@@ -922,10 +965,24 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   const bool guest_free_probe =
       REXCVAR_GET(mcla_lifecycle_probe) ||
       REXCVAR_GET(mcla_module_config_probe) || REXCVAR_GET(mcla_vfs_probe) ||
-      REXCVAR_GET(mcla_crash_probe) || REXCVAR_GET(mcla_logging_probe);
+      REXCVAR_GET(mcla_crash_probe) || REXCVAR_GET(mcla_logging_probe) ||
+      REXCVAR_GET(mcla_diagnostics_snapshot_probe) ||
+      REXCVAR_GET(mcla_native_crash_probe);
   if (config.gpu_plugin.empty() && !guest_free_probe) {
     config.gpu_plugin = "xenos";
     MCLA_GPU_INFO("MCLA graphics: selected GPU plugin 'xenos'");
+  }
+}
+
+void MclaApp::OnPostSetup() {
+  if (diagnostics_) {
+    mcla::diagnostics::native::RefreshCrashHandlers();
+    MCLA_APP_INFO("MCLA diagnostics: post-runtime crash handlers refreshed");
+  }
+  if (REXCVAR_GET(mcla_native_crash_post_setup_probe)) {
+    MCLA_APP_INFO("MCLA_NATIVE_CRASH_POST_SETUP_PROBE v=1 status=TRIGGERING");
+    rex::FlushLogging();
+    mcla::diagnostics::native::TriggerCrashProbe();
   }
 }
 
@@ -951,6 +1008,27 @@ std::optional<rex::PathConfig>
 MclaApp::OnFinalizePaths(const rex::PathConfig &defaults,
                          std::function<void(rex::PathConfig)> resume) {
   (void)resume;
+  if (REXCVAR_GET(mcla_diagnostics_snapshot_probe)) {
+    const bool queued =
+        diagnostics_ &&
+        diagnostics_->RequestSnapshot("probe", CaptureDiagnosticUiState());
+    const bool completed =
+        queued && diagnostics_->WaitForIdle(std::chrono::seconds(30));
+    MCLA_APP_INFO(
+        "MCLA_DIAGNOSTIC_SNAPSHOT_PROBE v=1 queued={} completed={} status={}",
+        queued ? 1 : 0, completed ? 1 : 0,
+        queued && completed ? "PASS" : "FAIL");
+    app_context().CallInUIThreadDeferred(
+        [this]() { app_context().QuitFromUIThread(); });
+    return std::nullopt;
+  }
+  if (REXCVAR_GET(mcla_native_crash_probe)) {
+    MCLA_APP_INFO("MCLA_NATIVE_CRASH_PROBE v=1 status=TRIGGERING");
+    rex::FlushLogging();
+    app_context().CallInUIThreadDeferred(
+        []() { mcla::diagnostics::native::TriggerCrashProbe(); });
+    return std::nullopt;
+  }
   if (REXCVAR_GET(mcla_lifecycle_probe)) {
     MCLA_APP_INFO("MCLA lifecycle: probe requested; guest runtime skipped");
     app_context().CallInUIThreadDeferred([this]() {
@@ -2877,12 +2955,74 @@ void MclaApp::StopFirstFrameProbe() {
   }
 }
 
+mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
+  mcla::diagnostics::RuntimeState state;
+  auto *active_runtime = runtime();
+  state.runtime_available = active_runtime != nullptr;
+  if (active_runtime && active_runtime->kernel_state()) {
+    state.title_id = active_runtime->kernel_state()->title_id();
+  }
+  if (active_runtime && active_runtime->graphics_system()) {
+    auto *presenter = active_runtime->graphics_system()->presenter();
+    if (presenter) {
+      state.guest_output_sequence = presenter->GetGuestOutputSequence();
+      state.guest_vblank_sequence = presenter->GetGuestVblankSequence();
+    }
+  }
+  state.race_back_sequence = race_back_probe_sequence.load();
+  state.race_back_handler_calls = race_back_camera_handler_calls.load();
+  state.race_back_apply_calls = race_back_camera_apply_calls.load();
+  return state;
+}
+
+mcla::diagnostics::UiState MclaApp::CaptureDiagnosticUiState() const {
+  mcla::diagnostics::UiState state;
+  if (auto *active_window = window()) {
+    state.logical_width = active_window->GetActualLogicalWidth();
+    state.logical_height = active_window->GetActualLogicalHeight();
+    state.physical_width = active_window->GetActualPhysicalWidth();
+    state.physical_height = active_window->GetActualPhysicalHeight();
+    state.focused = active_window->HasFocus();
+    state.fullscreen = active_window->IsFullscreen();
+    state.native_window_handle =
+        reinterpret_cast<uintptr_t>(active_window->GetNativeWindowHandle());
+  }
+  return state;
+}
+
+void MclaApp::QueueDiagnosticSnapshot(const char *reason) {
+  if (diagnostics_) {
+    diagnostics_->RequestSnapshot(reason, CaptureDiagnosticUiState());
+  }
+}
+
+void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
+  (void)thread;
+  if (diagnostics_ && !REXCVAR_GET(mcla_diagnostics_snapshot_probe) &&
+      !REXCVAR_GET(mcla_native_crash_probe)) {
+    diagnostics_->RequestSnapshot("unexpected-guest-exit", {});
+    diagnostics_->WaitForIdle(std::chrono::seconds(20));
+  }
+}
+
 bool MclaApp::OnWindowCloseRequested() {
+  if (diagnostic_keybind_registered_) {
+    rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
+    diagnostic_keybind_registered_ = false;
+  }
   StopFirstFrameProbe();
   return true;
 }
 
 void MclaApp::OnShutdown() {
+  if (diagnostic_keybind_registered_) {
+    rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
+    diagnostic_keybind_registered_ = false;
+  }
   StopFirstFrameProbe();
+  if (diagnostics_) {
+    diagnostics_->Stop();
+    diagnostics_.reset();
+  }
   MCLA_APP_INFO("MCLA lifecycle: shutdown");
 }

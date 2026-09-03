@@ -1069,6 +1069,38 @@ It then externally closes the exact title process and preserves the evolving
 profile. A reproduced softlock is a successful diagnostic outcome, not a
 compatibility PASS.
 
+## M6-014 live snapshot and native crash diagnostics
+
+```powershell
+scripts/test-diagnostics-smoke.ps1
+scripts/run-diagnostics-smoke.ps1 -ValidateOnly
+scripts/run-diagnostics-smoke.ps1
+scripts/show-latest-diagnostic.ps1
+```
+
+The focused fixture verifies package identities, privacy flags, per-artifact
+sizes and SHA-256 values, nested save-file inventories, bounded minidump flags,
+atomic publication, the F10 binding, post-runtime crash-filter refresh, exact
+helper handle inheritance, and rotating/bounded storage. Negative fixtures
+reject full/private/handle-memory dumps, automatic upload, unsafe package
+claims, and missing crash journals.
+
+The formal runner clean-builds Release, first creates a guest-free live package,
+then deliberately raises a real unhandled exception after runtime setup. The
+out-of-process helper must produce a structurally valid normal minidump plus its
+runtime journal and private save inventory after the title exits. Every package
+is verified from disk; a mere `MDMP` prefix or an unlisted artifact is not
+accepted. The intentional crash disables its reporter dialog only for this
+automated runner.
+
+During ordinary play, press `F10` immediately when a softlock or transient defect
+is visible and wait for the completion sound before closing the game. A native
+crash requires no keypress: the helper finishes the package and displays its
+folder. Use `show-latest-diagnostic.ps1` (and `-UserDataRoot` for isolated test
+roots) to retrieve the latest exact path. Packages are local-only and unsafe to
+share wholesale; provide the folder path first, then review requested dump,
+log, screenshot, or save artifacts before sending them.
+
 ## M6-014 current one-hour mixed-gameplay gate
 
 ```powershell

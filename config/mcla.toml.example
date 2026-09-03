@@ -67,6 +67,16 @@ wheel_button_dpad_down = -1
 wheel_button_dpad_left = -1
 wheel_button_dpad_right = -1
 
+# Local diagnostics. F10 creates an on-demand package for a live softlock;
+# unhandled native crashes are captured automatically by a separate helper.
+# Nothing is uploaded. Packages can contain a screenshot, log paths, memory
+# fragments, and a private save snapshot, so share the folder path first and
+# inspect files before publishing them. The crash dialog supports Ctrl+C to
+# copy its text. Change the bind here if F10 conflicts with another overlay.
+mcla_diagnostics_enabled = true
+mcla_crash_reporter_dialog = true
+bind_mcla_debug_snapshot = "F10"
+
 # Logging. An empty log_file uses the runtime default next to the executable.
 log_level = "info"
 log_file = ""

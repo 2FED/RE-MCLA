@@ -44,4 +44,13 @@ Sanitize host usernames and absolute private paths. Prefer counts, hashes, symbo
 
 When sanitization would make evidence misleading or incomplete, keep it private and commit only a summary with reproduction commands.
 
+MCLA-R live and native-crash packages are always local and explicitly marked
+unsafe to share as a whole. Their manifests distinguish public metadata from
+private dumps, rotating runtime journals, screenshots, and save snapshots;
+every copied save file has a bounded SHA-256 inventory. The application never
+uploads a package. Ask for or send the package folder path first, then inspect
+and share only the individual artifacts required for diagnosis. Neither
+`diagnostics/live`, `diagnostics/crash`, nor their latest-package pointers are
+release inputs or publishable evidence roots.
+
 Update this document whenever a new artifact type, tool, diagnostic format, package path, or distribution channel is introduced.

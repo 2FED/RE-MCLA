@@ -6,7 +6,7 @@ The project aims to translate the original PowerPC executable ahead of time and 
 
 ## Status
 
-MCLA-R has completed its first-playable milestone and is active in M6 stable-gameplay validation. Version `0.7.4.4` retains the reviewed alpha compatibility matrix for the unchanged `0.7.0.0` tested title/runtime route, pins ReXGlue v0.10.0.1, fixes black Photo Mode captures and the reached delivery-transition crash, preserves the latest progressed profile, and replaces the remaining operator-heavy two-hour replay with one bounded 60-minute mixed-gameplay gate whose optional quarter-hour desktop captures cannot terminate live gameplay. Historical evidence includes a two-hour frontend PASS; the current final hour is not claimed until its physical run succeeds. Current evidence covers guest-backed presentation, local offline profiles and transactional saves, race progression, all major city regions, repeated races, bounded audio and performance telemetry, standard controllers, and model-agnostic SDL racing-wheel input with physically verified Thrustmaster T300 force feedback. Final current-artifact long-session acceptance, intermittent wheel-centering loss, full campaign correctness, cross-model wheel validation, remaining rendering defects, runtime fullscreen switching, higher/variable frame rates, secondary-platform builds, and public packaging are still open, so this remains an experimental developer build rather than a public game release.
+MCLA-R has completed its first-playable milestone and is active in M6 stable-gameplay validation. Version `0.8.0.0` retains the reviewed alpha compatibility matrix for the unchanged `0.7.0.0` tested title/runtime route, pins ReXGlue v0.10.0.1, fixes black Photo Mode captures and the reached delivery-transition crash, preserves the latest progressed profile, and adds local F10 live diagnostics plus automatic out-of-process native crash packages. Historical evidence includes a two-hour frontend PASS; the current final hour is not claimed until its physical run succeeds. Current evidence covers guest-backed presentation, local offline profiles and transactional saves, race progression, all major city regions, repeated races, bounded audio and performance telemetry, standard controllers, and model-agnostic SDL racing-wheel input with physically verified Thrustmaster T300 force feedback. Final current-artifact long-session acceptance, the Race Back camera softlock, intermittent wheel-centering loss, full campaign correctness, cross-model wheel validation, remaining rendering defects, runtime fullscreen switching, higher/variable frame rates, secondary-platform builds, and public packaging are still open, so this remains an experimental developer build rather than a public game release.
 
 The initial target is:
 
@@ -42,6 +42,20 @@ The project uses an exact MCLA-R ReXGlue v0.10.0.1 fork as its recompilation/run
 The intended public experience is the same broad model used by asset-free recompilation launchers: MCLA-R ships a launcher, runtime, validation metadata, and original project code, while the user selects their own supported disc dump. On first preparation, the launcher will verify the exact dump, safely extract the required files, run local code generation/compilation, and publish an atomic fingerprinted prepared-game directory. Later launches will reuse that prepared directory until repair or an update is required.
 
 The current repository already implements the underlying developer pipeline—exact ISO validation, contained extraction, local code generation, native compilation, runtime launch, and data-integrity checks—but not the consumer launcher or clean-machine packaging UX. The source dump must never be uploaded, modified, bundled, or deleted; after successful preparation it need not be reread on every launch, but it remains user-owned and available for repair/rebuild. Generated proprietary guest code and game assets remain local and untracked.
+
+## Diagnostics and crash reports
+
+Press `F10` while the game is running to collect a local diagnostic package at the moment of a visual, input, audio, or transition softlock. The input callback only queues the background work, which records bounded process/window/runtime state, a screenshot of the already-presented window, a bounded log tail, a normal minidump, and a stable private save snapshot. A Windows sound confirms completion; repeated requests are ignored while one capture is active.
+
+Unhandled native crashes are captured automatically by the separate `mcla_crash_handler.exe`. After the dump is safe, the failed title is allowed to exit while the helper finishes the local package and shows its exact folder path. Nothing is uploaded automatically. Dumps, logs, screenshots, and save snapshots can contain private paths, profile/gameplay data, or memory fragments, so send the folder path first and inspect individual files before publishing them.
+
+The newest live or crash package can be located without browsing folders:
+
+```powershell
+.\scripts\show-latest-diagnostic.ps1
+```
+
+By default packages are below the Windows Documents folder in `mcla\diagnostics`; an explicit `user_data_root` moves them with the save. The configuration template documents the enable switch, crash dialog, and rebindable `F10` action. Retention is bounded and stale partial packages are cleaned automatically.
 
 ## Development plan
 
