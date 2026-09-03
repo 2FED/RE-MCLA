@@ -451,7 +451,7 @@ M8 may begin experimentally after M6, but no M8 feature may destabilize or delay
 - [x] **M0-004** Add `README.md` explaining scope, legal asset requirement, current status, and non-turnkey nature. Reviewed against the current project plan on 2026-08-10.
 - [x] **M0-005** Select and add a license covering only original port code and scripts. MIT selected on 2026-08-10 with third-party/game-content boundaries documented in README.
 - [x] **M0-006** Add `VERSION` with initial four-part version. Initialized to pre-alpha `0.0.1.0` on 2026-08-10, advanced to `0.1.0.0` at M1 toolchain closure, to `0.2.0.0` at M2 clean-codegen feasibility closure, to `0.3.0.0` at M3 clean native build/module-boot closure on 2026-08-11, to `0.4.0.0` at M4 frontend/menu-stability closure on 2026-08-14, to `0.5.0.0` at M5 first-playable-race closure on 2026-08-17, to `0.5.1.0` for the M6-005 transactional save/corruption/storage-full patch on 2026-08-18, to `0.6.0.0` for the M6 profile/settings feature line, to `0.6.1.0` for latest-active physical-controller routing during M6-014, to `0.6.1.1` for the named-suite, physical-capture focus, and ordered-resource-sample soak-harness hotfixes, to `0.6.1.2` for interactive completion, save-watcher host, and fail-closed stage-recovery fixes, to `0.6.2.0` for the expanded rendering-defect classification and evidence, to `0.6.3.0` for hash-bound mixed free-roam/race soak recovery without duplicate physical play, to `0.7.0.0` for model-agnostic racing-wheel input and bounded title force feedback, to `0.7.1.0` for the reviewed alpha compatibility matrix and synchronized known-issue inventory, to `0.7.1.1` for exact project-pinned soak SDK identity and the fresh current-artifact frontend checkpoint, to `0.7.2.0` for the reviewed variable-frame-rate and native macOS ARM64 future-work plan, to `0.7.2.1` for progressed-save soak-seed binding and fail-closed stale-attempt migration, to `0.7.3.0` for the verified Photo Mode GPU-readback fix, stable virtual-controller routing, and host-display-aware soak recovery, to `0.7.4.0` for the fresh successor-artifact two-hour frontend checkpoint, to `0.7.4.1` for the delivery constructor-registry and process-aware soak-scheduler hotfix, and to `0.7.4.2` for physical delivery-transition closure and the bounded runtime-fullscreen issue classification.
-  Version history continues with `0.7.4.3` for the one-hour mixed-gameplay long-session acceptance harness, `0.7.4.4` for its nonfatal quarter-hour capture and explicit recovery-archive hotfix, `0.7.5.0` for the focused Race Back camera/modal softlock diagnostic, `0.7.5.1` for its six-site camera-apply trace after the first healthy physical return rejected the narrow handler hypothesis, and `0.8.0.0` for local F10 live diagnostics and automatic out-of-process native crash packages.
+  Version history continues with `0.7.4.3` for the one-hour mixed-gameplay long-session acceptance harness, `0.7.4.4` for its nonfatal quarter-hour capture and explicit recovery-archive hotfix, `0.7.5.0` for the focused Race Back camera/modal softlock diagnostic, `0.7.5.1` for its six-site camera-apply trace after the first healthy physical return rejected the narrow handler hypothesis, `0.8.0.0` for local F10 live diagnostics and automatic out-of-process native crash packages, and `0.8.1.0` for the reviewed private Windows/Proton campaign-test bundle plan.
 - [x] **M0-007** Create the planned directory scaffold without copying proprietary files. Source, test, rule, documentation-evidence, CMake, script, and third-party roots created on 2026-08-10; private/generated roots remain local-only and ignored.
 - [x] **M0-008** Add `sgconfig.yml`, `rules/`, `rule-tests/`, and initial documented ast-grep workflow. Initial C++ smoke rule and fixtures added and verified with ast-grep 0.45.0 on 2026-08-10.
 - [x] **M0-009** Define initial structural safety rules and fixtures. Bootstrap rules cover unbounded `strcpy`, `sprintf`/`vsprintf`, and `strcat`; path-aware VFS and hook-metadata rules remain required when real C++ AST lands. Verified with ast-grep 0.45.0 on 2026-08-10.
@@ -1189,6 +1189,7 @@ Pause for a feasibility decision if:
 - [ ] **M7-013** Run clean-save full campaign playthrough number two on a release-like build.
 - [ ] **M7-014** Audit all remaining XAM/xboxkrnl stub calls reached during the campaign; replace unsafe success stubs with state-correct implementations.
 - [ ] **M7-015** Finalize compatibility and known-issues documentation.
+- [ ] **M7-016** Establish a private, relocatable local campaign-test build route. Produce a toolchain-free Windows x64 bundle with a small path-resolving launcher, `mcla.exe`, `mcla_crash_handler.exe`, the exact runtime DLLs/configuration, a content manifest with hashes, and—only inside ignored private output—the owner's validated prepared game tree plus a selected save; prove it after copying to a clean Windows path. Then test that same Windows bundle on a physical Steam Deck under one pinned Proton version, including D3D12-to-Vulkan presentation, Steam Input/SDL controller routing, audio, fullscreen, writable save/cache paths, save reload, and local diagnostics. Never include the source ISO, and do not track or distribute the prepared game data, generated guest content, saves, or diagnostic packages. Native Linux/Vulkan remains M8-009/M8-010 and public asset-free preparation/packaging remains M9-005. If the Deck route is not viable, record the exact blocker and retain the relocatable Windows test route rather than claiming support.
 
 ### Deliverables
 
@@ -1196,6 +1197,7 @@ Pause for a feasibility decision if:
 - Complete Edition content coverage matrix
 - stable save/progression behavior
 - no known single-player progression blockers
+- a private toolchain-free local campaign-test bundle and copy/launch workflow, with Steam Deck/Proton support only if physically verified
 
 ### Verification evidence
 
@@ -1204,6 +1206,7 @@ Pause for a feasibility decision if:
 - no S0/S1 defect remains open
 - all skipped, unavailable, or retired online functionality is explicitly documented
 - release-like build reproduces campaign completion without debug-only patches
+- a copied bundle launches without Visual Studio, CMake, PowerShell, or repository paths; any Steam Deck claim includes a physical frontend/gameplay/input/audio/save/diagnostics smoke
 
 ### Exit criteria
 
@@ -1211,6 +1214,7 @@ Pause for a feasibility decision if:
 - Complete Edition on-disc content is accessible.
 - Save data remains stable across the validated version line.
 - Remaining issues are non-blocking S2/S3 items with workarounds or accepted limitations.
+- M7-016 records either a physically verified pinned-Proton Deck route or an exact no-go disposition while retaining the clean-path Windows bundle.
 
 ### Gate
 
@@ -1218,7 +1222,7 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M7-001, M7-002.
+- 2026-09-03 — Pre-entry planning only. Health: `NOT STARTED`. M7-016 reserves a private relocatable Windows x64 bundle as the first toolchain-free campaign-test artifact and a pinned-Proton physical Steam Deck feasibility route. This does not claim a current package, SteamOS compatibility, native Linux, or redistributability. Next tasks after gate entry remain M7-001 and M7-002; M7-016 may proceed once a regression artifact is pinned.
 
 ## 16. Milestone M8 — Modern enhancements and secondary platforms
 
@@ -1503,6 +1507,7 @@ The criterion below is additional to the task wording and universal Definition o
 | M7-013 | Second clean campaign completes on release-like build / run record |
 | M7-014 | Reached stubs are state-correct or documented unavailable / final import audit |
 | M7-015 | Compatibility docs match both full-run evidence sets / documentation review |
+| M7-016 | A private Windows x64 bundle launches after relocation without developer tools; a Steam Deck claim additionally requires physical pinned-Proton frontend, gameplay, controller, audio, fullscreen, save/reload, and diagnostics evidence, while a failed Deck probe produces an explicit no-go rather than a support claim / bundle manifest, clean-path audit, and physical Deck report |
 
 ### M8 criteria
 
@@ -1564,6 +1569,7 @@ The criterion below is additional to the task wording and universal Definition o
 | R-012 | External patches do not match the local XEX | High | Verify module hash and bytes before applying | M2/M8 |
 | R-013 | Variable or uncapped FPS leaves hidden fixed-step physics, scripting, streaming, input, audio, or cutscene assumptions | High | Preserve stock 30; separate delta-time from presentation pacing; test sustained dips, transitions, high caps, and campaign-critical sequences before exposing each mode | M8 |
 | R-014 | ReXGlue or the Xenos Vulkan backend depends on Windows/Linux behavior or Vulkan features unavailable through MoltenVK/Metal | High | Dedicated Darwin/ARM64 feasibility branch; capability inventory and shader/render-path probes before promising or packaging macOS support | M8 |
+| R-015 | The current Windows D3D12 bundle may fail under Proton because of vkd3d-proton, helper-process/SEH IPC, Steam Input/SDL identity, case-sensitive host paths, or writable-storage differences | High | Pin and record Proton, package exact runtime dependencies, resolve roots from the launcher, run clean-copy Windows and physical Deck matrices, fail closed on unsupported behavior, and retain native Linux as separate M8 work | M7 |
 
 ## 20. Decision log
 
@@ -1576,6 +1582,7 @@ Record architecture decisions here or link to ADR files.
 | 2026-08-10 | Preserve stock 30 FPS until gameplay correctness | Known 60 FPS mode requires delta-time changes and broader validation | Accepted |
 | 2026-08-29 | Treat variable/unlocked FPS as a separate validated timing mode, not merely a disabled present cap | The known Complete Edition patch enables delta-time, but missed targets and 40–120+ FPS transitions can still expose fixed-step game systems | Planned for M8 |
 | 2026-08-29 | Gate native macOS ARM64 behind ReXGlue Darwin/ARM64 and MoltenVK/Metal feasibility | Generated code and Vulkan are ARM64-capable in principle, while the current SDK explicitly supports only Windows/Linux and may require unavailable portability features | Planned for M8 |
+| 2026-09-03 | Use an owner-private relocatable Windows x64 bundle under a pinned Proton version as the first Steam Deck campaign-test route; do not call it native Linux or a public package | The current build already produces a Windows executable, crash helper, and three runtime DLLs; bundling exact dependencies and resolving private data/save roots from one launcher can remove Parsec latency sooner than a native port, but Deck graphics, input, storage, fullscreen, and helper behavior still require physical proof | Planned for M7 |
 | 2026-08-10 | Keep game assets and generated proprietary output private | Legal and repository hygiene requirement | Accepted |
 | 2026-08-10 | Use `https://github.com/2FED/RE-MCLA.git` as the project remote | Repository supplied by project owner | Accepted |
 | 2026-08-10 | Commit after every closed task; closure commit and push after every closed milestone | Preserve auditable task boundaries and milestone gates | Accepted |
