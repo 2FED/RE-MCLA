@@ -79,7 +79,7 @@ function WaitMarker([Diagnostics.Process]$Process, [string]$Root, [string]$Marke
 function ReadOutcome([Diagnostics.Process]$Process) {
   try { $null = [Console]::KeyAvailable } catch { throw 'Interactive console input is unavailable; run this script in a visible console.' }
   while ($true) {
-    Write-Host "Lose one Red Light Driver event and select RACE BACK. After the map zoom finishes or sticks, Alt-Tab here.`nType exactly RACE BACK RETURNED or RACE BACK STUCK: " -ForegroundColor Yellow -NoNewline
+    Write-Host "Lose one Red Light Driver event and select RACE BACK. After the map zoom finishes or sticks, try PAUSE once, then Alt-Tab here. Use RETURNED only if both gameplay camera and PAUSE work.`nType exactly RACE BACK RETURNED or RACE BACK STUCK: " -ForegroundColor Yellow -NoNewline
     $input = [Text.StringBuilder]::new()
     while ($true) {
       if ($Process.HasExited) { Write-Host; throw "Process exited while waiting for the Race Back outcome (exit $($Process.ExitCode))." }
@@ -160,7 +160,7 @@ $forced = $false
 try {
   $process = Start-Process $exe -ArgumentList $args -WorkingDirectory $build -PassThru
   $watcher = Start-Process $pwshHost -ArgumentList @('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',('"' + $saveWatcher + '"'),'-SourceUserRoot',('"' + $user + '"'),'-ArchiveRoot',('"' + $saveArchive + '"'),'-MclaProcessId',$process.Id) -WorkingDirectory $repo -WindowStyle Hidden -PassThru
-  WaitMarker $process $run 'MCLA_RACE_BACK_CONFIG v=1' 90 'Race Back trace readiness'
+  WaitMarker $process $run 'MCLA_RACE_BACK_CONFIG v=2' 90 'Race Back trace readiness'
   WaitMarker $process $run 'MCLA_GARAGE_LIFECYCLE_CONFIG v=1 cycle=2' 20 'automatic START readiness'
   $request = Join-Path $user '.mcla-garage-control.request'
   $temporary = $request + '.tmp'
@@ -176,9 +176,12 @@ try {
   $selectCount = [regex]::Matches($logs, 'MCLA_RACE_BACK_SELECT v=1').Count
   $returnCount = [regex]::Matches($logs, 'MCLA_RACE_BACK_COMMAND_RETURN v=1').Count
   $handlerCount = [regex]::Matches($logs, 'MCLA_RACE_BACK_CAMERA_HANDLER v=1').Count
-  $applyCount = [regex]::Matches($logs, 'MCLA_RACE_BACK_CAMERA_APPLY_EDGE v=1').Count
+  $applyMatches = [regex]::Matches($logs, 'MCLA_RACE_BACK_CAMERA_APPLY_EDGE v=2[^\r\n]*site=(?<site>[0-9A-F]{8})')
+  $applyCount = $applyMatches.Count
+  $applySites = @($applyMatches | ForEach-Object { $_.Groups['site'].Value } | Group-Object | Sort-Object Name | ForEach-Object { [ordered]@{ site = $_.Name; calls = $_.Count } })
   if ($selectCount -lt 1 -or $returnCount -lt 1) { throw 'The owner confirmed an outcome, but the Race Back command hook was not reached.' }
-  Write-Host "RACE BACK TRACE     | select=$selectCount return=$returnCount handler=$handlerCount apply=$applyCount outcome=$outcome" -ForegroundColor DarkCyan
+  $siteSummary = if ($applySites.Count) { @($applySites | ForEach-Object { "$($_.site):$($_.calls)" }) -join ',' } else { 'none' }
+  Write-Host "RACE BACK TRACE     | select=$selectCount return=$returnCount handler=$handlerCount apply=$applyCount sites=$siteSummary outcome=$outcome" -ForegroundColor DarkCyan
   CloseExact $process
   if (-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0) { throw 'Controlled external WM_CLOSE failed.' }
 } catch {
@@ -196,11 +199,12 @@ if ($watcher -and $watcher.ExitCode -ne 0) { throw "Save watcher failed with exi
 $latestRecovery = Safe (Join-Path $saveArchive 'latest.json') 'Race Back recovery manifest' -Exists
 $recovery = Get-Content -LiteralPath $latestRecovery -Raw | ConvertFrom-Json
 $result = [ordered]@{
-  schema = 'mcla-race-back-camera-diagnostic-v1'; task = 'M6-014'; known_issue = 'KI-026'; run_id = $runId
+  schema = 'mcla-race-back-camera-diagnostic-v2'; task = 'M6-014'; known_issue = 'KI-026'; run_id = $runId
   decision = if ($outcome -ceq 'returned') { 'race-back-camera-return-pass' } else { 'race-back-camera-softlock-reproduced' }
   operator_outcome = $outcome; command_select_calls = $selectCount; command_return_calls = $returnCount
-  camera_handler_calls = $handlerCount; camera_apply_calls = $applyCount; controlled_external_close = $true
-  force_cleanup = $false; seed_snapshot = $seed.Snapshot.Substring($repo.Length + 1).Replace('\','/')
+  camera_handler_calls = $handlerCount; camera_apply_calls = $applyCount; camera_apply_sites = $applySites
+  controlled_external_close = $true; force_cleanup = $false
+  seed_snapshot = $seed.Snapshot.Substring($repo.Length + 1).Replace('\','/')
   seed_save_sha256 = $seed.Manifest.save_sha256; recovery_snapshot = $recovery.snapshot_directory
   recovery_save_sha256 = $recovery.save_sha256
 }

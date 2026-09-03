@@ -1060,13 +1060,14 @@ Use this short route before another one-hour attempt. It selects the newest
 complete hash-verified M6-014 recovery snapshot, clean-builds the Release title
 with the default-off `mcla_race_back_probe` enabled for that launch, and
 automatically enters saved gameplay. Lose one Red Light Driver event, choose
-`Race Back`, and report exactly `RACE BACK RETURNED` or `RACE BACK STUCK` after
-the map zoom resolves. The trace records the exact guest command producer at
+`Race Back`, try opening pause after the map zoom, and report exactly
+`RACE BACK RETURNED` only if both gameplay camera and pause work; otherwise
+report `RACE BACK STUCK`. The trace records the exact guest command producer at
 `0x82666C50`, `Racer_ApplyGameCamera` handler at `0x822AD640`, and the exact
-direct-call edge into camera apply function `0x822B0F10`. It then externally
-closes the exact title process and
-preserves the evolving profile. A reproduced softlock is a successful
-diagnostic outcome, not a compatibility PASS.
+counts for all six direct-call edges into camera apply function `0x822B0F10`.
+It then externally closes the exact title process and preserves the evolving
+profile. A reproduced softlock is a successful diagnostic outcome, not a
+compatibility PASS.
 
 ## M6-014 current one-hour mixed-gameplay gate
 

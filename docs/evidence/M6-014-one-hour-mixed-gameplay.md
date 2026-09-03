@@ -56,12 +56,14 @@ No duration from this attempt is credited.
 Static XEX analysis binds the failing route to guest function `0x82666C50`,
 which produces `raceOverCommand("raceBack")` and emits `raceOverTrigger`.
 `Racer_ApplyGameCamera` is registered at `0x822AD640`; it conditionally calls
-the camera application function at `0x822B0F10` with mode 4. The default-off
-`mcla_race_back_probe` hooks the command and handler functions and observes the
-exact direct-call edge into `0x822B0F10` without changing stock behavior.
+the camera application function at `0x822B0F10` with mode 4. Physical diagnostic
+`20260903-215313-7602fb14` then completed a healthy return with one command
+entry/return but zero handler or apply-edge calls, disproving that narrow route
+as the normal success path. The default-off v2 probe now observes all six exact
+direct call sites into `0x822B0F10` without changing stock behavior.
 `scripts/run-race-back-camera-diagnostic.ps1` clean-builds the traced
 title, selects the newest complete hash-verified M6-014 recovery profile,
-automatically loads gameplay, records whether the command, handler, and apply
-edges execute, preserves the evolving save, and ends after one focused Race
-Back outcome. Another one-hour run is blocked until this short diagnostic and a
-subsequent focused fix regression pass.
+automatically loads gameplay, records whether the command, handler, and each
+camera-apply edge execute, preserves the evolving save, and ends after one
+focused Race Back outcome. Another one-hour run is blocked until this short
+diagnostic and a subsequent focused fix regression pass.

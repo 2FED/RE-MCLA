@@ -18,7 +18,7 @@ complete profile with save SHA-256
 `5DEE5B6B2B107B17462F1D94EF404ABD676B94A7894CF740AB940C63450CE7CB`.
 The failed attempt contributes no accepted M6-014 stability time.
 
-Private Ghidra analysis establishes the focused callback path:
+Private Ghidra analysis established the initial focused callback hypothesis:
 
 - `0x82666C50` creates `raceOverCommand("raceBack")`, emits
   `raceOverTrigger`, and performs race-over UI bookkeeping;
@@ -26,14 +26,23 @@ Private Ghidra analysis establishes the focused callback path:
 - that handler resolves the racer camera at offset `0x370` and, when its stock
   predicate permits, calls `0x822B0F10` with camera mode 4.
 
-The default-off `mcla_race_back_probe` traces the command and handler functions,
-plus the exact direct-call edge into `0x822B0F10`, without altering normal title
-behavior. The focused
+The first physical diagnostic, `20260903-215313-7602fb14`, completed a healthy
+`Race Back` return with gameplay camera and pause restored. It observed one
+command entry and return, but zero `Racer_ApplyGameCamera` handler or direct
+apply-edge calls. That result rejects the initial handler as the normal success
+path; no camera reset has been guessed from it.
+
+The default-off `mcla_race_back_probe` v2 therefore traces the command and
+handler functions plus all six statically identified direct call sites into
+`0x822B0F10`: `0x822A5990`, `0x822AD698`, `0x822B1258`, `0x822B1464`,
+`0x822B3460`, and `0x822B359C`. Every stock call still executes. The focused
 `scripts/run-race-back-camera-diagnostic.ps1` route uses the newest complete
 hash-verified M6-014 recovery profile, automatically enters saved gameplay,
-records the command/handler/apply edges for one owner-confirmed `Race Back`
-outcome, preserves any new autosave, and closes the title externally. Its source
-contract is covered by `scripts/test-race-back-camera-diagnostic.ps1`.
+records the command/handler/apply edges and per-site counts for one
+owner-confirmed `Race Back` outcome, preserves any new autosave, and closes the
+title externally. `RETURNED` is valid only when both gameplay camera and pause
+work. Its source contract is covered by
+`scripts/test-race-back-camera-diagnostic.ps1`.
 
 Closure requires the focused trace to identify the missing edge, a narrow fix
 with no unconditional camera reset, and a physical retry in which the gameplay
