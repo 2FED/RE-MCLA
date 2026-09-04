@@ -26,10 +26,12 @@ The reference system is Windows 11 Pro x86-64 build 26200, Ryzen 9 5900X, RTX
 T300RS wheel; other SDL wheel models are configuration-compatible only.
 
 The matrix separates verified, verified-with-limitations,
-representative-only, bounded-offline, in-progress, and not-verified rows. It
-keeps M6-014 soak completion false, full-campaign and online-service claims
-false, and alternate-OS/GPU, cross-model wheel, graphics-parity, and exact
-audio-mix claims false.
+representative-only, bounded-offline, and not-verified rows. The split
+long-session route is now verified with limitations by the accepted 7,202-second
+historical frontend plus current 3,600-second mixed-gameplay evidence. The
+separate `current_five_stage_soak_complete` legacy-suite claim remains false,
+as do full-campaign and online-service claims and alternate-OS/GPU, cross-model
+wheel, graphics-parity, and exact-audio-mix claims.
 
 All current `KI-001` through `KI-026` entries are mirrored by ID, severity, and
 status from `docs/known-issues.md`; the initial M6-016 closure covered the first

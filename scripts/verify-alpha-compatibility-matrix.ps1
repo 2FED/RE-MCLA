@@ -66,7 +66,7 @@ $expectedRows = [ordered]@{
     'garage-customization'='verified-representative'
     'window-device-lifecycle'='verified-with-limitations'
     'offline-services'='bounded-offline'
-    'long-session-soak'='in-progress'
+    'long-session-soak'='verified-with-limitations'
     'campaign-complete-edition'='not-verified'
 }
 $rows = @($matrix.rows)
@@ -107,7 +107,7 @@ foreach ($name in @('alternate_gpu_verified','alternate_os_verified','cross_mode
 
 if (-not $Fixture) {
     $doc = Get-Content -LiteralPath (Join-Path $repo 'docs/alpha-compatibility.md') -Raw
-    foreach ($needle in @('0.7.0.0','5d3e98c064c38e0769b4f59d11729c8f6270eb83','Windows 11 Pro x86-64 build 26200','AMD Ryzen 9 5900X','NVIDIA GeForce RTX 3090','Thrustmaster T300RS','## Route matrix','## Known issues','known-issues.md','## Reading the status labels','Full campaign / all Complete Edition content','M6-014 remains open')) {
+    foreach ($needle in @('0.7.0.0','5d3e98c064c38e0769b4f59d11729c8f6270eb83','Windows 11 Pro x86-64 build 26200','AMD Ryzen 9 5900X','NVIDIA GeForce RTX 3090','Thrustmaster T300RS','## Route matrix','## Known issues','known-issues.md','## Reading the status labels','Full campaign / all Complete Edition content','3,600-second mixed gameplay passed')) {
         if (-not $doc.Contains($needle, [StringComparison]::Ordinal)) { throw "Alpha compatibility document is missing: $needle" }
     }
     $cmake = Get-Content -LiteralPath (Join-Path $repo 'CMakeLists.txt') -Raw

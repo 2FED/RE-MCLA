@@ -1,7 +1,8 @@
 # M6-014 one-hour mixed-gameplay long-session gate
 
-Status: runner and fail-closed verifier ready; physical 60-minute result pending
-after three healthy focused KI-026 retries unblocked the gate.
+Status: PASS. Physical run `20260904-095603-fb908583` completed the full
+60-minute gate; version `0.8.2.1` corrects verifier-only defects without
+changing or rebuilding the tested `0.8.2.0` Release artifact.
 
 The current M6-014 closure path deliberately limits new owner interaction to one
 continuous hour. It combines the immutable two-hour frontend stage from suite
@@ -11,12 +12,12 @@ ReXGlue v0.10.0.1 commit
 `20260901-203448-d31ab681` remains an immutable prerequisite, but is no longer
 misused as the gameplay seed or current executable identity.
 
-Version `0.8.2.0` makes the runner clean-build the current Release source before
+Version `0.8.2.0` made the runner clean-build the current Release source before
 the hour, binds all five launch artifacts including `mcla_crash_handler.exe`,
 and selects the newest complete hash-verified snapshot across the entire
-M6-014 save archive. Its validated current choice is Race Back recovery
-`20260904-035223Z-012407994331E607-2FAEFBC7FF8CDEAD`, save SHA-256
-`012407994331E607BFA404F50937B3046747B08D7CE76DAF50DCE51CB74F9C8D`.
+M6-014 save archive. The accepted run selected recovery
+`20260904-053615Z-5DCED57FBEEB5241-2FAEFBC7FF8CDEAD`, save SHA-256
+`5DCED57FBEEB5241BED4EC2CD5E89CA019B7B7758EAA00C3ED2456A4CC6291BF`.
 This prevents both the stale-artifact rejection and the stale post-delivery
 profile regression that the previous runner would have caused.
 
@@ -36,8 +37,31 @@ recovery source and preserved as an immutable seed copy. After shutdown, the
 verifier rehashes the referenced source and final snapshots, their manifests,
 and their save/header files rather than trusting `latest.json` metadata alone.
 
-Until a physical result passes, M6-014 remains open. Even after acceptance this
-evidence will not claim that historical frontend and current gameplay used the
+The accepted process ran for exactly 3,600 measured seconds with thirteen
+ordered resource samples, four nontrivial captures, and five recorded capture
+attempts. The first quarter-hour attempt was safely skipped because MCLA was
+not foreground; the mandatory baseline and the remaining three attempts were
+captured. The owner confirmed normal moving gameplay plus garage enter/exit,
+pause/resume, and Alt-Tab return. The title then closed externally with exit
+code zero, no forced cleanup, no runtime fatal marker, and zero new NVIDIA or
+Sunshine host events. Final growth was 57,360,384 private bytes and 56,766,464
+working-set bytes, with -1 handles and -9 threads; peak growth remained below
+the gate limits. The evolved save SHA-256 is
+`58B3385C89D9E4999B6791CCB95B6F7ED7963CE07F9C47618850841236784585`,
+and the complete final archive tree is
+`6539EB94AA60E0FBF7403D760B8B3FB35A1AB7876584118BE55EB9CDE1105888`.
+
+The initial post-run verifier failure was evidence-tooling drift, not a gameplay
+failure. It compared separately deserialized nested journals at PowerShell's
+default JSON depth, required an obsolete `Execution complete` line absent from
+the otherwise controlled current shutdown path, and assigned the read-only
+automatic `$Host` variable. Version `0.8.2.1` fixes those three verifier defects,
+adds source-contract coverage, and revalidates the immutable physical result.
+No gameplay rerun is required, and the verifier deliberately checks the
+recorded `0.8.2.0` build identity and hashes rather than demanding that a future
+repository `VERSION` remain frozen.
+
+This evidence does not claim that historical frontend and current gameplay used the
 same executable, that one process ran for three hours, that the legacy five-stage
 suite completed, that current gameplay ran for two hours, or that campaign,
 rendering, music, or wheel-centering behavior is fully correct.

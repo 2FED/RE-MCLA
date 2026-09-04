@@ -115,10 +115,10 @@
     },
     {
       "id": "long-session-soak",
-      "status": "in-progress",
-      "scope": "Historical mixed free-roam/race coverage and a ReXGlue v0.10.0.1 two-hour frontend stage passed; three consecutive current-artifact Race Back retries returned normally through the v2 traced camera path, so the 60-minute mixed-gameplay acceptance process is ready.",
+      "status": "verified-with-limitations",
+      "scope": "Historical mixed free-roam/race coverage, a 7,202-second ReXGlue v0.10.0.1 frontend stage, and a current-artifact 3,600-second mixed-gameplay process passed with bounded resources, physical captures, clean host audit, controlled exit, and a complete preserved save.",
       "evidence": ["docs/evidence/M6-014-one-hour-mixed-gameplay.md", "README-AI"],
-      "limitations": ["M6-014 remains open until the current 60-minute mixed-gameplay process physically passes; KI-026 remains intermittent/open and requires F10 capture if it recurs.", "The historical frontend and current gameplay executables differ; no same-artifact, continuous three-hour, legacy five-stage, or ten-hour monolithic run is claimed."]
+      "limitations": ["KI-026 remains intermittent/open and requires F10 capture if it recurs; KI-022 wheel-centering stability is also outside this gamepad-only gate.", "The historical frontend and current gameplay executables differ; no same-artifact, continuous three-hour, legacy five-stage, or ten-hour monolithic run is claimed."]
     },
     {
       "id": "campaign-complete-edition",

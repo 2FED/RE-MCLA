@@ -1145,6 +1145,15 @@ three consecutive healthy v2 traced returns unblock this hour. If it recurs,
 press F10 and wait for the completion sound before stopping; that run becomes
 diagnostic evidence rather than an accepted stability result.
 
+Accepted run `20260904-095603-fb908583` completed the full 3,600-second
+window with thirteen resource samples, four captures from five attempts,
+controlled external close, zero fatal or host-display markers, and a complete
+final save archive. The first verifier invocation failed only because the
+verifier used shallow JSON comparison, required an obsolete shutdown marker,
+and assigned PowerShell's read-only `$Host` automatic variable. Version
+`0.8.2.1` fixes those verifier defects and revalidates the immutable result;
+the gameplay hour does not need to be repeated.
+
 ## M6-014 legacy five-scenario two-hour soak suite
 
 ```powershell
