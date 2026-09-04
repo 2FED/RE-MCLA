@@ -754,6 +754,7 @@ public:
     }
     worker_ =
         std::jthread([this](std::stop_token token) { WorkerMain(token); });
+    snapshot_status_.store(SnapshotStatus::kIdle, std::memory_order_release);
     started_.store(true, std::memory_order_release);
     REXLOG_INFO("MCLA diagnostics: ready; F10 snapshot root is {}",
                 GenericPathUtf8(live_root_));
@@ -778,6 +779,8 @@ public:
       requested_ui_state_ = ui_state;
       request_pending_ = true;
     }
+    snapshot_status_.store(SnapshotStatus::kCapturing,
+                           std::memory_order_release);
     request_cv_.notify_one();
     REXLOG_INFO("MCLA diagnostics: snapshot queued");
     return true;
@@ -788,6 +791,10 @@ public:
     return idle_cv_.wait_for(lock, timeout, [this]() {
       return !busy_.load(std::memory_order_acquire);
     });
+  }
+
+  SnapshotStatus snapshot_status() const {
+    return snapshot_status_.load(std::memory_order_acquire);
   }
 
   void Stop() {
@@ -827,20 +834,24 @@ public:
         ui = requested_ui_state_;
         request_pending_ = false;
       }
+      bool captured = false;
       try {
-        Capture(reason, ui);
+        captured = Capture(reason, ui);
       } catch (const std::exception &e) {
         REXLOG_ERROR("MCLA diagnostics: snapshot worker failed: {}", e.what());
       } catch (...) {
         REXLOG_ERROR(
             "MCLA diagnostics: snapshot worker failed with unknown exception");
       }
+      snapshot_status_.store(captured ? SnapshotStatus::kComplete
+                                      : SnapshotStatus::kFailed,
+                             std::memory_order_release);
       busy_.store(false, std::memory_order_release);
       idle_cv_.notify_all();
     }
   }
 
-  void Capture(std::string_view reason, const UiState &ui) {
+  bool Capture(std::string_view reason, const UiState &ui) {
     const uint64_t sequence = sequence_.fetch_add(1) + 1;
     const std::string name = "live-" + UtcStamp() + "-" +
                              std::to_string(ProcessId()) + "-" +
@@ -855,7 +866,7 @@ public:
       REXLOG_ERROR(
           "MCLA diagnostics: cannot create snapshot staging directory: {}",
           ec.message());
-      return;
+      return false;
     }
 
     RuntimeState runtime_state;
@@ -909,7 +920,7 @@ public:
                    BuildStateJson(reason, ui, runtime_state, working_set,
                                   handles, native_threads))) {
       REXLOG_ERROR("MCLA diagnostics: state write failed");
-      return;
+      return false;
     }
 
     std::vector<rex::LogEntry> entries;
@@ -930,7 +941,7 @@ public:
     }
     if (!WriteText(partial / "log-tail.txt", log_tail)) {
       REXLOG_ERROR("MCLA diagnostics: log-tail write failed");
-      return;
+      return false;
     }
     if (journal_sink_) {
       journal_sink_->flush();
@@ -950,12 +961,12 @@ public:
                   << "}\n";
     if (!WriteText(partial / "save-metadata.json", save_metadata.str())) {
       REXLOG_ERROR("MCLA diagnostics: save metadata write failed");
-      return;
+      return false;
     }
     if (!WriteText(partial / "save-files-private.json",
                    BuildSaveInventory(save))) {
       REXLOG_ERROR("MCLA diagnostics: private save inventory write failed");
-      return;
+      return false;
     }
 
     std::string dump_error;
@@ -981,18 +992,18 @@ public:
         !AddArtifact(artifacts, partial, "save-metadata.json", true) ||
         !AddArtifact(artifacts, partial, "save-files-private.json", false)) {
       REXLOG_ERROR("MCLA diagnostics: required artifact hashing failed");
-      return;
+      return false;
     }
     if (frame_written) {
       if (!AddArtifact(artifacts, partial, "frame.bmp", false)) {
         REXLOG_ERROR("MCLA diagnostics: frame hashing failed");
-        return;
+        return false;
       }
     }
     if (dump_written) {
       if (!AddArtifact(artifacts, partial, "process-private.dmp", false)) {
         REXLOG_ERROR("MCLA diagnostics: minidump hashing failed");
-        return;
+        return false;
       }
     }
 
@@ -1033,13 +1044,13 @@ public:
     manifest << "  ]\n}\n";
     if (!WriteText(partial / "manifest.json", manifest.str())) {
       REXLOG_ERROR("MCLA diagnostics: manifest write failed");
-      return;
+      return false;
     }
     std::filesystem::rename(partial, complete, ec);
     if (ec) {
       REXLOG_ERROR("MCLA diagnostics: snapshot publish failed: {}",
                    ec.message());
-      return;
+      return false;
     }
     const bool pointer_written =
         WriteTextAtomic(diagnostics_root_ / "latest-live.txt", name + "\n");
@@ -1052,9 +1063,7 @@ public:
       REXLOG_ERROR("MCLA diagnostics: snapshot package completed but latest "
                    "pointer update failed");
     }
-#if defined(_WIN32)
-    MessageBeep(MB_OK);
-#endif
+    return pointer_written;
   }
 
   std::filesystem::path user_data_root_;
@@ -1076,6 +1085,7 @@ public:
   std::atomic<bool> started_{false};
   std::atomic<bool> stopping_{false};
   std::atomic<bool> busy_{false};
+  std::atomic<SnapshotStatus> snapshot_status_{SnapshotStatus::kIdle};
   std::atomic<uint64_t> sequence_{0};
   bool native_ready_ = false;
 };
@@ -1092,6 +1102,10 @@ bool Manager::Start(const std::filesystem::path &user_data_root,
 
 bool Manager::RequestSnapshot(std::string reason, const UiState &ui_state) {
   return impl_->RequestSnapshot(std::move(reason), ui_state);
+}
+
+SnapshotStatus Manager::snapshot_status() const {
+  return impl_->snapshot_status();
 }
 
 bool Manager::WaitForIdle(std::chrono::milliseconds timeout) {

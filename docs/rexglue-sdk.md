@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.11.0.0`
-- Immutable project commit: `b2afb8bc0ea06e62eea9d755a83772b0cdaad972`
+- Project release tag: `v0.12.0.0`
+- Immutable project commit: `84f9ec28ef76781768fe23080bfc08defdcfc334`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -147,6 +147,13 @@ cannot reset an in-flight window. MCLA uses this once per process from F10 so
 a later F10 package can return completed gameplay-only CPU/GPU, streaming,
 audio-underrun, shader, and PSO evidence.
 
+The v0.12.0.0 delta exposes the already compiled Xenos backend choice through
+`RuntimeConfig::gpu_backend` and the init-only
+`--gpu_backend=any|d3d12|vulkan` option. `any` preserves the platform default;
+an application may explicitly request either registered backend without a
+second plugin ABI or separate guest build. The same release also makes the
+migration/template fixtures CRLF-safe and collision-free on Windows.
+
 The clean v0.10.0.2 SDK validation executed all 1,805 registered cases: 1,792
 passed, four known BitStream cases were skipped, and nine pre-existing
 migration/template fixture cases failed outside this windowing delta. The
@@ -158,6 +165,12 @@ coverage passes 11 assertions in three cases. A full 1,806-case RelWithDebInfo
 CTest run during the same change passed 1,793, skipped the same four BitStream
 cases, and retained nine pre-existing migration/template fixture failures;
 all PPC cases passed.
+
+The clean v0.12.0.0 Windows configuration enabled both D3D12 and Vulkan. Its
+full RelWithDebInfo suite passed all 1,802 executed cases with four known
+BitStream cases skipped: 100 percent pass, zero failures out of 1,806
+registered tests. The matching Release SDK install completed and reports
+version `0.12.0.0`.
 
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
@@ -178,19 +191,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.11.0.0^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.12.0.0^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `b2afb8bc0ea06e62eea9d755a83772b0cdaad972`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `84f9ec28ef76781768fe23080bfc08defdcfc334`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.11.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.12.0.0 project-fork commit:
 
 ```text
-b2afb8bc0ea06e62eea9d755a83772b0cdaad972 third_party/rexglue-sdk
+84f9ec28ef76781768fe23080bfc08defdcfc334 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

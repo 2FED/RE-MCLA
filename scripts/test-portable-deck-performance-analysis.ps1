@@ -47,7 +47,14 @@ try {
     $result = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
     if (-not $result.Passed -or $result.GuestOutputRateHz -ne 20 -or $result.GuestVblankRateHz -ne 60 -or
         $result.Audit.Samples -ne 300 -or $result.Audit.SampleRateHz -ne 20 -or
-        $result.Audit.Classification -cne 'outside-render-work-or-frame-pacing') { throw 'Positive Deck performance analysis fixture did not produce the expected result.' }
+        -not $result.AuditAvailable -or
+        $result.Audit.Classification -cne 'outside-recorded-submission-span') { throw 'Positive Deck performance analysis fixture did not produce the expected result.' }
+
+    Remove-Item -LiteralPath $second -Recurse -Force
+    $second = Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false
+    $nativeResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    if (-not $nativeResult.Passed -or $nativeResult.AuditAvailable -or $null -ne $nativeResult.Audit -or
+        $nativeResult.GuestOutputRateHz -ne 20) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
 
     $negative = 0
     Add-Content -LiteralPath (Join-Path $first 'state.json') -Value 'tamper'
@@ -57,7 +64,7 @@ try {
     [void](Write-Package 'live-20260904T120000Z-11-1' 11 100 600 $false)
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Mixed-process fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=1;FailClosedNegatives=$negative}
+    [pscustomobject]@{Passed=$true;PositiveFixtures=2;FailClosedNegatives=$negative}
 } finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }

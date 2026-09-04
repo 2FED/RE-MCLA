@@ -1095,7 +1095,9 @@ accepted. The intentional crash disables its reporter dialog only for this
 automated runner.
 
 During ordinary play, press `F10` immediately when a softlock or transient defect
-is visible and wait for the completion sound before closing the game. A native
+is visible and wait for the top-right `F10: READY` status before closing the game.
+`RECORDING...` remains visible while capture is active; `BUSY` rejects overlap
+and `FAILED` reports an unsuccessful publication. A native
 crash requires no keypress: the helper finishes the package and displays its
 folder. Use `show-latest-diagnostic.ps1` (and `-UserDataRoot` for isolated test
 roots) to retrieve the latest exact path. Packages are local-only and unsafe to
@@ -1143,8 +1145,8 @@ a continuous three-hour process, two current-artifact gameplay hours, the old
 five-category suite, full-campaign completion, rendering parity, music
 continuity, or wheel-centering stability. KI-026 remains intermittent/open, but
 three consecutive healthy v2 traced returns unblock this hour. If it recurs,
-press F10 and wait for the completion sound before stopping; that run becomes
-diagnostic evidence rather than an accepted stability result.
+press F10 and wait for the visible `F10: READY` status before stopping; that
+run becomes diagnostic evidence rather than an accepted stability result.
 
 Accepted run `20260904-095603-fb908583` completed the full 3,600-second
 window with thirteen resource samples, four captures from five attempts,

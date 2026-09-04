@@ -4,7 +4,7 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.11.0.0 `mcla` application consumes the ignored generated corpus and produces a native Windows executable plus a separate local crash helper. Crash instrumentation expands the current corpus to 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic and native crash paths, F10 live snapshots, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, bounded title force feedback, and runtime fullscreen shortcuts are verified independently. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 accepts retained 7,202-second frontend evidence plus one current-artifact 3,600-second mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities remain explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, and KI-026 Race Back camera restoration remain open and carry into M7 without invalidating the bounded M6 long-session result.
+Current state: the canonical ReXGlue v0.12.0.0 `mcla` application consumes the ignored generated corpus and produces a native Windows executable plus a separate local crash helper. Crash instrumentation expands the current corpus to 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic and native crash paths, visible F10 live-snapshot status, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, bounded title force feedback, and runtime fullscreen shortcuts are verified independently. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 accepts retained 7,202-second frontend evidence plus one current-artifact 3,600-second mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities remain explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, KI-026 Race Back camera restoration, and KI-027 Proton performance remain open and carry into M7 without invalidating the bounded M6 long-session result.
 
 ## Private portable campaign-test boundary
 
@@ -23,7 +23,7 @@ Each game process has one atomic `results/session-<UTC>-<pid>.partial` staging d
 
 Steam Stop may terminate both title and launcher, preventing ordinary finalization. On the next normal launch, version `0.9.0.1` can reclaim `bundle.lock` only when no process still owns its exclusive handle. It then recognizes only a direct, identity-valid `results/session-*.partial`, removes bounded nested temporary publication state, captures the current profile, publishes a distinct interrupted-session result, and atomically closes the directory before starting the next title process. Active locks, malformed or unknown partial paths, invalid identities, reparse points, and Syncthing conflicts still fail closed. Atomic directory publication uses bounded retry for transient same-volume antivirus or synchronization locks and never overwrites an existing destination.
 
-The builder publishes a new fingerprinted child by atomic directory move and updates `current.txt` atomically. The fingerprint includes the project version, host hash, launcher hash, and selected save hash; the hash lock covers 25 immutable files. Same-volume developer staging may use NTFS hard links, which Syncthing still reads as ordinary file contents; `-MaterializeGameFiles` forces independent copies. Clean-path Windows relocation is proven, but actual Syncthing transport and Steam Deck/Proton behavior remain physical M7-016 gates.
+The builder publishes a new fingerprinted child by atomic directory move and updates `current.txt` atomically. The fingerprint includes the project version, host hash, launcher hash, and selected save hash; the hash lock covers 25 immutable files. Same-volume developer staging may use NTFS hard links, which Syncthing still reads as ordinary file contents; `-MaterializeGameFiles` forces independent copies. The launcher accepts one optional `--gpu-backend=any|d3d12|vulkan` override and forwards it to the runtime. Without an override, MCLA preserves D3D12 on native Windows and requests the plugin's native Vulkan backend when a Proton/Wine environment is detected. Clean-path Windows relocation is proven, but the Vulkan performance candidate and remaining Steam Deck/Proton behavior remain physical M7-016 gates.
 
 ## Consumer preparation model
 
@@ -57,7 +57,7 @@ distribution model.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.11.0.0, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
+- `CMakeLists.txt` pins ReXGlue 0.12.0.0, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching dual-backend runtime-loaded Xenos plugin
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
@@ -119,13 +119,16 @@ size-bounded, reparse-safe save snapshot. Concurrent crashing threads wait on
 the same manual-reset dump-completion event, preventing one thread from killing
 the process while another is being dumped.
 
-The `F10` bind queues one background live snapshot and rejects overlap. Runtime
-counters are sampled without guest mutation; the screenshot uses the already
-presented Win32 client surface rather than the presenter's GPU readback path, so
-a wedged render fence cannot block diagnostic shutdown. A sequence-numbered IPC
-request obtains the same privacy-bounded normal minidump from the helper. Both
-live and crash packages stage below a `.partial` directory, write and hash all
-required metadata last, and atomically rename/publish a latest-package pointer.
+The `F10` bind queues one background live snapshot and rejects overlap. A
+non-interactive top-right ImGui status reports `RECORDING` while the worker is
+active, `READY` for about one second only after successful package/latest-pointer
+publication, and explicit `BUSY` or `FAILED` outcomes. Runtime counters are
+sampled without guest mutation; the screenshot uses the already presented
+Win32 client surface rather than the presenter's GPU readback path, so a wedged
+render fence cannot block diagnostic shutdown. A sequence-numbered IPC request
+obtains the same privacy-bounded normal minidump from the helper. Both live and
+crash packages stage below a `.partial` directory, write and hash all required
+metadata last, and atomically rename/publish a latest-package pointer.
 Package retention, runtime-log rotation, dump/save/file-count limits, stale
 partial cleanup, and reparse rejection are fail-closed. Nothing is uploaded.
 The complete package is private: dump, log, screenshot, and save inventory may

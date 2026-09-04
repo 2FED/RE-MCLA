@@ -54,14 +54,14 @@ git submodule status --recursive
 
 The first status line must contain the ReXGlue project-fork commit recorded in `docs/rexglue-sdk.md`; no line may begin with `-`, `+`, or `U`.
 
-The current v0.11.0.0 Windows build uses:
+The current v0.12.0.0 Windows build uses:
 
-- ReXGlue 0.11.0.0 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.12.0.0 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
 - upstream `win-amd64` multi-config preset
-- D3D12 enabled and Vulkan disabled
+- D3D12 and Vulkan enabled in the same Xenos plugin
 - C++23 and `-march=x86-64-v3`
 
 ## Build and install ReXGlue
@@ -161,7 +161,7 @@ without rebuilding, run `build-portable-campaign-bundle.ps1 -PruneOnly`; the
 command validates `current.txt` and refuses paths outside the ignored bundle
 root before removing older recognized child identities.
 
-Add the stable parent `C:\BDU\MCLA-Recomp\private\bundles\M7-016` to Syncthing. Wait until both peers are idle before launching the child named by `current.txt`, do not run the same writable child concurrently on two hosts, and start only `Launch-MCLA.exe`. It should enter fullscreen by default; Alt+Enter and LMB double-click must each switch between fullscreen and windowed presentation. Every mutable runtime artifact is kept inside that child so it returns with the same synchronized folder. Steam Deck support is not claimed until the physical pinned-Proton matrix passes.
+Add the stable parent `C:\BDU\MCLA-Recomp\private\bundles\M7-016` to Syncthing. Wait until both peers are idle before launching the child named by `current.txt`, do not run the same writable child concurrently on two hosts, and start only `Launch-MCLA.exe`. It should enter fullscreen by default; Alt+Enter and LMB double-click must each switch between fullscreen and windowed presentation. Under Proton/Wine the application selects the native Vulkan backend; native Windows keeps the D3D12 default. If Vulkan initialization fails, run `Launch-MCLA.exe --gpu-backend=d3d12` as the explicit compatibility fallback. Every mutable runtime artifact is kept inside that child so it returns with the same synchronized folder. Steam Deck support and a performance improvement are not claimed until the physical pinned-Proton matrix passes.
 
 ## Xenia Canary baseline
 
@@ -214,7 +214,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.11.0.0`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.12.0.0`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1

@@ -30,6 +30,8 @@
 #include <rex/ui/keybinds.h>
 #include <rex/ui/presenter.h>
 
+#include <imgui.h>
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -52,6 +54,90 @@
 #include "mcla_native_crash.h"
 
 namespace {
+
+bool HasEnvironmentVariable(const char *name) {
+#if defined(_WIN32)
+  char *value = nullptr;
+  size_t length = 0;
+  const errno_t error = _dupenv_s(&value, &length, name);
+  const bool present = error == 0 && value && value[0] != '\0';
+  std::free(value);
+  return present;
+#else
+  const char *value = std::getenv(name);
+  return value && value[0] != '\0';
+#endif
+}
+
+class DiagnosticStatusDialog final : public rex::ui::ImGuiDialog {
+public:
+  DiagnosticStatusDialog(rex::ui::ImGuiDrawer *drawer,
+                         mcla::diagnostics::Manager *manager)
+      : ImGuiDialog(drawer), manager_(manager) {}
+
+  void ShowBusy() {
+    busy_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+  }
+
+protected:
+  void OnDraw(ImGuiIO &io) override {
+    const auto now = std::chrono::steady_clock::now();
+    const auto status = manager_ ? manager_->snapshot_status()
+                                 : mcla::diagnostics::SnapshotStatus::kIdle;
+    if (status != last_status_) {
+      last_status_ = status;
+      if (status == mcla::diagnostics::SnapshotStatus::kComplete ||
+          status == mcla::diagnostics::SnapshotStatus::kFailed) {
+        result_until_ = now + std::chrono::seconds(1);
+      }
+    }
+
+    const char *text = nullptr;
+    ImVec4 color(1.0f, 1.0f, 1.0f, 1.0f);
+    if (now < busy_until_) {
+      text = "F10: BUSY";
+      color = ImVec4(1.0f, 0.78f, 0.24f, 1.0f);
+    } else if (status == mcla::diagnostics::SnapshotStatus::kCapturing) {
+      text = "F10: RECORDING...";
+      color = ImVec4(0.30f, 0.86f, 1.0f, 1.0f);
+    } else if (now < result_until_ &&
+               status == mcla::diagnostics::SnapshotStatus::kComplete) {
+      text = "F10: READY";
+      color = ImVec4(0.35f, 1.0f, 0.45f, 1.0f);
+    } else if (now < result_until_ &&
+               status == mcla::diagnostics::SnapshotStatus::kFailed) {
+      text = "F10: FAILED";
+      color = ImVec4(1.0f, 0.35f, 0.30f, 1.0f);
+    }
+    if (!text) {
+      return;
+    }
+
+    constexpr float kPadding = 16.0f;
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - kPadding, kPadding),
+                            ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.88f);
+    const ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    if (ImGui::Begin("##mcla_f10_status", nullptr, flags)) {
+      ImGui::TextUnformatted(text);
+    }
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+  }
+
+private:
+  mcla::diagnostics::Manager *manager_ = nullptr;
+  mcla::diagnostics::SnapshotStatus last_status_ =
+      mcla::diagnostics::SnapshotStatus::kIdle;
+  std::chrono::steady_clock::time_point busy_until_{};
+  std::chrono::steady_clock::time_point result_until_{};
+};
 
 constexpr uint32_t kExpectedImageBase = 0x82000000;
 constexpr uint32_t kExpectedImageSize = 0x009E0000;
@@ -944,7 +1030,11 @@ void MclaApp::OnPostInitLogging() {
                             "armed={}",
                             armed ? 1 : 0);
             }
-            QueueDiagnosticSnapshot("f10");
+            if (!QueueDiagnosticSnapshot("f10") && diagnostic_status_dialog_) {
+              static_cast<DiagnosticStatusDialog *>(
+                  diagnostic_status_dialog_.get())
+                  ->ShowBusy();
+            }
           });
       diagnostic_keybind_registered_ = true;
     } else {
@@ -954,8 +1044,26 @@ void MclaApp::OnPostInitLogging() {
   MCLA_APP_INFO("MCLA lifecycle: logging ready");
 }
 
+void MclaApp::OnCreateDialogs(rex::ui::ImGuiDrawer *drawer) {
+  if (diagnostics_) {
+    diagnostic_status_dialog_ =
+        std::make_unique<DiagnosticStatusDialog>(drawer, diagnostics_.get());
+  }
+}
+
 void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   REXCVAR_SET(rtl_allow_cross_thread_critical_section_leave, true);
+  if (config.gpu_backend == "any" &&
+      (HasEnvironmentVariable("STEAM_COMPAT_DATA_PATH") ||
+       HasEnvironmentVariable("WINEPREFIX") ||
+       HasEnvironmentVariable("SteamDeck"))) {
+    // A Windows D3D12 backend under Proton is translated through VKD3D. Use
+    // the plugin's native Vulkan backend in compatibility-layer sessions so
+    // command submission does not cross an avoidable second graphics API.
+    config.gpu_backend = "vulkan";
+    MCLA_GPU_INFO(
+        "MCLA graphics: selected native Vulkan backend for Proton/Wine");
+  }
   if (REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
       REXCVAR_GET(mcla_environment_effects_probe) ||
@@ -987,7 +1095,8 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
       REXCVAR_GET(mcla_native_crash_probe);
   if (config.gpu_plugin.empty() && !guest_free_probe) {
     config.gpu_plugin = "xenos";
-    MCLA_GPU_INFO("MCLA graphics: selected GPU plugin 'xenos'");
+    MCLA_GPU_INFO("MCLA graphics: selected GPU plugin 'xenos' backend='{}'",
+                  config.gpu_backend);
   }
 }
 
@@ -3006,10 +3115,9 @@ mcla::diagnostics::UiState MclaApp::CaptureDiagnosticUiState() const {
   return state;
 }
 
-void MclaApp::QueueDiagnosticSnapshot(const char *reason) {
-  if (diagnostics_) {
-    diagnostics_->RequestSnapshot(reason, CaptureDiagnosticUiState());
-  }
+bool MclaApp::QueueDiagnosticSnapshot(const char *reason) {
+  return diagnostics_ &&
+         diagnostics_->RequestSnapshot(reason, CaptureDiagnosticUiState());
 }
 
 void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
@@ -3038,7 +3146,8 @@ void MclaApp::OnShutdown() {
   StopFirstFrameProbe();
   if (diagnostics_) {
     diagnostics_->Stop();
-    diagnostics_.reset();
   }
+  diagnostic_status_dialog_.reset();
+  diagnostics_.reset();
   MCLA_APP_INFO("MCLA lifecycle: shutdown");
 }

@@ -105,14 +105,13 @@ function Parse-TriggeredAudit([string]$LogTailPath) {
     $cpuP95 = Get-Percentile @($parsed.cpu) 0.95
     $gpuP95 = Get-Percentile @($parsed.gpu) 0.95
     $intervalP50 = Get-Percentile @($intervals) 0.50
-    $classification = if ($gpuP95 -ge [long]($intervalP50 * 0.8)) {
-        'gpu-render-work-dominant'
-    } elseif ($cpuP95 -ge [long]($intervalP50 * 0.8)) {
-        'renderer-cpu-work-dominant'
+    $classification = if ($gpuP95 -ge [long]($intervalP50 * 0.8) -or
+        $cpuP95 -ge [long]($intervalP50 * 0.8)) {
+        'long-submission-span-observed'
     } elseif ($gpuP95 -lt [long]($intervalP50 * 0.5) -and $cpuP95 -lt [long]($intervalP50 * 0.5)) {
-        'outside-render-work-or-frame-pacing'
+        'outside-recorded-submission-span'
     } else {
-        'mixed-or-inconclusive'
+        'submission-span-inconclusive'
     }
     return [pscustomobject]@{
         Samples = $parsed.Count
@@ -132,6 +131,7 @@ function Parse-TriggeredAudit([string]$LogTailPath) {
         AudioUnderruns = [long](($parsed.audio | Measure-Object -Sum).Sum)
         ShaderTranslations = [long](($parsed.shader | Measure-Object -Sum).Sum)
         PipelineCreations = [long](($parsed.pso | Measure-Object -Sum).Sum)
+        TimingSemantics = 'wall-clock submission spans; includes queue idle and is not pure CPU/GPU active work'
         Classification = $classification
     }
 }
@@ -180,7 +180,9 @@ $outputDelta = $second.GuestOutputs - $first.GuestOutputs
 $vblankDelta = $second.GuestVblanks - $first.GuestVblanks
 $secondManifest = Get-Content -LiteralPath (Join-Path $second.Directory 'manifest.json') -Raw | ConvertFrom-Json
 $secondLog = Assert-Artifact $second.Directory $secondManifest 'log-tail.txt'
-$audit = Parse-TriggeredAudit $secondLog
+$secondLogText = Get-Content -LiteralPath $secondLog -Raw
+$auditAvailable = $secondLogText.Contains('REX_PERF_AUDIT_TRIGGER v=1 source=application-diagnostics')
+$audit = if ($auditAvailable) { Parse-TriggeredAudit $secondLog } else { $null }
 
 [pscustomobject]@{
     Passed = $true
@@ -196,5 +198,6 @@ $audit = Parse-TriggeredAudit $secondLog
     GuestOutputRateHz = [Math]::Round($outputDelta / $elapsedSeconds, 2)
     GuestVblankRateHz = [Math]::Round($vblankDelta / $elapsedSeconds, 2)
     OutputPerVblankPercent = [Math]::Round(($outputDelta * 100.0) / $vblankDelta, 2)
+    AuditAvailable = $auditAvailable
     Audit = $audit
 }

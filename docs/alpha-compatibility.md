@@ -51,7 +51,7 @@ visible current alpha limitations are:
 - `KI-017`: music may stop while ambient SFX continue;
 - `KI-018`: retired-service unlocks remain retail-locked by policy;
 - `KI-021`: Photo Mode JPEGs were black on the historical tested build; the
-  current v0.11.0.0 successor retains the physically and machine verified non-black route;
+  current v0.12.0.0 successor retains the physically and machine verified non-black route;
 - `KI-022`: stable Steam Input mirror routing reduced false ownership changes,
   but wheel centering can still disappear from an unresolved FFB lifecycle fault;
 - `KI-023`: one long run ended in a host NVIDIA device removal during a Sunshine
@@ -65,9 +65,10 @@ visible current alpha limitations are:
   a live, controllable car behind a stuck aerial camera with pause unavailable;
   three focused current-artifact retries returned normally, so it remains an
   intermittent open issue rather than a blocker or a claimed fix;
-- `KI-027`: the first physical Steam Deck run reached gameplay but produced far
-  fewer unique guest outputs than its roughly 60-Hz presentation cadence, so
-  Proton performance remains open and MangoHUD is not treated as guest FPS.
+- `KI-027`: physical Proton 9.0-4 gameplay produced 7.34 unique guest outputs/s
+  against 59.93 guest vblanks/s with severe perceived slowdown and audio
+  underruns. Native Vulkan is the current physical candidate; Proton
+  performance remains open and MangoHUD is not treated as guest FPS.
 
 Closed issues remain in the register so compatibility claims retain their
 history and verification links.

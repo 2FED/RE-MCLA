@@ -76,7 +76,10 @@ try {
     $source = [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_app.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_diagnostics.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_native_crash_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_crash_handler_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'CMakeLists.txt'))
     foreach($needle in @('bind_mcla_debug_snapshot','"F10"','QueueDiagnosticSnapshot("f10")','mcla_diagnostics_snapshot_probe','mcla_native_crash_probe','mcla_native_crash_post_setup_probe','mcla_crash_reporter_dialog','MessageBoxW','RefreshCrashHandlers','live_completed_sequence','PROC_THREAD_ATTRIBUTE_HANDLE_LIST','EXTENDED_STARTUPINFO_PRESENT','rotating_file_sink_mt','kMaxSaveEntries','kMaxLiveDumpBytes','kMaxCrashDumpBytes','WriteTextAtomic','snapshot worker failed','CaptureWindowFrame','GPU readback/fence wait','MiniDumpWriteDump','SetUnhandledExceptionFilter','std::set_terminate','SIGABRT','CREATE_NO_WINDOW','MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules','automatic_upload','package_safe_to_share','save-private','save-files-private.json','runtime-journal-private.log','"frame.bmp", false','FILE_ATTRIBUTE_REPARSE_POINT','if (!WriteText(partial / "manifest.json", manifest.str()))','add_executable(mcla_crash_handler WIN32')) { if(-not$source.Contains($needle)){throw "Diagnostic source contract missing: $needle"} }
     foreach($forbidden in @('MiniDumpWithFullMemory |','MiniDumpWithHandleData |','MiniDumpWithPrivateReadWriteMemory |','basic_file_sink_mt')) { if($source.Contains($forbidden)){throw "Forbidden diagnostic mode found: $forbidden"} }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=35}
+    foreach($needle in @('F10: RECORDING...','F10: READY','F10: BUSY','F10: FAILED','snapshot_status() const','SnapshotStatus::kCapturing')) {
+        if(-not$source.Contains($needle)){throw "Diagnostic status overlay contract missing: $needle"}
+    }
+    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=41}
 }
 finally {
     if(Test-Path -LiteralPath $root){

@@ -23,7 +23,10 @@ $requiredImplementationPatterns = @(
     'MCLA lifecycle: probe complete',
     'MCLA lifecycle: shutdown',
     'CallInUIThreadDeferred',
-    'return\s+std::nullopt'
+    'return\s+std::nullopt',
+    'STEAM_COMPAT_DATA_PATH',
+    'config\.gpu_backend\s*=\s*"vulkan"',
+    'selected native Vulkan backend for Proton/Wine'
 )
 
 foreach ($pattern in $requiredHeaderPatterns) {
@@ -43,10 +46,14 @@ $windowReset = $sdkApp.LastIndexOf('window_.reset();', [System.StringComparison]
 if ($runtimeReset -lt 0 -or $windowReset -lt 0 -or $runtimeReset -gt $windowReset) {
     throw 'ReXApp must destroy Runtime/input drivers before their attached Window.'
 }
+if ($sdkApp -notmatch 'REXCVAR_DEFINE_STRING\s*\(\s*gpu_backend' -or
+    $sdkApp -notmatch 'LoadGpuPlugin\s*\(\s*config_\.gpu_plugin\s*,\s*config_\.gpu_backend\s*\)') {
+    throw 'ReXApp must expose and route the configured runtime GPU backend.'
+}
 
 [pscustomobject]@{
     Passed = $true
     AppSubclass = 'MclaApp'
-    LifecycleHooks = 3
+    LifecycleHooks = 4
     ProbeMarkers = 4
 }

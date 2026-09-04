@@ -951,12 +951,21 @@ int Fail(std::string_view message) {
 int wmain(int argc, wchar_t **argv) {
   bool verify_only = false;
   bool diagnostics_probe = false;
+  std::optional<std::wstring> gpu_backend;
   for (int index = 1; index < argc; ++index) {
     const std::wstring_view argument(argv[index]);
     if (argument == L"--verify-only") {
       verify_only = true;
     } else if (argument == L"--diagnostics-probe") {
       diagnostics_probe = true;
+    } else if (argument.starts_with(L"--gpu-backend=")) {
+      const std::wstring value(argument.substr(14));
+      if ((value != L"any" && value != L"d3d12" && value != L"vulkan") ||
+          gpu_backend) {
+        return Fail(
+            "--gpu-backend must be specified once as any, d3d12, or vulkan");
+      }
+      gpu_backend = value;
     } else {
       return Fail("unknown launcher argument");
     }
@@ -1059,6 +1068,9 @@ int wmain(int argc, wchar_t **argv) {
       L"--xam_user_signin_state=1",
       L"--input_backend=sdl",
       L"--mnk_mode=false"};
+  if (gpu_backend) {
+    arguments.push_back(L"--gpu_backend=" + *gpu_backend);
+  }
   if (diagnostics_probe) {
     arguments.push_back(L"--mcla_diagnostics_snapshot_probe=true");
     arguments.push_back(L"--mcla_crash_reporter_dialog=false");

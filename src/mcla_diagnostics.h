@@ -33,6 +33,13 @@ struct RuntimeState {
 
 using CaptureProvider = std::function<RuntimeState()>;
 
+enum class SnapshotStatus : uint8_t {
+  kIdle,
+  kCapturing,
+  kComplete,
+  kFailed,
+};
+
 class Manager {
 public:
   Manager();
@@ -44,6 +51,7 @@ public:
              const std::filesystem::path &diagnostics_root,
              CaptureProvider provider, bool show_crash_reporter_dialog);
   bool RequestSnapshot(std::string reason, const UiState &ui_state);
+  SnapshotStatus snapshot_status() const;
   bool WaitForIdle(std::chrono::milliseconds timeout);
   void Stop();
 
