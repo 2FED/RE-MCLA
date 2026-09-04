@@ -64,7 +64,10 @@ visible current alpha limitations are:
 - `KI-026`: selecting Race Back after a lost Red Light Driver event can leave
   a live, controllable car behind a stuck aerial camera with pause unavailable;
   three focused current-artifact retries returned normally, so it remains an
-  intermittent open issue rather than a blocker or a claimed fix.
+  intermittent open issue rather than a blocker or a claimed fix;
+- `KI-027`: the first physical Steam Deck run reached gameplay but produced far
+  fewer unique guest outputs than its roughly 60-Hz presentation cadence, so
+  Proton performance remains open and MangoHUD is not treated as guest FPS.
 
 Closed issues remain in the register so compatibility claims retain their
 history and verification links.

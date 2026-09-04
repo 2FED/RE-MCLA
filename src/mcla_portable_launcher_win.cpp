@@ -29,6 +29,7 @@ constexpr size_t kMaximumSaveEntries = 4096;
 constexpr uint64_t kMaximumSaveBytes = 512ull * 1024 * 1024;
 constexpr size_t kMaximumSnapshotsPerSession = 32;
 constexpr size_t kMaximumCompletedSessions = 32;
+constexpr uint64_t kMaximumSessionManifestBytes = 64ull * 1024;
 
 struct Handle {
   HANDLE value = INVALID_HANDLE_VALUE;
@@ -197,6 +198,29 @@ bool WriteTextAtomic(const std::filesystem::path &path, std::string_view text) {
   return true;
 }
 
+bool RenameDirectoryAtomic(const std::filesystem::path &source,
+                           const std::filesystem::path &destination,
+                           std::string &error) {
+  DWORD last_error = ERROR_SUCCESS;
+  for (size_t attempt = 0; attempt != 20; ++attempt) {
+    if (MoveFileExW(source.c_str(), destination.c_str(),
+                    MOVEFILE_WRITE_THROUGH)) {
+      return true;
+    }
+    last_error = GetLastError();
+    if (last_error != ERROR_ACCESS_DENIED &&
+        last_error != ERROR_SHARING_VIOLATION &&
+        last_error != ERROR_LOCK_VIOLATION) {
+      break;
+    }
+    Sleep(50);
+  }
+  error =
+      "atomic directory rename failed (win32=" + std::to_string(last_error) +
+      ")";
+  return false;
+}
+
 std::optional<std::string> ReadText(const std::filesystem::path &path) {
   std::ifstream stream(path, std::ios::binary);
   if (!stream) {
@@ -308,7 +332,29 @@ bool SafeRelative(const std::filesystem::path &path) {
   return true;
 }
 
-bool ValidateTree(const std::filesystem::path &root, std::string &error) {
+bool IsRecoverableSessionPartialPath(const std::filesystem::path &root,
+                                     const std::filesystem::path &path) {
+  const auto relative = path.lexically_relative(root);
+  if (!SafeRelative(relative)) {
+    return false;
+  }
+  auto component = relative.begin();
+  if (component == relative.end() || *component != L"results") {
+    return false;
+  }
+  ++component;
+  if (component == relative.end()) {
+    return false;
+  }
+  std::string session = ToUtf8(component->wstring());
+  std::transform(
+      session.begin(), session.end(), session.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return session.starts_with("session-") && session.ends_with(".partial");
+}
+
+bool ValidateTree(const std::filesystem::path &root, std::string &error,
+                  bool allow_recoverable_session_partials = false) {
   std::error_code ec;
   for (std::filesystem::recursive_directory_iterator
            it(root, std::filesystem::directory_options::skip_permission_denied,
@@ -333,7 +379,9 @@ bool ValidateTree(const std::filesystem::path &root, std::string &error) {
       error = "Syncthing conflict or incomplete transfer found: " + name;
       return false;
     }
-    if (lower.ends_with(".partial")) {
+    if (lower.ends_with(".partial") &&
+        (!allow_recoverable_session_partials ||
+         !IsRecoverableSessionPartialPath(root, it->path()))) {
       error = "incomplete bundle/session publication found: " + name;
       return false;
     }
@@ -434,9 +482,25 @@ std::optional<LockFile> AcquireLock(const std::filesystem::path &root,
                                     std::string &error) {
   LockFile lock;
   lock.path = root / L"bundle.lock";
-  lock.handle = Handle(
-      CreateFileW(lock.path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr));
+  auto create = [&]() {
+    return Handle(
+        CreateFileW(lock.path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr));
+  };
+  lock.handle = create();
+  if (!lock.handle && (GetLastError() == ERROR_FILE_EXISTS ||
+                       GetLastError() == ERROR_ALREADY_EXISTS)) {
+    // The live launcher owns this file without sharing. Deletion therefore
+    // succeeds only after an abrupt Steam/OS termination has closed the real
+    // exclusive handle, and never steals an active writer's lock.
+    if (DeleteFileW(lock.path.c_str())) {
+      lock.handle = create();
+      if (lock.handle) {
+        std::cout << "Recovered stale bundle.lock from an interrupted prior "
+                     "launcher.\n";
+      }
+    }
+  }
   if (!lock.handle) {
     error =
         "bundle.lock already exists or cannot be created; only one host may "
@@ -457,6 +521,43 @@ std::optional<LockFile> AcquireLock(const std::filesystem::path &root,
     return std::nullopt;
   }
   return lock;
+}
+
+std::optional<std::string> JsonStringField(std::string_view json,
+                                           std::string_view key) {
+  const std::string needle = "\"" + std::string(key) + "\"";
+  size_t position = json.find(needle);
+  if (position == std::string_view::npos) {
+    return std::nullopt;
+  }
+  position = json.find(':', position + needle.size());
+  if (position == std::string_view::npos) {
+    return std::nullopt;
+  }
+  ++position;
+  while (position < json.size() &&
+         std::isspace(static_cast<unsigned char>(json[position]))) {
+    ++position;
+  }
+  if (position >= json.size() || json[position] != '"') {
+    return std::nullopt;
+  }
+  ++position;
+  std::string value;
+  while (position < json.size()) {
+    const char character = json[position++];
+    if (character == '"') {
+      return value;
+    }
+    // Launcher-generated session fields are deliberately restricted to plain
+    // ASCII tokens. Reject escapes instead of ambiguously decoding input that
+    // may have been altered during synchronization.
+    if (character == '\\' || static_cast<unsigned char>(character) < 0x20) {
+      return std::nullopt;
+    }
+    value.push_back(character);
+  }
+  return std::nullopt;
 }
 
 std::wstring Quote(std::wstring_view value) {
@@ -648,14 +749,192 @@ bool CaptureSave(const std::filesystem::path &user_root,
     std::filesystem::remove_all(partial, ec);
     return false;
   }
-  std::filesystem::rename(partial, completed, ec);
-  if (ec) {
-    error = "cannot atomically publish save snapshot: " + ec.message();
+  if (!RenameDirectoryAtomic(partial, completed, error)) {
+    error = "cannot atomically publish save snapshot: " + error;
     return false;
   }
   last = copied;
   ++snapshot_count;
   PruneDirectories(snapshots, kMaximumSnapshotsPerSession);
+  return true;
+}
+
+size_t CountCompletedSaveSnapshots(const std::filesystem::path &session_root) {
+  const auto snapshots = session_root / L"saves";
+  std::error_code ec;
+  size_t count = 0;
+  for (const auto &entry : std::filesystem::directory_iterator(snapshots, ec)) {
+    if (ec) {
+      return count;
+    }
+    const auto name = ToUtf8(entry.path().filename().wstring());
+    if (entry.is_directory(ec) && !ec && !HasReparseAttribute(entry.path()) &&
+        name.size() == 16 &&
+        std::all_of(name.begin(), name.end(),
+                    [](unsigned char c) { return std::isxdigit(c) != 0; })) {
+      ++count;
+    }
+    ec.clear();
+  }
+  return count;
+}
+
+bool RemoveInterruptedTemporaryState(const std::filesystem::path &session_root,
+                                     std::string &error) {
+  std::error_code ec;
+  std::vector<std::filesystem::path> temporary;
+  for (std::filesystem::recursive_directory_iterator
+           it(session_root,
+              std::filesystem::directory_options::skip_permission_denied, ec),
+       end;
+       it != end; it.increment(ec)) {
+    if (ec) {
+      error = "cannot enumerate interrupted session state: " + ec.message();
+      return false;
+    }
+    std::string name = ToUtf8(it->path().filename().wstring());
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (name.ends_with(".partial") || name.find(".tmp-") != std::string::npos) {
+      if (it->is_directory(ec) && !ec) {
+        it.disable_recursion_pending();
+      }
+      ec.clear();
+      temporary.push_back(it->path());
+    }
+  }
+  if (ec) {
+    error = "cannot enumerate interrupted session state: " + ec.message();
+    return false;
+  }
+  std::sort(temporary.begin(), temporary.end(),
+            [](const auto &left, const auto &right) {
+              return left.native().size() > right.native().size();
+            });
+  for (const auto &path : temporary) {
+    std::filesystem::remove_all(path, ec);
+    if (ec) {
+      error = "cannot remove interrupted temporary state: " + ec.message();
+      return false;
+    }
+  }
+  return true;
+}
+
+bool RecoverInterruptedSessions(const std::filesystem::path &root,
+                                std::string_view bundle_id,
+                                size_t verified_files, std::string &error) {
+  const auto results = root / L"results";
+  std::error_code ec;
+  std::vector<std::filesystem::path> interrupted;
+  for (const auto &entry : std::filesystem::directory_iterator(results, ec)) {
+    if (ec) {
+      error = "cannot enumerate session results: " + ec.message();
+      return false;
+    }
+    std::string name = ToUtf8(entry.path().filename().wstring());
+    std::string lower = name;
+    std::transform(
+        lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (!lower.starts_with("session-") || !lower.ends_with(".partial")) {
+      continue;
+    }
+    if (!entry.is_directory(ec) || ec || HasReparseAttribute(entry.path())) {
+      error =
+          "interrupted session staging path is not a safe directory: " + name;
+      return false;
+    }
+    interrupted.push_back(entry.path());
+  }
+  if (ec) {
+    error = "cannot enumerate session results: " + ec.message();
+    return false;
+  }
+
+  std::sort(interrupted.begin(), interrupted.end());
+  for (const auto &partial : interrupted) {
+    const std::string partial_name = ToUtf8(partial.filename().wstring());
+    const std::string session_id = partial_name.substr(
+        0, partial_name.size() - std::string(".partial").size());
+    const auto completed = partial.parent_path() / FromUtf8(session_id);
+    if (std::filesystem::exists(completed, ec) || ec) {
+      error = "interrupted session destination already exists: " + session_id;
+      return false;
+    }
+
+    const auto session_path = partial / L"session.json";
+    const auto manifest_bytes = std::filesystem::file_size(session_path, ec);
+    if (ec || manifest_bytes > kMaximumSessionManifestBytes) {
+      error = "interrupted session manifest is missing or exceeds its bound: " +
+              session_id;
+      return false;
+    }
+    const auto session = ReadText(session_path);
+    const auto schema =
+        session ? JsonStringField(*session, "schema") : std::nullopt;
+    const auto recorded_bundle =
+        session ? JsonStringField(*session, "bundle_id") : std::nullopt;
+    const auto recorded_session =
+        session ? JsonStringField(*session, "session_id") : std::nullopt;
+    const auto started_utc =
+        session ? JsonStringField(*session, "started_utc") : std::nullopt;
+    const auto mode =
+        session ? JsonStringField(*session, "mode") : std::nullopt;
+    const auto state =
+        session ? JsonStringField(*session, "state") : std::nullopt;
+    if (!schema || *schema != "mcla-portable-session-v1" || !recorded_bundle ||
+        *recorded_bundle != bundle_id || !recorded_session ||
+        *recorded_session != session_id || !started_utc || !mode ||
+        (*mode != "gameplay" && *mode != "diagnostics-probe") || !state ||
+        *state != "running") {
+      error = "interrupted session manifest identity is invalid: " + session_id;
+      return false;
+    }
+    if (!RemoveInterruptedTemporaryState(partial, error)) {
+      return false;
+    }
+
+    std::optional<SaveState> last_save;
+    size_t snapshots = CountCompletedSaveSnapshots(partial);
+    if (!CaptureSave(root / L"user", partial, "launcher-recovery", last_save,
+                     snapshots, error)) {
+      return false;
+    }
+    const auto final_save = ReadSaveState(root / L"user");
+    const std::string recovered_utc = UtcStamp();
+    const std::string result =
+        "{\n  \"schema\": \"mcla-portable-interrupted-session-result-v1\",\n  "
+        "\"bundle_id\": \"" +
+        JsonEscape(bundle_id) + "\",\n  \"session_id\": \"" +
+        JsonEscape(session_id) + "\",\n  \"started_utc\": \"" +
+        JsonEscape(*started_utc) + "\",\n  \"recovered_utc\": \"" +
+        recovered_utc + "\",\n  \"mode\": \"" + JsonEscape(*mode) +
+        "\",\n  \"exit_code\": null,\n  \"verified_file_count\": " +
+        std::to_string(verified_files) +
+        ",\n  \"save_snapshot_count\": " + std::to_string(snapshots) +
+        ",\n  \"final_save_sha256\": " +
+        (final_save ? "\"" + final_save->save_hash + "\"" : "null") +
+        ",\n  \"final_header_sha256\": " +
+        (final_save ? "\"" + final_save->header_hash + "\"" : "null") +
+        ",\n  \"interruption_reason\": "
+        "\"launcher-terminated-before-session-finalization\",\n  "
+        "\"state\": \"interrupted\"\n}\n";
+    if (!WriteTextAtomic(partial / L"result.json", result)) {
+      error = "cannot publish interrupted session result: " + session_id;
+      return false;
+    }
+    if (!RenameDirectoryAtomic(partial, completed, error)) {
+      error = "cannot atomically recover interrupted session: " + error;
+      return false;
+    }
+    std::cout << "Recovered interrupted MCLA session: " << session_id
+              << " (save snapshots " << snapshots << ")\n";
+  }
+  if (!interrupted.empty()) {
+    PruneDirectories(results, kMaximumCompletedSessions, "session-");
+  }
   return true;
 }
 
@@ -707,7 +986,7 @@ int wmain(int argc, wchar_t **argv) {
   if (!lock) {
     return Fail(error);
   }
-  if (!ValidateTree(root, error)) {
+  if (!ValidateTree(root, error, !verify_only)) {
     return Fail(error);
   }
   std::cout << "Verifying the portable MCLA-R bundle..." << std::endl;
@@ -718,6 +997,15 @@ int wmain(int argc, wchar_t **argv) {
   const auto bundle_id = ReadBundleId(root);
   if (!bundle_id) {
     return Fail("bundle-id.txt is malformed");
+  }
+
+  if (!verify_only) {
+    if (!RecoverInterruptedSessions(root, *bundle_id, verified_files, error)) {
+      return Fail(error);
+    }
+    if (!ValidateTree(root, error)) {
+      return Fail(error);
+    }
   }
 
   if (verify_only) {
@@ -865,10 +1153,8 @@ int wmain(int argc, wchar_t **argv) {
   if (!WriteTextAtomic(session_partial / L"result.json", result)) {
     return Fail("cannot atomically publish the session result");
   }
-  std::filesystem::rename(session_partial, session_completed, ec);
-  if (ec) {
-    return Fail("cannot atomically complete the session directory: " +
-                ec.message());
+  if (!RenameDirectoryAtomic(session_partial, session_completed, error)) {
+    return Fail("cannot atomically complete the session directory: " + error);
   }
   PruneDirectories(root / L"results", kMaximumCompletedSessions, "session-");
   std::cout << "MCLA session complete: " << session_id << " (exit " << exit_code

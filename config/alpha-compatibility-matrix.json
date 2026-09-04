@@ -154,7 +154,8 @@
     {"id":"KI-023","severity":"S1","status":"Contained"},
     {"id":"KI-024","severity":"S1","status":"Closed"},
     {"id":"KI-025","severity":"S3","status":"Closed"},
-    {"id":"KI-026","severity":"S2","status":"Open"}
+    {"id":"KI-026","severity":"S2","status":"Open"},
+    {"id":"KI-027","severity":"S2","status":"Open"}
   ],
   "claims": {
     "single_reference_host_only": true,
