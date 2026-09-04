@@ -759,6 +759,12 @@ BuildStateJson(std::string_view reason, const UiState &ui,
       << ", \"deferred_execute_us\": " << runtime.graphics_deferred_execute_us
       << ", \"queue_submit_us\": " << runtime.graphics_queue_submit_us
       << ", \"guest_frame_wall_us\": " << runtime.graphics_guest_frame_wall_us
+      << ", \"command_ring_idle_us\": " << runtime.graphics_command_ring_idle_us
+      << ", \"command_wait_reg_mem_us\": " << runtime.graphics_command_wait_reg_mem_us
+      << ", \"memory_non_mmio_write_fault_count\": "
+      << runtime.graphics_memory_non_mmio_write_fault_count
+      << ", \"memory_non_mmio_write_fault_us\": "
+      << runtime.graphics_memory_non_mmio_write_fault_us
       << "},\n"
       << "  \"race_back_trace\": {\"sequence\": " << runtime.race_back_sequence
       << ", \"handler_calls\": " << runtime.race_back_handler_calls

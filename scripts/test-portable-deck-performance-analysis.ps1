@@ -12,7 +12,7 @@ function Write-Utf8([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, $utf8)
 }
 
-function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit) {
+function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit, [bool]$WithWait=$false, [long]$WaitScale=1) {
     $dir = Join-Path $root "diagnostics\live\$Name"
     [IO.Directory]::CreateDirectory($dir) | Out-Null
     $stamp = [regex]::Match($Name, 'live-(\d{8}T\d{6}Z)-').Groups[1].Value
@@ -33,6 +33,12 @@ function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vb
             [ordered]@{id=100;base_priority=8;kernel_time_100ns=($Outputs * 1000);user_time_100ns=($Outputs * 10000);name='GPU Commands'}
             [ordered]@{id=101;base_priority=8;kernel_time_100ns=($Outputs * 500);user_time_100ns=($Outputs * 1000);name='Main XThread'}
         )
+    }
+    if ($WithWait) {
+        $state.graphics.command_ring_idle_us = $Outputs * 10000 * $WaitScale
+        $state.graphics.command_wait_reg_mem_us = $Outputs * 2000 * $WaitScale
+        $state.graphics.memory_non_mmio_write_fault_count = $Outputs * 10 * $WaitScale
+        $state.graphics.memory_non_mmio_write_fault_us = $Outputs * 200000 * $WaitScale
     }
     Write-Utf8 (Join-Path $dir 'state.json') ($state | ConvertTo-Json -Depth 8)
     $lines = @('[core] ordinary log')
@@ -75,9 +81,27 @@ try {
     $nativeResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
     if (-not $nativeResult.Passed -or $nativeResult.AuditAvailable -or $null -ne $nativeResult.Audit -or
         $nativeResult.GuestOutputRateHz -ne 20 -or $null -eq $nativeResult.Graphics -or
-        $nativeResult.ThreadCpuTop.Count -ne 2) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
+        $nativeResult.ThreadCpuTop.Count -ne 2 -or
+        $null -ne $nativeResult.Graphics.WaitDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
 
     $negative = 0
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true)
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Incomplete wait fixture unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true)
+    $waitResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    if ($waitResult.Graphics.WaitDiagnostics.CommandRingIdleSeconds -ne 6 -or
+        $waitResult.Graphics.WaitDiagnostics.CommandWaitRegMemSeconds -ne 1.2 -or
+        $waitResult.Graphics.WaitDiagnostics.NonMmioWriteFaults -ne 6000 -or
+        $waitResult.Graphics.WaitDiagnostics.NonMmioWriteFaultAggregateSeconds -ne 120 -or
+        $waitResult.Graphics.WaitDiagnostics.NonMmioWriteFaultsPerSecond -ne 200 -or
+        $waitResult.Graphics.DominantMeasuredStage -cne 'unattributed_frame_wall') {
+        throw 'Wait fixture failed or overlapping thread time was treated as a frame stage.'
+    }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 0)
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Regressing wait fixture unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true)
     Add-Content -LiteralPath (Join-Path $first 'state.json') -Value 'tamper'
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Tampered state fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
@@ -85,7 +109,7 @@ try {
     [void](Write-Package 'live-20260904T120000Z-11-1' 11 100 600 $false)
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Mixed-process fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=2;FailClosedNegatives=$negative}
+    [pscustomobject]@{Passed=$true;PositiveFixtures=3;FailClosedNegatives=$negative}
 } finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }

@@ -92,7 +92,13 @@ try {
     foreach($needle in @('F10: RECORDING...','F10: READY','F10: BUSY','F10: FAILED','snapshot_status() const','SnapshotStatus::kCapturing')) {
         if(-not$source.Contains($needle)){throw "Diagnostic status overlay contract missing: $needle"}
     }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=45}
+    foreach($needle in @('void ShowCapture()', 'SetVisible(false)', 'SetVisible(true)',
+                         'dialog->ShowCapture()', 'graphics_command_ring_idle_us',
+                         'graphics_command_wait_reg_mem_us', 'graphics_memory_non_mmio_write_fault_count',
+                         'graphics_memory_non_mmio_write_fault_us')) {
+        if(-not$source.Contains($needle)){throw "Diagnostic wake/wait contract missing: $needle"}
+    }
+    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=53}
 }
 finally {
     if(Test-Path -LiteralPath $root){

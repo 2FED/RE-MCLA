@@ -40,6 +40,10 @@ struct RuntimeState {
   uint64_t graphics_deferred_execute_us = 0;
   uint64_t graphics_queue_submit_us = 0;
   uint64_t graphics_guest_frame_wall_us = 0;
+  uint64_t graphics_command_ring_idle_us = 0;
+  uint64_t graphics_command_wait_reg_mem_us = 0;
+  uint64_t graphics_memory_non_mmio_write_fault_count = 0;
+  uint64_t graphics_memory_non_mmio_write_fault_us = 0;
   uint64_t race_back_sequence = 0;
   uint64_t race_back_handler_calls = 0;
   uint64_t race_back_apply_calls = 0;

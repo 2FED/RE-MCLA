@@ -75,10 +75,21 @@ class DiagnosticStatusDialog final : public rex::ui::ImGuiDialog {
 public:
   DiagnosticStatusDialog(rex::ui::ImGuiDrawer *drawer,
                          mcla::diagnostics::Manager *manager)
-      : ImGuiDialog(drawer), manager_(manager) {}
+      : ImGuiDialog(drawer), manager_(manager) {
+    SetVisible(false);
+  }
+
+  void ShowCapture() {
+    busy_until_ = {};
+    result_until_ = {};
+    // A fast completed request still needs a fresh READY interval.
+    last_status_ = mcla::diagnostics::SnapshotStatus::kCapturing;
+    SetVisible(true);
+  }
 
   void ShowBusy() {
     busy_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    SetVisible(true);
   }
 
 protected:
@@ -112,6 +123,7 @@ protected:
       color = ImVec4(1.0f, 0.35f, 0.30f, 1.0f);
     }
     if (!text) {
+      SetVisible(false);
       return;
     }
 
@@ -1032,10 +1044,15 @@ void MclaApp::OnPostInitLogging() {
                             "armed={}",
                             armed ? 1 : 0);
             }
-            if (!QueueDiagnosticSnapshot("f10") && diagnostic_status_dialog_) {
-              static_cast<DiagnosticStatusDialog *>(
-                  diagnostic_status_dialog_.get())
-                  ->ShowBusy();
+            const bool queued = QueueDiagnosticSnapshot("f10");
+            if (diagnostic_status_dialog_) {
+              auto *dialog = static_cast<DiagnosticStatusDialog *>(
+                  diagnostic_status_dialog_.get());
+              if (queued) {
+                dialog->ShowCapture();
+              } else {
+                dialog->ShowBusy();
+              }
             }
           });
       diagnostic_keybind_registered_ = true;
@@ -3117,6 +3134,12 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
       state.graphics_deferred_execute_us = graphics.deferred_execute_us;
       state.graphics_queue_submit_us = graphics.queue_submit_us;
       state.graphics_guest_frame_wall_us = graphics.guest_frame_wall_us;
+      state.graphics_command_ring_idle_us = graphics.command_ring_idle_us;
+      state.graphics_command_wait_reg_mem_us = graphics.command_wait_reg_mem_us;
+      state.graphics_memory_non_mmio_write_fault_count =
+          graphics.memory_non_mmio_write_fault_count;
+      state.graphics_memory_non_mmio_write_fault_us =
+          graphics.memory_non_mmio_write_fault_us;
     }
   }
   state.race_back_sequence = race_back_probe_sequence.load();

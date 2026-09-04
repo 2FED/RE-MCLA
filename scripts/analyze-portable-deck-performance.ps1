@@ -21,7 +21,7 @@ function Get-OptionalProperty([object]$Object, [string]$Name) {
     return $property.Value
 }
 
-function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState) {
+function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [double]$ElapsedSeconds) {
     $firstGraphics = Get-OptionalProperty $FirstState 'graphics'
     $secondGraphics = Get-OptionalProperty $SecondState 'graphics'
     if ($null -eq $firstGraphics -or $null -eq $secondGraphics) { return $null }
@@ -49,6 +49,37 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState) {
         $delta[$name] = $difference
     }
     $opened = [Math]::Max(1L, [long]$delta.guest_frames_opened)
+    # Optional on older packages, but partially present or regressing counters
+    # are not trustworthy. These spans overlap frame timing and memory spans
+    # aggregate multiple threads: never subtract them from guest frame wall.
+    $waitNames = @('command_ring_idle_us', 'command_wait_reg_mem_us',
+                  'memory_non_mmio_write_fault_count', 'memory_non_mmio_write_fault_us')
+    $waitDelta = [ordered]@{}
+    foreach ($name in $waitNames) {
+        $before = Get-OptionalProperty $firstGraphics $name
+        $after = Get-OptionalProperty $secondGraphics $name
+        if ($null -eq $before -and $null -eq $after) { continue }
+        if ($null -eq $before -or $null -eq $after) { throw "Incomplete wait diagnostic '$name'." }
+        $difference = [long]$after - [long]$before
+        if ($difference -lt 0) { throw "Wait diagnostic '$name' regressed." }
+        $waitDelta[$name] = $difference
+    }
+    if ($waitDelta.Count -ne 0 -and $waitDelta.Count -ne $waitNames.Count) {
+        throw 'Incomplete wait diagnostic counter set.'
+    }
+    $waitDiagnostics = $null
+    if ($waitDelta.Count) {
+        if ($ElapsedSeconds -le 0) { throw 'Wait diagnostics require a positive interval.' }
+        $waitDiagnostics = [pscustomobject]@{
+            CommandRingIdleSeconds = [Math]::Round($waitDelta.command_ring_idle_us / 1000000.0, 6)
+            CommandWaitRegMemSeconds = [Math]::Round($waitDelta.command_wait_reg_mem_us / 1000000.0, 6)
+            NonMmioWriteFaults = [long]$waitDelta.memory_non_mmio_write_fault_count
+            NonMmioWriteFaultAggregateSeconds = [Math]::Round($waitDelta.memory_non_mmio_write_fault_us / 1000000.0, 6)
+            NonMmioWriteFaultsPerSecond = [Math]::Round($waitDelta.memory_non_mmio_write_fault_count / $ElapsedSeconds, 2)
+            RawDelta = [pscustomobject]$waitDelta
+            Scope = 'completed-wait-episodes; fault-time-aggregates-threads-and-excludes-OS-exception-delivery; not-additive-frame-stages'
+        }
+    }
     $closed = [Math]::Max(1L, [long]$delta.guest_frames_closed)
     $submissions = [Math]::Max(1L, [long]$delta.submission_count)
     $trackedSubmissionUs = [long]$delta.pipeline_end_submission_us +
@@ -82,6 +113,7 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState) {
         } else { 0.0 }
         DominantMeasuredStage = [string]$dominantStage
         RawDelta = [pscustomobject]$delta
+        WaitDiagnostics = $waitDiagnostics
     }
 }
 
@@ -282,7 +314,7 @@ $secondLog = Assert-Artifact $second.Directory $secondManifest 'log-tail.txt'
 $secondLogText = Get-Content -LiteralPath $secondLog -Raw
 $auditAvailable = $secondLogText.Contains('REX_PERF_AUDIT_TRIGGER v=1 source=application-diagnostics')
 $audit = if ($auditAvailable) { Parse-TriggeredAudit $secondLog } else { $null }
-$graphics = Measure-GraphicsDelta $first.State $second.State
+$graphics = Measure-GraphicsDelta $first.State $second.State $elapsedSeconds
 $threadCpuTop = @(Measure-ThreadCpuDelta $first.State $second.State $elapsedSeconds)
 
 [pscustomobject]@{

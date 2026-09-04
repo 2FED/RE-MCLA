@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.13.0.0`
-- Immutable project commit: `e66cfd2e2020e71bb001af62fedb37faab4caf68`
+- Project release tag: `v0.14.0.0`
+- Immutable project commit: `5cc7134845504dd60ba66090880be766a58ab2bb`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -186,6 +186,24 @@ The clean v0.13.0.0 RelWithDebInfo build and install retained that full result:
 tests failed out of 1,806 registered. The matching clean Release build/install
 completed and reports version `0.13.0.0`.
 
+The v0.14.0.0 delta adds explicit persistent-dialog visibility and weak-token
+UI-thread wakeups. Empty achievement notifications no longer keep the UI
+presenter polling/repainting unchanged guest images. Seven new headless
+UI/memory cases cover actual drawer dispatch, self-hide iteration, queued
+wake/destruction, populated toast rendering, and read-only snapshot getters.
+Four cumulative counters distinguish completed command-ring idle and
+WAIT_REG_MEM episodes from handled non-MMIO write-fault activity. The owned
+Memory/MMIO getter avoids global-pointer lifetime dependencies; the counters
+do not change scheduling, protection or coherency. Aggregate fault durations
+span threads and are not additive graphics-frame stages.
+
+Full dual-backend RelWithDebInfo and tagged Release validation pass 1,809
+executed cases with four known BitStream skips and zero failures (1,813
+registered). The matching Release install reports `0.14.0.0`. SDK-local
+`README-AI.md`, `sgconfig.yml`, one scoped safety rule and its fixtures now
+document and gate this fork's agent workflow. Physical Deck performance is
+not certified by these native Windows tests.
+
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
 filtered `[offline]` suite passes 3/3 cases and 10/10 assertions without
@@ -205,19 +223,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-list -n 1 v0.13.0.0
+git -C third_party/rexglue-sdk rev-list -n 1 v0.14.0.0
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `e66cfd2e2020e71bb001af62fedb37faab4caf68`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `5cc7134845504dd60ba66090880be766a58ab2bb`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.13.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.14.0.0 project-fork commit:
 
 ```text
-e66cfd2e2020e71bb001af62fedb37faab4caf68 third_party/rexglue-sdk
+5cc7134845504dd60ba66090880be766a58ab2bb third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11
