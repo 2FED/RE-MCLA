@@ -2,6 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$BundleRoot,
     [switch]$Fixture,
+    [switch]$ReturnedProfile,
     [switch]$RunLauncherVerify
 )
 
@@ -41,18 +42,30 @@ function Resolve-Contained([string]$Root, [string]$Relative, [string]$Label, [sw
 }
 
 $root = (Resolve-Path -LiteralPath $BundleRoot).Path.TrimEnd('\')
+. (Join-Path $PSScriptRoot 'Portable-SaveLineage.ps1')
+$null = Assert-PortablePath $root $root
 if ((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Bundle root must not be a reparse point.' }
-$all = @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+$all = [Collections.Generic.List[object]]::new()
+$pending = [Collections.Generic.Queue[string]]::new(); $pending.Enqueue($root)
+while ($pending.Count) {
+    foreach ($item in @(Get-ChildItem -LiteralPath $pending.Dequeue() -Force -ErrorAction Stop)) {
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Bundle contains a reparse point.' }
+        if ($all.Count -ge 16384) { throw 'Bundle exceeds the bounded entry inventory.' }
+        $all.Add($item)
+        if ($item.PSIsContainer) { $pending.Enqueue($item.FullName) }
+    }
+}
 foreach ($item in $all) {
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Bundle contains a reparse point: '$($item.Name)'." }
     $lower = $item.Name.ToLowerInvariant()
     if ($lower.Contains('.sync-conflict-') -or $lower.StartsWith('.syncthing.')) { throw "Bundle contains a Syncthing conflict/incomplete transfer: '$($item.Name)'." }
-    if ($lower.EndsWith('.partial')) { throw "Bundle contains an incomplete publication: '$($item.Name)'." }
+    $relativeItem = $item.FullName.Substring($root.Length + 1).Replace('\','/')
+    if ($lower.EndsWith('.partial') -and -not ($ReturnedProfile -and $relativeItem.StartsWith('diagnostics/',[StringComparison]::Ordinal))) { throw "Bundle contains an incomplete publication: '$($item.Name)'." }
     if ($item.Extension -match '^(?i)\.(iso|dvd)$') { throw 'Bundle must never contain the source disc image.' }
 }
 
 $requiredTop = @('Launch-MCLA.exe','bin','bundle-files.sha256','bundle-id.txt','bundle-manifest.json','cache','diagnostics','game','game-manifest.json','logs','metadata','results','update','user')
-$actualTop = @((Get-ChildItem -LiteralPath $root -Force).Name | Sort-Object)
+$actualTop = @((Get-ChildItem -LiteralPath $root -Force).Name | Where-Object { -not ($ReturnedProfile -and $_ -ceq 'bundle.lock') } | Sort-Object)
 if (($actualTop -join '|') -cne (($requiredTop | Sort-Object) -join '|')) { throw 'Portable bundle root topology is not exact.' }
 foreach ($directory in @('bin','cache','diagnostics','game','logs','metadata','results','update','user')) {
     $null = Resolve-Contained $root $directory "Writable/content root '$directory'" -Container
@@ -67,7 +80,8 @@ Assert-ExactProperties $manifest @('schema','task','bundle_id','project_version'
 if ($manifest.schema -cne 'mcla-portable-campaign-bundle-v1' -or $manifest.task -cne 'M7-016' -or
     $manifest.bundle_id -cne $bundleId -or $manifest.project_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or
     $bundleId -cnotmatch ('^mcla-' + [regex]::Escape([string]$manifest.project_version) + '-win64-') -or
-    $manifest.sdk_version -cne '0.14.0.0' -or $manifest.sdk_commit -cne '5cc7134845504dd60ba66090880be766a58ab2bb' -or
+    ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.14.0.0' -or $manifest.sdk_commit -cne '5cc7134845504dd60ba66090880be766a58ab2bb')) -or
+    [string]$manifest.sdk_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or [string]$manifest.sdk_commit -cnotmatch '^[0-9a-f]{40}$' -or
     $manifest.platform -cne 'windows-proton' -or
     $manifest.architecture -cne 'x86_64' -or $manifest.launcher -cne 'Launch-MCLA.exe') { throw 'Bundle manifest identity is invalid.' }
 $createdValue = $manifest.created_utc
@@ -140,13 +154,35 @@ foreach ($required in @('mcla_diagnostics_root = "diagnostics"','log_file = "log
 if ($config -match '(?im)^\s*(?:game_data_root|user_data_root|update_data_root|cache_root|metadata_root)\s*=\s*"[^\"]+"' -or
     $config -match '(?i)[A-Z]:\\|C:/BDU/MCLA-Recomp') { throw 'Portable config contains an absolute or repository-bound root.' }
 
-Assert-ExactProperties $manifest.selected_save @('source_snapshot','save_relative','header_relative','save_sha256','header_sha256') 'Selected save'
+$saveProperties = @('source_snapshot','save_relative','header_relative','save_sha256','header_sha256')
+if ($manifest.selected_save.PSObject.Properties['profile_sha256']) { $saveProperties += 'profile_sha256' }
+if ($manifest.selected_save.PSObject.Properties['ancestor_profile_sha256']) { $saveProperties += 'ancestor_profile_sha256' }
+Assert-ExactProperties $manifest.selected_save $saveProperties 'Selected save'
+$fullProfileBound = [bool]$manifest.selected_save.PSObject.Properties['profile_sha256']
+if ($manifest.selected_save.source_snapshot -cmatch '^private/save-archive/M7-009/' -and -not $fullProfileBound) { throw 'M7 portable profile provenance requires a full-tree hash.' }
+if ($manifest.selected_save.PSObject.Properties['ancestor_profile_sha256']) {
+    $ancestors = $manifest.selected_save.ancestor_profile_sha256
+    if (-not $fullProfileBound -or $ancestors -isnot [array] -or $ancestors.Count -gt 256) { throw 'Portable ancestry must be a bounded array with a full-profile seed.' }
+    $seenAncestors = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($ancestor in $ancestors) {
+        if ($ancestor -isnot [string] -or $ancestor -cnotmatch '^[0-9A-F]{64}$' -or $ancestor -ceq $manifest.selected_save.profile_sha256 -or -not $seenAncestors.Add($ancestor)) { throw 'Portable ancestry contains an invalid, duplicate or self identity.' }
+    }
+}
 if ($manifest.selected_save.save_relative -cne $saveRelative -or $manifest.selected_save.header_relative -cne $headerRelative -or
-    $manifest.selected_save.source_snapshot -cnotmatch '^private/save-archive/M6-014/.+' -or
+    $manifest.selected_save.source_snapshot -cnotmatch '^private/save-archive/(M6-014/.+|M7-009/[0-9A-F]{64})$' -or
+    [string]$manifest.selected_save.source_snapshot -match '(^|/)\.\.?(/|$)|\\|:' -or
     $manifest.selected_save.save_sha256 -cnotmatch '^[0-9A-F]{64}$' -or $manifest.selected_save.header_sha256 -cnotmatch '^[0-9A-F]{64}$') { throw 'Selected save identity is invalid.' }
 $savePath = Resolve-Contained $root ('user/' + $saveRelative) 'Selected save payload' -Leaf
 $headerPath = Resolve-Contained $root ('user/' + $headerRelative) 'Selected save header' -Leaf
-if ((Get-Sha256 $savePath) -cne $manifest.selected_save.save_sha256 -or (Get-Sha256 $headerPath) -cne $manifest.selected_save.header_sha256) { throw 'Selected save physical identity drifted.' }
+if (-not $ReturnedProfile -and ((Get-Sha256 $savePath) -cne $manifest.selected_save.save_sha256 -or (Get-Sha256 $headerPath) -cne $manifest.selected_save.header_sha256)) { throw 'Selected save physical identity drifted.' }
+if ($manifest.selected_save.PSObject.Properties['profile_sha256']) {
+    if ([string]$manifest.selected_save.profile_sha256 -cnotmatch '^[0-9A-F]{64}$') { throw 'Selected full-profile hash is malformed.' }
+    if (-not $ReturnedProfile) {
+        . (Join-Path $PSScriptRoot 'Portable-SaveLineage.ps1')
+        if ((Get-PortableProfile (Join-Path $root 'user')).Sha256 -cne $manifest.selected_save.profile_sha256) { throw 'Selected complete profile drifted.' }
+    }
+}
+if ($ReturnedProfile -and $RunLauncherVerify) { throw 'Returned-profile validation does not launch or mutate the source.' }
 
 $textSurface = [IO.File]::ReadAllText($manifestPath) + [IO.File]::ReadAllText($lockPath) + [IO.File]::ReadAllText($configPath)
 if ($textSurface -match '(?i)C:\\BDU\\MCLA-Recomp|C:/BDU/MCLA-Recomp') { throw 'Bundle text metadata leaks the repository path.' }

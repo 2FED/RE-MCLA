@@ -4,12 +4,14 @@ param(
     [switch]$MaterializeGameFiles,
     [switch]$SkipCleanBuild,
     [switch]$SkipRelocationProof,
-    [switch]$PruneOnly
+    [switch]$PruneOnly,
+    [string]$SaveSource
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'Portable-SaveLineage.ps1')
 if (-not $OutputRoot) { $OutputRoot = Join-Path $repo 'private\bundles\M7-016' }
 $output = [IO.Path]::GetFullPath($OutputRoot)
 $privateRoot = [IO.Path]::GetFullPath((Join-Path $repo 'private'))
@@ -37,28 +39,32 @@ function Get-Sha256([string]$Path) {
     } finally { $stream.Dispose() }
 }
 
-function Write-AtomicText([string]$Path, [string]$Text) {
-    $temporary = $Path + '.tmp-' + [guid]::NewGuid().ToString('N')
-    [IO.File]::WriteAllText($temporary, $Text, $utf8)
-    Move-Item -LiteralPath $temporary -Destination $Path -Force
-}
-
 function Resolve-LatestSave {
     $candidates = @()
-    foreach ($pointer in @(Get-ChildItem -LiteralPath (Join-Path $repo 'private\save-archive\M6-014') -Recurse -File -Filter 'latest.json')) {
+    $archiveRoot = Assert-PortablePath $repo (Join-Path $repo 'private\save-archive\M6-014')
+    $pending = [Collections.Generic.Queue[string]]::new(); $pending.Enqueue($archiveRoot)
+    $pointers = [Collections.Generic.List[object]]::new()
+    while ($pending.Count) {
+        foreach ($item in @(Get-ChildItem -LiteralPath $pending.Dequeue() -Force -ErrorAction Stop)) {
+            $null = Assert-PortablePath $archiveRoot $item.FullName
+            if ($item.PSIsContainer) { $pending.Enqueue($item.FullName) }
+            elseif ($item.Name -ceq 'latest.json') { $pointers.Add($item) }
+        }
+    }
+    foreach ($pointer in $pointers) {
         try {
             $value = Get-Content -LiteralPath $pointer.FullName -Raw | ConvertFrom-Json
             if ($value.schema -cne 'mcla-soak-save-snapshot-v1' -or $value.complete_profile_tree -ne $true -or
-                [string]$value.snapshot_directory -cnotmatch '^\d{8}-\d{6}Z-[0-9A-F]{16}-[0-9A-F]{16}$') { continue }
+                [string]$value.snapshot_directory -cnotmatch '^\d{8}-\d{6}Z-[0-9A-F]{16}-[0-9A-F]{16}$') { throw 'Malformed legacy save pointer.' }
             $captured = [DateTimeOffset]::Parse([string]$value.captured_utc, [Globalization.CultureInfo]::InvariantCulture)
             $snapshot = [IO.Path]::GetFullPath((Join-Path $pointer.DirectoryName ([string]$value.snapshot_directory)))
-            if (-not $snapshot.StartsWith($pointer.DirectoryName.TrimEnd('\') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { continue }
+            $null = Assert-PortablePath $pointer.DirectoryName $snapshot
             $save = Join-Path $snapshot $saveRelative.Replace('/','\')
             $header = Join-Path $snapshot $headerRelative.Replace('/','\')
-            if (-not (Test-Path -LiteralPath $save -PathType Leaf) -or -not (Test-Path -LiteralPath $header -PathType Leaf)) { continue }
-            if ((Get-Sha256 $save) -cne [string]$value.save_sha256 -or (Get-Sha256 $header) -cne [string]$value.header_sha256) { continue }
+            if (-not (Test-Path -LiteralPath $save -PathType Leaf) -or -not (Test-Path -LiteralPath $header -PathType Leaf)) { throw 'Legacy save/header missing.' }
+            if ((Get-Sha256 $save) -cne [string]$value.save_sha256 -or (Get-Sha256 $header) -cne [string]$value.header_sha256) { throw 'Legacy save/header hash drifted.' }
             $candidates += [pscustomobject]@{ Captured=$captured; Pointer=$pointer.FullName; Snapshot=$snapshot; Value=$value }
-        } catch { continue }
+        } catch { throw "Legacy snapshot needs recovery review; refusing to fall back to older progress: '$($pointer.FullName)'. $($_.Exception.Message)" }
     }
     if (-not $candidates.Count) { throw 'No complete, physically verified M6-014 progressed-save snapshot exists.' }
     return $candidates | Sort-Object Captured -Descending | Select-Object -First 1
@@ -80,40 +86,31 @@ function Clone-Relocated([string]$SourceRoot, [string]$DestinationRoot) {
     [IO.Directory]::CreateDirectory($DestinationRoot) | Out-Null
     foreach ($item in @(Get-ChildItem -LiteralPath $SourceRoot -Recurse -Force)) {
         $relative = $item.FullName.Substring($SourceRoot.Length).TrimStart('\')
+        if ($relative -ceq 'bundle.lock') { continue }
         $target = Join-Path $DestinationRoot $relative
         if ($item.PSIsContainer) { [IO.Directory]::CreateDirectory($target) | Out-Null }
         else {
             [IO.Directory]::CreateDirectory((Split-Path -Parent $target)) | Out-Null
-            try { New-Item -ItemType HardLink -Path $target -Target $item.FullName -ErrorAction Stop | Out-Null }
-            catch { Copy-Item -LiteralPath $item.FullName -Destination $target }
+            if ($relative -cmatch '^(user|logs|diagnostics|results|metadata|update|cache)\\') {
+                Copy-Item -LiteralPath $item.FullName -Destination $target
+            } else {
+                try { New-Item -ItemType HardLink -Path $target -Target $item.FullName -ErrorAction Stop | Out-Null }
+                catch { Copy-Item -LiteralPath $item.FullName -Destination $target }
+            }
         }
     }
 }
 
 function Remove-ObsoleteBundles([string]$BundleParent, [string]$CurrentBundle) {
-    $parent = [IO.Path]::GetFullPath($BundleParent).TrimEnd('\')
-    $current = [IO.Path]::GetFullPath($CurrentBundle).TrimEnd('\')
-    if (-not $parent.StartsWith($privateRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
-        -not $current.StartsWith($parent + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Refusing to prune portable bundles outside the validated private output root.'
-    }
-    $removed = 0
-    foreach ($candidate in @(Get-ChildItem -LiteralPath $parent -Directory -Force)) {
-        $resolved = [IO.Path]::GetFullPath($candidate.FullName).TrimEnd('\')
-        # Accept the early two-fingerprint prototype as well as the current
-        # three-fingerprint identity so successful publications prune both.
-        if ($resolved -ceq $current -or $candidate.Name -cnotmatch '^mcla-\d+\.\d+\.\d+\.\d+-win64-(?:[0-9A-F]{16}-){1,3}[0-9A-F]{16}$') { continue }
-        if ((Split-Path -Parent $resolved).TrimEnd('\') -cne $parent) { throw 'Portable retention candidate escaped its parent.' }
-        if (Test-Path -LiteralPath (Join-Path $resolved 'bundle.lock') -PathType Leaf) {
-            Write-Warning "Retaining obsolete bundle with an active/stale writer lock: '$resolved'."
-            continue
-        }
-        Remove-Item -LiteralPath $resolved -Recurse -Force
-        $removed++
-    }
-    return $removed
+    if ($BundleParent.TrimEnd('\') -cne $publication.Root) { throw 'Retention parent does not match the held publication lock.' }
+    Remove-PortableArchivedBundles $publication $CurrentBundle $selected.Receipts
 }
 
+$publication = $null
+try {
+$publication = Enter-PortablePublication $repo $output
+$legacy = Resolve-LatestSave
+$selected = New-PortableSavePlan $repo $publication $legacy.Snapshot $SaveSource
 if ($PruneOnly) {
     if (-not (Test-Path -LiteralPath $output -PathType Container)) { throw 'Portable bundle output root is missing.' }
     $pointer = Join-Path $output 'current.txt'
@@ -123,6 +120,9 @@ if ($PruneOnly) {
     $currentBundle = [IO.Path]::GetFullPath((Join-Path $output $currentId))
     if ((Split-Path -Parent $currentBundle).TrimEnd('\') -cne $output.TrimEnd('\') -or
         -not (Test-Path -LiteralPath $currentBundle -PathType Container)) { throw 'Portable current bundle is missing or escaped its parent.' }
+    # Pruning must not discard a branch that should seed the next child.
+    if ((Get-PortableProfile (Join-Path $currentBundle 'user')).Sha256 -cne $selected.Profile.Sha256) { throw 'Current child does not carry the selected profile; publish its successor before pruning.' }
+    Assert-PortablePublicationUnchanged $publication $selected.Receipts
     $removedBundles = Remove-ObsoleteBundles $output $currentBundle
     Write-Host "M7-016 RETENTION: removed $removedBundles obsolete bundle(s); current plus current.txt retained." -ForegroundColor DarkCyan
     [pscustomobject]@{ Passed=$true; CurrentBundle=$currentBundle; RemovedBundles=$removedBundles }
@@ -131,7 +131,6 @@ if ($PruneOnly) {
 
 Write-Host 'M7-016 [1/6]: validating the exact private game and latest complete progressed save...' -ForegroundColor Cyan
 $gameIdentity = & (Join-Path $PSScriptRoot 'verify-game-manifest.ps1') -GamePath $game -ManifestPath $gameManifestPath -VerifyHashes
-$selected = Resolve-LatestSave
 $selectedSave = Join-Path $selected.Snapshot $saveRelative.Replace('/','\')
 $selectedHeader = Join-Path $selected.Snapshot $headerRelative.Replace('/','\')
 $selectedSaveHash = Get-Sha256 $selectedSave
@@ -187,8 +186,13 @@ try {
         $destination = Join-Path (Join-Path $partial 'game') ([string]$entry.Path).Replace('/','\')
         $null = $copyModes.Add((Copy-OrLink $source $destination -Materialize:$MaterializeGameFiles))
     }
-    $sourceProfile = Join-Path $selected.Snapshot 'B13EBABEBABEBABE'
-    Copy-Item -LiteralPath $sourceProfile -Destination (Join-Path $partial 'user') -Recurse
+    $sourceProfile = Get-PortableProfile $selected.Snapshot
+    foreach ($entry in $sourceProfile.Entries) {
+        $destination = Join-Path (Join-Path $partial 'user') $entry.path.Replace('/','\')
+        if ($entry.kind -eq 'directory') { [IO.Directory]::CreateDirectory($destination) | Out-Null }
+        else { Copy-Item -LiteralPath (Join-Path $selected.Snapshot $entry.path.Replace('/','\')) -Destination $destination }
+    }
+    if ((Get-PortableProfile (Join-Path $partial 'user')).Sha256 -cne $selected.Profile.Sha256) { throw 'Staged full profile differs from the chosen branch.' }
 
     [IO.File]::WriteAllText((Join-Path $partial 'bundle-id.txt'), $bundleId + "`n", $utf8)
     $sourceSnapshotRelative = $selected.Snapshot.Substring($repo.TrimEnd('\').Length + 1).Replace('\','/')
@@ -207,7 +211,7 @@ try {
         window_mode = [ordered]@{ startup_fullscreen=$true; alt_enter_toggle=$true; left_double_click_toggle=$true }
         immutable_file_count = $immutableCount
         game = [ordered]@{ manifest_sha256=(Get-Sha256 (Join-Path $partial 'game-manifest.json')); file_count=[int]$gameIdentity.FileCount; payload_bytes=[long]$gameIdentity.PayloadBytes }
-        selected_save = [ordered]@{ source_snapshot=$sourceSnapshotRelative; save_relative=$saveRelative; header_relative=$headerRelative; save_sha256=$selectedSaveHash; header_sha256=$selectedHeaderHash }
+        selected_save = [ordered]@{ source_snapshot=$sourceSnapshotRelative; save_relative=$saveRelative; header_relative=$headerRelative; save_sha256=$selectedSaveHash; header_sha256=$selectedHeaderHash; profile_sha256=$selected.Profile.Sha256; ancestor_profile_sha256=@($selected.Ancestors) }
         writable_roots = @('user','cache','logs','diagnostics','results','update','metadata')
         retention = [ordered]@{ completed_sessions=32; save_snapshots_per_session=32 }
         private_content = [ordered]@{ game_and_save_private=$true; source_iso_included=$false }
@@ -227,7 +231,7 @@ try {
     Write-Host 'M7-016 [4/6]: verifying staged hashes, privacy boundaries, roots, and native launcher contract...' -ForegroundColor Cyan
     $staged = & (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $partial
     [IO.Directory]::Move($partial, $final)
-    Write-AtomicText (Join-Path $output 'current.txt') ($bundleId + "`n")
+    Add-PortableWriterLock $publication (Join-Path $final 'bundle.lock')
 
     $relocation = $null
     $relocatedVerification = $null
@@ -240,7 +244,7 @@ try {
         Clone-Relocated $final $relocation
         try {
             $relocatedVerification = & (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $relocation -RunLauncherVerify
-            $probe = Start-Process -FilePath (Join-Path $relocation 'Launch-MCLA.exe') -ArgumentList '--diagnostics-probe' -WorkingDirectory $relocation -Wait -PassThru
+            $probe = Start-Process -FilePath (Join-Path $relocation 'Launch-MCLA.exe') -ArgumentList '--diagnostics-probe' -WorkingDirectory $relocation -WindowStyle Hidden -Wait -PassThru
             if ($probe.ExitCode -ne 0) { throw "Relocated diagnostics probe exited $($probe.ExitCode)." }
             $sessions = @(Get-ChildItem -LiteralPath (Join-Path $relocation 'results') -Directory | Sort-Object LastWriteTimeUtc -Descending)
             if ($sessions.Count -ne 1 -or $sessions[0].Name.EndsWith('.partial')) { throw 'Relocated probe did not atomically publish exactly one completed session.' }
@@ -261,6 +265,7 @@ try {
     }
 
     Write-Host 'M7-016 [6/6]: persisting the private bundle result...' -ForegroundColor Cyan
+    Assert-PortablePublicationUnchanged $publication $selected.Receipts
     $result = [ordered]@{
         schema = 'mcla-portable-campaign-bundle-result-v1'
         task = 'M7-016'
@@ -279,6 +284,9 @@ try {
         selected_save_sha256 = $selectedSaveHash
         selected_header_sha256 = $selectedHeaderHash
         selected_snapshot = $sourceSnapshotRelative
+        selected_profile_sha256 = $selected.Profile.Sha256
+        selected_source = $selected.Source
+        returned_state_archives = @($selected.Receipts)
         publication_atomic = $true
         writable_roots_local = $true
         source_iso_included = $false
@@ -291,6 +299,8 @@ try {
     }
     $resultPath = Join-Path $evidence 'result.json'
     [IO.File]::WriteAllText($resultPath, (($result | ConvertTo-Json -Depth 8) + "`n"), $utf8)
+    # Only advertise the successor after relocation and return preservation.
+    Publish-PortablePointer $publication $bundleId
     $removedBundles = Remove-ObsoleteBundles $output $final
     Write-Host "M7-016 RETENTION: removed $removedBundles obsolete bundle(s); current plus current.txt retained." -ForegroundColor DarkCyan
     Write-Host "M7-016 WINDOWS BUNDLE PASS: '$final'." -ForegroundColor Green
@@ -301,3 +311,4 @@ try {
     }
     throw
 }
+} finally { Exit-PortablePublication $publication }

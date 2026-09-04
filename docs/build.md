@@ -21,6 +21,29 @@ The aggregate prerequisite gate last passed 12/12 for the 2026-09-04
 0.13.0.0 runtime publication. Rerun `scripts/bootstrap.ps1` when the
 environment changes; historical results do not verify a different machine.
 
+## Private portable updates and save preservation
+
+Use `scripts/build-portable-campaign-bundle.ps1` only after the game/launcher
+is stopped on every host and Syncthing reports completed synchronization.
+The stable root is `private/bundles/M7-016`; only its selected child is current.
+The builder is mutating: it validates returned profiles, archives complete
+branches/evidence outside that sync root, builds/verifies a successor, publishes
+`current.txt`, then prunes only archived predecessors. `-PruneOnly` has the same
+save-safety gates and cannot remove a branch missing from the current child.
+
+If ancestry is ambiguous, retain all data. `-SaveSource` accepts `legacy` or
+one exact validated bundle ID only after the owner deliberately chooses that
+branch. It does not bypass incomplete, corrupt or conflicted data. A legacy
+two-file-only manifest may require this one-time recovery decision because it
+does not prove full-profile ancestry. Never remove a stale lock or `.partial`
+folder just to make publication proceed.
+
+Complete profiles are kept under `private/save-archive/M7-009`; old mutable
+bundle evidence is under `private/evidence/M7-016/returned-bundles`. Those paths
+are outside the Deck sync root. Actual successor gameplay reload remains a
+physical gate; tooling fixtures are not a substitute. See
+[lineage contract and limitations](evidence/M7-009-portable-save-lineage.md).
+
 ## Deterministic toolchain discovery
 
 Run the resolver from any PowerShell working directory:

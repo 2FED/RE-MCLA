@@ -17,7 +17,7 @@ and the M7-016/M7-009 criteria are refined.
 | Priority | Evidence and problem | Disposition |
 |---|---|---|
 | P0 | KI-027: Deck comparisons produce about 7--9 new outputs/s with audio breakup; native Vulkan and forced clocks did not resolve it. | Make throughput/pacing/audio an explicit M7-016 sub-gate before campaign coverage. |
-| P0 | `build-portable-campaign-bundle.ps1` `Resolve-LatestSave` scans only M6-014 archives, not returned portable profiles. | KI-028: bring the cross-build subset of M7-009 forward. Preserve branches and reject ambiguous lineage before publication/pruning. No observed loss in the latest unchanged return. |
+| P0 | Review found an M6-only seed-selection risk in the publisher. | KI-028: developer-side full-tree lineage/archive/publication protection implemented and fixture-tested in 0.13.2.0; actual progressed successor reload remains the next save gate. See [evidence](evidence/M7-009-portable-save-lineage.md). |
 | P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. The task paragraph stopped at the prior 0.12 diagnostic candidate. | Separate implemented tooling from physical gates; identify 0.13.0.0 as the pending binary. Do not rebuild just for this documentation release. |
 | P1 | M7-001 matrix preparation waits for all of M7-016, while M7 prerequisites require a campaign checklist; reached-import auditing appears last. | Allow planning/save fixtures while awaiting hardware; audit reached imports incrementally, not only after two campaigns. |
 | P2 | Rendering/music defects have generic follow-up owners; wheel centering lacks available hardware. | Assign existing M7 tasks below; keep separate hypotheses and defer physical wheel work. |
