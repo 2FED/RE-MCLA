@@ -41,6 +41,7 @@ public:
   Manager &operator=(const Manager &) = delete;
 
   bool Start(const std::filesystem::path &user_data_root,
+             const std::filesystem::path &diagnostics_root,
              CaptureProvider provider, bool show_crash_reporter_dialog);
   bool RequestSnapshot(std::string reason, const UiState &ui_state);
   bool WaitForIdle(std::chrono::milliseconds timeout);

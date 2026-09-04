@@ -1763,3 +1763,27 @@ The accompanying M4-013 report audits every remaining frontend limitation by
 severity, workaround, and target milestone. Closure is `GO M5 WITH PINNED
 SAVE`: it supplies a deterministic saved free-roam prerequisite for M5, not a
 clean-new-game, race-completion, persistence, or general-playability claim.
+
+## M7-016 private portable campaign-test bundle
+
+```powershell
+scripts/test-portable-campaign-bundle.ps1
+scripts/test-portable-campaign-session.ps1
+scripts/test-fullscreen-toggle-smoke.ps1
+scripts/run-fullscreen-toggle-smoke.ps1
+scripts/build-portable-campaign-bundle.ps1
+scripts/verify-portable-campaign-bundle.ps1 `
+  -BundleRoot <private-bundle> -RunLauncherVerify
+scripts/verify-portable-campaign-session.ps1 `
+  -BundleRoot <private-bundle> `
+  -SessionPath <private-bundle\results\session-...> `
+  -RequireDiagnosticsProbe
+```
+
+The bundle fixture proves exact topology and immutable inventory, safe relative paths, private source/save identity, portable config roots, startup `fullscreen = true`, explicit Alt+Enter/LMB-double-click support, atomic-publication source contracts, exclusive-writer locking, bounded session/save/current-build retention, and fail-closed handling for modified/missing/extra files, source images, reparse points, `.partial` state, and Syncthing conflict names. It also invokes `git check-ignore` on a representative nested game path so proprietary bundle content cannot enter Git accidentally.
+
+The session fixture independently requires a zero-exit completed lifecycle, exact bundle/session/timestamp identity, zero save-watcher errors, at least one and at most 32 complete content-addressed profile snapshots, matching final save/header hashes, no stale lock/partial/reparse state, a privacy-bounded local diagnostics package, and the expected probe marker without fatal runtime text. Its negative matrix corrupts each critical boundary.
+
+The real builder always hash-verifies the 6.57-GB prepared game and newest complete M6-014 profile. Its accepted Windows proof must be a clean Release build, atomically published below ignored `private/bundles/M7-016`, then cloned to a fresh temporary path containing spaces. The clone must pass native `Launch-MCLA.exe --verify-only`, exit-zero `--diagnostics-probe`, and the session verifier with a real complete-profile snapshot. Separately, `run-fullscreen-toggle-smoke.ps1` starts the real title windowed, verifies Alt+Enter reaches exact monitor fullscreen geometry, verifies LMB double-click returns it to windowed geometry, checks one source marker per transition, and closes externally. These checks prove Windows relocation, same-folder artifact routing, and the two Windows runtime shortcuts; they do not prove actual Syncthing transport or any Steam Deck/Proton behavior.
+
+M7-016 remains in progress until the exact returned Syncthing child is tested physically on Steam Deck with the installed Proton build recorded. The physical matrix must cover frontend and gameplay presentation, D3D12-to-Vulkan operation, Steam Input/SDL controller input, audio, default fullscreen, runtime fullscreen/windowed switching (both shortcuts when a keyboard/mouse is attached), save evolution plus reload, F10 diagnostics, clean external close, and returned result/save/diagnostic verification. A no-go disposition must preserve the precise failure and keep the Windows result without implying Deck support.

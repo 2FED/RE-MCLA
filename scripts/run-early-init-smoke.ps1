@@ -110,7 +110,7 @@ $result = [ordered]@{
     runs = $RunCount
     timeout_seconds_per_run = $TimeoutSeconds
     first_occurrence_signature = $signatures[0]
-    sdk_version = '0.10.0.1'
+    sdk_version = '0.10.0.2'
     executable_sha256 = (Get-FileHash -LiteralPath $executablePath -Algorithm SHA256).Hash
     results = $results
 }

@@ -69,7 +69,7 @@
       "status": "usable-with-open-s2-defects",
       "scope": "D3D12 output covers frontend, HUD, city, day/night, rain, reflections, motion, shadows, particles, and garage scenes at stock timing.",
       "evidence": ["docs/evidence/M5-003-rendering-categories.md", "docs/evidence/M6-004-environment-effects.md"],
-      "limitations": ["KI-013 colored vehicle-light amplification remains open.", "KI-015 alpha coverage shimmer/noise remains open.", "KI-016 minimap flicker remains open.", "KI-019 exposed neon projection geometry remains open.", "KI-020 white-paint overexposure remains open.", "KI-021 is closed on the v0.10.0.1 successor after physical and machine non-black Photo Mode verification; the historical tested build remains affected.", "Only the NVIDIA RTX 3090 D3D12 path is physically verified."]
+      "limitations": ["KI-013 colored vehicle-light amplification remains open.", "KI-015 alpha coverage shimmer/noise remains open.", "KI-016 minimap flicker remains open.", "KI-019 exposed neon projection geometry remains open.", "KI-020 white-paint overexposure remains open.", "KI-021 is closed on the v0.10.0.2 successor after physical and machine non-black Photo Mode verification; the historical tested build remains affected.", "Only the NVIDIA RTX 3090 D3D12 path is physically verified."]
     },
     {
       "id": "audio",
@@ -103,8 +103,8 @@
       "id": "window-device-lifecycle",
       "status": "verified-with-limitations",
       "scope": "Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external window close are covered across bounded runs.",
-      "evidence": ["docs/evidence/M6-010-window-device-lifecycle.md"],
-      "limitations": ["OS suspend/hibernate, display-adapter removal, and graceful full guest teardown are not claimed.", "KI-023 records one host NVIDIA device removal during a Sunshine crash storm; it is contained by classification, not claimed fixed by the title.", "KI-025 tracks the missing runtime Alt+Enter and double-click fullscreen toggle; startup fullscreen remains configuration-controlled."]
+      "evidence": ["docs/evidence/M6-010-window-device-lifecycle.md", "docs/evidence/M7-016-runtime-fullscreen.md"],
+      "limitations": ["OS suspend/hibernate, display-adapter removal, and graceful full guest teardown are not claimed.", "KI-023 records one host NVIDIA device removal during a Sunshine crash storm; it is contained by classification, not claimed fixed by the title.", "KI-025 is closed on ReXGlue v0.10.0.2 by a real Windows windowed-to-fullscreen-to-windowed run; Steam Deck/Proton fullscreen remains an M7-016 physical gate."]
     },
     {
       "id": "offline-services",
@@ -153,7 +153,7 @@
     {"id":"KI-022","severity":"S2","status":"Open"},
     {"id":"KI-023","severity":"S1","status":"Contained"},
     {"id":"KI-024","severity":"S1","status":"Closed"},
-    {"id":"KI-025","severity":"S3","status":"Open"},
+    {"id":"KI-025","severity":"S3","status":"Closed"},
     {"id":"KI-026","severity":"S2","status":"Open"}
   ],
   "claims": {

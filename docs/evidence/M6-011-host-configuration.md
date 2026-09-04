@@ -15,8 +15,8 @@ It uses exact ReXGlue v0.9.0.27 commit
 ## Configuration surface
 
 The original accepted `config/mcla.toml.example` contained 25 documented keys.
-The current successor template contains exactly 54 keys after the reviewed
-wheel and diagnostics extensions:
+The current M7 successor template contains exactly 55 keys after the reviewed
+wheel controls and explicit portable diagnostics-root extension:
 
 - guest resolution, video mode, refresh rate, host window size, fullscreen,
   and monitor selection;
@@ -24,7 +24,8 @@ wheel and diagnostics extensions:
   volume, and mute;
 - SDL input backend and mouse/keyboard mode;
 - model-agnostic wheel axes, buttons, inversion, and force-feedback gains;
-- local diagnostic enablement, crash-package dialog, and F10 binding;
+- local diagnostic enablement, crash-package dialog, optional package root,
+  and F10 binding;
 - log level, destination, verbosity, noisy tracing, flush interval, rotation
   size, and retained-file count;
 - game, user, update, cache, and metadata roots.
@@ -57,8 +58,8 @@ the source and staged examples to share SHA-256
 `FCDEFE2702592DF54680AE76F2B30A35FC395488F4EFD784AB5AC20C29DD1EA7`,
 and accepted only the exact four-file private result topology.
 
-The current successor fixture coverage passes one positive, twenty-one
-fail-closed negatives, and twenty-five source-contract checks. Negatives cover
+The current M7 successor fixture coverage passes one positive, twenty-two
+fail-closed negatives, and twenty-six source-contract checks. Negatives cover
 invalid volume type/range, unavailable device and invalid
 backend/window/log/resolution defaults, wheel/diagnostic default drift, plus
 missing, duplicate, unknown, malformed, and private-path template keys. The

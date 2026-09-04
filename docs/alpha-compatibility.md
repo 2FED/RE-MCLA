@@ -30,12 +30,12 @@ and device identifiers remain private.
 | Saved single player | Verified with limitations | Progressed local save, autosave overwrite, fresh-process reload, and transactional recovery. | Native clean first-run creation and player-name editing are not alpha claims. |
 | Gamepad input | Verified | Complete digital/analog matrix, focus recovery, hotplug, and latest-active arbitrary-slot selection. | Prompts are Xbox-style; remote software may not forward rumble. |
 | Racing wheel | Verified with limitations | T300 steering/pedals/buttons, hotplug, wheel/gamepad switching, centering, finite curb/collision force, and Alt-Tab recovery. | Only T300 is physically verified; curb submission is intermittent; exact Xbox 360 force fidelity is not claimed. KI-022 remains open because centering can still disappear despite stable latest-active routing. |
-| Graphics | Usable with open S2 defects | Frontend, HUD, city, garage, day/night, rain, reflections, motion, shadows, particles, and current-artifact non-black Photo Mode capture on RTX 3090/D3D12. | Colored light amplification, alpha shimmer, minimap flicker, neon projection geometry, and white-paint overexposure remain open. The historical tested build had black Photo Mode JPEGs; KI-021 is closed only on the v0.10.0.1 successor. No alternate GPU or parity claim. |
+| Graphics | Usable with open S2 defects | Frontend, HUD, city, garage, day/night, rain, reflections, motion, shadows, particles, and current-artifact non-black Photo Mode capture on RTX 3090/D3D12. | Colored light amplification, alpha shimmer, minimap flicker, neon projection geometry, and white-paint overexposure remain open. The historical tested build had black Photo Mode JPEGs; KI-021 is closed on the v0.10.0.2 successor. No alternate GPU or parity claim. |
 | Audio | Verified with limitations | Six audible classes, long XMA/XAudio/SDL output, pause/resume, and default-device recovery. | Exact mix and music continuity are not claimed; XMP system music is unavailable. |
 | City streaming | Verified | Continuous route through all project-defined major city zones and back to Hollywood/Sunset. | Not every road, collectible, event, or campaign item. |
 | Race systems | Representative coverage | Head-to-head and series events, traffic, police observation, checkpoints, finishes, rewards, and repeated completions. | Not an exhaustive opponent/event/campaign matrix. |
 | Garage/customization | Representative coverage | Vehicle/part/exhaust/paint purchase, switch, autosave, and fresh-process reload. | Not every vehicle, part, tune, paint, or garage. |
-| Window/device lifecycle | Verified with limitations | Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external close. | No OS suspend/hibernate or display-adapter-removal claim; KI-023 records one separately classified host NVIDIA/Sunshine failure. |
+| Window/device lifecycle | Verified with limitations | Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, external close, and current-successor runtime Alt+Enter/LMB-double-click fullscreen switching. | No OS suspend/hibernate or display-adapter-removal claim; KI-023 records one separately classified host NVIDIA/Sunshine failure. Steam Deck/Proton fullscreen remains an M7 physical gate. |
 | Offline services | Bounded offline behavior | Reached achievement/stat/voice/service surfaces fail or degrade deterministically without fabricated online state. | Multiplayer, leaderboards, Rate My Ride, voice transport, and retired services are unavailable. |
 | Split long-session gate | Verified with limitations | Historical mixed free-roam/race coverage, a 7,202-second ReXGlue v0.10.0.1 frontend stage, and current-artifact 3,600-second mixed gameplay passed with bounded resources, physical captures, clean host audit, controlled exit, and a complete preserved save. | KI-026 remains intermittent/open and requires F10 capture if it recurs; KI-022 wheel-centering stability is outside the gamepad-only gate. Historical frontend and current gameplay executables differ, so no same-artifact, continuous three-hour, legacy five-stage, or ten-hour monolithic claim. |
 | Full campaign / all Complete Edition content | Not verified | Exact edition and South Central city data load in covered routes. | Full campaign, every event/vehicle/cutscene/unlock, and all content are M7 scope. |
@@ -51,15 +51,16 @@ visible current alpha limitations are:
 - `KI-017`: music may stop while ambient SFX continue;
 - `KI-018`: retired-service unlocks remain retail-locked by policy;
 - `KI-021`: Photo Mode JPEGs were black on the historical tested build; the
-  current v0.10.0.1 successor is physically and machine verified non-black;
+  current v0.10.0.2 successor is physically and machine verified non-black;
 - `KI-022`: stable Steam Input mirror routing reduced false ownership changes,
   but wheel centering can still disappear from an unresolved FFB lifecycle fault;
 - `KI-023`: one long run ended in a host NVIDIA device removal during a Sunshine
   crash storm, now classified separately by the soak harness;
 - `KI-024`: the omitted delivery constructor callback is closed on the current
   artifact by an owner-confirmed active transition and five playable minutes;
-- `KI-025`: startup fullscreen is configurable, but runtime Alt+Enter and
-  double-click window-mode switching are not implemented.
+- `KI-025`: closed on the v0.10.0.2 successor by a real-title
+  windowed-to-fullscreen-to-windowed run covering both Alt+Enter and LMB
+  double-click; Steam Deck/Proton presentation remains a separate M7 gate.
 - `KI-026`: selecting Race Back after a lost Red Light Driver event can leave
   a live, controllable car behind a stuck aerial camera with pause unavailable;
   three focused current-artifact retries returned normally, so it remains an

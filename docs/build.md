@@ -54,9 +54,9 @@ git submodule status --recursive
 
 The first status line must contain the ReXGlue project-fork commit recorded in `docs/rexglue-sdk.md`; no line may begin with `-`, `+`, or `U`.
 
-The current v0.10.0.1 Windows build uses:
+The current v0.10.0.2 Windows build uses:
 
-- ReXGlue 0.10.0.1 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.10.0.2 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -143,6 +143,26 @@ Validate the extracted inventory against the ignored local manifest:
 
 Without `-VerifyHashes`, the validator checks schema/source identity, safe relative paths, exact inventory, every file size, total bytes, and the required 4 RPF/6 BIK counts. Use `-VerifyHashes` for milestone gates and after any suspected corruption; it reads and hashes all 6.57 GB of extracted payload.
 
+## Build the private portable campaign-test folder
+
+After a verified M6-014 progressed-save archive exists, build the private M7-016 Windows/Proton artifact with:
+
+```powershell
+& .\scripts\build-portable-campaign-bundle.ps1
+```
+
+The command clean-builds Release, selects the newest complete hash-verified profile snapshot, stages the exact runtime and prepared game below ignored `private/bundles/M7-016`, publishes it atomically, and updates `current.txt`. It then clones that exact folder to a clean temporary path with spaces and runs both native immutable verification and a diagnostics/save-session probe. The immutable bundle contract requires `fullscreen = true` plus declared Alt+Enter and LMB-double-click runtime toggles. This developer build requires PowerShell and the build toolchain; the resulting child requires neither.
+
+Use `-MaterializeGameFiles` when the local bundle itself must not share NTFS file records with `private/game`. The default hard-link staging saves local disk space and is safe for Syncthing, which transfers file contents rather than NTFS hard-link identity. Do not distribute the result: it contains the private prepared game and save.
+
+Every successful publication retains only the new current child and skips any
+obsolete child that still has a writer lock. To apply the same bounded cleanup
+without rebuilding, run `build-portable-campaign-bundle.ps1 -PruneOnly`; the
+command validates `current.txt` and refuses paths outside the ignored bundle
+root before removing older recognized child identities.
+
+Add the stable parent `C:\BDU\MCLA-Recomp\private\bundles\M7-016` to Syncthing. Wait until both peers are idle before launching the child named by `current.txt`, do not run the same writable child concurrently on two hosts, and start only `Launch-MCLA.exe`. It should enter fullscreen by default; Alt+Enter and LMB double-click must each switch between fullscreen and windowed presentation. Every mutable runtime artifact is kept inside that child so it returns with the same synchronized folder. Steam Deck support is not claimed until the physical pinned-Proton matrix passes.
+
 ## Xenia Canary baseline
 
 The pinned behavioral-reference emulator is installed at:
@@ -194,7 +214,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.10.0.1`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.10.0.2`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1

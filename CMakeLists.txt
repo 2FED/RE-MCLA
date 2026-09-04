@@ -8,7 +8,7 @@ project(mcla LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(MCLA_REXGLUE_VERSION "0.10.0.1")
+set(MCLA_REXGLUE_VERSION "0.10.0.2")
 if(DEFINED REXSDK_VERSION AND
    NOT REXSDK_VERSION STREQUAL "" AND
    NOT REXSDK_VERSION STREQUAL "${MCLA_REXGLUE_VERSION}")
@@ -98,6 +98,15 @@ if(WIN32)
     target_compile_features(mcla_crash_handler PRIVATE cxx_std_23)
     target_link_libraries(mcla_crash_handler PRIVATE dbghelp bcrypt shell32 user32)
     add_dependencies(mcla mcla_crash_handler)
+
+    add_executable(mcla_portable_launcher
+        src/mcla_portable_launcher_win.cpp
+    )
+    set_target_properties(mcla_portable_launcher PROPERTIES
+        OUTPUT_NAME "Launch-MCLA")
+    target_compile_features(mcla_portable_launcher PRIVATE cxx_std_23)
+    target_link_libraries(mcla_portable_launcher PRIVATE bcrypt user32)
+    add_dependencies(mcla mcla_portable_launcher)
 endif()
 
 # Ship a discoverable host-configuration template without overwriting the

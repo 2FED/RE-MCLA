@@ -4,7 +4,24 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.10.0.1 `mcla` application consumes the ignored generated corpus and produces a native Windows executable plus a separate local crash helper. Crash instrumentation expands the current corpus to 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic and native crash paths, F10 live snapshots, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, and bounded title force feedback are verified independently. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 accepts retained 7,202-second frontend evidence plus one current-artifact 3,600-second mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities remain explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, KI-025 runtime fullscreen switching, and KI-026 Race Back camera restoration remain open and carry into M7 without invalidating the bounded M6 long-session result.
+Current state: the canonical ReXGlue v0.10.0.2 `mcla` application consumes the ignored generated corpus and produces a native Windows executable plus a separate local crash helper. Crash instrumentation expands the current corpus to 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic and native crash paths, F10 live snapshots, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, bounded title force feedback, and runtime fullscreen shortcuts are verified independently. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 accepts retained 7,202-second frontend evidence plus one current-artifact 3,600-second mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities remain explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, and KI-026 Race Back camera restoration remain open and carry into M7 without invalidating the bounded M6 long-session result.
+
+## Private portable campaign-test boundary
+
+M7-016 adds a native `Launch-MCLA.exe` beside an owner-private, fingerprinted Windows x64 bundle. The launcher obtains its root from its own executable path, creates only the seven sibling writable roots, takes an exclusive `bundle.lock`, rejects reparse points plus Syncthing conflict/incomplete names, and SHA-256-verifies the exact immutable lock before spawning `bin/mcla.exe`. Absolute game/user/update/cache/metadata arguments are then derived solely from that root; the portable config routes ordinary logs and live/crash diagnostics into sibling folders as well.
+
+```text
+private/bundles/M7-016/<fingerprinted bundle>/
+  Launch-MCLA.exe + bundle manifests
+  bin/                       immutable host/runtime/config
+  game/                      immutable private prepared payload
+  user/ cache/ update/ metadata/
+  logs/ diagnostics/ results/
+```
+
+Each game process has one atomic `results/session-<UTC>-<pid>.partial` staging directory. Before the title starts, the launcher captures the complete Xbox profile into a short content-addressed `saves/<save-hash-prefix>` path; this avoids legacy Windows `MAX_PATH` failure under deep Syncthing roots. It polls for changed saves while the title runs, records any watcher error, writes the final hashes/result, then atomically removes `.partial` by renaming the session complete. Session and per-session save retention are both bounded at 32. A kill-on-close job contains the title when supported, and all normal/crash/F10 artifacts remain private and local. The launcher intentionally fails closed on stale partial/conflict/lock state instead of guessing which synchronized writer is authoritative.
+
+The builder publishes a new fingerprinted child by atomic directory move and updates `current.txt` atomically. The fingerprint includes the project version, host hash, launcher hash, and selected save hash; the hash lock covers 25 immutable files. Same-volume developer staging may use NTFS hard links, which Syncthing still reads as ordinary file contents; `-MaterializeGameFiles` forces independent copies. Clean-path Windows relocation is proven, but actual Syncthing transport and Steam Deck/Proton behavior remain physical M7-016 gates.
 
 ## Consumer preparation model
 
@@ -38,7 +55,7 @@ distribution model.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.10.0.1, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
+- `CMakeLists.txt` pins ReXGlue 0.10.0.2, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching runtime-loaded Xenos plugin
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`
@@ -117,11 +134,11 @@ to `\Device\Harddisk0\Partition1`, resolves representative XEX/BIK/RPF files
 through all aliases, rejects root traversal, and proves the game device is
 read-only across open/create/delete and writable-mapping paths. The
 `--mcla_vfs_probe` route exercises the same checks and exits before guest-thread
-creation. ReXGlue v0.10.0.1 supplies the fail-closed device boundary and explicit
+creation. ReXGlue v0.10.0.2 supplies the fail-closed device boundary and explicit
 offline results for the ten direct XONLINE/social/XHV imports reviewed in M3-007;
 user/cache writes remain on their separately configured roots.
 
-ReXGlue v0.10.0.1 extends that boundary to the return-bearing progression
+ReXGlue v0.10.0.2 extends that boundary to the return-bearing progression
 imports reached by MCLA. Achievement guide UI reports not signed in while the
 local achievement manager remains authoritative; leaderboard creation returns
 a bounded initialized enumerator with zero rows; and voice packet submission
@@ -178,11 +195,11 @@ save it applies two 200-ms `START` pulses and two 200-ms `RB` pulses, with a
 two-second inter-tab debounce, and captures title, free-roam gameplay, pause,
 and Settings/Options frames. The route closes through the exact native window's
 `WM_CLOSE`; the title has no internal Exit action and the evidence does not
-invent one. ReXGlue v0.10.0.1 canonicalizes only the relative suffix when
+invent one. ReXGlue v0.10.0.2 canonicalizes only the relative suffix when
 resolving mounted VFS roots, allowing saved-profile root opens with trailing
 separators without changing containment.
 
-ReXGlue v0.10.0.1 separates stable SDL physical storage slots from the guest's
+ReXGlue v0.10.0.2 separates stable SDL physical storage slots from the guest's
 logical controller selection. Xbox user slot zero follows the connected pad
 with the latest deliberate button or analog activity, while release edges,
 analog noise, and near-simultaneous identical Steam Input/XInput mirror states
@@ -246,7 +263,7 @@ existing-content opens remain available. Destructive tests use temporary roots;
 the canonical HANGOUT save is only rehashed and never modified.
 
 The M6-006 profile/settings boundary is also isolated from gameplay. ReXGlue
-v0.10.0.1 stores only known standard XAM settings under the local user's global
+v0.10.0.2 stores only known standard XAM settings under the local user's global
 profile root, with an explicit magic/id/type/size header, per-setting size
 bounds, temporary/backup recovery, and full-batch validation before any guest
 write is applied. Title-specific binary settings retain their existing

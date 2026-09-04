@@ -1,4 +1,5 @@
-# Private game data and extracted Xbox 360 content
+# Private game data, extracted Xbox 360 content, and Syncthing campaign bundles
+# (including private/bundles/M7-016 game/save/log/diagnostic/result trees)
 /private/
 # ReXGlue's non-proprietary bootstrap is tracked; all guest-generated output is not.
 /generated/*

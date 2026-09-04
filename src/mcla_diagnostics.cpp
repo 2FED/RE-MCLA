@@ -708,10 +708,14 @@ std::string BuildStateJson(std::string_view reason, const UiState &ui,
 class Manager::Impl {
 public:
   bool Start(const std::filesystem::path &user_data_root,
+             const std::filesystem::path &diagnostics_root,
              CaptureProvider provider, bool show_crash_reporter_dialog) {
     user_data_root_ =
         std::filesystem::absolute(user_data_root).lexically_normal();
-    diagnostics_root_ = user_data_root_ / "diagnostics";
+    diagnostics_root_ =
+        diagnostics_root.empty()
+            ? user_data_root_ / "diagnostics"
+            : std::filesystem::absolute(diagnostics_root).lexically_normal();
     live_root_ = diagnostics_root_ / "live";
     runtime_root_ = diagnostics_root_ / "runtime";
     std::error_code ec;
@@ -751,8 +755,8 @@ public:
     worker_ =
         std::jthread([this](std::stop_token token) { WorkerMain(token); });
     started_.store(true, std::memory_order_release);
-    REXLOG_INFO("MCLA diagnostics: ready; F10 snapshot root is "
-                "<user-data>/diagnostics/live");
+    REXLOG_INFO("MCLA diagnostics: ready; F10 snapshot root is {}",
+                GenericPathUtf8(live_root_));
     return true;
   }
 
@@ -1080,8 +1084,9 @@ Manager::Manager() : impl_(std::make_unique<Impl>()) {}
 Manager::~Manager() { impl_->Stop(); }
 
 bool Manager::Start(const std::filesystem::path &user_data_root,
+                    const std::filesystem::path &diagnostics_root,
                     CaptureProvider provider, bool show_crash_reporter_dialog) {
-  return impl_->Start(user_data_root, std::move(provider),
+  return impl_->Start(user_data_root, diagnostics_root, std::move(provider),
                       show_crash_reporter_dialog);
 }
 

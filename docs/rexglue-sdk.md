@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.10.0.1`
-- Immutable project commit: `7dd5cb33002a443b097c0f65d5566c0a0f2db838`
+- Project release tag: `v0.10.0.2`
+- Immutable project commit: `492614eec92c31f11d75dd8fa0f09785cbae4a66`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -133,6 +133,18 @@ setup, allowing MCLA to select its delayed render-target readback default after
 the plugin CVars exist. Focused SDL coverage passes 369 assertions / 33 cases;
 physical Photo Mode and extended T300 confirmation remain release gates.
 
+The v0.10.0.2 delta restores runtime borderless-fullscreen switching in the SDL
+window layer. A non-repeated Alt+Enter press and every complete left-button
+double-click toggle the same window state; the triggering down/up pair is
+consumed so it cannot become accidental title input. Both routes emit bounded
+source/state markers for physical regression evidence.
+
+The clean v0.10.0.2 SDK validation executed all 1,805 registered cases: 1,792
+passed, four known BitStream cases were skipped, and nine pre-existing
+migration/template fixture cases failed outside this windowing delta. The
+changed SDL window source compiled in the clean install and the real title
+physically passed both toggle routes with exact geometry and runtime markers.
+
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
 filtered `[offline]` suite passes 3/3 cases and 10/10 assertions without
@@ -152,19 +164,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.10.0.1^{}
+git -C third_party/rexglue-sdk rev-parse refs/tags/v0.10.0.2^{}
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `7dd5cb33002a443b097c0f65d5566c0a0f2db838`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `492614eec92c31f11d75dd8fa0f09785cbae4a66`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.10.0.1 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.10.0.2 project-fork commit:
 
 ```text
-7dd5cb33002a443b097c0f65d5566c0a0f2db838 third_party/rexglue-sdk
+492614eec92c31f11d75dd8fa0f09785cbae4a66 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

@@ -75,6 +75,7 @@ wheel_button_dpad_right = -1
 # copy its text. Change the bind here if F10 conflicts with another overlay.
 mcla_diagnostics_enabled = true
 mcla_crash_reporter_dialog = true
+mcla_diagnostics_root = ""
 bind_mcla_debug_snapshot = "F10"
 
 # Logging. An empty log_file uses the runtime default next to the executable.

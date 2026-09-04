@@ -25,6 +25,7 @@ try {
         { param($s) $s.Replace('wheel_button_start = 7','') },
         { param($s) $s.Replace('mcla_diagnostics_enabled = true','mcla_diagnostics_enabled = false') },
         { param($s) $s.Replace('mcla_crash_reporter_dialog = true','mcla_crash_reporter_dialog = false') },
+        { param($s) $s.Replace('mcla_diagnostics_root = ""','mcla_diagnostics_root = "C:\\private\\diagnostics"') },
         { param($s) $s.Replace('bind_mcla_debug_snapshot = "F10"','bind_mcla_debug_snapshot = "F9"') },
         { param($s) $s.Replace('fullscreen = true','fullscreen = maybe') },
         { param($s) $s.Replace('log_level = "info"','log_level = "verbose"') },

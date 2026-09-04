@@ -175,7 +175,7 @@ the constructor registration call, and each interval terminates immediately
 before an already distinct generated function.
 
 All three minimal entries are now in `config/mcla_functions.toml`. Non-force
-ReXGlue v0.10.0.1 codegen succeeds, emits the exact bodies and dispatcher
+ReXGlue v0.10.0.2 codegen succeeds, emits the exact bodies and dispatcher
 registrations, and `scripts/verify-constructor-registry-coverage.ps1` confirms
 all 102 analyzed registry targets are present among 30,034 generated
 registrations. See `docs/evidence/M6-014-delivery-constructor-registry.md`.

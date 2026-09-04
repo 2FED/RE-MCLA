@@ -6,6 +6,7 @@
 #include <rex/audio/audio_system.h>
 #include <rex/chrono/clock.h>
 #include <rex/cvar.h>
+#include <rex/filesystem.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
 #include <rex/input/input_driver.h>
@@ -67,8 +68,7 @@ constexpr uint32_t kRaceResultAddress = 0x821FBB40;
 constexpr uint32_t kRaceBackCommandAddress = 0x82666C50;
 constexpr uint32_t kApplyGameCameraHandlerAddress = 0x822AD640;
 constexpr std::array<uint32_t, 6> kApplyGameCameraEdgeAddresses = {
-    0x822A5990, 0x822AD698, 0x822B1258,
-    0x822B1464, 0x822B3460, 0x822B359C};
+    0x822A5990, 0x822AD698, 0x822B1258, 0x822B1464, 0x822B3460, 0x822B359C};
 constexpr uint32_t kExpectedTitleId = 0x545407F8;
 constexpr uint32_t kExpectedMediaId = 0x5940C9DB;
 constexpr rex::X_STATUS kAccessDenied = 0xC0000022u;
@@ -160,9 +160,8 @@ void RaceBackCommandProbe(PPCContext &ctx, uint8_t *base) {
       "MCLA_RACE_BACK_SELECT v=1 sequence={} callback={:08X} option={:08X}",
       sequence, ctx.r3.u32, ctx.r4.u32);
   race_back_command_original(ctx, base);
-  MCLA_INPUT_INFO(
-      "MCLA_RACE_BACK_COMMAND_RETURN v=1 sequence={} result={:08X}",
-      sequence, ctx.r3.u32);
+  MCLA_INPUT_INFO("MCLA_RACE_BACK_COMMAND_RETURN v=1 sequence={} result={:08X}",
+                  sequence, ctx.r3.u32);
 }
 
 void ApplyGameCameraHandlerProbe(PPCContext &ctx, uint8_t *base) {
@@ -179,8 +178,8 @@ void ApplyGameCameraHandlerProbe(PPCContext &ctx, uint8_t *base) {
     }
   }
   const bool armed = race_back_probe_armed.load();
-  const uint64_t call = armed ? race_back_camera_handler_calls.fetch_add(1) + 1
-                              : 0;
+  const uint64_t call =
+      armed ? race_back_camera_handler_calls.fetch_add(1) + 1 : 0;
   if (armed && call <= 64) {
     MCLA_INPUT_INFO(
         "MCLA_RACE_BACK_CAMERA_HANDLER v=1 sequence={} call={} event={:08X} "
@@ -677,13 +676,13 @@ private:
 void MclaRaceBackCameraApplyEdge(uint32_t site, PPCRegister &r3,
                                  PPCRegister &r4, PPCRegister &f1) {
   const bool armed = race_back_probe_armed.load();
-  const uint64_t call = armed ? race_back_camera_apply_calls.fetch_add(1) + 1
-                              : 0;
+  const uint64_t call =
+      armed ? race_back_camera_apply_calls.fetch_add(1) + 1 : 0;
   if (armed && call <= 256) {
-    MCLA_INPUT_INFO(
-        "MCLA_RACE_BACK_CAMERA_APPLY_EDGE v=2 sequence={} call={} "
-        "site={:08X} controller={:08X} mode={} duration={}",
-        race_back_probe_sequence.load(), call, site, r3.u32, r4.u32, f1.f64);
+    MCLA_INPUT_INFO("MCLA_RACE_BACK_CAMERA_APPLY_EDGE v=2 sequence={} call={} "
+                    "site={:08X} controller={:08X} mode={} duration={}",
+                    race_back_probe_sequence.load(), call, site, r3.u32, r4.u32,
+                    f1.f64);
   }
 }
 
@@ -740,6 +739,11 @@ REXCVAR_DEFINE_BOOL(
 REXCVAR_DEFINE_BOOL(
     mcla_diagnostics_enabled, true, "MCLA Diagnostics",
     "Enable F10 live snapshots and automatic native crash packages")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_STRING(
+    mcla_diagnostics_root, "", "MCLA Diagnostics",
+    "Override diagnostics package path (empty = <user-data>/diagnostics)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(
@@ -923,8 +927,11 @@ void MclaApp::OnPostInitLogging() {
       REXCVAR_GET(mcla_native_crash_probe) ||
       REXCVAR_GET(mcla_native_crash_post_setup_probe)) {
     diagnostics_ = std::make_unique<mcla::diagnostics::Manager>();
+    const auto diagnostics_root =
+        rex::to_path(REXCVAR_GET(mcla_diagnostics_root));
     if (diagnostics_->Start(
-            user_data_root(), [this]() { return CaptureDiagnosticState(); },
+            user_data_root(), diagnostics_root,
+            [this]() { return CaptureDiagnosticState(); },
             REXCVAR_GET(mcla_crash_reporter_dialog))) {
       rex::ui::RegisterBind("bind_mcla_debug_snapshot", "F10",
                             "Capture an MCLA-R live diagnostic package",
@@ -1421,11 +1428,10 @@ void MclaApp::LaunchModule() {
     race_back_probe_sequence = 0;
     race_back_camera_handler_calls = 0;
     race_back_camera_apply_calls = 0;
-    MCLA_INPUT_INFO(
-        "MCLA_RACE_BACK_CONFIG v=2 command={:08X} handler={:08X} "
-        "apply_edges={} status=READY",
-        kRaceBackCommandAddress, kApplyGameCameraHandlerAddress,
-        kApplyGameCameraEdgeAddresses.size());
+    MCLA_INPUT_INFO("MCLA_RACE_BACK_CONFIG v=2 command={:08X} handler={:08X} "
+                    "apply_edges={} status=READY",
+                    kRaceBackCommandAddress, kApplyGameCameraHandlerAddress,
+                    kApplyGameCameraEdgeAddresses.size());
   }
 
   rex::ReXApp::LaunchModule();
