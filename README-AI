@@ -1174,6 +1174,7 @@ Pause for a feasibility decision if:
 
 ### Tasks
 
+- [ ] **M7-016** Establish a private, relocatable local campaign-test build route as the first M7 execution task, before campaign/content validation. Produce a toolchain-free Windows x64 bundle with a small path-resolving launcher, `mcla.exe`, `mcla_crash_handler.exe`, the exact runtime DLLs/configuration, a content manifest with hashes, and—only inside ignored private output—the owner's validated prepared game tree plus a selected save; prove it after copying to a clean Windows path. Then test that same Windows bundle on a physical Steam Deck under one pinned Proton version, including D3D12-to-Vulkan presentation, Steam Input/SDL controller routing, audio, fullscreen, writable save/cache paths, save reload, and local diagnostics. Never include the source ISO, and do not track or distribute the prepared game data, generated guest content, saves, or diagnostic packages. Native Linux/Vulkan remains M8-009/M8-010 and public asset-free preparation/packaging remains M9-005. If the Deck route is not viable, record the exact blocker and retain the relocatable Windows test route rather than claiming support.
 - [ ] **M7-001** Build a chapter/event/race progression matrix for the full campaign.
 - [ ] **M7-002** Verify new game, local-profile naming/renaming, tutorials, contacts, mission unlocks, reputation progression, and end-game state. Replace the current fixed `User` presentation with a validated persistent local display name without fabricating Xbox Live identity.
 - [ ] **M7-003** Validate every race/event category with representative failures, retries, restarts, and wins.
@@ -1189,7 +1190,6 @@ Pause for a feasibility decision if:
 - [ ] **M7-013** Run clean-save full campaign playthrough number two on a release-like build.
 - [ ] **M7-014** Audit all remaining XAM/xboxkrnl stub calls reached during the campaign; replace unsafe success stubs with state-correct implementations.
 - [ ] **M7-015** Finalize compatibility and known-issues documentation.
-- [ ] **M7-016** Establish a private, relocatable local campaign-test build route. Produce a toolchain-free Windows x64 bundle with a small path-resolving launcher, `mcla.exe`, `mcla_crash_handler.exe`, the exact runtime DLLs/configuration, a content manifest with hashes, and—only inside ignored private output—the owner's validated prepared game tree plus a selected save; prove it after copying to a clean Windows path. Then test that same Windows bundle on a physical Steam Deck under one pinned Proton version, including D3D12-to-Vulkan presentation, Steam Input/SDL controller routing, audio, fullscreen, writable save/cache paths, save reload, and local diagnostics. Never include the source ISO, and do not track or distribute the prepared game data, generated guest content, saves, or diagnostic packages. Native Linux/Vulkan remains M8-009/M8-010 and public asset-free preparation/packaging remains M9-005. If the Deck route is not viable, record the exact blocker and retain the relocatable Windows test route rather than claiming support.
 
 ### Deliverables
 
@@ -1222,7 +1222,7 @@ Pause for a feasibility decision if:
 
 ### Checkpoint log
 
-- 2026-09-03 — Pre-entry planning only. Health: `NOT STARTED`. M7-016 reserves a private relocatable Windows x64 bundle as the first toolchain-free campaign-test artifact and a pinned-Proton physical Steam Deck feasibility route. This does not claim a current package, SteamOS compatibility, native Linux, or redistributability. Next tasks after gate entry remain M7-001 and M7-002; M7-016 may proceed once a regression artifact is pinned.
+- 2026-09-04 — Pre-entry planning only. Health: `NOT STARTED`. M7-016 is the first M7 execution task: pin a regression artifact, produce the private relocatable Windows x64 bundle, and physically disposition its pinned-Proton Steam Deck route before beginning the campaign/content matrix. This does not claim a current package, SteamOS compatibility, native Linux, or redistributability. Only after that tooling route is settled do M7-001 and M7-002 begin.
 
 ## 16. Milestone M8 — Modern enhancements and secondary platforms
 
@@ -1492,6 +1492,7 @@ The criterion below is additional to the task wording and universal Definition o
 
 | ID | Individual acceptance criterion / minimum evidence |
 |---|---|
+| M7-016 | A private Windows x64 bundle launches after relocation without developer tools; a Steam Deck claim additionally requires physical pinned-Proton frontend, gameplay, controller, audio, fullscreen, save/reload, and diagnostics evidence, while a failed Deck probe produces an explicit no-go rather than a support claim / bundle manifest, clean-path audit, and physical Deck report |
 | M7-001 | Matrix enumerates mandatory campaign/content nodes and dependencies / reviewed matrix |
 | M7-002 | Core progression chain completes from clean save and a validated persistent local profile name can be changed without fabricating Live identity / playthrough and restart log |
 | M7-003 | Every event category has win/fail/retry evidence / matrix |
@@ -1507,7 +1508,6 @@ The criterion below is additional to the task wording and universal Definition o
 | M7-013 | Second clean campaign completes on release-like build / run record |
 | M7-014 | Reached stubs are state-correct or documented unavailable / final import audit |
 | M7-015 | Compatibility docs match both full-run evidence sets / documentation review |
-| M7-016 | A private Windows x64 bundle launches after relocation without developer tools; a Steam Deck claim additionally requires physical pinned-Proton frontend, gameplay, controller, audio, fullscreen, save/reload, and diagnostics evidence, while a failed Deck probe produces an explicit no-go rather than a support claim / bundle manifest, clean-path audit, and physical Deck report |
 
 ### M8 criteria
 
@@ -1582,7 +1582,7 @@ Record architecture decisions here or link to ADR files.
 | 2026-08-10 | Preserve stock 30 FPS until gameplay correctness | Known 60 FPS mode requires delta-time changes and broader validation | Accepted |
 | 2026-08-29 | Treat variable/unlocked FPS as a separate validated timing mode, not merely a disabled present cap | The known Complete Edition patch enables delta-time, but missed targets and 40–120+ FPS transitions can still expose fixed-step game systems | Planned for M8 |
 | 2026-08-29 | Gate native macOS ARM64 behind ReXGlue Darwin/ARM64 and MoltenVK/Metal feasibility | Generated code and Vulkan are ARM64-capable in principle, while the current SDK explicitly supports only Windows/Linux and may require unavailable portability features | Planned for M8 |
-| 2026-09-03 | Use an owner-private relocatable Windows x64 bundle under a pinned Proton version as the first Steam Deck campaign-test route; do not call it native Linux or a public package | The current build already produces a Windows executable, crash helper, and three runtime DLLs; bundling exact dependencies and resolving private data/save roots from one launcher can remove Parsec latency sooner than a native port, but Deck graphics, input, storage, fullscreen, and helper behavior still require physical proof | Planned for M7 |
+| 2026-09-04 | Make the owner-private relocatable Windows x64 bundle and pinned-Proton Steam Deck disposition the first M7 execution task; do not call it native Linux or a public package | Local Deck testing removes Parsec latency from the campaign evidence that follows. The current build already produces a Windows executable, crash helper, and three runtime DLLs, but Deck graphics, input, storage, fullscreen, and helper behavior still require physical proof before the campaign matrix relies on them | Planned for M7 |
 | 2026-08-10 | Keep game assets and generated proprietary output private | Legal and repository hygiene requirement | Accepted |
 | 2026-08-10 | Use `https://github.com/2FED/RE-MCLA.git` as the project remote | Repository supplied by project owner | Accepted |
 | 2026-08-10 | Commit after every closed task; closure commit and push after every closed milestone | Preserve auditable task boundaries and milestone gates | Accepted |
