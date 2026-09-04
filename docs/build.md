@@ -17,9 +17,9 @@ Current verified host components:
 - Ghidra 12.0.4 with XEXLoaderWV 13.0.0
 - RenderDoc 1.45.0
 
-Still required or unverified:
-
-- aggregate prerequisite validation through `scripts/bootstrap.ps1`
+The aggregate prerequisite gate last passed 12/12 for the 2026-09-04
+0.13.0.0 runtime publication. Rerun `scripts/bootstrap.ps1` when the
+environment changes; historical results do not verify a different machine.
 
 ## Deterministic toolchain discovery
 
@@ -145,7 +145,13 @@ Without `-VerifyHashes`, the validator checks schema/source identity, safe relat
 
 ## Build the private portable campaign-test folder
 
-After a verified M6-014 progressed-save archive exists, build the private M7-016 Windows/Proton artifact with:
+Before building or pruning a private M7-016 Windows/Proton artifact, check
+KI-028 in `docs/known-issues.md`: the current seed selector scans **only
+M6-014 archives**, not newer Deck returns. Preserve full returned profiles
+and their session/bundle provenance. Do not replace/prune a progressed child
+until the returned progression is verified in the successor seed; ambiguous
+branches require owner selection. This safety gate is not automated yet.
+The existing developer command is:
 
 ```powershell
 & .\scripts\build-portable-campaign-bundle.ps1

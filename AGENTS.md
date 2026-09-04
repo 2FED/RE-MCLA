@@ -2,6 +2,13 @@
 
 These repository-specific rules supplement the global Codex working rules.
 
+## Durable context and handoff
+
+- At the start of a new task or after context compaction, read `docs/current-state.md`, then the relevant `README-AI` sections and linked evidence. Check Git status and actual artifact identities before relying on recorded versions.
+- `README-AI` owns the milestone ledger and stable workflow; `docs/current-state.md` is a concise, replace-in-place handoff, not another chronological log. Keep detailed history in linked evidence reports and the existing checkpoint log.
+- Before handing off, refresh the active task, tested versus pending artifacts, save lineage, blockers, next action, and relevant test results. Never infer a physical PASS from implementation, old evidence, or chat memory.
+- Prefer one chat per coherent investigation or outcome. A new chat is optional at a clean boundary; it is not a reason to abandon an active experiment or repeat completed owner testing.
+
 ## Milestone persistence
 
 - Continue working autonomously on the active milestone until one of these terminal conditions is reached: the milestone is fully reviewed, closed, committed, and pushed; further progress genuinely requires user input or authorization; or the observable remaining weekly usage allowance reaches 20%.
