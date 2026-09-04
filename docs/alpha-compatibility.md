@@ -37,7 +37,7 @@ and device identifiers remain private.
 | Garage/customization | Representative coverage | Vehicle/part/exhaust/paint purchase, switch, autosave, and fresh-process reload. | Not every vehicle, part, tune, paint, or garage. |
 | Window/device lifecycle | Verified with limitations | Pause, focus loss, minimize/restore, controller hotplug, audio endpoint recovery, and external close. | No OS suspend/hibernate or display-adapter-removal claim; KI-023 records one separately classified host NVIDIA/Sunshine failure. |
 | Offline services | Bounded offline behavior | Reached achievement/stat/voice/service surfaces fail or degrade deterministically without fabricated online state. | Multiplayer, leaderboards, Rate My Ride, voice transport, and retired services are unavailable. |
-| Split long-session gate | In progress | Historical mixed free-roam/race coverage and a ReXGlue v0.10.0.1 two-hour frontend stage passed; the current-artifact 60-minute mixed-gameplay process is blocked on focused KI-026 repair. | M6-014 remains open until KI-026 is fixed and the physical hour passes. Historical frontend and current gameplay executables differ; no same-artifact, continuous three-hour, legacy five-stage, or ten-hour monolithic claim. |
+| Split long-session gate | In progress | Historical mixed free-roam/race coverage and a ReXGlue v0.10.0.1 two-hour frontend stage passed; three consecutive current-artifact Race Back retries returned normally through the v2 traced camera path, so the 60-minute mixed-gameplay process is ready. | M6-014 remains open until the physical hour passes. KI-026 remains intermittent/open and requires F10 capture if it recurs; historical frontend and current gameplay executables differ, so no same-artifact, continuous three-hour, legacy five-stage, or ten-hour monolithic claim. |
 | Full campaign / all Complete Edition content | Not verified | Exact edition and South Central city data load in covered routes. | Full campaign, every event/vehicle/cutscene/unlock, and all content are M7 scope. |
 
 ## Known issues
@@ -61,7 +61,9 @@ visible current alpha limitations are:
 - `KI-025`: startup fullscreen is configurable, but runtime Alt+Enter and
   double-click window-mode switching are not implemented.
 - `KI-026`: selecting Race Back after a lost Red Light Driver event can leave
-  a live, controllable car behind a stuck aerial camera with pause unavailable.
+  a live, controllable car behind a stuck aerial camera with pause unavailable;
+  three focused current-artifact retries returned normally, so it remains an
+  intermittent open issue rather than a blocker or a claimed fix.
 
 Closed issues remain in the register so compatibility claims retain their
 history and verification links.

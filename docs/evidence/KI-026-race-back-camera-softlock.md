@@ -44,7 +44,21 @@ title externally. `RETURNED` is valid only when both gameplay camera and pause
 work. Its source contract is covered by
 `scripts/test-race-back-camera-diagnostic.ps1`.
 
-Closure requires the focused trace to identify the missing edge, a narrow fix
-with no unconditional camera reset, and a physical retry in which the gameplay
-camera and pause both return after `Race Back`. The one-hour M6-014 gate remains
-blocked until that focused regression passes.
+Current-artifact run `20260904-062842-fb1043bf` then exercised three consecutive
+lost-event `Race Back` selections in one process. All three restored the
+gameplay camera and pause. The trace recorded three command selections, three
+successful command returns, no legacy handler calls, and 27 total direct apply
+edges: six from `0x822B3460` and 21 from `0x822B359C`. Each return began with a
+repeatable sequence: `0x822B359C` about 1.7–2.0 seconds after the command,
+`0x822B3460` about 0.63–0.66 seconds later, then two rapid `0x822B359C` calls.
+The exact process exited through external `WM_CLOSE` without forced cleanup,
+and the watcher preserved evolved save SHA-256
+`012407994331E607BFA404F50937B3046747B08D7CE76DAF50DCE51CB74F9C8D`.
+
+This zero-of-three non-reproduction does not prove that KI-026 was fixed: no
+camera behavior was changed. It does establish the current healthy v2 path and
+makes repeated forced reproduction disproportionate for an intermittent S2
+issue. KI-026 remains open, while the M6-014 one-hour gate is unblocked. If the
+softlock recurs during normal play, press F10 and wait for completion before
+restart; that live package plus the trace will drive a narrow fix. Otherwise the
+issue remains catalogued for M7 rather than preventing M6 completion.

@@ -1114,9 +1114,11 @@ scripts/verify-mixed-gameplay-long-session.ps1 `
 
 This is the current operator-facing M6-014 long-session gate. It reuses the
 immutable 7,202-second historical frontend result, then runs one continuous
-3,600-second process on the current repaired v0.10.0.1 artifact set and the
-latest complete post-delivery profile. Normal play is expected: story events,
-races, deliveries, police encounters, and free-roam travel are all allowed.
+3,600-second process on a clean-built current v0.10.0.1 artifact set and the
+newest complete hash-verified profile across all M6-014 recovery archives.
+The preflight prints the exact selected snapshot and save SHA-256. Normal play
+is expected: story events, races, deliveries, police encounters, and free-roam
+travel are all allowed.
 During the hour the operator must also enter and leave the garage once,
 pause/resume once, and Alt-Tab away and back once. The wheel is not required.
 
@@ -1127,7 +1129,7 @@ mandatory; the four quarter-hour captures are best-effort and their exact
 `captured`/`skipped` outcomes are persisted. A missed foreground capture never
 closes a live title or delays the resource schedule. A
 hidden exact-PID watcher preserves every stable complete profile snapshot, and
-the final result binds the source game, current suite, Release artifacts,
+the final result binds the source game, SDK baseline, current Release artifacts,
 historical frontend, delivery regression, latest seed, runtime logs, host event
 audit, controlled external close, and final archive tree. On failure, the runner
 names a recovery snapshot only after revalidating the watcher exit, identical
@@ -1138,8 +1140,10 @@ This split is intentionally narrow. The historical frontend and current
 gameplay executables differ, so the result cannot claim one same-artifact suite,
 a continuous three-hour process, two current-artifact gameplay hours, the old
 five-category suite, full-campaign completion, rendering parity, music
-continuity, or wheel-centering stability. KI-026 currently blocks another full
-hour; run and resolve the focused Race Back diagnostic above first.
+continuity, or wheel-centering stability. KI-026 remains intermittent/open, but
+three consecutive healthy v2 traced returns unblock this hour. If it recurs,
+press F10 and wait for the completion sound before stopping; that run becomes
+diagnostic evidence rather than an accepted stability result.
 
 ## M6-014 legacy five-scenario two-hour soak suite
 

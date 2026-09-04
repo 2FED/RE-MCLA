@@ -1,14 +1,24 @@
 # M6-014 one-hour mixed-gameplay long-session gate
 
-Status: runner and fail-closed verifier ready; physical 60-minute result blocked
-on focused KI-026 repair and regression.
+Status: runner and fail-closed verifier ready; physical 60-minute result pending
+after three healthy focused KI-026 retries unblocked the gate.
 
 The current M6-014 closure path deliberately limits new owner interaction to one
 continuous hour. It combines the immutable two-hour frontend stage from suite
 `20260831-133236-2cecb67b` with one 3,600-second mixed-gameplay process bound to
-current suite `20260901-153415-d747cf2d`, ReXGlue v0.10.0.1 commit
-`7dd5cb33002a443b097c0f65d5566c0a0f2db838`, and the complete profile preserved
-by accepted delivery regression `20260901-203448-d31ab681`.
+ReXGlue v0.10.0.1 commit
+`7dd5cb33002a443b097c0f65d5566c0a0f2db838`. The accepted delivery regression
+`20260901-203448-d31ab681` remains an immutable prerequisite, but is no longer
+misused as the gameplay seed or current executable identity.
+
+Version `0.8.2.0` makes the runner clean-build the current Release source before
+the hour, binds all five launch artifacts including `mcla_crash_handler.exe`,
+and selects the newest complete hash-verified snapshot across the entire
+M6-014 save archive. Its validated current choice is Race Back recovery
+`20260904-035223Z-012407994331E607-2FAEFBC7FF8CDEAD`, save SHA-256
+`012407994331E607BFA404F50937B3046747B08D7CE76DAF50DCE51CB74F9C8D`.
+This prevents both the stale-artifact rejection and the stale post-delivery
+profile regression that the previous runner would have caused.
 
 The owner may play normally and progress the story, races, or deliveries. The
 hour also includes one garage enter/exit, one pause/resume, and one Alt-Tab
@@ -21,10 +31,10 @@ Runtime logs, host NVIDIA/Sunshine event health, controlled external close, and
 the final complete save archive remain mandatory. Only start and end
 attestations require console input.
 
-Before launch, the copied working profile is rehashed against the accepted
-post-delivery source and preserved as an immutable seed copy. After shutdown,
-the verifier rehashes the referenced final snapshot and its save/header rather
-than trusting `latest.json` metadata alone.
+Before launch, the copied working profile is rehashed against the selected
+recovery source and preserved as an immutable seed copy. After shutdown, the
+verifier rehashes the referenced source and final snapshots, their manifests,
+and their save/header files rather than trusting `latest.json` metadata alone.
 
 Until a physical result passes, M6-014 remains open. Even after acceptance this
 evidence will not claim that historical frontend and current gameplay used the
@@ -65,8 +75,10 @@ direct call sites into `0x822B0F10` without changing stock behavior.
 title, selects the newest complete hash-verified M6-014 recovery profile,
 automatically loads gameplay, records whether the command, handler, and each
 camera-apply edge execute, preserves the evolving save, and ends after one
-focused Race Back outcome. Another one-hour run is blocked until this short
-diagnostic and a subsequent focused fix regression pass.
+focused Race Back outcome. Current run `20260904-062842-fb1043bf` subsequently
+completed three consecutive Race Back returns with camera and pause restored,
+so another one-hour run is now allowed with KI-026 retained as an intermittent
+open issue.
 
 Version `0.8.0.0` adds the local diagnostic prerequisite for that next
 reproduction. Pressing F10 while the camera is stuck now preserves bounded
@@ -74,4 +86,6 @@ process/window/runtime state, the already-presented client frame, a runtime-log
 tail, normal minidump, and private save snapshot without waiting for a debugger.
 Unhandled native failures are captured automatically by a separate helper. See
 `docs/evidence/M6-014-live-crash-diagnostics.md`; this improves evidence capture
-but does not itself close KI-026 or the one-hour gate.
+but does not itself close KI-026. If the defect recurs during the final hour,
+F10 capture before restart is mandatory and the run is diagnostic rather than
+accepted stability evidence.
