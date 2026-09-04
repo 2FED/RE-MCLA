@@ -80,10 +80,13 @@ function Assert-SourceContract {
     }
 
     $hid = Get-Content (Join-Path $sdkRoot 'src/kernel/xboxkrnl/xboxkrnl_hid.cpp') -Raw
-    if ([regex]::Matches($hid, 'REX_EXPORT_STUB\(__imp__XInputdFF').Count -ne 8) { throw 'Advanced FFB stub inventory drifted.' }
+    if ([regex]::Matches($hid, 'REX_EXPORT_STUB\(__imp__XInputdFF').Count -ne 0) { throw 'An advanced FFB export regressed to a stub.' }
+    if ([regex]::Matches($hid, 'REX_HOOK_RAW\(__imp__XInputdFF').Count -ne 8) { throw 'Implemented advanced FFB import inventory drifted.' }
     $sdl = Get-Content (Join-Path $sdkRoot 'src/input/sdl/sdl_input_driver.cpp') -Raw
-    if ($sdl -match 'cap_flags\s*\|=\s*X_INPUT_CAPS_FFB_SUPPORTED') { throw 'Advanced FFB capability must remain withheld.' }
-    [pscustomobject]@{ Passed = $true; FixedTargetCount = $targets.Count; WithheldFfbImportCount = 8; SourceChecks = 18 }
+    $sdlHeader = Get-Content (Join-Path $sdkRoot 'include/rex/input/sdl/sdl_input_driver.h') -Raw
+    if ([regex]::Matches($sdl, 'cap_flags\s*\|=\s*X_INPUT_CAPS_FFB_SUPPORTED').Count -ne 1) { throw 'Advanced FFB capability advertisement drifted.' }
+    if (-not $sdlHeader.Contains('kWheelForceFeedbackEffectSlots = 64')) { throw 'Advanced FFB effect-slot bound drifted.' }
+    [pscustomobject]@{ Passed = $true; FixedTargetCount = $targets.Count; ImplementedFfbImportCount = 8; WithheldFfbImportCount = 0; SourceChecks = 20 }
 }
 
 function Parse-Log([string]$CurrentLog) {

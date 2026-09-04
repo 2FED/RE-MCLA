@@ -8,9 +8,11 @@ reached `PPC_UNIMPLEMENTED` instruction. Two imported operations had emitted
 stub diagnostics during broad play; both now have explicit, tested behavior.
 
 This is a reached-surface report, not a claim that every ReXGlue export is
-implemented. Twelve remaining imported xboxkrnl stubs are not-observed/deferred,
-while eight advanced `XInputdFF*` exports remain deliberately unadvertised and
-are owned by the accepted M5-007 degradation policy.
+implemented. Twelve remaining imported xboxkrnl stubs are
+not-observed/deferred. At M6-013 closure, eight advanced `XInputdFF*` exports
+were deliberately unadvertised under the M5-007 degradation policy; M6-015
+subsequently implemented that bounded surface and advertises it only for
+eligible wheel devices.
 
 ## Immutable result
 
@@ -73,9 +75,12 @@ no call was observed in the accepted broad-route logs: `__C_specific_handler`,
 claim that every route made every possible call observable. Static import or
 direct-call presence is also not runtime reachability.
 
-The eight resolved `XInputdFF*` exports also remain explicit stubs while SDL
-withholds `X_INPUT_CAPS_FFB_SUPPORTED`. Basic rumble is separately bounded by
-M5-007; advanced guest force-feedback effects are not claimed.
+The immutable M6-013 result truthfully records that its eight resolved
+`XInputdFF*` exports were stubs and the capability was withheld at that time.
+Current-source closure review separately requires all eight explicit hooks,
+zero matching stubs, one wheel-only `X_INPUT_CAPS_FFB_SUPPORTED` advertisement,
+and the 64-slot bound introduced and physically scoped by M6-015. This does not
+retroactively add advanced-force evidence to the historical M6-013 run.
 
 M7-014 still owns the final unsupported-operation audit after full campaign and
 Complete Edition content coverage. Any newly reached stub, unsupported PPC

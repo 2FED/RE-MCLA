@@ -29,6 +29,7 @@ $expected = [ordered]@{
     wheel_button_back='6'; wheel_button_start='7'; wheel_button_left_thumb='10'
     wheel_button_right_thumb='11'; wheel_button_guide='12'
     wheel_button_dpad_up='-1'; wheel_button_dpad_down='-1'; wheel_button_dpad_left='-1'; wheel_button_dpad_right='-1'
+    mcla_diagnostics_enabled='true'; mcla_crash_reporter_dialog='true'; bind_mcla_debug_snapshot='"F10"'
     log_level='"info"'; log_file='""'; log_verbose='false'; log_noisy='false'
     log_flush_interval='0'; log_max_file_size_mb='5'; log_max_files='20'
     game_data_root='""'; user_data_root='""'; update_data_root='""'; cache_root='""'; metadata_root='""'
@@ -64,6 +65,7 @@ if (-not $TemplateOnly) {
     $logging = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/core/logging.cpp'))
     $runtime = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/system/runtime.cpp'))
     $app = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/src/ui/rex_app.cpp'))
+    $mclaApp = [IO.File]::ReadAllText((Join-Path $repoRoot 'src/mcla_app.cpp'))
     $cmake = [IO.File]::ReadAllText((Join-Path $repoRoot 'CMakeLists.txt'))
     $tests = [IO.File]::ReadAllText((Join-Path $repoRoot 'third_party/rexglue-sdk/tests/unit/audio/sdl_audio_config_test.cpp'))
     $needles = @(
@@ -81,6 +83,9 @@ if (-not $TemplateOnly) {
         @($sdlInput, 'REXCVAR_DEFINE_INT32(wheel_force_feedback_continuous_constant_gain,'),
         @($sdlInput, 'wheel_force_feedback_minimum_transient_strength,'),
         @($sdlInput, 'REXCVAR_DEFINE_INT32(wheel_button_guide, 12'),
+        @($mclaApp, 'mcla_diagnostics_enabled, true'),
+        @($mclaApp, 'mcla_crash_reporter_dialog, true'),
+        @($mclaApp, 'RegisterBind("bind_mcla_debug_snapshot", "F10"'),
         @($logging, 'REXCVAR_DEFINE_STRING(log_level, "info"'),
         @($runtime, 'REXCVAR_DEFINE_STRING(game_data_root, ""'),
         @($app, 'cvar::LoadConfig(config_path_)'),

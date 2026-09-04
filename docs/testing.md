@@ -985,9 +985,9 @@ scripts/verify-host-config-smoke.ps1 -ResultPath <private-result.json>
 This non-GUI gate clean-builds and installs the exact pinned ReXGlue SDK, runs
 the focused audio/config suite, clean-builds the RelWithDebInfo host, and
 requires the source and staged `mcla.toml.example` files to be byte-identical.
-The 25-key template records exact defaults for guest resolution, host window
+The current 54-key template records exact defaults for guest resolution, host window
 mode, default/exact-name SDL audio output, bounded output volume, SDL input,
-logging, and five data roots. It is copied only as an example: the build never
+wheel input/force feedback, local diagnostics, logging, and five data roots. It is copied only as an example: the build never
 overwrites a user's `mcla.toml`, and deliberate file values retain the runtime's
 documented precedence over command-line and environment inputs.
 
@@ -995,7 +995,8 @@ The verifier source-binds CVar defaults, lifecycle/range metadata, exact-device
 selection, post-conversion volume scaling, runtime config loading, and staged
 template copying. Fixture tests reject bad volume/type/range, unavailable
 sample defaults, invalid backend/window/log/resolution values, missing,
-duplicate, unknown, malformed, and private-path keys. This gate proves the
+wheel/diagnostic default drift, duplicate, unknown, malformed, and private-path
+keys. This gate proves the
 configuration contract and build integration; it does not claim a physical
 alternate playback device, perceived loudness, persisted controller identity,
 or a launcher UI.

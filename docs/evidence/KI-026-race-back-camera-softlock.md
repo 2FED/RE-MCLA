@@ -58,7 +58,7 @@ and the watcher preserved evolved save SHA-256
 This zero-of-three non-reproduction does not prove that KI-026 was fixed: no
 camera behavior was changed. It does establish the current healthy v2 path and
 makes repeated forced reproduction disproportionate for an intermittent S2
-issue. KI-026 remains open, while the M6-014 one-hour gate is unblocked. If the
-softlock recurs during normal play, press F10 and wait for completion before
-restart; that live package plus the trace will drive a narrow fix. Otherwise the
-issue remains catalogued for M7 rather than preventing M6 completion.
+issue. KI-026 remains open. The later M6-014 one-hour gate completed without a
+recurrence and M6 closed without claiming a camera fix. If the softlock recurs
+during normal play, press F10 and wait for completion before restart; that live
+package plus the trace will drive a narrow M7 fix.
