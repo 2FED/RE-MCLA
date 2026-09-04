@@ -1766,6 +1766,17 @@ severity, workaround, and target milestone. Closure is `GO M5 WITH PINNED
 SAVE`: it supplies a deterministic saved free-roam prerequisite for M5, not a
 clean-new-game, race-completion, persistence, or general-playability claim.
 
+## M7-001 historical campaign coverage seed
+
+For the independent M7-001 preparation seed, run
+`scripts/verify-campaign-coverage-seed.ps1` and
+`scripts/test-campaign-coverage-seed.ps1` on PowerShell 7 and Windows
+PowerShell 5.1. The eleven historical scenarios have one positive and thirteen
+fail-closed negative checks: topology/classification, safe existing references,
+known issue IDs, explicit unknowns and rejection of automatic campaign credit.
+This is not an exhaustive node catalog or gameplay PASS. See
+[campaign source/coverage limits](campaign-coverage-matrix.md).
+
 ## M7-016 private portable campaign-test bundle
 
 ```powershell

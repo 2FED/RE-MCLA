@@ -6,20 +6,27 @@ manifest hashes, and returned evidence take precedence over this snapshot.
 
 ## Active work and next action
 
-- M6 closed at `0.8.2.2`; M7 is **0/16 complete**. M7-016 is active.
+- M6 closed at `0.8.2.2`; M7 is **0/16 complete**. M7-016, M7-009 and
+  M7-001 preparation are active; none of their full criteria is closed.
 - Priority: usable stock-timing Deck gameplay and cross-build save continuity.
   See [the reviewed M7 order](M7-priorities.md). M7-009's early portable tooling
   subset is implemented/tested; the full task is in progress, not complete.
 - Published runtime: **MCLA 0.13.0.0 / ReXGlue v0.14.0.0**. Repository revision
-  **0.13.2.0** changes developer-side save handoff only; it does not
-  publish a replacement binary or invalidate the pending physical comparison.
+  **0.13.3.0** adds campaign source/claim checks after the 0.13.2.0
+  developer-side save handoff changes; neither revision
+  publishes a replacement binary or invalidates the pending physical comparison.
 - Waiting for one same-process F10 pair on that build: gameplay, F10 `READY`,
   30--60 seconds driving, F10 `READY`, normal exit, completed sync. Keep
   Proton 9.0-4 and Desktop Mode fixed. Compare real movement/audio and the
   presentation overlay. No long soak or wheel required.
-- Autonomous next work: campaign-matrix preparation (M7-001). Save-lineage
-  tooling is reviewed/tested; actual successor reload remains pending alongside
-  the Deck pair. Neither establishes a Deck PASS.
+- Campaign preparation now has [eleven historical scenarios](campaign-coverage-matrix.md)
+  and checked references/claim limits. Native retail nodes, mandatory count and
+  dependencies remain unknown. [Source feasibility](evidence/M7-001-campaign-source-feasibility.md)
+  resolves catalog wrappers `0x822C9070` / `0x822C8FE8` and unlock query
+  `0x826C0700`; their storage/ABI/bounds remain to be inspected. No archive
+  extraction or unlock mutation is authorized by this source lead. Save-lineage tooling is
+  reviewed/tested; actual successor reload remains pending alongside the Deck
+  pair. Neither establishes a Deck PASS.
 
 ## Exact artifact and evidence
 
@@ -104,6 +111,9 @@ manifest hashes, and returned evidence take precedence over this snapshot.
   5.1; 47 with the existing native launcher's verify-only fixture; bundle
   1 positive / 13 negative / 36 source checks, session 1 positive / 10 negative,
   AST scan clean / 3 fixtures. No actual publication, pruning or owner save edit.
+- Campaign seed: eleven source-reviewed scenarios; 1 positive / 13 negative
+  checks on PowerShell 7 and Windows PowerShell 5.1; AST clean / 3 fixtures.
+  Free-text semantics still require source review; no gameplay was credited.
 - Prior documentation review: independent review has no blockers; AST scan
   clean / 3 fixtures pass; 151/151 task/criterion coverage, 16 unchanged M7
   tasks, 28 unique issue IDs and local links checked. Runtime was not rebuilt.
@@ -113,7 +123,7 @@ manifest hashes, and returned evidence take precedence over this snapshot.
 “Read AGENTS.md, docs/current-state.md, docs/M7-priorities.md and the relevant
 README-AI/evidence sections. Verify the working tree and current.txt. Continue
 the next bounded M7 task; distinguish the published 0.13.0.0 Deck build from
-later documentation changes. Preserve the progressed save, do not push, and
+  later developer-side tooling/documentation. Preserve the progressed save, do not push, and
 do not claim physical results that have not returned.”
 
 Refresh this handoff at task/experiment boundaries: goal, changes, tests,

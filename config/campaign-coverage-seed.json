@@ -1,0 +1,131 @@
+{
+  "schema": "mcla-campaign-coverage-seed-v1",
+  "task": "M7-001",
+  "catalog_complete": false,
+  "mandatory_node_count": null,
+  "dependency_graph_complete": false,
+  "full_campaign_pass": false,
+  "entries": [
+    {
+      "id": "ian-series",
+      "label": "One available Ian multi-event series",
+      "kind": "campaign-route",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/M5-012-race-results.md"],
+      "observed": ["two-car start", "all NEXT RACE events completed", "final series results", "free-roam return", "fresh-process save reload"],
+      "unknown": ["retail event IDs", "course names", "event count", "mandatory prerequisites", "unlocks"],
+      "known_issues": [],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "martin-race",
+      "label": "One available Martin head-to-head event",
+      "kind": "campaign-route",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/M6-003-race-system-matrix.md"],
+      "observed": ["two-car start", "Race_Finish wrapper", "100 REP and $340 reward screen", "owner reported police not seen"],
+      "unknown": ["retail event ID", "course", "series membership", "prerequisites", "all police paths"],
+      "known_issues": [],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "five-race-resources",
+      "label": "Five completion checkpoints in one process",
+      "kind": "aggregate-session",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/M5-013-race-resource-growth.md"],
+      "observed": ["five owner-confirmed event completions", "bounded post-race resources", "controlled exit"],
+      "unknown": ["event identities", "overlap with other coverage rows", "mandatory campaign coverage"],
+      "known_issues": [],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "red-light-race-back",
+      "label": "Red Light Driver loss -> Race Back",
+      "kind": "recovery-route",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/KI-026-race-back-camera-softlock.md"],
+      "observed": ["earlier camera/pause softlock", "three healthy retry returns in one diagnostic", "F10 available for a recurrence"],
+      "unknown": ["intermittent root cause", "reliable failing reproduction", "course identity"],
+      "known_issues": ["KI-026"],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "delivery-entry",
+      "label": "Delivery activation and five-minute stability",
+      "kind": "campaign-route",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/M6-014-delivery-constructor-registry.md"],
+      "observed": ["owner-confirmed objective active", "controllable delivery car", "300-second stability window", "save preservation"],
+      "unknown": ["delivery identity", "delivery completion", "reward", "all delivery transitions"],
+      "known_issues": ["KI-024"],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "garage-purchase-reload",
+      "label": "Representative garage transactions and reload",
+      "kind": "support-route",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/M6-002-garage-lifecycle.md"],
+      "observed": ["1983 Golf/GTI purchase", "one exterior and exhaust purchase", "paint change", "vehicle switch", "fresh-process persistence"],
+      "unknown": ["all vehicles and categories", "campaign unlock thresholds", "all garages"],
+      "known_issues": ["KI-019", "KI-020"],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "arcade-sunset-and-vine",
+      "label": "Arcade Ordered Race: Sunset and Vine",
+      "kind": "noncampaign-route",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/M6-004-environment-effects.md"],
+      "observed": ["Arcade selection", "RAINY / DAWN options", "stationary and moving gameplay", "particle input"],
+      "unknown": ["race completion", "campaign counterpart identity"],
+      "known_issues": ["KI-013", "KI-015", "KI-016"],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "city-streaming-regions",
+      "label": "Eight project-defined zones plus return",
+      "kind": "support-route",
+      "evidence_level": "historical-accepted",
+      "evidence": ["docs/evidence/M6-001-city-streaming.md", "config/city-streaming-route.json"],
+      "observed": ["nine owner-confirmed stopped GPS checkpoints", "continuous city streaming", "bounded resources"],
+      "unknown": ["story unlock progression", "mandatory South Central events", "official district boundary mapping"],
+      "known_issues": ["KI-015", "KI-016"],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "owner-mixed-racing",
+      "label": "Owner-reported freeway events, series and pink-slip win",
+      "kind": "aggregate-session",
+      "evidence_level": "owner-attested-categories",
+      "evidence": ["README-AI"],
+      "observed": ["2026-08-27 checkpoint: two freeway-driver events", "at least two series", "one pink-slip best-of-three win", "aggregate parsed save counters +15 races / +14 wins"],
+      "unknown": ["event and opponent identities", "course names", "per-event telemetry", "overlap with other rows"],
+      "known_issues": [],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "offline-service-policy",
+      "label": "Offline progression/service policy",
+      "kind": "support-route",
+      "evidence_level": "implementation-with-historical-evidence",
+      "evidence": ["docs/evidence/M6-008-offline-progression.md"],
+      "observed": ["local achievement boundaries", "empty/unavailable retired services", "title-local Driving Test save policy"],
+      "unknown": ["physical invocation of every export", "Driving Test unlock point", "retired-service vehicle entitlements"],
+      "known_issues": [],
+      "counts_toward_full_campaign": false
+    },
+    {
+      "id": "trevor-proposed-route",
+      "label": "Historical proposed Trevor / Sunset Strip route",
+      "kind": "proposed-route",
+      "evidence_level": "unverified-definition",
+      "evidence": ["config/first-race-route.json", "docs/evidence/M5-001-first-race-route.md"],
+      "observed": ["a normative calibration route was defined"],
+      "unknown": ["native event identity", "availability on the progressed owner save", "completion", "mandatory status"],
+      "known_issues": [],
+      "counts_toward_full_campaign": false
+    }
+  ]
+}

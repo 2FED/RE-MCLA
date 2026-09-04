@@ -45,6 +45,13 @@ portable subset passes. M7-012 blocker fixes and M7-014 reached-import audit
 run throughout progression. M7-015 documentation stays current throughout;
 its final acceptance still requires the full campaign evidence.
 
+2026-09-05 preparation update: M7-001 now has a reviewed
+[historical evidence seed](campaign-coverage-matrix.md), with eleven scenarios
+and explicit unknowns. This preserves prior work without claiming a mandatory
+retail catalog, dependency graph, clean-campaign credit or current-artifact
+playability. The next source step is native event identity/catalog feasibility;
+the performance and successor-save front gates retain priority.
+
 Optional resolution/60+/VRR, native Linux/macOS and public packaging remain
 M8/M9. Shader/cache optimization may enter M7-016 only when evidence proves
 it blocks stock gameplay, not as speculative renderer rewrites or permission
