@@ -12,9 +12,9 @@ manifest hashes, and returned evidence take precedence over this snapshot.
   See [the reviewed M7 order](M7-priorities.md). M7-009's early portable tooling
   subset is implemented/tested; the full task is in progress, not complete.
 - Published runtime: **MCLA 0.13.0.0 / ReXGlue v0.14.0.0**. Repository revision
-  **0.13.3.0** adds campaign source/claim checks after the 0.13.2.0
-  developer-side save handoff changes; neither revision
-  publishes a replacement binary or invalidates the pending physical comparison.
+  **0.13.4.0** records the native catalog/query and diagnostic-format review,
+  following 0.13.3.0 campaign claim checks and 0.13.2.0 save handoff tooling.
+  None publishes a replacement binary or invalidates the pending comparison.
 - Waiting for one same-process F10 pair on that build: gameplay, F10 `READY`,
   30--60 seconds driving, F10 `READY`, normal exit, completed sync. Keep
   Proton 9.0-4 and Desktop Mode fixed. Compare real movement/audio and the
@@ -22,8 +22,13 @@ manifest hashes, and returned evidence take precedence over this snapshot.
 - Campaign preparation now has [eleven historical scenarios](campaign-coverage-matrix.md)
   and checked references/claim limits. Native retail nodes, mandatory count and
   dependencies remain unknown. [Source feasibility](evidence/M7-001-campaign-source-feasibility.md)
-  resolves catalog wrappers `0x822C9070` / `0x822C8FE8` and unlock query
-  `0x826C0700`; their storage/ABI/bounds remain to be inspected. No archive
+  now resolves wrapper ABI, the shared count at city `+0x20`, name pointers
+  at `+0x24` and 160-byte descriptors at `+0x2C`. These are static layout
+  facts, not observed nodes; query accessors lack upper bounds, and unlock
+  membership is not the prerequisite graph. Existing F10 requests no catalog
+  ranges or guest translation metadata. A future opt-in catalog snapshot
+  needs isolated copied-profile scope, range/lifetime/consistency checks;
+  do not rebuild or probe the pending owner bundle for it. No archive
   extraction or unlock mutation is authorized by this source lead. Save-lineage tooling is
   reviewed/tested; actual successor reload remains pending alongside the Deck
   pair. Neither establishes a Deck PASS.
@@ -114,6 +119,10 @@ manifest hashes, and returned evidence take precedence over this snapshot.
 - Campaign seed: eleven source-reviewed scenarios; 1 positive / 13 negative
   checks on PowerShell 7 and Windows PowerShell 5.1; AST clean / 3 fixtures.
   Free-text semantics still require source review; no gameplay was credited.
+- Native source review: independent ABI/count/unlock and diagnostic-format
+  reviews accepted, with scan ceiling versus allocation bounds kept distinct.
+  Same campaign/AST gates rerun; no native launch, runtime edit or dump payload
+  read. The pending bundle manifest was rehashed unchanged on 2026-09-05.
 - Prior documentation review: independent review has no blockers; AST scan
   clean / 3 fixtures pass; 151/151 task/criterion coverage, 16 unchanged M7
   tasks, 28 unique issue IDs and local links checked. Runtime was not rebuilt.

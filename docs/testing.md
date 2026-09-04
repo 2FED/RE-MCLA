@@ -1777,6 +1777,14 @@ known issue IDs, explicit unknowns and rejection of automatic campaign credit.
 This is not an exhaustive node catalog or gameplay PASS. See
 [campaign source/coverage limits](campaign-coverage-matrix.md).
 
+The follow-up [native query/diagnostic review](evidence/M7-001-campaign-source-feasibility.md)
+is static only. Its count/stride proof is not a live catalog validation, and
+the 250-slot unlock scan is not a proven allocation size or mission count.
+Existing compact F10 dumps do not request catalog ranges/translation metadata.
+No test should inject unchecked query calls, invoke unlock mutators or count
+an inferred node as physical campaign coverage. The same seed/AST gates pass
+after this 0.13.4.0 documentation update; no runtime was rebuilt.
+
 ## M7-016 private portable campaign-test bundle
 
 ```powershell

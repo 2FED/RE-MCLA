@@ -78,7 +78,8 @@ that source work. A future complete catalog needs a separately reviewed schema;
 this historical seed is intentionally unable to grant full-campaign credit.
 
 The bounded [native-source investigation](evidence/M7-001-campaign-source-feasibility.md)
-now resolves catalog/unlock registration wrappers and identifies RPF3 headers.
+now resolves catalog/unlock wrapper ABI, paired arrays/count, current-unlock
+lookup limits and the lack of an explicit catalog snapshot in current F10.
 It does not yet enumerate instances or dependencies, and does not authorize
 unlock mutations or broad asset extraction.
 
@@ -102,5 +103,6 @@ The fixture performs no game launch or owner-profile operation.
 
 Gates: one positive / thirteen negatives on PowerShell 7 and Windows
 PowerShell 5.1; structural scan clean; all three ast-grep fixtures pass;
-`git diff --check` clean. Developer-side revision: 0.13.3.0. The published
+`git diff --check` clean. Seed implementation: 0.13.3.0; static query/diagnostic
+review: 0.13.4.0, with the same gates rerun. The published
 0.13.0.0 / SDK v0.14.0.0 Deck candidate was not rebuilt or replaced.

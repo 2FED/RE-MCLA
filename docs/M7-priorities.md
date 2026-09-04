@@ -49,8 +49,12 @@ its final acceptance still requires the full campaign evidence.
 [historical evidence seed](campaign-coverage-matrix.md), with eleven scenarios
 and explicit unknowns. This preserves prior work without claiming a mandatory
 retail catalog, dependency graph, clean-campaign credit or current-artifact
-playability. The next source step is native event identity/catalog feasibility;
-the performance and successor-save front gates retain priority.
+playability. The bounded native ABI/layout review now establishes how paired
+name/descriptor arrays are indexed, but not populated mandatory events or
+dependencies. Current F10 is not an explicit catalog-memory snapshot; any
+future opt-in collector must use isolated scope and validated live ranges.
+The performance and successor-save front gates retain priority; no runtime
+collector or pending-bundle replacement was introduced for matrix preparation.
 
 Optional resolution/60+/VRR, native Linux/macOS and public packaging remain
 M8/M9. Shader/cache optimization may enter M7-016 only when evidence proves
