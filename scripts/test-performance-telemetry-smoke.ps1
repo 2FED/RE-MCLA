@@ -24,6 +24,9 @@ try {
     @{p='src/core/perf/frame_audit.cpp';n='constexpr uint64_t kSampleLimit = 300'},
     @{p='src/core/perf/frame_audit.cpp';n='audit_enabled.store(false, std::memory_order_release)'},
     @{p='src/core/perf/frame_audit.cpp';n='return audit_enabled.load(std::memory_order_acquire);'},
+    @{p='src/core/perf/frame_audit.cpp';n='ArmFrameAuditForDiagnostics'},
+    @{p='src/core/perf/frame_audit.cpp';n='source=application-diagnostics'},
+    @{p='src/core/perf/frame_audit.cpp';n='audit_gpu_timing_available'},
     @{p='src/core/CMakeLists.txt';n='perf/frame_audit.cpp'},
     @{p='src/filesystem/devices/host_path_file.cpp';n='RecordStreamingRead'},
     @{p='src/audio/sdl/sdl_audio_driver.cpp';n='RecordAudioUnderrun'},
@@ -33,6 +36,10 @@ try {
     @{p='src/graphics/d3d12/command_processor.cpp';n='ResolveQueryData'},
     @{p='src/graphics/d3d12/command_processor.cpp';n='RecordCpuFrame'},
     @{p='src/graphics/d3d12/command_processor.cpp';n='RecordGpuFrame'},
+    @{p='src/graphics/d3d12/command_processor.cpp';n='SetFrameAuditGpuTimingAvailable(true)'},
+    @{p='src/graphics/d3d12/command_processor.cpp';n='performance_timestamp_query_heap_ && rex::perf::IsFrameAuditEnabled()'},
+    @{p='src/graphics/d3d12/command_processor.cpp';n='performance_timestamp_frame_active_)'},
+    @{p='src/graphics/d3d12/command_processor.cpp';n='performance_timestamp_frame_active_ = false'},
     @{p='tests/unit/CMakeLists.txt';n='core/frame_audit_test.cpp'}
   );foreach($c in $contracts){$text=Get-Content (Join-Path $sdk $c.p) -Raw;if(-not$text.Contains($c.n)){throw "Source contract missing: $($c.p) :: $($c.n)"}}
   [pscustomobject]@{Passed=$true;PositiveFixtures=1;FailClosedNegatives=$failed;SourceContractChecks=$contracts.Count}

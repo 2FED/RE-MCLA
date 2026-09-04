@@ -51,7 +51,7 @@ visible current alpha limitations are:
 - `KI-017`: music may stop while ambient SFX continue;
 - `KI-018`: retired-service unlocks remain retail-locked by policy;
 - `KI-021`: Photo Mode JPEGs were black on the historical tested build; the
-  current v0.10.0.2 successor is physically and machine verified non-black;
+  current v0.11.0.0 successor retains the physically and machine verified non-black route;
 - `KI-022`: stable Steam Input mirror routing reduced false ownership changes,
   but wheel centering can still disappear from an unresolved FFB lifecycle fault;
 - `KI-023`: one long run ended in a host NVIDIA device removal during a Sunshine

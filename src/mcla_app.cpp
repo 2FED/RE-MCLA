@@ -20,6 +20,7 @@
 #include <rex/kernel/xboxkrnl/rtl.h>
 #include <rex/logging.h>
 #include <rex/memory/mapped_memory.h>
+#include <rex/perf/frame_audit.h>
 #include <rex/runtime.h>
 #include <rex/system/crash_report.h>
 #include <rex/system/function_dispatcher.h>
@@ -933,9 +934,18 @@ void MclaApp::OnPostInitLogging() {
             user_data_root(), diagnostics_root,
             [this]() { return CaptureDiagnosticState(); },
             REXCVAR_GET(mcla_crash_reporter_dialog))) {
-      rex::ui::RegisterBind("bind_mcla_debug_snapshot", "F10",
-                            "Capture an MCLA-R live diagnostic package",
-                            [this]() { QueueDiagnosticSnapshot("f10"); });
+      rex::ui::RegisterBind(
+          "bind_mcla_debug_snapshot", "F10",
+          "Capture an MCLA-R live diagnostic package", [this]() {
+            if (!diagnostic_performance_audit_requested_) {
+              const bool armed = rex::perf::ArmFrameAuditForDiagnostics();
+              diagnostic_performance_audit_requested_ = armed;
+              MCLA_APP_INFO("MCLA diagnostics: F10 performance audit "
+                            "armed={}",
+                            armed ? 1 : 0);
+            }
+            QueueDiagnosticSnapshot("f10");
+          });
       diagnostic_keybind_registered_ = true;
     } else {
       diagnostics_.reset();

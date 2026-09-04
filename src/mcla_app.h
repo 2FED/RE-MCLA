@@ -55,4 +55,5 @@ class MclaApp : public rex::ReXApp {
   std::jthread first_frame_probe_thread_;
   std::unique_ptr<mcla::diagnostics::Manager> diagnostics_;
   bool diagnostic_keybind_registered_ = false;
+  bool diagnostic_performance_audit_requested_ = false;
 };
