@@ -9,6 +9,8 @@
 #include <rex/filesystem.h>
 #include <rex/filesystem/file.h>
 #include <rex/filesystem/vfs.h>
+#include <rex/graphics/command_processor.h>
+#include <rex/graphics/graphics_system.h>
 #include <rex/input/input_driver.h>
 #include <rex/input/input_system.h>
 #include <rex/input/sdl/controller_matrix_audit.h>
@@ -3088,10 +3090,33 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
     state.title_id = active_runtime->kernel_state()->title_id();
   }
   if (active_runtime && active_runtime->graphics_system()) {
-    auto *presenter = active_runtime->graphics_system()->presenter();
+    auto *graphics_system = static_cast<rex::graphics::GraphicsSystem *>(
+        active_runtime->graphics_system());
+    auto *presenter = graphics_system->presenter();
     if (presenter) {
       state.guest_output_sequence = presenter->GetGuestOutputSequence();
       state.guest_vblank_sequence = presenter->GetGuestVblankSequence();
+    }
+    if (auto *command_processor = graphics_system->command_processor()) {
+      const auto graphics =
+          command_processor->GetPerformanceDiagnosticSnapshot();
+      state.graphics_backend = static_cast<uint32_t>(graphics.backend);
+      state.graphics_guest_frames_opened = graphics.guest_frames_opened;
+      state.graphics_guest_frames_closed = graphics.guest_frames_closed;
+      state.graphics_issue_swap_calls = graphics.issue_swap_calls;
+      state.graphics_guest_output_refresh_successes =
+          graphics.guest_output_refresh_successes;
+      state.graphics_guest_output_refresh_failures =
+          graphics.guest_output_refresh_failures;
+      state.graphics_async_placeholder_skips = graphics.async_placeholder_skips;
+      state.graphics_swap_source_missing = graphics.swap_source_missing;
+      state.graphics_submission_count = graphics.submission_count;
+      state.graphics_frame_fence_wait_us = graphics.frame_fence_wait_us;
+      state.graphics_pipeline_end_submission_us =
+          graphics.pipeline_end_submission_us;
+      state.graphics_deferred_execute_us = graphics.deferred_execute_us;
+      state.graphics_queue_submit_us = graphics.queue_submit_us;
+      state.graphics_guest_frame_wall_us = graphics.guest_frame_wall_us;
     }
   }
   state.race_back_sequence = race_back_probe_sequence.load();

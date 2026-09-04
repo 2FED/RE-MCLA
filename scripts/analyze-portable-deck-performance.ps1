@@ -14,6 +14,105 @@ function Get-Percentile([long[]]$Values, [double]$Percentile) {
     return [long]$sorted[$index]
 }
 
+function Get-OptionalProperty([object]$Object, [string]$Name) {
+    if ($null -eq $Object) { return $null }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState) {
+    $firstGraphics = Get-OptionalProperty $FirstState 'graphics'
+    $secondGraphics = Get-OptionalProperty $SecondState 'graphics'
+    if ($null -eq $firstGraphics -or $null -eq $secondGraphics) { return $null }
+    $backendFirst = [long](Get-OptionalProperty $firstGraphics 'backend')
+    $backendSecond = [long](Get-OptionalProperty $secondGraphics 'backend')
+    if ($backendFirst -le 0 -or $backendFirst -ne $backendSecond) {
+        throw 'Graphics diagnostic backend changed or is unavailable across the selected F10 pair.'
+    }
+    $names = @(
+        'guest_frames_opened', 'guest_frames_closed', 'issue_swap_calls',
+        'guest_output_refresh_successes', 'guest_output_refresh_failures',
+        'async_placeholder_skips', 'swap_source_missing', 'submission_count',
+        'frame_fence_wait_us', 'pipeline_end_submission_us',
+        'deferred_execute_us', 'queue_submit_us', 'guest_frame_wall_us'
+    )
+    $delta = [ordered]@{}
+    foreach ($name in $names) {
+        $firstValue = Get-OptionalProperty $firstGraphics $name
+        $secondValue = Get-OptionalProperty $secondGraphics $name
+        if ($null -eq $firstValue -or $null -eq $secondValue) {
+            throw "Graphics diagnostic counter '$name' is missing."
+        }
+        $difference = [long]$secondValue - [long]$firstValue
+        if ($difference -lt 0) { throw "Graphics diagnostic counter '$name' regressed." }
+        $delta[$name] = $difference
+    }
+    $opened = [Math]::Max(1L, [long]$delta.guest_frames_opened)
+    $closed = [Math]::Max(1L, [long]$delta.guest_frames_closed)
+    $submissions = [Math]::Max(1L, [long]$delta.submission_count)
+    $trackedSubmissionUs = [long]$delta.pipeline_end_submission_us +
+        [long]$delta.deferred_execute_us + [long]$delta.queue_submit_us
+    $unattributedFrameUs = [Math]::Max(0L, [long]$delta.guest_frame_wall_us - $trackedSubmissionUs)
+    $stages = [ordered]@{
+        frame_fence_wait = [long]$delta.frame_fence_wait_us
+        pipeline_end = [long]$delta.pipeline_end_submission_us
+        deferred_execute = [long]$delta.deferred_execute_us
+        queue_submit = [long]$delta.queue_submit_us
+        unattributed_frame_wall = $unattributedFrameUs
+    }
+    $dominantStage = ($stages.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1).Key
+    return [pscustomobject]@{
+        Backend = $backendSecond
+        GuestFramesOpened = [long]$delta.guest_frames_opened
+        GuestFramesClosed = [long]$delta.guest_frames_closed
+        IssueSwapCalls = [long]$delta.issue_swap_calls
+        RefreshSuccesses = [long]$delta.guest_output_refresh_successes
+        RefreshFailures = [long]$delta.guest_output_refresh_failures
+        AsyncPlaceholderSkips = [long]$delta.async_placeholder_skips
+        SwapSourceMissing = [long]$delta.swap_source_missing
+        Submissions = [long]$delta.submission_count
+        FenceWaitMsPerOpenedFrame = [Math]::Round([long]$delta.frame_fence_wait_us / $opened / 1000.0, 3)
+        PipelineEndMsPerSubmission = [Math]::Round([long]$delta.pipeline_end_submission_us / $submissions / 1000.0, 3)
+        DeferredExecuteMsPerSubmission = [Math]::Round([long]$delta.deferred_execute_us / $submissions / 1000.0, 3)
+        QueueSubmitMsPerSubmission = [Math]::Round([long]$delta.queue_submit_us / $submissions / 1000.0, 3)
+        GuestFrameWallMsPerClosedFrame = [Math]::Round([long]$delta.guest_frame_wall_us / $closed / 1000.0, 3)
+        TrackedSubmissionPercentOfFrameWall = if ([long]$delta.guest_frame_wall_us) {
+            [Math]::Round($trackedSubmissionUs * 100.0 / [long]$delta.guest_frame_wall_us, 2)
+        } else { 0.0 }
+        DominantMeasuredStage = [string]$dominantStage
+        RawDelta = [pscustomobject]$delta
+    }
+}
+
+function Measure-ThreadCpuDelta([object]$FirstState, [object]$SecondState,
+                                [double]$ElapsedSeconds) {
+    $firstValue = Get-OptionalProperty $FirstState 'native_threads'
+    $secondValue = Get-OptionalProperty $SecondState 'native_threads'
+    if ($null -eq $firstValue -or $null -eq $secondValue) { return @() }
+    $firstById = @{}
+    foreach ($thread in @($firstValue)) { $firstById[[string][long]$thread.id] = $thread }
+    $rows = @()
+    foreach ($thread in @($secondValue)) {
+        $key = [string][long]$thread.id
+        if (-not $firstById.ContainsKey($key)) { continue }
+        $before = $firstById[$key]
+        $kernelTicks = [long]$thread.kernel_time_100ns - [long]$before.kernel_time_100ns
+        $userTicks = [long]$thread.user_time_100ns - [long]$before.user_time_100ns
+        if ($kernelTicks -lt 0 -or $userTicks -lt 0) { continue }
+        $totalTicks = $kernelTicks + $userTicks
+        $rows += [pscustomobject]@{
+            ThreadId = [long]$thread.id
+            Name = [string]$thread.name
+            UserMs = [Math]::Round($userTicks / 10000.0, 2)
+            KernelMs = [Math]::Round($kernelTicks / 10000.0, 2)
+            TotalMs = [Math]::Round($totalTicks / 10000.0, 2)
+            SingleCorePercent = [Math]::Round($totalTicks * 100.0 / ($ElapsedSeconds * 10000000.0), 2)
+        }
+    }
+    return @($rows | Sort-Object TotalMs -Descending | Select-Object -First 12)
+}
+
 function Assert-PlainDirectory([string]$Path, [string]$Label) {
     $item = Get-Item -LiteralPath $Path -Force
     if (-not $item.PSIsContainer) { throw "$Label is not a directory." }
@@ -183,6 +282,8 @@ $secondLog = Assert-Artifact $second.Directory $secondManifest 'log-tail.txt'
 $secondLogText = Get-Content -LiteralPath $secondLog -Raw
 $auditAvailable = $secondLogText.Contains('REX_PERF_AUDIT_TRIGGER v=1 source=application-diagnostics')
 $audit = if ($auditAvailable) { Parse-TriggeredAudit $secondLog } else { $null }
+$graphics = Measure-GraphicsDelta $first.State $second.State
+$threadCpuTop = @(Measure-ThreadCpuDelta $first.State $second.State $elapsedSeconds)
 
 [pscustomobject]@{
     Passed = $true
@@ -200,4 +301,6 @@ $audit = if ($auditAvailable) { Parse-TriggeredAudit $secondLog } else { $null }
     OutputPerVblankPercent = [Math]::Round(($outputDelta * 100.0) / $vblankDelta, 2)
     AuditAvailable = $auditAvailable
     Audit = $audit
+    Graphics = $graphics
+    ThreadCpuTop = $threadCpuTop
 }

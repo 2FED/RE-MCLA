@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.12.0.0`
-- Immutable project commit: `84f9ec28ef76781768fe23080bfc08defdcfc334`
+- Project release tag: `v0.13.0.0`
+- Immutable project commit: `e66cfd2e2020e71bb001af62fedb37faab4caf68`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -154,6 +154,15 @@ an application may explicitly request either registered backend without a
 second plugin ABI or separate guest build. The same release also makes the
 migration/template fixtures CRLF-safe and collision-free on Windows.
 
+The v0.13.0.0 delta adds a read-only command-processor performance diagnostic
+snapshot without changing normal presentation policy. The Vulkan backend
+publishes monotonic counts for guest-frame, swap, output-refresh, placeholder,
+missing-source, and submission activity plus cumulative microseconds spent in
+frame-fence wait, pipeline-end submission, deferred execution, queue submit,
+and total guest-frame wall span. The application samples these counters only
+when producing an explicit diagnostic package, so the route adds no per-frame
+file I/O or continuously enabled trace buffer.
+
 The clean v0.10.0.2 SDK validation executed all 1,805 registered cases: 1,792
 passed, four known BitStream cases were skipped, and nine pre-existing
 migration/template fixture cases failed outside this windowing delta. The
@@ -171,6 +180,11 @@ full RelWithDebInfo suite passed all 1,802 executed cases with four known
 BitStream cases skipped: 100 percent pass, zero failures out of 1,806
 registered tests. The matching Release SDK install completed and reports
 version `0.12.0.0`.
+
+The clean v0.13.0.0 RelWithDebInfo build and install retained that full result:
+1,802 executed cases passed, four known BitStream cases were skipped, and zero
+tests failed out of 1,806 registered. The matching clean Release build/install
+completed and reports version `0.13.0.0`.
 
 KI-012 is closed in v0.9.0.10: profiled hook/debug wrappers check
 `TracyIsStarted` before creating zones or publishing Tracy metadata. The
@@ -191,19 +205,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-parse refs/tags/v0.12.0.0^{}
+git -C third_party/rexglue-sdk rev-list -n 1 v0.13.0.0
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `84f9ec28ef76781768fe23080bfc08defdcfc334`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `e66cfd2e2020e71bb001af62fedb37faab4caf68`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.12.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.13.0.0 project-fork commit:
 
 ```text
-84f9ec28ef76781768fe23080bfc08defdcfc334 third_party/rexglue-sdk
+e66cfd2e2020e71bb001af62fedb37faab4caf68 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

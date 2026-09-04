@@ -2,92 +2,102 @@
 
 ## Decision
 
-`native-vulkan-performance-candidate-and-visible-f10-ready-physical-rerun-required`
+`native-vulkan-throughput-still-blocked-richer-f10-causal-trace-required`
 
-MCLA-R `0.11.0.0` pins ReXGlue `v0.12.0.0` commit
-`84f9ec28ef76781768fe23080bfc08defdcfc334`. The current private child is:
+The first causal trace used MCLA-R `0.10.0.0` with ReXGlue `v0.11.0.0`.
+MCLA-R `0.11.0.0` then pinned ReXGlue `v0.12.0.0`, selected the already
+compiled native Vulkan backend under Proton/Wine, and added visible F10 status.
+The returned Proton 9.0-4 run proves that bypassing D3D12-to-VKD3D did not fix
+the severe gameplay cadence or audio breakup.
 
-`mcla-0.11.0.0-win64-86CDF916E35F65DF-6E42A5CA4417D209-58B3385C89D9E499`
+The current diagnostic build is MCLA-R `0.12.0.0` with ReXGlue `v0.13.0.0`
+commit `e66cfd2e2020e71bb001af62fedb37faab4caf68`. It adds read-only monotonic
+Vulkan stage counters and native-thread CPU samples to each F10 state package.
+The current private child is:
+
+`mcla-0.12.0.0-win64-80826022C0CEC134-8824D0B85BBA533F-58B3385C89D9E499`
 
 Its immutable manifest SHA-256 is
-`89D4D648E49BE467563AA52B8ED06AB05F90933106FE2EB014EAEB7CE6C3E3A8`;
+`AFAB6F7EB512037A5FE4DFCBB34B29CE5D8BEA507463B13C9D9D0CF8EF672A6D`;
 the 25-file hash lock SHA-256 is
-`347696A2D91E914B8350E2A72DDEEDF92E260346E902F52EE8DB95C0DF36D8A2`.
-Clean Windows build, relocation, diagnostics, launcher verification, and
-current-child-only retention passed in private run
-`bundle-20260904-171436-fdf6e2c9`. The obsolete 0.10.0.0 child's returned
-diagnostics, logs, and results were preserved below
-`private/evidence/M7-016/deck-return-20260904-proton-9.0-4` before its verified
-stale unlocked writer lock and multi-gigabyte payload were pruned.
+`926A9223E46C486CD30D301B28B50448304614264B70B0305283F9EC906C8BB6`.
+Clean build, publication, relocation, launcher verification, and guest-free
+diagnostics passed in private run `bundle-20260904-185630-b120dcc6`. This is
+diagnostic instrumentation, not a performance-fix claim.
 
-## Returned Proton 9.0-4 trace
+## Returned Proton 9.0-4 evidence
 
 The owner observed MangoHUD reporting 86--90 presentations per second while
 static and roughly 50 while driving, while perceived gameplay was mostly 1--5
-FPS and at best roughly 10. Driving also caused audio breakup while MangoHUD
-reported only about 50--60 percent CPU/GPU utilization and an 800--900 MHz GPU
-clock.
+FPS and at best roughly 10. Driving also caused audio breakup. MangoHUD showed
+moderate CPU/GPU utilization and initially let the GPU fall to roughly
+600--900 MHz. Forcing a 1,600-MHz GPU clock did not improve perceived cadence,
+so the low clock is evidence of idle GPU capacity, not the cause of the stall.
 
-The same-process active-driving F10 pair measured 7.34 unique guest outputs/s
-against 59.93 guest vblanks/s, or 12.24 percent. Its guest-frame interval was
-116.86 ms median and 134.46 ms p95. The bounded audit recorded 1,152 audio
-underruns, two streaming stalls, five shader translations, and six pipeline
-creations. The renderer CPU/GPU fields are wall-clock submission spans that
-include queue idle and therefore are not pure active-work timings; no specific
-CPU or GPU bottleneck is claimed from them.
+The original D3D12 same-process active-driving F10 pair measured 7.34 unique
+guest outputs/s against 59.93 guest vblanks/s, or 12.24 percent. Its
+guest-frame interval was 116.86 ms median and 134.46 ms p95. The bounded audit
+recorded 1,152 audio underruns, two streaming stalls, five shader translations,
+and six pipeline creations.
 
-## Current candidate
+The subsequent native-Vulkan pair is:
 
-ReXGlue v0.12.0.0 exposes the already compiled Xenos backend through
-`RuntimeConfig::gpu_backend` and `--gpu_backend=any|d3d12|vulkan`. MCLA keeps
-the `any`/D3D12 default on native Windows and selects native Vulkan when Proton
-or Wine environment markers are present, avoiding the extra D3D12-to-VKD3D
-translation layer. The portable launcher accepts
-`--gpu-backend=d3d12` as an explicit fallback and A/B route. This is a physical
-test candidate, not a performance-fix claim.
+- `live-20260904T174147Z-340-1`
+- `live-20260904T174244Z-340-2`
 
-F10 no longer relies on the inaudible Windows completion sound under Proton. A
-top-right, input-transparent overlay displays `F10: RECORDING...` during the
-worker capture and `F10: READY` for approximately one second only after the
-package and latest pointer are published. Repeated and failed requests display
-`BUSY` and `FAILED` respectively.
+Across its 57-second interval, the title produced 505 unique guest outputs
+(8.86/s) while advancing 3,442 guest vblanks (60.39/s), or 14.67 percent.
+The returned runtime selected Vulkan on RADV VANGOGH with Mesa 26. One
+asynchronous placeholder skip was logged. Thirty-eight pipeline-creation
+messages were present but tapered instead of continuing throughout the
+capture. Native Vulkan therefore improved neither the observed order of
+magnitude nor the audio behavior enough to disposition KI-027.
 
-`scripts/analyze-portable-deck-performance.ps1` selects a monotonic pair of
-complete F10 packages from one process and reports:
+## Current causal capture
 
-- guest output and guest vblank deltas and rates;
-- frame-interval p50/p95/max;
-- renderer wall-clock submission-span p50/p95/max where that audit exists;
-- streaming reads/stalls, audio underruns, shader translations, and pipeline
-  creations;
-- a conservative long-span, outside-recorded-span, or inconclusive
-  classification.
+ReXGlue v0.13.0.0 exposes a read-only
+`GraphicsPerformanceDiagnosticSnapshot` from the active command processor.
+The Vulkan implementation accumulates, without per-frame file I/O:
 
-Vulkan packages need not contain the D3D12-only triggered audit; the unique
-guest-output/vblank pair remains valid and the analyzer reports the audit as
-unavailable rather than rejecting the package.
+- guest frames opened and closed, issue-swap calls, successful and failed
+  output refreshes, asynchronous placeholder skips, and missing swap sources;
+- submission count and cumulative time in frame-fence wait, pipeline-end,
+  deferred command execution, queue submission, and total guest-frame wall
+  span.
+
+MCLA F10 state also records the Windows native thread ID, name when available,
+base priority, and cumulative user/kernel CPU time for every process thread.
+The analyzer compares two same-process packages, calculates per-frame or
+per-submission Vulkan stage averages, identifies the largest measured stage,
+and reports the twelve native threads with the greatest CPU-time delta. Older
+F10 packages remain accepted with these new sections reported as unavailable.
+
+The next physical input is deliberately short: reach moving gameplay under
+Proton 9.0-4, press F10 and wait for `READY`, drive for 30--60 seconds while the
+slowdown and audio breakup are active, then press F10 again and wait for
+`READY`. No forced GPU clock or full compatibility matrix is needed for this
+capture.
 
 ## Gates
 
-- ReXGlue v0.12.0.0 clean dual-backend Release build/install: PASS.
+- ReXGlue v0.13.0.0 clean dual-backend Release build/install: PASS.
 - ReXGlue full RelWithDebInfo suite: 1,802 executed PASS, four known skips,
   zero failures out of 1,806 registered tests.
-- Focused ReXGlue frame-audit tests: 11 assertions / 3 cases PASS.
-- Existing performance telemetry contract: 1 positive / 14 fail-closed
-  negatives / 22 source checks PASS.
 - Deck analyzer fixture: 2 positives / 2 fail-closed negatives PASS.
-- Portable bundle fixture: PASS.
-- Build-matrix fixture: 1 positive / 6 negatives PASS.
-- Diagnostics source fixture: 1 positive / 7 fail-closed negatives / 41 source
+- MCLA Release compile with the new SDK diagnostic surface: PASS.
+- Direct guest-free diagnostic state probe: graphics and native-thread
+  sections PASS.
+- Diagnostics source fixture: 1 positive / 7 fail-closed negatives / 45 source
   checks PASS.
+- Aggregate bootstrap: 12/12 PASS, including the exact SDK tag/commit/install
+  and all 6.57-GB game hashes.
 - Real Release diagnostics/crash package run
-  `20260904-171409-9cfb20e3`: PASS.
-- Clean current bundle/relocation run `bundle-20260904-171436-fdf6e2c9`: PASS.
+  `20260904-185258-3ebdc3e2`: PASS.
+- Clean current bundle/relocation run `bundle-20260904-185630-b120dcc6`: PASS.
+- Portable bundle fixture: 1 positive / 13 fail-closed negatives / 36 source
+  checks PASS.
 
-No MangoHUD correction or performance improvement is claimed yet. Physical
-closure requires launching the new child under Proton 9.0-4, confirming Vulkan
-selection in the returned runtime log, comparing perceived gameplay/audio and
-unique-output cadence, verifying the visible F10 `RECORDING` then `READY`
-states, and completing the remaining fullscreen-toggle/save/reload/recovery
-matrix. Use the explicit D3D12 override only if Vulkan fails or for a bounded
-A/B comparison.
+No MangoHUD correction, cadence improvement, or audio fix is claimed. The next
+returned F10 pair is required to distinguish a fence/submission wait from
+guest-side or another native-thread scheduling bottleneck before changing the
+runtime path.

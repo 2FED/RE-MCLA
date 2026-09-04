@@ -93,7 +93,26 @@ foreach ($manifest in @($liveManifest, $crashManifest)) {
     if ([string]$manifest.mcla_version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Diagnostic package has an invalid MCLA-R version.' }
     if ([bool]$manifest.privacy.automatic_upload -or [bool]$manifest.privacy.package_safe_to_share) { throw 'Diagnostic privacy contract drifted.' }
 }
-if ($state.schema -cne 'mcla-diagnostic-state-v1' -or -not $state.PSObject.Properties['process'] -or -not $state.PSObject.Properties['window'] -or -not $state.PSObject.Properties['runtime']) { throw 'Live state payload is incomplete.' }
+if ($state.schema -cne 'mcla-diagnostic-state-v1' -or -not $state.PSObject.Properties['process'] -or
+    -not $state.PSObject.Properties['window'] -or -not $state.PSObject.Properties['runtime'] -or
+    -not $state.PSObject.Properties['graphics'] -or -not $state.PSObject.Properties['native_threads']) {
+    throw 'Live state payload is incomplete.'
+}
+$graphicsCounters = @('backend','guest_frames_opened','guest_frames_closed','issue_swap_calls',
+    'guest_output_refresh_successes','guest_output_refresh_failures','async_placeholder_skips',
+    'swap_source_missing','submission_count','frame_fence_wait_us','pipeline_end_submission_us',
+    'deferred_execute_us','queue_submit_us','guest_frame_wall_us')
+foreach ($counter in $graphicsCounters) {
+    if (-not $state.graphics.PSObject.Properties[$counter]) { throw "Live graphics counter is missing: $counter." }
+}
+if ([uint32]$state.process.native_thread_count -ne @($state.native_threads).Count) {
+    throw 'Live native thread inventory count drifted.'
+}
+foreach ($thread in @($state.native_threads)) {
+    foreach ($property in @('id','base_priority','kernel_time_100ns','user_time_100ns','name')) {
+        if (-not $thread.PSObject.Properties[$property]) { throw "Live native thread property is missing: $property." }
+    }
+}
 if ($save.schema -cne 'mcla-save-snapshot-metadata-v1' -or [bool]$save.safe_to_share) { throw 'Save snapshot privacy metadata is invalid.' }
 Assert-SaveInventory $live $liveSaveInventory ([uint32]$liveManifest.capture.save_files) 'Live'
 Assert-SaveInventory $crash $crashSaveInventory ([uint32]$crashManifest.capture.save_files) 'Crash'

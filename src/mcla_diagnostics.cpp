@@ -64,6 +64,49 @@ constexpr size_t kRuntimeRetentionCount = 12;
 constexpr uint64_t kRuntimeRetentionBytes = 64ull * 1024 * 1024;
 constexpr auto kPartialRetentionAge = std::chrono::hours(24);
 
+struct NativeThreadSample {
+  uint32_t id = 0;
+  int32_t base_priority = 0;
+  uint64_t kernel_time_100ns = 0;
+  uint64_t user_time_100ns = 0;
+  std::string name;
+};
+
+#if defined(_WIN32)
+uint64_t FileTimeTicks(const FILETIME &value) {
+  ULARGE_INTEGER ticks{};
+  ticks.LowPart = value.dwLowDateTime;
+  ticks.HighPart = value.dwHighDateTime;
+  return ticks.QuadPart;
+}
+
+std::string ThreadDescription(HANDLE thread) {
+  using GetThreadDescriptionFunction = HRESULT(WINAPI *)(HANDLE, PWSTR *);
+  const auto function =
+      reinterpret_cast<GetThreadDescriptionFunction>(GetProcAddress(
+          GetModuleHandleW(L"kernel32.dll"), "GetThreadDescription"));
+  if (!function) {
+    return {};
+  }
+  PWSTR description = nullptr;
+  if (FAILED(function(thread, &description)) || !description) {
+    return {};
+  }
+  const int bytes =
+      WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, description, -1,
+                          nullptr, 0, nullptr, nullptr);
+  std::string result;
+  if (bytes > 1) {
+    result.resize(static_cast<size_t>(bytes));
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, description, -1,
+                        result.data(), bytes, nullptr, nullptr);
+    result.pop_back();
+  }
+  LocalFree(description);
+  return result;
+}
+#endif
+
 std::string PathUtf8(const std::filesystem::path &path) {
 #if defined(_WIN32)
   const auto value = path.u8string();
@@ -673,9 +716,11 @@ bool AddArtifact(std::vector<Artifact> &artifacts,
   return true;
 }
 
-std::string BuildStateJson(std::string_view reason, const UiState &ui,
-                           const RuntimeState &runtime, uint64_t working_set,
-                           uint32_t handles, uint32_t native_threads) {
+std::string
+BuildStateJson(std::string_view reason, const UiState &ui,
+               const RuntimeState &runtime, uint64_t working_set,
+               uint32_t handles,
+               const std::vector<NativeThreadSample> &native_threads) {
   std::ostringstream out;
   out << "{\n"
       << "  \"schema\": \"mcla-diagnostic-state-v1\",\n"
@@ -683,7 +728,7 @@ std::string BuildStateJson(std::string_view reason, const UiState &ui,
       << "  \"process\": {\"pid\": " << ProcessId()
       << ", \"working_set_bytes\": " << working_set
       << ", \"handle_count\": " << handles
-      << ", \"native_thread_count\": " << native_threads << "},\n"
+      << ", \"native_thread_count\": " << native_threads.size() << "},\n"
       << "  \"window\": {\"logical_width\": " << ui.logical_width
       << ", \"logical_height\": " << ui.logical_height
       << ", \"physical_width\": " << ui.physical_width
@@ -696,9 +741,41 @@ std::string BuildStateJson(std::string_view reason, const UiState &ui,
       << ", \"guest_output_sequence\": " << runtime.guest_output_sequence
       << ", \"guest_vblank_sequence\": " << runtime.guest_vblank_sequence
       << "},\n"
+      << "  \"graphics\": {\"backend\": " << runtime.graphics_backend
+      << ", \"guest_frames_opened\": " << runtime.graphics_guest_frames_opened
+      << ", \"guest_frames_closed\": " << runtime.graphics_guest_frames_closed
+      << ", \"issue_swap_calls\": " << runtime.graphics_issue_swap_calls
+      << ", \"guest_output_refresh_successes\": "
+      << runtime.graphics_guest_output_refresh_successes
+      << ", \"guest_output_refresh_failures\": "
+      << runtime.graphics_guest_output_refresh_failures
+      << ", \"async_placeholder_skips\": "
+      << runtime.graphics_async_placeholder_skips
+      << ", \"swap_source_missing\": " << runtime.graphics_swap_source_missing
+      << ", \"submission_count\": " << runtime.graphics_submission_count
+      << ", \"frame_fence_wait_us\": " << runtime.graphics_frame_fence_wait_us
+      << ", \"pipeline_end_submission_us\": "
+      << runtime.graphics_pipeline_end_submission_us
+      << ", \"deferred_execute_us\": " << runtime.graphics_deferred_execute_us
+      << ", \"queue_submit_us\": " << runtime.graphics_queue_submit_us
+      << ", \"guest_frame_wall_us\": " << runtime.graphics_guest_frame_wall_us
+      << "},\n"
       << "  \"race_back_trace\": {\"sequence\": " << runtime.race_back_sequence
       << ", \"handler_calls\": " << runtime.race_back_handler_calls
-      << ", \"apply_calls\": " << runtime.race_back_apply_calls << "}\n"
+      << ", \"apply_calls\": " << runtime.race_back_apply_calls << "},\n"
+      << "  \"native_threads\": [";
+  for (size_t i = 0; i < native_threads.size(); ++i) {
+    const auto &thread = native_threads[i];
+    if (i) {
+      out << ',';
+    }
+    out << "{\"id\": " << thread.id
+        << ", \"base_priority\": " << thread.base_priority
+        << ", \"kernel_time_100ns\": " << thread.kernel_time_100ns
+        << ", \"user_time_100ns\": " << thread.user_time_100ns
+        << ", \"name\": \"" << JsonEscape(thread.name) << "\"}";
+  }
+  out << "]\n"
       << "}\n";
   return out.str();
 }
@@ -888,7 +965,7 @@ public:
 
     uint64_t working_set = 0;
     uint32_t handles = 0;
-    uint32_t native_threads = 0;
+    std::vector<NativeThreadSample> native_threads;
 #if defined(_WIN32)
     PROCESS_MEMORY_COUNTERS_EX counters{};
     counters.cb = sizeof(counters);
@@ -909,12 +986,30 @@ public:
       if (Thread32First(thread_snapshot, &entry)) {
         do {
           if (entry.th32OwnerProcessID == GetCurrentProcessId()) {
-            ++native_threads;
+            NativeThreadSample sample;
+            sample.id = entry.th32ThreadID;
+            sample.base_priority = entry.tpBasePri;
+            HANDLE thread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE,
+                                       entry.th32ThreadID);
+            if (thread) {
+              FILETIME creation{}, exit{}, kernel{}, user{};
+              if (GetThreadTimes(thread, &creation, &exit, &kernel, &user)) {
+                sample.kernel_time_100ns = FileTimeTicks(kernel);
+                sample.user_time_100ns = FileTimeTicks(user);
+              }
+              sample.name = ThreadDescription(thread);
+              CloseHandle(thread);
+            }
+            native_threads.push_back(std::move(sample));
           }
         } while (Thread32Next(thread_snapshot, &entry));
       }
       CloseHandle(thread_snapshot);
     }
+    std::sort(native_threads.begin(), native_threads.end(),
+              [](const NativeThreadSample &a, const NativeThreadSample &b) {
+                return a.id < b.id;
+              });
 #endif
     if (!WriteText(partial / "state.json",
                    BuildStateJson(reason, ui, runtime_state, working_set,

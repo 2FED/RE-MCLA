@@ -30,7 +30,20 @@ try {
     [IO.File]::WriteAllBytes($liveSave,[byte[]](1,2,3,4));[IO.File]::WriteAllBytes($crashSave,[byte[]](1,2,3,4))
     Write-Json (Join-Path $live 'save-files-private.json') ([ordered]@{schema='mcla-private-save-inventory-v1';safe_to_share=$false;files=@([ordered]@{path=$saveRelative;bytes=4;sha256=(Hash $liveSave)})})
     Write-Json (Join-Path $crash 'save-files-private.json') ([ordered]@{schema='mcla-private-save-inventory-v1';safe_to_share=$false;files=@([ordered]@{path=$saveRelative;bytes=4;sha256=(Hash $crashSave)})})
-    Write-Json (Join-Path $live 'state.json') ([ordered]@{schema='mcla-diagnostic-state-v1';process=@{};window=@{};runtime=@{}})
+    Write-Json (Join-Path $live 'state.json') ([ordered]@{
+        schema='mcla-diagnostic-state-v1'
+        process=[ordered]@{native_thread_count=1}
+        window=@{}
+        runtime=@{}
+        graphics=[ordered]@{
+            backend=2;guest_frames_opened=10;guest_frames_closed=10;issue_swap_calls=10
+            guest_output_refresh_successes=10;guest_output_refresh_failures=0
+            async_placeholder_skips=0;swap_source_missing=0;submission_count=20
+            frame_fence_wait_us=100;pipeline_end_submission_us=200
+            deferred_execute_us=300;queue_submit_us=400;guest_frame_wall_us=5000
+        }
+        native_threads=@([ordered]@{id=1;base_priority=8;kernel_time_100ns=10;user_time_100ns=20;name='fixture'})
+    })
     Write-Json (Join-Path $live 'save-metadata.json') ([ordered]@{schema='mcla-save-snapshot-metadata-v1';safe_to_share=$false})
     $liveManifest=[ordered]@{schema='mcla-diagnostic-package-v1';kind='live';mcla_version='0.8.0.0';privacy=[ordered]@{automatic_upload=$false;package_safe_to_share=$false};capture=[ordered]@{frame=$false;minidump=$true;save_files=1};artifacts=@(
         [ordered]@{name='state.json';bytes=(Get-Item (Join-Path $live 'state.json')).Length;sha256=(Hash (Join-Path $live 'state.json'));safe_to_share=$true},
@@ -74,12 +87,12 @@ try {
     Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'missing crash journal'
 
     $source = [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_app.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_diagnostics.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_native_crash_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_crash_handler_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'CMakeLists.txt'))
-    foreach($needle in @('bind_mcla_debug_snapshot','"F10"','QueueDiagnosticSnapshot("f10")','mcla_diagnostics_snapshot_probe','mcla_native_crash_probe','mcla_native_crash_post_setup_probe','mcla_crash_reporter_dialog','MessageBoxW','RefreshCrashHandlers','live_completed_sequence','PROC_THREAD_ATTRIBUTE_HANDLE_LIST','EXTENDED_STARTUPINFO_PRESENT','rotating_file_sink_mt','kMaxSaveEntries','kMaxLiveDumpBytes','kMaxCrashDumpBytes','WriteTextAtomic','snapshot worker failed','CaptureWindowFrame','GPU readback/fence wait','MiniDumpWriteDump','SetUnhandledExceptionFilter','std::set_terminate','SIGABRT','CREATE_NO_WINDOW','MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules','automatic_upload','package_safe_to_share','save-private','save-files-private.json','runtime-journal-private.log','"frame.bmp", false','FILE_ATTRIBUTE_REPARSE_POINT','if (!WriteText(partial / "manifest.json", manifest.str()))','add_executable(mcla_crash_handler WIN32')) { if(-not$source.Contains($needle)){throw "Diagnostic source contract missing: $needle"} }
+    foreach($needle in @('bind_mcla_debug_snapshot','"F10"','QueueDiagnosticSnapshot("f10")','mcla_diagnostics_snapshot_probe','mcla_native_crash_probe','mcla_native_crash_post_setup_probe','mcla_crash_reporter_dialog','MessageBoxW','RefreshCrashHandlers','live_completed_sequence','PROC_THREAD_ATTRIBUTE_HANDLE_LIST','EXTENDED_STARTUPINFO_PRESENT','rotating_file_sink_mt','kMaxSaveEntries','kMaxLiveDumpBytes','kMaxCrashDumpBytes','WriteTextAtomic','snapshot worker failed','CaptureWindowFrame','GPU readback/fence wait','MiniDumpWriteDump','SetUnhandledExceptionFilter','std::set_terminate','SIGABRT','CREATE_NO_WINDOW','MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules','automatic_upload','package_safe_to_share','save-private','save-files-private.json','runtime-journal-private.log','"frame.bmp", false','FILE_ATTRIBUTE_REPARSE_POINT','if (!WriteText(partial / "manifest.json", manifest.str()))','add_executable(mcla_crash_handler WIN32','GetThreadTimes','GetThreadDescription','graphics_guest_frames_opened','NativeThreadSample')) { if(-not$source.Contains($needle)){throw "Diagnostic source contract missing: $needle"} }
     foreach($forbidden in @('MiniDumpWithFullMemory |','MiniDumpWithHandleData |','MiniDumpWithPrivateReadWriteMemory |','basic_file_sink_mt')) { if($source.Contains($forbidden)){throw "Forbidden diagnostic mode found: $forbidden"} }
     foreach($needle in @('F10: RECORDING...','F10: READY','F10: BUSY','F10: FAILED','snapshot_status() const','SnapshotStatus::kCapturing')) {
         if(-not$source.Contains($needle)){throw "Diagnostic status overlay contract missing: $needle"}
     }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=41}
+    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=45}
 }
 finally {
     if(Test-Path -LiteralPath $root){

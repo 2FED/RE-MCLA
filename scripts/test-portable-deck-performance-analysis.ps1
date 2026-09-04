@@ -16,8 +16,25 @@ function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vb
     $dir = Join-Path $root "diagnostics\live\$Name"
     [IO.Directory]::CreateDirectory($dir) | Out-Null
     $stamp = [regex]::Match($Name, 'live-(\d{8}T\d{6}Z)-').Groups[1].Value
-    $state = [ordered]@{schema='mcla-diagnostic-state-v1';reason='f10';process=[ordered]@{pid=$ProcessId};runtime=[ordered]@{available=$true;guest_output_sequence=$Outputs;guest_vblank_sequence=$Vblanks}}
-    Write-Utf8 (Join-Path $dir 'state.json') ($state | ConvertTo-Json -Depth 5)
+    $state = [ordered]@{
+        schema='mcla-diagnostic-state-v1'
+        reason='f10'
+        process=[ordered]@{pid=$ProcessId}
+        runtime=[ordered]@{available=$true;guest_output_sequence=$Outputs;guest_vblank_sequence=$Vblanks}
+        graphics=[ordered]@{
+            backend=2;guest_frames_opened=$Outputs;guest_frames_closed=$Outputs;issue_swap_calls=$Outputs
+            guest_output_refresh_successes=$Outputs;guest_output_refresh_failures=0
+            async_placeholder_skips=0;swap_source_missing=0;submission_count=($Outputs * 2)
+            frame_fence_wait_us=($Outputs * 100);pipeline_end_submission_us=($Outputs * 200)
+            deferred_execute_us=($Outputs * 300);queue_submit_us=($Outputs * 400)
+            guest_frame_wall_us=($Outputs * 5000)
+        }
+        native_threads=@(
+            [ordered]@{id=100;base_priority=8;kernel_time_100ns=($Outputs * 1000);user_time_100ns=($Outputs * 10000);name='GPU Commands'}
+            [ordered]@{id=101;base_priority=8;kernel_time_100ns=($Outputs * 500);user_time_100ns=($Outputs * 1000);name='Main XThread'}
+        )
+    }
+    Write-Utf8 (Join-Path $dir 'state.json') ($state | ConvertTo-Json -Depth 8)
     $lines = @('[core] ordinary log')
     if ($WithAudit) {
         $lines += '[core] REX_PERF_AUDIT_CONFIG v=1 enabled=1 backend=d3d12 sample_limit=300 streaming_stall_us=5000'
@@ -48,13 +65,17 @@ try {
     if (-not $result.Passed -or $result.GuestOutputRateHz -ne 20 -or $result.GuestVblankRateHz -ne 60 -or
         $result.Audit.Samples -ne 300 -or $result.Audit.SampleRateHz -ne 20 -or
         -not $result.AuditAvailable -or
+        $result.Graphics.GuestFramesClosed -ne 600 -or
+        $result.Graphics.DominantMeasuredStage -cne 'unattributed_frame_wall' -or
+        $result.ThreadCpuTop[0].Name -cne 'GPU Commands' -or
         $result.Audit.Classification -cne 'outside-recorded-submission-span') { throw 'Positive Deck performance analysis fixture did not produce the expected result.' }
 
     Remove-Item -LiteralPath $second -Recurse -Force
     $second = Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false
     $nativeResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
     if (-not $nativeResult.Passed -or $nativeResult.AuditAvailable -or $null -ne $nativeResult.Audit -or
-        $nativeResult.GuestOutputRateHz -ne 20) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
+        $nativeResult.GuestOutputRateHz -ne 20 -or $null -eq $nativeResult.Graphics -or
+        $nativeResult.ThreadCpuTop.Count -ne 2) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
 
     $negative = 0
     Add-Content -LiteralPath (Join-Path $first 'state.json') -Value 'tamper'
