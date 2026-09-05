@@ -18,7 +18,8 @@ $privateRoot = [IO.Path]::GetFullPath((Join-Path $repo 'private'))
 if (-not $output.StartsWith($privateRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Portable campaign bundles must remain below ignored private/ output.'
 }
-$build = Join-Path $repo 'out\build\win-amd64-release'
+# Keep publication builds separate from legacy hardlinked developer outputs.
+$build = Join-Path $repo 'out\build\win-amd64-portable-release'
 $game = Join-Path $repo 'private\game'
 $gameManifestPath = Join-Path $repo 'private\game-manifest.json'
 $version = ([IO.File]::ReadAllText((Join-Path $repo 'VERSION'))).Trim()
@@ -139,9 +140,9 @@ $selectedHeaderHash = Get-Sha256 $selectedHeader
 if (-not $SkipCleanBuild) {
     Write-Host 'M7-016 [2/6]: clean-building the toolchain-free Release runtime and native launcher...' -ForegroundColor Cyan
     & (Join-Path $PSScriptRoot 'Resolve-Toolchain.ps1') -ExportPath | Out-Null
-    & cmake --preset win-amd64-release *>&1 | Tee-Object -FilePath $buildLog | Out-Null
+    & cmake --preset win-amd64-release -B $build *>&1 | Tee-Object -FilePath $buildLog | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Release configure failed. Private evidence: '$evidence'." }
-    & cmake --build --preset win-amd64-release --target mcla --clean-first --parallel 8 *>&1 | Tee-Object -FilePath $buildLog -Append | Out-Null
+    & cmake --build $build --target mcla --clean-first --parallel 8 *>&1 | Tee-Object -FilePath $buildLog -Append | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Release build failed. Private evidence: '$evidence'." }
 } else {
     [IO.File]::WriteAllText($buildLog, "clean build deliberately skipped`r`n", $utf8)
@@ -167,9 +168,11 @@ try {
     foreach ($directory in @('bin','game','user','cache','logs','diagnostics','results','update','metadata')) {
         [IO.Directory]::CreateDirectory((Join-Path $partial $directory)) | Out-Null
     }
-    $null = $copyModes.Add((Copy-OrLink $launcherSource (Join-Path $partial 'Launch-MCLA.exe')))
+    # Build outputs may be overwritten in place by a later linker/staging copy.
+    # Never hardlink them into an already published immutable bundle.
+    $null = $copyModes.Add((Copy-OrLink $launcherSource (Join-Path $partial 'Launch-MCLA.exe') -Materialize))
     foreach ($name in @('mcla.exe','mcla_crash_handler.exe','rexruntime.dll','TracyClient.dll','rexgpu-xenos.dll')) {
-        $null = $copyModes.Add((Copy-OrLink (Join-Path $build $name) (Join-Path $partial ('bin\' + $name))))
+        $null = $copyModes.Add((Copy-OrLink (Join-Path $build $name) (Join-Path $partial ('bin\' + $name)) -Materialize))
     }
     $portableConfig = [IO.File]::ReadAllText((Join-Path $repo 'config\mcla.toml.example'))
     $portableConfig = $portableConfig.Replace('mcla_diagnostics_root = ""','mcla_diagnostics_root = "diagnostics"')
@@ -202,8 +205,8 @@ try {
         task = 'M7-016'
         bundle_id = $bundleId
         project_version = $version
-        sdk_version = '0.14.0.0'
-        sdk_commit = '5cc7134845504dd60ba66090880be766a58ab2bb'
+        sdk_version = '0.15.0.0'
+        sdk_commit = 'a88eefcec058975bc01be54ab7a8ee424ce73630'
         created_utc = [DateTime]::UtcNow.ToString('O')
         platform = 'windows-proton'
         architecture = 'x86_64'
@@ -274,8 +277,8 @@ try {
         bundle_id = $bundleId
         bundle_path = $final.Substring($repo.TrimEnd('\').Length + 1).Replace('\','/')
         project_version = $version
-        sdk_version = '0.14.0.0'
-        sdk_commit = '5cc7134845504dd60ba66090880be766a58ab2bb'
+        sdk_version = '0.15.0.0'
+        sdk_commit = 'a88eefcec058975bc01be54ab7a8ee424ce73630'
         bundle_manifest_sha256 = Get-Sha256 (Join-Path $final 'bundle-manifest.json')
         bundle_lock_sha256 = Get-Sha256 (Join-Path $final 'bundle-files.sha256')
         immutable_file_count = $staged.ImmutableFiles

@@ -765,6 +765,27 @@ BuildStateJson(std::string_view reason, const UiState &ui,
       << runtime.graphics_memory_non_mmio_write_fault_count
       << ", \"memory_non_mmio_write_fault_us\": "
       << runtime.graphics_memory_non_mmio_write_fault_us
+      << ", \"command_primary_buffer_count\": " << runtime.graphics_command_primary_buffer_count
+      << ", \"command_primary_buffer_us\": " << runtime.graphics_command_primary_buffer_us
+      << ", \"command_draw_packet_count\": " << runtime.graphics_command_draw_packet_count
+      << ", \"command_draw_packet_us\": " << runtime.graphics_command_draw_packet_us
+      << ", \"command_swap_packet_count\": " << runtime.graphics_command_swap_packet_count
+      << ", \"command_swap_packet_us\": " << runtime.graphics_command_swap_packet_us
+      << ", \"command_interrupt_packet_count\": " << runtime.graphics_command_interrupt_packet_count
+      << ", \"command_interrupt_packet_us\": " << runtime.graphics_command_interrupt_packet_us
+      << ", \"vulkan_fence_call_count\": " << runtime.graphics_vulkan_fence_call_count
+      << ", \"vulkan_fence_call_us\": " << runtime.graphics_vulkan_fence_call_us
+      << ", \"memory_write_fault_lock_wait_us\": " << runtime.graphics_memory_write_fault_lock_wait_us
+      << ", \"memory_write_fault_query_us\": " << runtime.graphics_memory_write_fault_query_us
+      << ", \"memory_write_fault_callback_us\": " << runtime.graphics_memory_write_fault_callback_us
+      << ", \"memory_write_fault_already_cleared_count\": " << runtime.graphics_memory_write_fault_already_cleared_count
+      << ", \"memory_watch_arm_calls\": " << runtime.graphics_memory_watch_arm_calls
+      << ", \"memory_watch_arm_us\": " << runtime.graphics_memory_watch_arm_us
+      << ", \"memory_watch_arm_lock_wait_us\": " << runtime.graphics_memory_watch_arm_lock_wait_us
+      << ", \"memory_watch_disarm_calls\": " << runtime.graphics_memory_watch_disarm_calls
+      << ", \"memory_watch_disarm_us\": " << runtime.graphics_memory_watch_disarm_us
+      << ", \"memory_watch_protect_failures\": " << runtime.graphics_memory_watch_protect_failures
+      << ", \"memory_watch_arm_gap_splits\": " << runtime.graphics_memory_watch_arm_gap_splits
       << "},\n"
       << "  \"race_back_trace\": {\"sequence\": " << runtime.race_back_sequence
       << ", \"handler_calls\": " << runtime.race_back_handler_calls

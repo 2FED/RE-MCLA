@@ -2,7 +2,15 @@
 
 Date: 2026-09-04. Owner/reviewer: primary Codex agent, with independent
 read-only save/dependency/evidence review. Scope: planning/documentation;
-no runtime fix, physical test or new platform-support claim.
+no runtime fix, physical test or new platform-support claim in that review.
+
+2026-09-05 performance update: the 0.13.0.0 pair has returned and is archived.
+The owner confirms truthful overlay FPS, but gameplay remains 2--10 FPS;
+the pair measures 6.91 new outputs/s. Published 0.14.0.0 / SDK v0.15.0.0
+adds command/fence/protection/lock attribution under the explicit decision
+rules in [the current experiment](evidence/M7-016-deck-command-memory-cost.md).
+Native tests and relocation pass, not a Deck throughput fix. Old pending-pair
+wording below is historical where explicitly tied to the 2026-09-04 review.
 
 ## Decision
 
@@ -32,7 +40,7 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | Analyze pending 0.13.0.0 pair, attribute remaining cost, make one bounded causal correction at a time, verify actual driving/audio recovery. |
+| 1 | **M7-016 performance**, KI-027 | 0.13.0.0 return accepted; use the 0.14.0.0 cost split to choose one bounded causal correction, then verify actual driving/audio recovery. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |
 | 3 | **M7-016 remaining platform matrix**, then **M7-002** | Short input/audio/window/save/recovery checks; isolated clean-profile new-game/tutorial/unlock/name flow without touching owner progress. |
@@ -85,7 +93,8 @@ to distribute guest-derived shader content.
 
 ## Performance experiment protocol
 
-1. Use the already published 0.13.0.0 candidate first. Record build/SDK/hash,
+1. Use the published 0.14.0.0 candidate for the next cost split. The 0.13.0.0
+   pair is already accepted; do not request it again. Record build/SDK/hash,
    Proton/backend/mode, resolution/save/route and cold/warm cache. Do not
    change clocks, renderer and scheduling simultaneously.
 2. Initial check: the requested 30--60-second driving interval between two
@@ -107,7 +116,7 @@ to distribute guest-derived shader content.
 
 The existing 2--6-month campaign estimate remains provisional, not a promise.
 The feasibility front gate has no reliable date yet; re-estimate after the
-pending pair and save-lineage implementation instead of inventing a deadline.
+pending cost split and successor-save reload instead of inventing a deadline.
 
 ## Context and review cadence
 
@@ -122,8 +131,9 @@ after updating the handoff. Compaction is supported, not a reason to restart
 after each message. Official guidance recommends focused chats and concise
 reusable instructions: [Codex best practices](https://learn.chatgpt.com/guides/best-practices).
 
-No milestone closes, extra physical session is scheduled or commit is pushed
-in this review. The pending 0.13.0.0 bundle and saves/evidence stay unchanged.
+No milestone closed, extra physical session was scheduled or commit pushed
+by the 2026-09-04 planning review. The 2026-09-05 experiment above now supersedes
+its pending artifact; the complete 0.13.0.0 return is archived outside sync.
 
 ## Review verification
 

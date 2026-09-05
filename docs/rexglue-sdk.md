@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.14.0.0`
-- Immutable project commit: `5cc7134845504dd60ba66090880be766a58ab2bb`
+- Project release tag: `v0.15.0.0`
+- Immutable project commit: `a88eefcec058975bc01be54ab7a8ee424ce73630`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -210,6 +210,16 @@ filtered `[offline]` suite passes 3/3 cases and 10/10 assertions without
 starting the manual-lifetime profiler. See the public report at
 [rexglue/rexglue-sdk#410](https://github.com/rexglue/rexglue-sdk/issues/410).
 
+The v0.15.0.0 delta adds 21 address-free command, Vulkan fence and physical
+memory-watch/fault phase counters. Packet scopes include early-return and
+exception paths; fault phases retain the successful non-MMIO write denominator.
+Native protection ranges, guest access rights, aliases, scheduling and coherency
+are unchanged. Timers are cumulative and nested across threads, not exclusive
+frame stages. Eight new regression cases exercise packet scopes, real protected
+writes, aliases and safe/unsafe watch gaps. RelWithDebInfo and tagged Release
+each pass 1,817 executed cases / four known skips / zero failures (1,821
+registered). See [Deck attribution evidence](evidence/M7-016-deck-command-memory-cost.md).
+
 ## Reproduction
 
 After cloning MCLA-R, initialize the pinned graph with:
@@ -223,19 +233,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-list -n 1 v0.14.0.0
+git -C third_party/rexglue-sdk rev-list -n 1 v0.15.0.0
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `5cc7134845504dd60ba66090880be766a58ab2bb`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `a88eefcec058975bc01be54ab7a8ee424ce73630`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.14.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.15.0.0 project-fork commit:
 
 ```text
-5cc7134845504dd60ba66090880be766a58ab2bb third_party/rexglue-sdk
+a88eefcec058975bc01be54ab7a8ee424ce73630 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

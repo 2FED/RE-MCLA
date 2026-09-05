@@ -21,6 +21,21 @@ function Get-OptionalProperty([object]$Object, [string]$Name) {
     return $property.Value
 }
 
+function Measure-OptionalCounterSet([object]$First, [object]$Second, [string[]]$Names, [string]$Label) {
+    $delta = [ordered]@{}
+    foreach ($name in $Names) {
+        $before = Get-OptionalProperty $First $name
+        $after = Get-OptionalProperty $Second $name
+        if ($null -eq $before -and $null -eq $after) { continue }
+        if ($null -eq $before -or $null -eq $after) { throw "Incomplete $Label diagnostic '$name'." }
+        if ([long]$before -lt 0 -or [long]$after -lt [long]$before) { throw "$Label diagnostic '$name' regressed or is negative." }
+        $delta[$name] = [long]$after - [long]$before
+    }
+    if ($delta.Count -eq 0) { return $null }
+    if ($delta.Count -ne $Names.Count) { throw "Incomplete $Label diagnostic counter set." }
+    return [pscustomobject]$delta
+}
+
 function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [double]$ElapsedSeconds) {
     $firstGraphics = Get-OptionalProperty $FirstState 'graphics'
     $secondGraphics = Get-OptionalProperty $SecondState 'graphics'
@@ -80,6 +95,39 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [doubl
             Scope = 'completed-wait-episodes; fault-time-aggregates-threads-and-excludes-OS-exception-delivery; not-additive-frame-stages'
         }
     }
+    # Added together as one versioned group. A partial set is not old evidence.
+    # Primary-buffer, packet and fence spans nest; memory spans aggregate threads.
+    # Keep their raw deltas separate, never infer an exclusive GPU/CPU remainder.
+    $detailNames = @(
+        'command_primary_buffer_count',
+        'command_primary_buffer_us',
+        'command_draw_packet_count',
+        'command_draw_packet_us',
+        'command_swap_packet_count',
+        'command_swap_packet_us',
+        'command_interrupt_packet_count',
+        'command_interrupt_packet_us',
+        'vulkan_fence_call_count',
+        'vulkan_fence_call_us',
+        'memory_write_fault_lock_wait_us',
+        'memory_write_fault_query_us',
+        'memory_write_fault_callback_us',
+        'memory_write_fault_already_cleared_count',
+        'memory_watch_arm_calls',
+        'memory_watch_arm_us',
+        'memory_watch_arm_lock_wait_us',
+        'memory_watch_disarm_calls',
+        'memory_watch_disarm_us',
+        'memory_watch_protect_failures',
+        'memory_watch_arm_gap_splits'
+    )
+    $detailDelta = Measure-OptionalCounterSet $firstGraphics $secondGraphics $detailNames 'command/memory'
+    $detailDiagnostics = if ($null -ne $detailDelta) {
+        [pscustomobject]@{
+            RawDelta = $detailDelta
+            Scope = 'completed-primary-and-packet-spans-inclusive-and-nested; native-fence-call-wall-only; memory-aggregates-threads; not-additive'
+        }
+    } else { $null }
     $closed = [Math]::Max(1L, [long]$delta.guest_frames_closed)
     $submissions = [Math]::Max(1L, [long]$delta.submission_count)
     $trackedSubmissionUs = [long]$delta.pipeline_end_submission_us +
@@ -114,6 +162,7 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [doubl
         DominantMeasuredStage = [string]$dominantStage
         RawDelta = [pscustomobject]$delta
         WaitDiagnostics = $waitDiagnostics
+        DetailDiagnostics = $detailDiagnostics
     }
 }
 

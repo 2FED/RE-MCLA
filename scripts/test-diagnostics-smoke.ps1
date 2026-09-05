@@ -98,7 +98,38 @@ try {
                          'graphics_memory_non_mmio_write_fault_us')) {
         if(-not$source.Contains($needle)){throw "Diagnostic wake/wait contract missing: $needle"}
     }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=53}
+    $header = [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_diagnostics.h'))
+    $app = [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_app.cpp'))
+    $writer = [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_diagnostics.cpp'))
+    $details = @(
+        'command_primary_buffer_count',
+        'command_primary_buffer_us',
+        'command_draw_packet_count',
+        'command_draw_packet_us',
+        'command_swap_packet_count',
+        'command_swap_packet_us',
+        'command_interrupt_packet_count',
+        'command_interrupt_packet_us',
+        'vulkan_fence_call_count',
+        'vulkan_fence_call_us',
+        'memory_write_fault_lock_wait_us',
+        'memory_write_fault_query_us',
+        'memory_write_fault_callback_us',
+        'memory_write_fault_already_cleared_count',
+        'memory_watch_arm_calls',
+        'memory_watch_arm_us',
+        'memory_watch_arm_lock_wait_us',
+        'memory_watch_disarm_calls',
+        'memory_watch_disarm_us',
+        'memory_watch_protect_failures',
+        'memory_watch_arm_gap_splits'
+    )
+    foreach ($field in $details) {
+        if (-not $header.Contains("uint64_t graphics_$field = 0;")) { throw "Missing initialized detail state: $field" }
+        if (-not $app.Contains("state.graphics_$field = graphics.$field;")) { throw "Missing SDK detail mapping: $field" }
+        if (-not $writer.Contains(('<< ", \"{0}\": " << runtime.graphics_{0}' -f $field))) { throw "Missing detail JSON field: $field" }
+    }
+    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=(53 + 3 * $details.Count)}
 }
 finally {
     if(Test-Path -LiteralPath $root){

@@ -113,7 +113,7 @@ if (-not $Fixture) {
     $cmake = Get-Content -LiteralPath (Join-Path $repo 'CMakeLists.txt') -Raw
     $bootstrap = Get-Content -LiteralPath (Join-Path $repo 'scripts/bootstrap.ps1') -Raw
     if ($cmake -notmatch 'MCLA_REXGLUE_VERSION\s+"0\.14\.0\.0"' -or
-        -not $bootstrap.Contains('5cc7134845504dd60ba66090880be766a58ab2bb', [StringComparison]::Ordinal) -or
+        -not $bootstrap.Contains('a88eefcec058975bc01be54ab7a8ee424ce73630', [StringComparison]::Ordinal) -or
         $build.sdk_version -cne '0.10.0.0' -or
         $build.sdk_commit -cne '5d3e98c064c38e0769b4f59d11729c8f6270eb83') {
         throw 'Tested alpha identity or its reviewed SDK hotfix successor drifted.'

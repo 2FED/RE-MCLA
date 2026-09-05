@@ -12,7 +12,7 @@ function Write-Utf8([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, $utf8)
 }
 
-function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit, [bool]$WithWait=$false, [long]$WaitScale=1) {
+function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit, [bool]$WithWait=$false, [long]$WaitScale=1, [string]$Detail='absent') {
     $dir = Join-Path $root "diagnostics\live\$Name"
     [IO.Directory]::CreateDirectory($dir) | Out-Null
     $stamp = [regex]::Match($Name, 'live-(\d{8}T\d{6}Z)-').Groups[1].Value
@@ -39,6 +39,37 @@ function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vb
         $state.graphics.command_wait_reg_mem_us = $Outputs * 2000 * $WaitScale
         $state.graphics.memory_non_mmio_write_fault_count = $Outputs * 10 * $WaitScale
         $state.graphics.memory_non_mmio_write_fault_us = $Outputs * 200000 * $WaitScale
+    }
+    if ($Detail -cne 'absent') {
+        $detailFields = @(
+            'command_primary_buffer_count',
+            'command_primary_buffer_us',
+            'command_draw_packet_count',
+            'command_draw_packet_us',
+            'command_swap_packet_count',
+            'command_swap_packet_us',
+            'command_interrupt_packet_count',
+            'command_interrupt_packet_us',
+            'vulkan_fence_call_count',
+            'vulkan_fence_call_us',
+            'memory_write_fault_lock_wait_us',
+            'memory_write_fault_query_us',
+            'memory_write_fault_callback_us',
+            'memory_write_fault_already_cleared_count',
+            'memory_watch_arm_calls',
+            'memory_watch_arm_us',
+            'memory_watch_arm_lock_wait_us',
+            'memory_watch_disarm_calls',
+            'memory_watch_disarm_us',
+            'memory_watch_protect_failures',
+            'memory_watch_arm_gap_splits'
+        )
+        foreach ($field in $detailFields) {
+            $state.graphics[$field] = if ($field.EndsWith('_us')) { $Outputs * 200000 } else { $Outputs * 10 }
+        }
+        if ($Detail -ceq 'partial') { $state.graphics.Remove('memory_watch_arm_calls') }
+        if ($Detail -ceq 'regressed') { $state.graphics.memory_watch_arm_us = 0 }
+        if ($Detail -ceq 'negative') { $state.graphics.memory_watch_arm_us = -1 }
     }
     Write-Utf8 (Join-Path $dir 'state.json') ($state | ConvertTo-Json -Depth 8)
     $lines = @('[core] ordinary log')
@@ -82,7 +113,8 @@ try {
     if (-not $nativeResult.Passed -or $nativeResult.AuditAvailable -or $null -ne $nativeResult.Audit -or
         $nativeResult.GuestOutputRateHz -ne 20 -or $null -eq $nativeResult.Graphics -or
         $nativeResult.ThreadCpuTop.Count -ne 2 -or
-        $null -ne $nativeResult.Graphics.WaitDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
+        $null -ne $nativeResult.Graphics.WaitDiagnostics -or
+        $null -ne $nativeResult.Graphics.DetailDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
 
     $negative = 0
     [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true)
@@ -102,6 +134,24 @@ try {
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Regressing wait fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
     [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true)
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true 1 'complete')
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'One-sided detail fixture unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete')
+    $detailResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    $raw = $detailResult.Graphics.DetailDiagnostics.RawDelta
+    if ($raw.command_primary_buffer_count -ne 6000 -or $raw.command_draw_packet_us -ne 120000000 -or
+        $raw.vulkan_fence_call_us -ne 120000000 -or $raw.memory_watch_arm_us -ne 120000000 -or
+        $raw.memory_write_fault_lock_wait_us -ne 120000000 -or
+        $detailResult.Graphics.DominantMeasuredStage -cne 'unattributed_frame_wall') {
+        throw 'Detailed fixture failed or nested/aggregate spans were subtracted from frame wall.'
+    }
+    foreach ($mode in @('partial','regressed','negative')) {
+        [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 $mode)
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw "$mode detail fixture unexpectedly passed." }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete')
     Add-Content -LiteralPath (Join-Path $first 'state.json') -Value 'tamper'
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Tampered state fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
@@ -109,7 +159,7 @@ try {
     [void](Write-Package 'live-20260904T120000Z-11-1' 11 100 600 $false)
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Mixed-process fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=3;FailClosedNegatives=$negative}
+    [pscustomobject]@{Passed=$true;PositiveFixtures=4;FailClosedNegatives=$negative}
 } finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }

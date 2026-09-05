@@ -3140,6 +3140,27 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
           graphics.memory_non_mmio_write_fault_count;
       state.graphics_memory_non_mmio_write_fault_us =
           graphics.memory_non_mmio_write_fault_us;
+      state.graphics_command_primary_buffer_count = graphics.command_primary_buffer_count;
+      state.graphics_command_primary_buffer_us = graphics.command_primary_buffer_us;
+      state.graphics_command_draw_packet_count = graphics.command_draw_packet_count;
+      state.graphics_command_draw_packet_us = graphics.command_draw_packet_us;
+      state.graphics_command_swap_packet_count = graphics.command_swap_packet_count;
+      state.graphics_command_swap_packet_us = graphics.command_swap_packet_us;
+      state.graphics_command_interrupt_packet_count = graphics.command_interrupt_packet_count;
+      state.graphics_command_interrupt_packet_us = graphics.command_interrupt_packet_us;
+      state.graphics_vulkan_fence_call_count = graphics.vulkan_fence_call_count;
+      state.graphics_vulkan_fence_call_us = graphics.vulkan_fence_call_us;
+      state.graphics_memory_write_fault_lock_wait_us = graphics.memory_write_fault_lock_wait_us;
+      state.graphics_memory_write_fault_query_us = graphics.memory_write_fault_query_us;
+      state.graphics_memory_write_fault_callback_us = graphics.memory_write_fault_callback_us;
+      state.graphics_memory_write_fault_already_cleared_count = graphics.memory_write_fault_already_cleared_count;
+      state.graphics_memory_watch_arm_calls = graphics.memory_watch_arm_calls;
+      state.graphics_memory_watch_arm_us = graphics.memory_watch_arm_us;
+      state.graphics_memory_watch_arm_lock_wait_us = graphics.memory_watch_arm_lock_wait_us;
+      state.graphics_memory_watch_disarm_calls = graphics.memory_watch_disarm_calls;
+      state.graphics_memory_watch_disarm_us = graphics.memory_watch_disarm_us;
+      state.graphics_memory_watch_protect_failures = graphics.memory_watch_protect_failures;
+      state.graphics_memory_watch_arm_gap_splits = graphics.memory_watch_arm_gap_splits;
     }
   }
   state.race_back_sequence = race_back_probe_sequence.load();
