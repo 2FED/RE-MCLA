@@ -21,6 +21,8 @@
 #include <string_view>
 #include <vector>
 
+#include "mcla_portable_path_policy.h"
+
 namespace {
 
 constexpr size_t kHashCharacters = 64;
@@ -379,11 +381,27 @@ bool ValidateTree(const std::filesystem::path &root, std::string &error,
       error = "Syncthing conflict or incomplete transfer found: " + name;
       return false;
     }
-    if (lower.ends_with(".partial") &&
-        (!allow_recoverable_session_partials ||
-         !IsRecoverableSessionPartialPath(root, it->path()))) {
-      error = "incomplete bundle/session publication found: " + name;
-      return false;
+    if (lower.ends_with(".partial")) {
+      const auto relative = it->path().lexically_relative(root);
+      bool unfinished_live_diagnostic = false;
+      if (SafeRelative(relative)) {
+        const bool is_directory = it->is_directory(ec);
+        if (ec) {
+          error = "cannot inspect partial bundle entry: " + ec.message();
+          return false;
+        }
+        unfinished_live_diagnostic =
+            mcla::portable::IsUnfinishedLiveDiagnosticPartial(
+                ToUtf8(relative.generic_wstring()), is_directory);
+      }
+      if (!unfinished_live_diagnostic &&
+          (!allow_recoverable_session_partials ||
+           !IsRecoverableSessionPartialPath(root, it->path()))) {
+        error = "incomplete bundle/session publication found: " + name;
+        return false;
+      }
+      // Keep traversing unfinished diagnostics for unsafe descendants. Do not
+      // publish, recover, delete or use their private save copies as a seed.
     }
   }
   if (ec) {

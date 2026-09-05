@@ -180,10 +180,67 @@ alpha identity. Exact published bundle/launcher re-verifies after native probes.
 Logs are named `root-final-*`; post-tag SDK configure/all-target test/install
 logs are `sdk-binding-ns-retag-*`. No milestone task closed or pushed.
 
-Successor Deck cadence/audio remains pending. Request only the same-settings
-30-second gameplay pair and 30-second settled-pause pair, not another soak.
-Accept/reject using actual reuse, update cost, output cadence and owner audio/
-motion observations; preserve the complete progressed profile and all artifacts.
+The requested short successor comparison has now returned and is accepted
+below. Do not request another identical four-F10 run.
+
+## Accepted 0.16.0.1 Deck return: avoided work, no material cadence gain
+
+All four completed F10s arrived after the initially incomplete sync. Gameplay
+pair: live-20260905T151346Z-336-1 / 151424Z-336-2. Pause pair:
+151437Z-336-3 / 151515Z-336-4. Both intervals are 38 seconds, same PID 336,
+positive creation ticks 134330947656625730. Both explicit analyzer pairs pass.
+Shutdown 151532Z-336-5.partial is excluded, not counted as another F10.
+
+| Measurement | Gameplay | Pause |
+|---|---:|---:|
+| New outputs | 480 / 12.63 per second | 328 / 8.63 per second |
+| Previous 0.15.1 output rate | 12.78/s | 8.60/s |
+| Vblank cadence | 59.97/s | 60.13/s |
+| Closed frames / async placeholders | 495 / 15 | 328 / 0 |
+| Draw packets / closed frame | 4,090 | 9,225 |
+| Guest-frame wall / closed frame | 76.014 ms | 115.457 ms |
+| GPU Commands CPU, one-core basis | 81.00% | 87.08% |
+| Busiest guest CPU, one-core basis | 90.61% | 94.63% |
+| Completed binding calls / inclusive wall | 1,993,711 / 3.661381s | 3,003,519 / 5.210364s |
+| Reused / written texture stage sets | 773,803 / 1,217,155 | 1,209,760 / 2,069,278 |
+| Stage-set reuse | 38.87% | 36.89% |
+| Native descriptor updates / nested wall | 1,970,941 / 1.348343s | 2,973,343 / 1.800974s |
+| Actual Vulkan fence wall | 0.294923s | 0.018520s |
+| Resolve readback waits / wall | 26 / 0.300423s | 0 / 0s |
+
+The owner noticed no particular improvement. This agrees with essentially
+unchanged output cadence in both pairs. Reuse is real, but this experiment
+does NOT establish a material FPS/audio fix or close KI-027. Packet density
+differs (previous gameplay 4,421; pause 9,071), so this is not a controlled
+causal speedup/regression estimate. No pre-reuse binding-time counter exists;
+the actual amount of time saved cannot be calculated from these totals.
+
+Native updates are still numerous because constant descriptors still update.
+That fact is not sufficient evidence to optimize constants next. Binding wall
+includes nested operations; native-update wall is a subset, not an additional
+CPU budget. Neither can be subtracted from thread CPU or frame wall to invent
+an exclusive residual hotspot. GPU Commands uses 62.18 ms CPU/closed gameplay
+frame versus 62.58 previously, and 100.88 ms in pause; useful work, polling and
+driver work remain unattributed. Other gameplay guest threads use 67.76% and
+45.24% of a logical core; this is not an application using only two cores.
+
+Session session-20260905T151245Z-296 finished at 15:15:33Z, exit 0,
+state complete, 25 verified immutable files, one profile snapshot and zero
+watcher errors. Full four-file profile/album hashes remain as above. This
+unchanged short return is not proof of evolved successor-save continuity.
+Analysis: private/evidence/M7-016/deck-return-20260905-0.16.0.1/analysis.json.
+Full mutable return is archived outside Syncthing at
+private/evidence/M7-016/returned-bundles/<0.16.0.1 bundle id>/
+3EAEDE327B845C041138C52D578C6A7569B630F302AA73F1CF6F8F62A492CCBF.
+The current published executable, SDK, bundle pointer and source profile are
+unchanged. No rebuild, pruning, new runtime probe or milestone PASS is implied.
+
+Disposition: retain the reviewed conservative reuse policy as avoided work,
+not a proven FPS optimization. Complete this bounded comparison and move to
+[CPU profiling](M7-016-deck-cpu-profile-plan.md). Direct Deck capability,
+pause/gameplay recordings and narrow GPU copy callers have since been verified;
+see [current attribution](M7-016-deck-cpu-attribution.md). A new hardware sample
+must answer a new attribution question, not repeat this completed owner test.
 
 ## Next research boundary
 
@@ -192,5 +249,6 @@ for a separate CPU/multicore optimization investigation. This is not a matched
 benchmark. [The work package](../M7-priorities.md#separate-follow-up-deck-cpu-scaling--matched-xenia-baseline)
 records matching scene/settings/cache, supported sampling and independent-work
 design before any parallelization. Other guest threads already use CPU; two
-hot threads do not mean only two cores are active. Complete this bounded
-descriptor comparison first; no speculative affinity change or FPS promise.
+hot threads do not mean only two cores are active. The descriptor comparison
+is complete without a demonstrated gain; no speculative affinity change or
+FPS promise follows. KI-027 remains open.

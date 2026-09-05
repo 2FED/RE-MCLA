@@ -14,6 +14,10 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
     target_compile_features(mcla_frame_signal_test PRIVATE cxx_std_23)
+    add_executable(mcla_portable_path_policy_test EXCLUDE_FROM_ALL
+        tests/mcla_portable_path_policy_test.cpp)
+    target_include_directories(mcla_portable_path_policy_test PRIVATE src)
+    target_compile_features(mcla_portable_path_policy_test PRIVATE cxx_std_23)
 endif()
 
 set(MCLA_REXGLUE_VERSION "0.18.0.1")

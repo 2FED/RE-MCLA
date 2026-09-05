@@ -4,19 +4,23 @@ Date: 2026-09-04. Owner/reviewer: primary Codex agent, with independent
 read-only save/dependency/evidence review. Scope: planning/documentation;
 no runtime fix, physical test or new platform-support claim in that review.
 
-2026-09-05 performance update: four complete 0.15.1.0 F10s and the complete
-profile/album are accepted and hash-archived. Explicit gameplay/pause pairs
-yield 12.78/8.60 outputs/s versus prior 12.14/10.02. Pause packet density rose
-22%; per-packet GPU-thread CPU is essentially unchanged. PAUSE executes but
-no material gain or causal regression is established; pause resolve waits
-are still zero. Broken Wine unwinds do not identify descriptor cost.
-MCLA 0.16.0.1 / SDK v0.18.0.1 conservatively reuses unchanged same-epoch
-texture descriptor sets with actual-value comparisons and intact resource
-requests/barriers/lifetimes. Six counters measure actual reuse and update cost.
-Exact final native Vulkan and D3D12 controls pass saved gameplay/PAUSE/Settings;
-Vulkan shows about 50% cumulative stage-set reuse. This is avoided work, not
-a Deck speedup claim. Next: short same-settings Deck cost/cadence/audio evidence.
-See [the current experiment](evidence/M7-016-deck-descriptor-reuse.md).
+2026-09-05 performance update: all four 0.16.0.1 F10s, completed session and
+full profile/album are accepted and archived. Gameplay/pause 12.63/8.63
+outputs/s versus 12.78/8.60; no material descriptor-reuse cadence benefit.
+Stage-set reuse 38.87%/36.89% is actual avoided work; nested wall timers are
+not exclusive CPU budgets. Pause resolve waits remain zero. Keep the unchanged
+artifact for direct profiling, not another identical four-F10 run.
+Owner-approved Devkit/SSH access now works. A bounded exact-process userspace
+leaf profile in owner-confirmed pause has 4,249 samples, including a substantial
+guest active-wait block. This is not permission to remove synchronization.
+Both phase-confirmed leaf captures and exact SDK attribution are now complete.
+An additional private GPU-thread stack capture identifies large resolve-readback
+copies and uploads; this is partial cost attribution, not a performance fix.
+Next: a short same-scene diagnostic readback-cost control after normal session
+closure/archive, then choose the measured dependency-safe correction.
+See [CPU findings and limits](evidence/M7-016-deck-cpu-attribution.md).
+See [descriptor results](evidence/M7-016-deck-descriptor-reuse.md) and
+[CPU profiling](evidence/M7-016-deck-cpu-profile-plan.md).
 Old pending-pair wording below is historical only where explicitly tied to
 the 2026-09-04 review.
 
@@ -32,7 +36,7 @@ and the M7-016/M7-009 criteria are refined.
 
 | Priority | Evidence and problem | Disposition |
 |---|---|---|
-| P0 | KI-027: latest gameplay/pause pairs yield 12.78/8.60 new outputs/s; pause workload differs, and the spin hint shows no material gain. | Keep throughput/pacing/audio the M7-016 front gate; validate conservative descriptor reuse and measure avoided work before broad campaign coverage. |
+| P0 | KI-027: accepted descriptor return yields 12.63/8.63 new outputs/s, without material gain. Direct CPU profiles show guest waiting and serial command/copy/protection work. | Keep stock throughput/audio the front gate; use the exact caller evidence for one bounded readback-cost control, preserving required CPU consumers. |
 | P0 | Review found an M6-only seed-selection risk in the publisher. | KI-028: developer-side full-tree lineage/archive/publication protection implemented and fixture-tested in 0.13.2.0; actual progressed successor reload remains the next save gate. See [evidence](evidence/M7-009-portable-save-lineage.md). |
 | P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. | Separate tooling, accepted historical returns and pending physical correction; current candidate is 0.16.0.1, not a boot-only platform PASS. |
 | P1 | M7-001 matrix preparation waits for all of M7-016, while M7 prerequisites require a campaign checklist; reached-import auditing appears last. | Allow planning/save fixtures while awaiting hardware; audit reached imports incrementally, not only after two campaigns. |
@@ -48,7 +52,7 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | Accepted 0.15.1 pairs show no material hint gain and still zero pause resolve waits. Validate 0.16.0 descriptor reuse/cost and short driving/audio evidence; retain only evidence-backed optimizations. |
+| 1 | **M7-016 performance**, KI-027 | Descriptor comparison and direct CPU attribution retained; next short same-scene cost control, then reviewed correction with actual cadence/audio and image evidence. Zero resolve waits does not mean zero copies. |
 | 1, separate follow-up investigation | **M7-016 Deck CPU scaling / matched Xenia baseline** | Profile work versus waits and synchronization; compare identical scenes/settings before deciding which independent work can safely run in parallel. Produce an evidence-backed optimization backlog, not a core-affinity-only change or promised FPS gain. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |
@@ -102,15 +106,15 @@ to distribute guest-derived shader content.
 
 ## Performance experiment protocol
 
-1. Use 0.16.0.1 / SDK 0.18.0.1 for descriptor reuse and precise cumulative
-   update timing. The 0.15.1 gameplay/pause pairs are accepted; do not repeat
-   their attribution as a new test of unchanged code. Record build/SDK/hash,
+1. Keep 0.16.0.1 / SDK 0.18.0.1 fixed for direct CPU attribution. Its descriptor
+   gameplay/pause pairs are already accepted; do not repeat them as a new
+   owner test. Record build/SDK/hash,
    Proton/backend/mode, resolution/save/route and cold/warm cache. Do not
    change clocks, renderer and scheduling simultaneously.
-2. Capture two F10s 30 seconds apart during driving. Open pause, settle two
-   seconds, then capture two F10s 30 seconds apart while paused. Analyze each
-   pair explicitly with process-lifetime identity. Record owner motion/audio
-   observation; note capture overhead and the brief visible status overlay.
+2. Inspect the short exact-process userspace leaf capture before requesting
+   another physical action. Bind symbols to current PE/ELF identities, preserve
+   unresolved addresses, check lost samples and overhead. A later targeted
+   change gets a short matched comparison, not an automatic repeated soak.
 3. Compare new-output rate, available frame-time percentiles, underrun deltas,
    thread CPU, command waits, memory faults, shader/PSO/stream activity.
    Unavailable is unknown, not zero. Submission spans are not active GPU time;
@@ -130,13 +134,14 @@ to distribute guest-derived shader content.
    agreed campaign gate, not every small patch.
 
 The existing 2--6-month campaign estimate remains provisional, not a promise.
-The feasibility front gate has no reliable date yet; re-estimate after the
-descriptor comparison and successor-save reload instead of inventing a deadline.
+The feasibility front gate has no reliable date yet. Descriptor comparison is
+complete without material gain; re-estimate after the caller-guided cost control
+and successor-save reload instead of inventing a deadline.
 
 ## Separate follow-up: Deck CPU scaling / matched Xenia baseline
 
-Owner requested this bounded research package on 2026-09-05. Finish the
-current descriptor comparison first, then investigate remaining stock-mode
+Owner requested this bounded research package on 2026-09-05. The descriptor
+comparison is now complete without material gain; investigate remaining stock-mode
 headroom separately; M7-016 remains its owner and M8-011 later consumes the
 reproducible benchmark method for optional enhancements. No task ID is closed
 or added, and no new conversation or speculative threading rewrite is started.
