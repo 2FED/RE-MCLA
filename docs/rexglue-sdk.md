@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.17.1.0`
-- Immutable project commit: `2c7c99c8f7683279295c45b0278cf91b1f88815e`
+- Project release tag: `v0.18.0.1`
+- Immutable project commit: `9098e122afa116f4316d6cec47e561ebc5186974`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -254,7 +254,7 @@ exposed a test-only XAM temp-directory collision; atomic unique-directory
 ownership fixes it, with seven saved-game fixtures repeated five times per
 configuration. See [resolve evidence](evidence/M7-016-deck-resolve-readback.md).
 
-Current v0.17.1.0 preserves the exact Xenon db16cyc hint as one bounded host
+The preceding v0.17.1.0 preserves the exact Xenon db16cyc hint as one bounded host
 `simde_mm_pause()` instead of emitting only a comment. On x86 this compiles to
 PAUSE, not Sleep or an OS yield; it neither changes PPC state nor reproduces
 exactly sixteen Xenon cycles. Three PPC semantic cases plus an emission
@@ -263,9 +263,32 @@ All-target RelWithDebInfo, Release and tagged Release pass 1,838 tests plus
 four known skips. Actual MCLA non-force regeneration adds exactly 13 hints
 across four files; removing only those lines restores all 67 previous files
 byte-for-byte. The optimized native polling loop contains eight consecutive
-PAUSE instructions. CMake compatibility floor is 0.17.1; the parent pins the
+PAUSE instructions. Its compatibility floor was 0.17.1; the parent pins the
 full four-part tag and commit. Deck performance benefit is NOT proven.
 See [accepted return and correction](evidence/M7-016-deck-delay-hint.md).
+
+The v0.18.0.0 delta uses a one-entry-per-stage Vulkan descriptor snapshot keyed
+by actual ordered values, current set/validity and layout/frame/submission.
+Requests, uploads, barriers, usage marks and pool fences remain unchanged;
+misses allocate fresh sets and partial writes cannot publish reusable values.
+Layout/external/epoch transitions invalidate, with conservative full rebinding
+on layout change. Six public counters measure successful stage-set reuse/write
+and inclusive UpdateBindings/native-driver calls/time, so the compatibility
+floor advances to 0.18.0. Independent review and both all-target configurations
+pass 1,843 executed/four known skips (1,847 registered); tagged Release also
+passes. Five helper fixtures/37 assertions do not substitute for real Vulkan
+lifetime/failure injection or physical Deck evidence. See
+[current candidate and accepted return](evidence/M7-016-deck-descriptor-reuse.md).
+
+Current v0.18.0.1 corrects only the two new high-frequency elapsed counters:
+accumulate nanoseconds internally and convert cumulative totals to public
+microseconds. Per-call microsecond rounding on a native driver discarded
+short calls. Descriptor policy and the six-field schema/0.18.0 floor remain
+unchanged. Independent review, nanosecond/early-return/unwind fixtures and
+full all-target RelWithDebInfo/Release pass: 1,845 executed, four known skips
+(1,849 registered), zero failures. After making a new tag, explicitly rerun
+CMake configure before rebuilding/installing: tags alone do not invalidate
+cached package-version metadata. Exact installed metadata is a release gate.
 
 After cloning MCLA-R, initialize the pinned graph with:
 
@@ -278,19 +301,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-list -n 1 v0.17.1.0
+git -C third_party/rexglue-sdk rev-list -n 1 v0.18.0.1
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `2c7c99c8f7683279295c45b0278cf91b1f88815e`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `9098e122afa116f4316d6cec47e561ebc5186974`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.17.1.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.18.0.1 project-fork commit:
 
 ```text
-2c7c99c8f7683279295c45b0278cf91b1f88815e third_party/rexglue-sdk
+9098e122afa116f4316d6cec47e561ebc5186974 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

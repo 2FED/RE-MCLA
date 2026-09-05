@@ -72,6 +72,12 @@ struct RuntimeState {
   uint64_t graphics_vulkan_resolve_readback_copy_us = 0;
   uint64_t graphics_vulkan_resolve_readback_wait_count = 0;
   uint64_t graphics_vulkan_resolve_readback_wait_us = 0;
+  uint64_t graphics_vulkan_binding_update_count = 0;
+  uint64_t graphics_vulkan_binding_update_us = 0;
+  uint64_t graphics_vulkan_texture_descriptor_reuse_count = 0;
+  uint64_t graphics_vulkan_texture_descriptor_write_count = 0;
+  uint64_t graphics_vulkan_descriptor_update_count = 0;
+  uint64_t graphics_vulkan_descriptor_update_us = 0;
   uint64_t race_back_sequence = 0;
   uint64_t race_back_handler_calls = 0;
   uint64_t race_back_apply_calls = 0;

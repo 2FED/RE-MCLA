@@ -3017,6 +3017,21 @@ void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
                 "MCLA_FRONTEND_SMOKE_FRAME v=1 phase={} width={} height={} "
                 "status=PASS",
                 phase, frontend_image.width, frontend_image.height);
+            // Three bounded probe-only samples. No per-frame log or addresses;
+            // complements F10 when validating the Vulkan path autonomously.
+            if (auto* command_processor =
+                    static_cast<rex::graphics::GraphicsSystem*>(graphics)->command_processor()) {
+              const auto binding = command_processor->GetPerformanceDiagnosticSnapshot();
+              MCLA_GPU_INFO(
+                  "MCLA_FRONTEND_BINDINGS v=1 phase={} backend={} frames={} "
+                  "calls={} inclusive_us={} reused_stage_sets={} written_stage_sets={} "
+                  "driver_calls={} driver_us={}",
+                  phase, static_cast<uint32_t>(binding.backend), binding.guest_frames_closed,
+                  binding.vulkan_binding_update_count, binding.vulkan_binding_update_us,
+                  binding.vulkan_texture_descriptor_reuse_count,
+                  binding.vulkan_texture_descriptor_write_count,
+                  binding.vulkan_descriptor_update_count, binding.vulkan_descriptor_update_us);
+            }
             return true;
           }
           std::this_thread::sleep_for(100ms);
@@ -3168,6 +3183,12 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
       state.graphics_vulkan_resolve_readback_copy_us = graphics.vulkan_resolve_readback_copy_us;
       state.graphics_vulkan_resolve_readback_wait_count = graphics.vulkan_resolve_readback_wait_count;
       state.graphics_vulkan_resolve_readback_wait_us = graphics.vulkan_resolve_readback_wait_us;
+      state.graphics_vulkan_binding_update_count = graphics.vulkan_binding_update_count;
+      state.graphics_vulkan_binding_update_us = graphics.vulkan_binding_update_us;
+      state.graphics_vulkan_texture_descriptor_reuse_count = graphics.vulkan_texture_descriptor_reuse_count;
+      state.graphics_vulkan_texture_descriptor_write_count = graphics.vulkan_texture_descriptor_write_count;
+      state.graphics_vulkan_descriptor_update_count = graphics.vulkan_descriptor_update_count;
+      state.graphics_vulkan_descriptor_update_us = graphics.vulkan_descriptor_update_us;
     }
   }
   state.race_back_sequence = race_back_probe_sequence.load();

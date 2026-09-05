@@ -38,10 +38,17 @@ function Test-F10ProcessLifetime([object]$First, [object]$Second, [bool]$AllowLe
 function Measure-OptionalCounterSet([object]$First, [object]$Second, [string[]]$Names, [string]$Label) {
     $delta = [ordered]@{}
     foreach ($name in $Names) {
-        $before = Get-OptionalProperty $First $name
-        $after = Get-OptionalProperty $Second $name
-        if ($null -eq $before -and $null -eq $after) { continue }
-        if ($null -eq $before -or $null -eq $after) { throw "Incomplete $Label diagnostic '$name'." }
+        $beforeProperty = $First.PSObject.Properties[$name]
+        $afterProperty = $Second.PSObject.Properties[$name]
+        if ($null -eq $beforeProperty -and $null -eq $afterProperty) { continue }
+        if ($null -eq $beforeProperty -or $null -eq $afterProperty) { throw "Incomplete $Label diagnostic '$name'." }
+        $before = $beforeProperty.Value
+        $after = $afterProperty.Value
+        # Only absent fields are legacy. JSON null, booleans, strings and
+        # fractional/oversized numbers must not silently coerce to counters.
+        foreach ($value in @($before, $after)) {
+            if (-not ($value -is [int] -or $value -is [long])) { throw "Malformed $Label diagnostic '$name': integer required." }
+        }
         if ([long]$before -lt 0 -or [long]$after -lt [long]$before) { throw "$Label diagnostic '$name' regressed or is negative." }
         $delta[$name] = [long]$after - [long]$before
     }
@@ -165,6 +172,26 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [doubl
         }
     } else { $null }
     $closed = [Math]::Max(1L, [long]$delta.guest_frames_closed)
+    $bindingNames = @('vulkan_binding_update_count','vulkan_binding_update_us',
+        'vulkan_texture_descriptor_reuse_count','vulkan_texture_descriptor_write_count',
+        'vulkan_descriptor_update_count','vulkan_descriptor_update_us')
+    $bindingDelta = Measure-OptionalCounterSet $firstGraphics $secondGraphics $bindingNames 'Vulkan bindings'
+    $bindingDiagnostics = if ($null -ne $bindingDelta) {
+        $stageSets = [double]$bindingDelta.vulkan_texture_descriptor_reuse_count +
+            [double]$bindingDelta.vulkan_texture_descriptor_write_count
+        [pscustomobject]@{
+            BackendApplicable = ($backendSecond -eq 2)
+            Calls = [long]$bindingDelta.vulkan_binding_update_count
+            InclusiveSeconds = [Math]::Round($bindingDelta.vulkan_binding_update_us / 1000000.0, 6)
+            ReusedStageSets = [long]$bindingDelta.vulkan_texture_descriptor_reuse_count
+            WrittenStageSets = [long]$bindingDelta.vulkan_texture_descriptor_write_count
+            ReusePercent = if ($stageSets -gt 0) { [Math]::Round(100.0 * $bindingDelta.vulkan_texture_descriptor_reuse_count / $stageSets, 2) } else { $null }
+            DriverUpdateCalls = [long]$bindingDelta.vulkan_descriptor_update_count
+            DriverUpdateSeconds = [Math]::Round($bindingDelta.vulkan_descriptor_update_us / 1000000.0, 6)
+            RawDelta = $bindingDelta
+            Scope = 'completed-UpdateBindings-inclusive; successful-texture-stage-set-reuse-or-write; vkUpdateDescriptorSets-includes-constants; nontransactional-nested-not-additive'
+        }
+    } else { $null }
     $submissions = [Math]::Max(1L, [long]$delta.submission_count)
     $trackedSubmissionUs = [long]$delta.pipeline_end_submission_us +
         [long]$delta.deferred_execute_us + [long]$delta.queue_submit_us
@@ -200,6 +227,7 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [doubl
         WaitDiagnostics = $waitDiagnostics
         DetailDiagnostics = $detailDiagnostics
         ResolveDiagnostics = $resolveDiagnostics
+        BindingDiagnostics = $bindingDiagnostics
     }
 }
 

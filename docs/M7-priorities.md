@@ -4,18 +4,19 @@ Date: 2026-09-04. Owner/reviewer: primary Codex agent, with independent
 read-only save/dependency/evidence review. Scope: planning/documentation;
 no runtime fix, physical test or new platform-support claim in that review.
 
-2026-09-05 performance update: the five complete 0.15.0.0 F10s and whole
-profile/album return are accepted and hash-archived. First two captures are
-gameplay (12.14 outputs/s); FINAL two are pause (10.02/s). The intermediate
-pause capture is harmless and is not paired. Pause readback waits are zero;
-59% more draw packets per frame and a busy guest polling thread are grounded
-leads, not exclusive cost attribution or statistical CPU sampling.
-MCLA 0.15.1.0 / SDK v0.17.1.0 restores omitted db16cyc spin hints as bounded
-host PAUSE instructions. Actual non-force generation adds only 13 statements;
-SDK semantics/emission/full suites and parent gates pass. This is a narrow
-correction, not a new counter-only build or proven Deck speedup. Next is a
-short same-settings gameplay/pause comparison of the corrected artifact.
-See [the current experiment](evidence/M7-016-deck-delay-hint.md).
+2026-09-05 performance update: four complete 0.15.1.0 F10s and the complete
+profile/album are accepted and hash-archived. Explicit gameplay/pause pairs
+yield 12.78/8.60 outputs/s versus prior 12.14/10.02. Pause packet density rose
+22%; per-packet GPU-thread CPU is essentially unchanged. PAUSE executes but
+no material gain or causal regression is established; pause resolve waits
+are still zero. Broken Wine unwinds do not identify descriptor cost.
+MCLA 0.16.0.1 / SDK v0.18.0.1 conservatively reuses unchanged same-epoch
+texture descriptor sets with actual-value comparisons and intact resource
+requests/barriers/lifetimes. Six counters measure actual reuse and update cost.
+Exact final native Vulkan and D3D12 controls pass saved gameplay/PAUSE/Settings;
+Vulkan shows about 50% cumulative stage-set reuse. This is avoided work, not
+a Deck speedup claim. Next: short same-settings Deck cost/cadence/audio evidence.
+See [the current experiment](evidence/M7-016-deck-descriptor-reuse.md).
 Old pending-pair wording below is historical only where explicitly tied to
 the 2026-09-04 review.
 
@@ -31,9 +32,9 @@ and the M7-016/M7-009 criteria are refined.
 
 | Priority | Evidence and problem | Disposition |
 |---|---|---|
-| P0 | KI-027: latest homogeneous gameplay/pause pairs yield 12.14/10.02 new outputs/s, still below usable stock cadence; native Vulkan and forced clocks did not resolve it. | Make throughput/pacing/audio an explicit M7-016 sub-gate; test the bounded spin-hint correction before campaign coverage. |
+| P0 | KI-027: latest gameplay/pause pairs yield 12.78/8.60 new outputs/s; pause workload differs, and the spin hint shows no material gain. | Keep throughput/pacing/audio the M7-016 front gate; validate conservative descriptor reuse and measure avoided work before broad campaign coverage. |
 | P0 | Review found an M6-only seed-selection risk in the publisher. | KI-028: developer-side full-tree lineage/archive/publication protection implemented and fixture-tested in 0.13.2.0; actual progressed successor reload remains the next save gate. See [evidence](evidence/M7-009-portable-save-lineage.md). |
-| P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. | Separate tooling, accepted historical return and pending physical correction; current experiment is 0.15.1.0, not a boot-only platform PASS. |
+| P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. | Separate tooling, accepted historical returns and pending physical correction; current candidate is 0.16.0.1, not a boot-only platform PASS. |
 | P1 | M7-001 matrix preparation waits for all of M7-016, while M7 prerequisites require a campaign checklist; reached-import auditing appears last. | Allow planning/save fixtures while awaiting hardware; audit reached imports incrementally, not only after two campaigns. |
 | P2 | Rendering/music defects have generic follow-up owners; wheel centering lacks available hardware. | Assign existing M7 tasks below; keep separate hypotheses and defer physical wheel work. |
 | P2 | README-AI is roughly 278 KB of guidance plus history; current SDK references drifted in architecture/issues. | Add a short replace-in-place handoff and read order; correct current pins without rewriting old evidence. |
@@ -47,7 +48,8 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | Accepted 0.15.0 gameplay/pause pairs reject pause resolve-wait attribution. Test 0.15.1.0 missing-spin-hint correction and driving/audio recovery; if no benefit, investigate measured descriptor work or a named sampling question. |
+| 1 | **M7-016 performance**, KI-027 | Accepted 0.15.1 pairs show no material hint gain and still zero pause resolve waits. Validate 0.16.0 descriptor reuse/cost and short driving/audio evidence; retain only evidence-backed optimizations. |
+| 1, separate follow-up investigation | **M7-016 Deck CPU scaling / matched Xenia baseline** | Profile work versus waits and synchronization; compare identical scenes/settings before deciding which independent work can safely run in parallel. Produce an evidence-backed optimization backlog, not a core-affinity-only change or promised FPS gain. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |
 | 3 | **M7-016 remaining platform matrix**, then **M7-002** | Short input/audio/window/save/recovery checks; isolated clean-profile new-game/tutorial/unlock/name flow without touching owner progress. |
@@ -100,9 +102,9 @@ to distribute guest-derived shader content.
 
 ## Performance experiment protocol
 
-1. Use 0.15.1.0 / SDK 0.17.1.0 for the actual spin-hint correction. The
-   0.15.0 gameplay/pause pairs are accepted; do not repeat their attribution
-   as a new test of unchanged code. Record build/SDK/hash,
+1. Use 0.16.0.1 / SDK 0.18.0.1 for descriptor reuse and precise cumulative
+   update timing. The 0.15.1 gameplay/pause pairs are accepted; do not repeat
+   their attribution as a new test of unchanged code. Record build/SDK/hash,
    Proton/backend/mode, resolution/save/route and cold/warm cache. Do not
    change clocks, renderer and scheduling simultaneously.
 2. Capture two F10s 30 seconds apart during driving. Open pause, settle two
@@ -115,9 +117,9 @@ to distribute guest-derived shader content.
    one fence metric does not cover all fences; multithread durations overlap.
 4. The UI fix is physically confirmed to correct the inflated overlay count.
    Pause readback waits are now measured at zero, not a remaining theory to
-   retest. The current candidate preserves omitted hints in a captured busy
-   guest polling path; it is not proven to account for all CPU or recover FPS.
-   Require actual output/audio recovery before accepting its benefit.
+   retest. The current candidate preserves the earlier spin hints, whose
+   material benefit is unproven, and now measures conservative descriptor
+   reuse. Require actual cost/output/audio evidence before accepting a gain.
    Only add counters for a named unanswered question, never as a substitute
    for a defined experiment or indefinitely repeat a completed owner test.
 5. Review/unit-test each correction and run the relevant Windows regression.
@@ -129,7 +131,43 @@ to distribute guest-derived shader content.
 
 The existing 2--6-month campaign estimate remains provisional, not a promise.
 The feasibility front gate has no reliable date yet; re-estimate after the
-spin-hint comparison and successor-save reload instead of inventing a deadline.
+descriptor comparison and successor-save reload instead of inventing a deadline.
+
+## Separate follow-up: Deck CPU scaling / matched Xenia baseline
+
+Owner requested this bounded research package on 2026-09-05. Finish the
+current descriptor comparison first, then investigate remaining stock-mode
+headroom separately; M7-016 remains its owner and M8-011 later consumes the
+reproducible benchmark method for optional enhancements. No task ID is closed
+or added, and no new conversation or speculative threading rewrite is started.
+
+The owner reports roughly 15--20 gameplay FPS in Xenia on this Deck. This is
+an uncontrolled comparator, not proof of a fixed overhead gap: record the
+exact Xenia build, Proton/backend, resolution, patches, save/scene, cache
+warmth and presentation versus actual simulation cadence before comparison.
+Retain stock timing and comparable graphics; do not count repeated presents.
+
+Our latest gameplay pair has the busiest guest thread at 90.94% and GPU
+Commands at 81.61% of one logical core, but other guest threads also consume
+60.24% and 38.02%. Thus "only two cores are used" is incorrect. These thread
+totals neither identify fixed physical cores nor prove that the hot work is
+parallelizable. Affinity can move a thread without shortening its serial work.
+
+Deliverables and decision gates:
+
+- A same-scene, same-settings baseline with repeated short samples, frame-time
+  tails, motion/audio observations and attributable per-thread work/waits.
+- A supported sampling/call-stack route with matching module/unwind identities;
+  F10 snapshots alone are not a statistical CPU profile. Separate guest work,
+  busy polling, command translation/driver work, memory protection, streaming,
+  audio and synchronization. Inclusive spans must not be summed as CPU budgets.
+- Ranked serial-overhead fixes and genuinely independent batching/worker
+  candidates. Each candidate needs an ordering, lifetime, contention and
+  determinism design plus a before/after regression test. Do not split guest
+  or GPU command streams blindly, bypass coherency, or alter the guest clock.
+- Explicit stop/continue conclusions: useful parallel headroom, cheaper serial
+  work, or a hardware/compatibility limit. No automatic 30-FPS guarantee or
+  two-hour owner test; request only the shortest missing hardware measurement.
 
 ## Context and review cadence
 
@@ -146,7 +184,7 @@ reusable instructions: [Codex best practices](https://learn.chatgpt.com/guides/b
 
 No milestone closed, extra physical session was scheduled or commit pushed
 by the 2026-09-04 planning review. The 2026-09-05 experiment above now supersedes
-its pending artifact; the complete 0.15.0.0 return is archived outside sync.
+its pending artifact; the complete 0.15.1.0 return is archived outside sync.
 
 ## Historical review verification (2026-09-04)
 

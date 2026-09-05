@@ -1,126 +1,116 @@
 # Current state / AI handoff
 
 Updated: 2026-09-05. Read this first, then relevant README-AI sections.
-Replace stale facts here; Git, artifact hashes and returned evidence win.
-Detailed history: [current correction](evidence/M7-016-deck-delay-hint.md).
+Replace stale facts here; exact Git/artifacts and accepted evidence win.
+Detailed history: [descriptor experiment](evidence/M7-016-deck-descriptor-reuse.md).
 
-## Active task and next action
+## Active task / next action
 
-- M6 closed at 0.8.2.2. M7 is **0/16 complete**. Active M7-016/KI-027
-  stock-mode Deck performance; early M7-009 save lineage and M7-001 matrix
-  preparation remain partial. [Priorities](M7-priorities.md).
-- Finish this coherent Deck-lag investigation before a new task; no M7 push.
-  Do not repeat accepted tests or require another long soak/physical wheel.
-- **0.15.0.0 accepted/archived:** five complete F10s. FIRST two are gameplay;
-  FINAL two are pause. Extra intermediate pause F10 is harmless, retained but
-  not paired. Gameplay 886 outputs/73s = **12.14/s**; pause 561/56s = **10.02/s**.
-- Published **0.15.1.0 / SDK v0.17.1.0** is a bounded codegen correction:
-  exact db16cyc now emits simde_mm_pause(), not just a comment. Thirteen added
-  statements in actual regenerated game; no other generated-code change.
-  Prior cache/protection/diagnostics fixes retained. No renderer/coherency
-  bypass, OS yield/Sleep or guest-clock scaling. Deck benefit is UNPROVEN.
-- **Next owner action (about two minutes):** same Proton 9.0-4/Desktop settings.
-  F10 READY, drive 30s, F10 READY. Open pause, settle 2s, F10 READY, remain
-  paused 30s, F10 READY. Normal exit and full sync. Note motion/audio and
-  whether the existing progressed car/profile loaded. No wheel or hour-long run.
-- Analyze each explicit pair with matching PID AND positive creation_time_100ns.
-  Do not splice modes/process lifetimes or compare different route loads as
-  a controlled speedup. If no benefit, investigate measured descriptor-work
-  reuse or a named sampling question, not repeat the rejected pause-wait theory.
+- M6 closed at 0.8.2.2; M7 **0/16**. Active M7-016/KI-027 stock Deck
+  performance; M7-009 save lineage and M7-001 campaign preparation are partial.
+- Finish the descriptor comparison before changing investigation/chat. No
+  M7 push, physical wheel or new long soak. See [priorities](M7-priorities.md).
+- **Accepted 0.15.1.0:** four complete F10s, gameplay 12.78 new outputs/s,
+  pause 8.60/s versus previous 12.14/10.02. Pause packets/frame rose 22%;
+  per-packet GPU-thread CPU is essentially unchanged. No material spin-hint
+  gain or causal regression established. Pause resolve waits remain ZERO.
+- Candidate **0.16.0.1 / SDK 0.18.0.1** reuses identical same-epoch Vulkan
+  texture/sampler stage sets, retaining requests/barriers/lifetimes and fresh
+  allocation on misses. Six fields measure reuse and nested update cost.
+  Nanosecond accumulation fixes short-call truncation before exporting us.
+- Final clean publication and exact-binary Windows Vulkan/D3D12 controls PASS:
+  primary inspected saved gameplay, PAUSE and Settings; exit 0, no force cleanup.
+  Native Vulkan cumulative stage-set reuse is 50.03%, NOT a Deck FPS gain.
+- Next owner action: same Proton 9.0-4/settings, gameplay F10 READY,
+  drive 30s, F10 READY; pause, settle 2s, F10 READY, wait 30s, F10 READY.
+  Normal exit/full sync; report motion/audio and progressed profile loading.
+  No hour-long test. Do not infer Deck gain from native reuse or unit tests.
+- **Separate next research package requested by owner:** Deck CPU scaling /
+  matched Xenia baseline, still under M7-016; later M8-011 reuses benchmarks.
+  Owner Xenia 15--20 FPS is not controlled A/B. Match scene/settings/cache and
+  profile useful work/waits before parallelizing independent work. Two hot
+  threads do not mean only two cores are active. No affinity-only promise.
 
-## Exact published artifacts and save lineage
+## Identity / save lineage
 
-- Root VERSION **0.15.1.0**. SDK local tag/commit **v0.17.1.0** /
-  `2c7c99c8f7683279295c45b0278cf91b1f88815e`; local checkpoint only, no push.
-- Sync root: `private/bundles/M7-016`; current.txt selects
-  `mcla-0.15.1.0-win64-7E11C5B992C824AE-C78486BB42C195E3-58B3385C89D9E499`.
-- Receipt: `private/evidence/M7-016/bundle-20260905-123823-19c684f2/result.json`.
-- Manifest SHA-256:
-  `1BBFA7FD89BA3255DF55C5D8E737EF8FE55BDFF01E363084FB444B262589E250`.
-  Immutable lock SHA-256:
-  `F7376C6BB51F797174EF9909287059BC0822C2DC82215845A1267F43A9613878`.
-- Full profile SHA-256 (4 files / 3,815,088 bytes, album included):
-  `3BBC44D0E0CBE03633DFA3BFFBC776B0C5E62CFDC5AA34BEFB346DE022322B5A`.
-  Save: `58B3385C89D9E4999B6791CCB95B6F7ED7963CE07F9C47618850841236784585`.
-  Header: `2FAEFBC7FF8CDEADBCE025D9BE914436ED05E27D041F72C8C88798612CFB0D60`.
-  Album: `8EE49926E1DFE804DB923EF2512219FC7A078FEB50944C3D2BD4E9AC39F81588`.
-- Accepted pairs: live-20260905T114748Z-340-1 / 114900Z-340-2, then
-  114925Z-340-4 / 115021Z-340-5. Creation ticks 134330823743760390.
-  114917Z-340-3 is not paired; 115027Z-340-6.partial is NOT a complete F10.
-  Completed session session-20260905T114614Z-300: exit 0, 25 immutable,
-  one snapshot, zero watcher errors, complete profile unchanged.
-- Full mutable archive outside sync:
-  `private/evidence/M7-016/returned-bundles/<0.15.0 bundle id>/33B9020756F0106C9BA71394AFADAED9CF7A3A853D01C4FD9F91CAA185B876BD`.
-  Obsolete 0.15.0 payload pruned only after verified archive/successor. No
-  fallback to M6 seed or loss of album/progress.
-- Dedicated publication tree out/build/win-amd64-portable-release: binaries
-  are independent copies; immutable game data alone may be hardlinked. Never
-  rebuild legacy developer trees whose DLL hardlinks can mutate old children.
+- Root VERSION 0.16.0.1, local reviewed checkpoint; no push.
+- SDK clean tag v0.18.0.1 / 9098e122afa116f4316d6cec47e561ebc5186974.
+  Parent gitlink matches; semantic/codegen floor remains 0.18.0.
+- Sync root private/bundles/M7-016; current.txt selects
+  mcla-0.16.0.1-win64-B6A19E748F517476-0BCEBB4FB89A8529-58B3385C89D9E499.
+  Receipt: private/evidence/M7-016/bundle-20260905-144002-92771135/result.json.
+  Manifest: 546AF7AA8256738AE37896818338A96A624A6DC73FE9ACE2333229EF04E1FAA2.
+  Lock: 0AA62A18D247FEF31D2C37B4D4C09E8C573C6AB598D7A654593406487300DBDD.
+  25 immutable files; final launcher/hash verification after probes PASS.
+- Full profile4files /3,815,088bytes, including album:
+  3BBC44D0E0CBE03633DFA3BFFBC776B0C5E62CFDC5AA34BEFB346DE022322B5A.
+  Save: 58B3385C89D9E4999B6791CCB95B6F7ED7963CE07F9C47618850841236784585.
+  Header: 2FAEFBC7FF8CDEADBCE025D9BE914436ED05E27D041F72C8C88798612CFB0D60.
+  Album: 8EE49926E1DFE804DB923EF2512219FC7A078FEB50944C3D2BD4E9AC39F81588.
+- Accepted F10 pairs live-20260905T130741Z-336-1/130830Z-336-2 and
+  130857Z-336-3/130940Z-336-4. PID336 creation134330871933074650. Shutdown
+  130950Z-336-5.partial is not a complete capture. Session130633Z-296 exit0,
+  25 immutable files, one profile snapshot, zero watcher errors, unchanged save.
+- Mutable archive outside sync: private/evidence/M7-016/returned-bundles/
+  <0.15.1 bundle id>/4D672717A35E99B9E9EEE5653F72A68AAAD9603AA772D4D7D3DCC33CB2187560.
+  Full profiles also archived under private/save-archive/M7-009. No staleM6seed.
+- Use dedicated out/build/win-amd64-portable-release only for publication.
+  Legacy build-tree DLL hardlinks can mutate published artifacts. Runtime
+  binaries are copies; immutable game files alone may be hardlinked.
 
-## Known, not assumed
+## Evidence and rejected overclaims
 
-- Gameplay/pause: GPU Commands uses 83.71/81.38% of one core; guest thread
-  508 uses 89.42/91.32%. Pause has 7,426 draw packets/frame versus 4,661
-  gameplay, about 59% more. Packets can include copy dispatch, not just draws.
-- Resolve waits: gameplay 32/0.101s; pause ZERO. Resolve memcpy wall is
-  4.403/2.703s, about 28.0/20.7 GB copied. Nested faults and inclusive spans
-  overlap; do not add/subtract them as exclusive costs. Actual Vulkan fence
-  wall 0.113/0.037s. Readback waits do not explain this pause slowdown.
-- One exact-bin PE-unwind chain for thread 508 in F10 #2 reaches guest
-  0x82412F98 via 0x82411E98: a bounded poll contains four iterations of eight
-  delay hints. Prior codegen omitted their host statements. The captured
-  thread's semantic role and fraction spent polling are not proven. Other
-  Wine-module unwinds are rejected without matching images. Five F10s are
-  not a sampling profile; 91% CPU is not proven to be all spin.
-- x86 PAUSE is not an exact sixteen-cycle Xenon delay, nor OS descheduling.
-  Poll responsiveness may change and FPS need not improve. ARM uses a
-  different local SIMDe implementation; no macOS/ARM physical claim.
-- All five accepted Deck F10 BMPs are all-black GDI captures. frame_signal
-  labels this honestly, not a repaired capture. Photo Mode is separately
-  fixed. READY means package saved. Visible F10 status can raise Steam FPS
-  by repainting old output without new guest-output counts.
-- Prior owner report that a traffic light no longer dithers is narrow;
-  KI-015 and wider geometry/temporal parity remain open.
-- Deferred Vulkan descriptor reuse is a source lead, NOT in this candidate.
-  It must retain texture/sampler requests and handle layout/submission/frame/
-  error lifetimes before reusing actual descriptor values.
-- Campaign matrix retains eleven historical scenarios/static ABI review, not
-  mandatory live nodes/dependencies or clean-campaign credit. No unlock edits.
+- Gameplay busiest guest thread90.94%, GPU Commands81.61% of one logicalcore;
+  others60.24/38.02%. Pause busiest93.07/85.21%. These are threadCPU totals,
+  not physical-core placement or proof of parallelizable work.
+- Pause9071packets/frame vs4421gameplay. Packets include copy dispatch.
+  Resolve copy gameplay19.91GB/3.036s, pause13.76GB/2.058s; waits25/.248s
+  versus0. Actual Vulkan fences.253/.021s. Inclusive/cross-thread spans overlap.
+- Eight offline instantaneous thread snapshots: two guest PAUSE RIPs, one
+  valid own-code unwind. All four GPU Wine stacks fail missing-module unwind;
+  none establishes UpdateBindings as hotspot. Not a statistical profile.
+- Initial exact0.16.0.0 Windows/Vulkan built-in frontend probe reaches copied
+  progressed gameplay, PAUSE, Settings. Primary visually inspected BMPs.
+  Exit0/CloseMainWindow/no force/sourceprofile unchanged. About49%stage reuse
+  is real avoided work, not Deck FPS proof. Native per-call microsecond
+  truncation motivated0.18.0.1; do not use old elapsed totals as cost estimates.
+  Final exact controls are native-vulkan-ns-control and native-d3d12-ns-control.
+  All six saved gameplay/menu BMPs inspected. Vulkan gameplay cumulative
+  6,229,160 binding calls/3.651949s, 6,145,552 native updates/1.427899s;
+  nested native wall, not Deck CPU/GPU cost. D3D12 Vulkan-only fields zero.
+- F10 Deck GDI frames remain all-black, honestly classified. READY means
+  package saved; visible overlay may repaint old output and raise SteamFPS.
+  Photo Mode is separately fixed. KI-015 broader dithering/lighting/neon open.
+- Campaign seed has11historical scenarios/static ABI boundaries, not mandatory
+  live nodes, dependencies or clean-campaign credit. No unlock edits.
 
-## Verified gates and operational cautions
+## Gates and operational pitfalls
 
-- SDK independent exact-opcode/semantics/source/test review plus AST scan/
-  one fixture. Full RelWithDebInfo, Release and tagged Release:
-  **1,838 executed / four known BitStream skips / zero failures**
-  (1,842 registered). Red old emission is 0/9; three PPC state cases pass.
-- Actual non-force regeneration: 67 files / 133,916,451 bytes / 65 C++.
-  Exactly 13 added hints across four files; remove those lines and all
-  prior 67 files are byte-identical. Dispatcher unchanged. Optimized native
-  object contains eight consecutive F3 90 PAUSE instructions at the poll.
-- Root AST scan/3 fixtures and independent pin/privacy/document review pass.
-  PS7 + PS5.1: analyzer 12 positive/37 negative; diagnostics 5/20/146 source
-  checks; bundle 1/13/41; save lineage 46; session 1/10; build matrix 1/6;
-  alpha 1/31 plus real alpha validation; bootstrap 12/12.
-- Clean publication/relocation/launcher/session/guest-free diagnostics pass,
-  exit 0. No successor Deck cadence/audio PASS.
-- Isolated exact-published-binary built-in Windows/D3D12 frontend control
-  loads the copied progressed save, opens PAUSE and Settings; primary visually
-  verifies the car/HUD and both menus. Exit 0 through CloseMainWindow, no
-  force cleanup, source profile unchanged. Evidence: native-successor-control-
-  shared-log below the return evidence root. This is not Deck/audio/driving
-  or physical-controller proof. Initial private harness failed on log sharing
-  and needed cleanup; retained separately as native-successor-control.
-- First staging rename failed with access denied; holder unknown. Complete
-  failed staging retained outside sync at
-  private/evidence/M7-016/bundle-20260905-123424-a62b647d/failed-staging.
-  Move and fresh full clean retry passed without weakening gates. Recurring
-  transient publication failure remains a follow-up, not a proven ACL fix.
-- Logs/receipts:
-  private/evidence/M7-016/deck-return-20260905-0.15.0.0.
-- Finish sync/stop writers before publishing; locks are not distributed.
-  Never pick ambiguous save branches. Unrelated source-directory .stfolder
-  remains untracked; do not stage private payload.
-- Default sandbox/native UI helper setup failed earlier; scoped escalated
-  shell works. Edits use Codex apply_patch. Native UI needs its supported
-  helper; no custom SendInput/UIAutomation fallback. Built-in deterministic
-  engine probes are separate from physical controller/F10 evidence.
+- SDK descriptor/helper review, independent timer review and source/AST pass.
+  Descriptor5cases/37assertions; focused graphics diagnostic5/53. Full final
+  all-target RelWithDebInfo/Release:1845executed+4knownBitStreamskips=1849,
+  zero failures. Explicit post-tag configure/fullRelease/install also pass.
+- Actual non-force codegen67files/133,916,451bytes byte-identical to prior
+  0.17.1 corpus. Only SDK compatibility metadata advances.
+- Final root AST/3fixtures and PS7/5.1 gates pass: analyzer14/48,
+  diagnostics5/20/164source checks, bundle1/13/41, save-lineage46, session1/10,
+  buildmatrix1/6, alpha1/31 plus real alpha verification, bootstrap12/12.
+- Independent review caught permissive optional-counter type coercion, fixed
+  with malformed/null/legacy/zero fixtures; caught alpha escaped-version and
+  early-init result-label drift, corrected before final gates.
+- Retag alone does not rerun SDK CMake configure. Verify installed package
+  version after explicit configure/build/install, not only source tag.
+- Publication rename access denial recurred; holder unknown. Failed staging
+  retained outside sync under bundle-20260905-143544-618197f0/failed-staging;
+  fresh full clean retry PASSED. Holder/race still unknown; do not erase
+  diagnostics or weaken verification. Intermediate0.16 payload pruned only
+  after verified successor and recoverable archive F4D24E3B... outside sync.
+- Logs under private/evidence/M7-016/deck-return-20260905-0.15.1.0. First
+  0.16 compile interface error and stale-install configure failure are retained.
+- Serialize native/private/build mutations. Stop writers/finish sync before
+  publishing; locks are not distributed. Never choose ambiguous save branches.
+- Default sandbox/native UI helper unavailable; scoped escalated shell and
+  Codex apply_patch work. No custom SendInput/UIAutomation fallback. Built-in
+  deterministic engine probes do not replace owner/controller evidence.
+- Preserve unrelated untracked source-directory .stfolder; never stage private
+  payload. Recheck actual status/identity before committing the checkpoint.

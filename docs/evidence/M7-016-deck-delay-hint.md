@@ -1,5 +1,11 @@
 # M7-016: gameplay/pause return and missing spin hint
 
+Experiment returned: 0.15.1.0 gameplay/pause measured 12.78/8.60 outputs/s.
+PAUSE executes, but material gain is not established; pause packet density
+rose 22%, preventing a causal regression claim. Current work and successor
+instructions are in [descriptor reuse](M7-016-deck-descriptor-reuse.md).
+The original publication/test instructions below describe this completed step.
+
 2026-09-05. M7 remains **0/16**, KI-027 open. This follows
 [resolve attribution](M7-016-deck-resolve-readback.md). No milestone push.
 

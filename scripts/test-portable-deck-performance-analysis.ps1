@@ -12,7 +12,7 @@ function Write-Utf8([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, $utf8)
 }
 
-function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit, [bool]$WithWait=$false, [long]$WaitScale=1, [string]$Detail='absent', [string]$Resolve='absent', [object]$CreationTime100ns=134330000000000000L) {
+function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit, [bool]$WithWait=$false, [long]$WaitScale=1, [string]$Detail='absent', [string]$Resolve='absent', [object]$CreationTime100ns=134330000000000000L, [string]$Bindings='absent') {
     $dir = Join-Path $root "diagnostics\live\$Name"
     [IO.Directory]::CreateDirectory($dir) | Out-Null
     $stamp = [regex]::Match($Name, 'live-(\d{8}T\d{6}Z)-').Groups[1].Value
@@ -85,6 +85,23 @@ function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vb
         if ($Resolve -ceq 'regressed') { $state.graphics.vulkan_resolve_readback_copy_us = 0L }
         if ($Resolve -ceq 'negative') { $state.graphics.vulkan_resolve_readback_copy_us = -1L }
     }
+    if ($Bindings -cne 'absent') {
+        foreach ($field in @('vulkan_binding_update_count','vulkan_binding_update_us',
+            'vulkan_texture_descriptor_reuse_count','vulkan_texture_descriptor_write_count',
+            'vulkan_descriptor_update_count','vulkan_descriptor_update_us')) {
+            $state.graphics[$field] = if ($Bindings -ceq 'zero') { 0L } elseif ($field.EndsWith('_us')) { $Outputs * 200000L } else { $Outputs * 10L }
+        }
+        if ($Bindings -ceq 'partial') { $state.graphics.Remove('vulkan_texture_descriptor_reuse_count') }
+        if ($Bindings -ceq 'regressed') { $state.graphics.vulkan_binding_update_us = 0L }
+        if ($Bindings -ceq 'negative') { $state.graphics.vulkan_binding_update_us = -1L }
+        if ($Bindings -ceq 'null') { $state.graphics.vulkan_binding_update_us = $null }
+        if ($Bindings -ceq 'bool') { $state.graphics.vulkan_binding_update_us = $true }
+        if ($Bindings -ceq 'string') { $state.graphics.vulkan_binding_update_us = '140000000' }
+        if ($Bindings -ceq 'fractional') { $state.graphics.vulkan_binding_update_us = 140000000.5 }
+        if ($Bindings -ceq 'array') { $state.graphics.vulkan_binding_update_us = @(140000000,140000001) }
+        if ($Bindings -ceq 'oversized') { $state.graphics.vulkan_binding_update_us = [decimal]::MaxValue }
+        if ($Bindings -ceq 'all-null') { foreach ($key in @($state.graphics.Keys | Where-Object { $_ -like 'vulkan_*binding*' -or $_ -like 'vulkan_*descriptor*' })) { $state.graphics[$key] = $null } }
+    }
     Write-Utf8 (Join-Path $dir 'state.json') ($state | ConvertTo-Json -Depth 8)
     $lines = @('[core] ordinary log')
     if ($WithAudit) {
@@ -131,9 +148,37 @@ try {
         $nativeResult.ThreadCpuTop.Count -ne 2 -or
         $null -ne $nativeResult.Graphics.WaitDiagnostics -or
         $null -ne $nativeResult.Graphics.DetailDiagnostics -or
-        $null -ne $nativeResult.Graphics.ResolveDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
+        $null -ne $nativeResult.Graphics.ResolveDiagnostics -or
+        $null -ne $nativeResult.Graphics.BindingDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
 
     $negative = 0
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false -Bindings 'complete')
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'One-sided binding fixture unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false -Bindings 'complete')
+    $bindingResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    $bindings = $bindingResult.Graphics.BindingDiagnostics
+    if (-not $bindings.BackendApplicable -or $bindings.Calls -ne 6000 -or
+        $bindings.ReusedStageSets -ne 6000 -or $bindings.WrittenStageSets -ne 6000 -or
+        $bindings.ReusePercent -ne 50 -or $bindings.DriverUpdateCalls -ne 6000 -or
+        $bindings.InclusiveSeconds -ne 120 -or $bindings.DriverUpdateSeconds -ne 120 -or
+        $bindingResult.Graphics.DominantMeasuredStage -cne 'unattributed_frame_wall') { throw 'Binding values or inclusive-time semantics drifted.' }
+    foreach ($mode in @('partial','regressed','negative','null','bool','string','fractional','array','oversized')) {
+        [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false -Bindings $mode)
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Invalid binding fixture unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false -Bindings 'all-null')
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false -Bindings 'all-null')
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Present all-null binding fixture unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false -Bindings 'zero')
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false -Bindings 'zero')
+    $zeroBindings = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    if ($zeroBindings.Graphics.BindingDiagnostics.Calls -ne 0 -or
+        $null -ne $zeroBindings.Graphics.BindingDiagnostics.ReusePercent) { throw 'No descriptor activity must not imply a zero-percent reuse result.' }
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false)
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false)
     [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true)
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Incomplete wait fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
@@ -270,7 +315,7 @@ try {
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-11-1' -SecondF10 'live-20260904T120030Z-10-2' | Out-Null; throw 'Explicit mixed-process fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=12;FailClosedNegatives=$negative}
+    [pscustomobject]@{Passed=$true;PositiveFixtures=14;FailClosedNegatives=$negative}
 } finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }

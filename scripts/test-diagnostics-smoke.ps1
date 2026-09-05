@@ -207,7 +207,13 @@ try {
         'vulkan_resolve_readback_bytes',
         'vulkan_resolve_readback_copy_us',
         'vulkan_resolve_readback_wait_count',
-        'vulkan_resolve_readback_wait_us'
+        'vulkan_resolve_readback_wait_us',
+        'vulkan_binding_update_count',
+        'vulkan_binding_update_us',
+        'vulkan_texture_descriptor_reuse_count',
+        'vulkan_texture_descriptor_write_count',
+        'vulkan_descriptor_update_count',
+        'vulkan_descriptor_update_us'
     )
     foreach ($field in $details) {
         if (-not $header.Contains("uint64_t graphics_$field = 0;")) { throw "Missing initialized detail state: $field" }

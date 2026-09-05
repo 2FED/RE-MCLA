@@ -17,8 +17,8 @@ Current verified host components:
 - Ghidra 12.0.4 with XEXLoaderWV 13.0.0
 - RenderDoc 1.45.0
 
-The aggregate prerequisite gate passed 12/12 on 2026-09-05 with SDK v0.17.0.0
-before the 0.15.0.0 diagnostic build. Rerun `scripts/bootstrap.ps1` when the
+The aggregate prerequisite gate passed 12/12 on 2026-09-05 with SDK v0.18.0.1
+on PowerShell 7 and 5.1 for the 0.16.0.1 candidate. Rerun `scripts/bootstrap.ps1` when the
 environment changes; historical results do not verify a different machine.
 
 ## Private portable updates and save preservation
@@ -243,13 +243,13 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.17.0.0`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.18.0.1`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1
-cmake --preset win-amd64-release
-cmake --build --preset win-amd64-release --target mcla --parallel
-scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-release
+cmake --preset win-amd64-release -B out/build/win-amd64-portable-release
+cmake --build out/build/win-amd64-portable-release --target mcla --parallel 8
+scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-portable-release
 ```
 
 With the accepted M3-013 corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 65 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.
