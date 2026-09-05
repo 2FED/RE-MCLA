@@ -1812,4 +1812,24 @@ The real builder hash-verifies the 6.57-GB prepared game, validates the M6-014 b
 
 M7-016 remains in progress until the exact returned Syncthing child is tested physically on Steam Deck with the installed Proton build recorded. The first return proves D3D12-to-RADV presentation, saved gameplay, garage entry, Steam Input control, default `1024x640` fullscreen, and a complete returned F10 package, but exposes KI-027 severe unique-frame throughput loss and Steam Stop interruption of launcher finalization. A subsequent native-Vulkan Proton 9.0-4 run still produced only 8.86 unique guest outputs/s against 60.39 guest vblanks/s, with unchanged perceived slowdown and audio breakup; forcing the Deck GPU to 1,600 MHz did not help.
 
-The immediate physical gate is intentionally short. Launch the current child with Proton 9.0-4, reach actively moving gameplay, press F10 and wait for `READY`, drive for 30--60 seconds while the slowdown is present, then press F10 and wait for `READY` again. Exit normally and let Syncthing return the folder. `scripts/analyze-portable-deck-performance.ps1` must hash-verify the same-process pair and report the Vulkan frame/swap/refresh/submission deltas, per-frame fence/pipeline/deferred/queue/frame-wall averages, dominant measured stage, and top native threads by CPU delta. Do not force a GPU clock for this trace. Explicit audio, runtime fullscreen/windowed switching, save evolution plus reload, and recovered interrupted-session publication remain later physical gates after the performance blocker is understood. A no-go disposition must preserve the precise failure and keep the Windows result without implying Deck support.
+The immediate physical gate is intentionally short and targets the newly reported
+pause slowdown. Same Proton 9.0-4 / Desktop settings: F10 READY, 30 seconds of
+driving, F10 READY; then open pause, settle two seconds, F10 READY, 30 seconds
+paused, F10 READY. Exit and finish sync. Analyze the two homogeneous intervals
+using `scripts/analyze-portable-deck-performance.ps1 -BundlePath <child>
+-FirstF10 <complete-direct-name> -SecondF10 <complete-direct-name>`. It verifies
+hashes, positive elapsed/monotonic counters, matching PID AND positive process
+creation ticks. Historical pairs without either creation field require explicit
+`-AllowLegacyPidOnly` and independent same-session proof; output remains
+ProcessLifetimeVerified=false. Do not splice captures across launches or modes.
+Seven optional complete resolve-copy/bytes/wait counters remain nested totals,
+not exclusive frame stages. Compare native thread CPU, existing graphics/memory
+deltas and actual output cadence; do not force GPU clocks. F10 GDI source/RGB
+metadata distinguishes all-black/uniform/nonuniform bytes, not visual freshness;
+black frames do not invalidate a successfully captured dump. Native frame tests:
+configure with `-DMCLA_BUILD_DIAGNOSTIC_TESTS=ON`, build the explicit nonshipping
+`mcla_frame_signal_test` target and run it. SDK timer tests do not exercise actual
+Vulkan resolve branches. Details: [current experiment](evidence/M7-016-deck-resolve-readback.md).
+Audio, fullscreen switching, save evolution/reload and interrupted-session
+recovery remain later physical gates after performance is understood. A no-go
+must preserve precise limits, not imply Deck support from Windows proof.

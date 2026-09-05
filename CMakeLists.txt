@@ -8,7 +8,15 @@ project(mcla LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(MCLA_REXGLUE_VERSION "0.16.1.0")
+option(MCLA_BUILD_DIAGNOSTIC_TESTS "Expose nonshipping pure diagnostic tests" OFF)
+if(MCLA_BUILD_DIAGNOSTIC_TESTS)
+    add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
+        tests/mcla_frame_signal_test.cpp)
+    target_include_directories(mcla_frame_signal_test PRIVATE src)
+    target_compile_features(mcla_frame_signal_test PRIVATE cxx_std_23)
+endif()
+
+set(MCLA_REXGLUE_VERSION "0.17.0.0")
 if(DEFINED REXSDK_VERSION AND
    NOT REXSDK_VERSION STREQUAL "" AND
    NOT REXSDK_VERSION STREQUAL "${MCLA_REXGLUE_VERSION}")

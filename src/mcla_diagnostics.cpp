@@ -2,6 +2,7 @@
 
 #include "mcla_diagnostics.h"
 
+#include "mcla_frame_signal.h"
 #include "mcla_native_crash.h"
 
 #include <rex/crypto/sha256.h>
@@ -391,32 +392,38 @@ bool WriteBgraBmp(const std::filesystem::path &path, uint32_t width,
   return static_cast<bool>(stream);
 }
 
-bool CaptureWindowFrame(const std::filesystem::path &path, const UiState &ui) {
+struct WindowFrameCapture {
+  bool written = false;
+  FrameSignal signal;
+};
+
+WindowFrameCapture CaptureWindowFrame(const std::filesystem::path &path,
+                                     const UiState &ui) {
 #if defined(_WIN32)
   const HWND window = reinterpret_cast<HWND>(ui.native_window_handle);
   if (!window || !IsWindow(window)) {
-    return false;
+    return {};
   }
   RECT client{};
   if (!GetClientRect(window, &client)) {
-    return false;
+    return {};
   }
   const LONG signed_width = client.right - client.left;
   const LONG signed_height = client.bottom - client.top;
   if (signed_width <= 0 || signed_height <= 0 || signed_width > 8192 ||
       signed_height > 8192) {
-    return false;
+    return {};
   }
   const uint32_t width = static_cast<uint32_t>(signed_width);
   const uint32_t height = static_cast<uint32_t>(signed_height);
   const uint64_t bytes = uint64_t(width) * height * 4;
   if (bytes > kMaxFrameBytes || bytes > std::numeric_limits<size_t>::max()) {
-    return false;
+    return {};
   }
 
   HDC source = GetDC(window);
   if (!source) {
-    return false;
+    return {};
   }
   HDC memory = CreateCompatibleDC(source);
   HBITMAP bitmap =
@@ -450,11 +457,21 @@ bool CaptureWindowFrame(const std::filesystem::path &path, const UiState &ui) {
     DeleteDC(memory);
   }
   ReleaseDC(window, source);
-  return captured && WriteBgraBmp(path, width, height, width * 4, pixels);
+  if (!captured) {
+    return {};
+  }
+  const FrameSignal signal = MeasureBgraFrame(pixels, width, height, width * 4);
+  if (signal.classification == FrameRgbClass::kUnavailable ||
+      !WriteBgraBmp(path, width, height, width * 4, pixels)) {
+    return {};
+  }
+  // A written GDI bitmap is not proof of a fresh or visible renderer output.
+  // Preserve even all-black bytes as evidence without failing the package.
+  return {true, signal};
 #else
   (void)path;
   (void)ui;
-  return false;
+  return {};
 #endif
 }
 
@@ -719,13 +736,14 @@ bool AddArtifact(std::vector<Artifact> &artifacts,
 std::string
 BuildStateJson(std::string_view reason, const UiState &ui,
                const RuntimeState &runtime, uint64_t working_set,
-               uint32_t handles,
+               uint32_t handles, uint64_t creation_time_100ns,
                const std::vector<NativeThreadSample> &native_threads) {
   std::ostringstream out;
   out << "{\n"
       << "  \"schema\": \"mcla-diagnostic-state-v1\",\n"
       << "  \"reason\": \"" << JsonEscape(reason) << "\",\n"
       << "  \"process\": {\"pid\": " << ProcessId()
+      << ", \"creation_time_100ns\": " << creation_time_100ns
       << ", \"working_set_bytes\": " << working_set
       << ", \"handle_count\": " << handles
       << ", \"native_thread_count\": " << native_threads.size() << "},\n"
@@ -786,6 +804,13 @@ BuildStateJson(std::string_view reason, const UiState &ui,
       << ", \"memory_watch_disarm_us\": " << runtime.graphics_memory_watch_disarm_us
       << ", \"memory_watch_protect_failures\": " << runtime.graphics_memory_watch_protect_failures
       << ", \"memory_watch_arm_gap_splits\": " << runtime.graphics_memory_watch_arm_gap_splits
+      << ", \"vulkan_resolve_count\": " << runtime.graphics_vulkan_resolve_count
+      << ", \"vulkan_resolve_us\": " << runtime.graphics_vulkan_resolve_us
+      << ", \"vulkan_resolve_readback_copy_count\": " << runtime.graphics_vulkan_resolve_readback_copy_count
+      << ", \"vulkan_resolve_readback_bytes\": " << runtime.graphics_vulkan_resolve_readback_bytes
+      << ", \"vulkan_resolve_readback_copy_us\": " << runtime.graphics_vulkan_resolve_readback_copy_us
+      << ", \"vulkan_resolve_readback_wait_count\": " << runtime.graphics_vulkan_resolve_readback_wait_count
+      << ", \"vulkan_resolve_readback_wait_us\": " << runtime.graphics_vulkan_resolve_readback_wait_us
       << "},\n"
       << "  \"race_back_trace\": {\"sequence\": " << runtime.race_back_sequence
       << ", \"handler_calls\": " << runtime.race_back_handler_calls
@@ -988,12 +1013,20 @@ public:
     // Capture the already-presented client area. This deliberately avoids a
     // GPU readback/fence wait, so an F10 snapshot cannot hang behind a wedged
     // guest renderer.
-    const bool frame_written = CaptureWindowFrame(partial / "frame.bmp", ui);
+    const WindowFrameCapture frame =
+        CaptureWindowFrame(partial / "frame.bmp", ui);
+    const bool frame_written = frame.written;
 
     uint64_t working_set = 0;
+    uint64_t creation_time_100ns = 0;
     uint32_t handles = 0;
     std::vector<NativeThreadSample> native_threads;
 #if defined(_WIN32)
+    FILETIME process_creation{}, process_exit{}, process_kernel{}, process_user{};
+    if (GetProcessTimes(GetCurrentProcess(), &process_creation, &process_exit,
+                        &process_kernel, &process_user)) {
+      creation_time_100ns = FileTimeTicks(process_creation);
+    }
     PROCESS_MEMORY_COUNTERS_EX counters{};
     counters.cb = sizeof(counters);
     if (GetProcessMemoryInfo(
@@ -1040,7 +1073,7 @@ public:
 #endif
     if (!WriteText(partial / "state.json",
                    BuildStateJson(reason, ui, runtime_state, working_set,
-                                  handles, native_threads))) {
+                                  handles, creation_time_100ns, native_threads))) {
       REXLOG_ERROR("MCLA diagnostics: state write failed");
       return false;
     }
@@ -1149,6 +1182,11 @@ public:
                 "\"save-files-private.json\", \"save-private\"]},\n"
              << "  \"capture\": {\"frame\": "
              << (frame_written ? "true" : "false")
+             << ", \"frame_signal\": {\"source\": \"win32-client-bitblt\", "
+                "\"classification\": \""
+             << FrameRgbClassName(frame.signal.classification)
+             << "\", \"width\": " << frame.signal.width
+             << ", \"height\": " << frame.signal.height << "}"
              << ", \"minidump\": " << (dump_written ? "true" : "false")
              << ", \"save_found\": " << (save.found ? "true" : "false")
              << ", \"save_files\": " << save.files

@@ -26,6 +26,70 @@ function Hash([string]$Path) {
     finally { $sha.Dispose(); $stream.Dispose() }
 }
 
+function Assert-FrameSignal([string]$PackageRoot, $Capture) {
+    # Historical packages predate this optional, all-or-nothing group. A frame
+    # remains optional; its RGB class never establishes freshness/gameplay health.
+    $property = $Capture.PSObject.Properties['frame_signal']
+    if (-not $property) { return }
+    $signal = $property.Value
+    if ($null -eq $signal) { throw 'Live frame signal group is null.' }
+    foreach ($name in @('source','classification','width','height')) {
+        if (-not $signal.PSObject.Properties[$name]) { throw "Live frame signal field is missing: $name." }
+    }
+    if ($signal.source -isnot [string] -or $signal.source -cne 'win32-client-bitblt' -or
+        $signal.classification -isnot [string] -or
+        $signal.classification -cnotin @('unavailable','all-black','uniform-nonblack','nonuniform')) {
+        throw 'Live frame signal source or RGB classification is invalid.'
+    }
+    foreach ($name in @('width','height')) {
+        $value = $signal.$name
+        if (($value -isnot [int] -and $value -isnot [long]) -or $value -lt 0 -or $value -gt 8192) {
+            throw "Live frame signal dimension is invalid: $name."
+        }
+    }
+    if ($Capture.frame -isnot [bool]) { throw 'Live frame presence must be a boolean.' }
+    if ($signal.classification -ceq 'unavailable') {
+        if ($Capture.frame -or $signal.width -ne 0 -or $signal.height -ne 0) {
+            throw 'Unavailable live frame signal has pixels or an artifact.'
+        }
+        return
+    }
+    if (-not $Capture.frame -or $signal.width -eq 0 -or $signal.height -eq 0) {
+        throw 'Available live frame signal has no artifact or dimensions.'
+    }
+    $payloadBytes = [uint64]$signal.width * [uint64]$signal.height * 4
+    if ($payloadBytes -gt 64MB) { throw 'Live frame signal exceeds the bounded frame size.' }
+    $path = Join-Path $PackageRoot 'frame.bmp'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or
+        [uint64](Get-Item -LiteralPath $path).Length -ne (54 + $payloadBytes)) {
+        throw 'Live frame signal does not match its bounded bitmap size.'
+    }
+    $bmp = [IO.File]::ReadAllBytes($path)
+    if ($bmp[0] -ne 0x42 -or $bmp[1] -ne 0x4D -or
+        [BitConverter]::ToUInt32($bmp,2) -ne $bmp.Length -or
+        [BitConverter]::ToUInt32($bmp,10) -ne 54 -or
+        [BitConverter]::ToUInt32($bmp,14) -ne 40 -or
+        [BitConverter]::ToInt32($bmp,18) -ne $signal.width -or
+        [BitConverter]::ToInt32($bmp,22) -ne (-$signal.height) -or
+        [BitConverter]::ToUInt16($bmp,26) -ne 1 -or
+        [BitConverter]::ToUInt16($bmp,28) -ne 32 -or
+        [BitConverter]::ToUInt32($bmp,30) -ne 0 -or
+        [BitConverter]::ToUInt32($bmp,34) -ne $payloadBytes) {
+        throw 'Live frame signal does not match a top-down 32-bit BI_RGB bitmap.'
+    }
+    $blue = $bmp[54]; $green = $bmp[55]; $red = $bmp[56]
+    $actual = if ($blue -eq 0 -and $green -eq 0 -and $red -eq 0) { 'all-black' } else { 'uniform-nonblack' }
+    # Packed BMP rows have no padding at 32 bpp. Ignore alpha/X, just as the
+    # runtime classifier does. Stop early only after the entire view is valid.
+    for ($offset = 58; $offset -lt $bmp.Length; $offset += 4) {
+        if ($bmp[$offset] -ne $blue -or $bmp[$offset + 1] -ne $green -or $bmp[$offset + 2] -ne $red) {
+            $actual = 'nonuniform'
+            break
+        }
+    }
+    if ($actual -cne $signal.classification) { throw 'Live frame RGB classification does not match its pixels.' }
+}
+
 function Assert-Dump([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Minidump is missing: '$Path'." }
     $item=Get-Item -LiteralPath $Path
@@ -153,6 +217,7 @@ if ($liveSaveInventoryArtifact.Count -ne 1 -or [bool]$liveSaveInventoryArtifact[
 $frameArtifact = @($liveManifest.artifacts | Where-Object name -CEQ 'frame.bmp')
 if ($frameArtifact.Count -gt 1 -or ($frameArtifact.Count -eq 1 -and [bool]$frameArtifact[0].safe_to_share)) { throw 'Live frame privacy record is invalid.' }
 if ([bool]$liveManifest.capture.frame -ne ($frameArtifact.Count -eq 1)) { throw 'Live frame capture record does not match its artifact.' }
+Assert-FrameSignal $live $liveManifest.capture
 $crashArtifact = $crashManifest.artifacts.'crash-private.dmp'
 if (-not $crashArtifact -or [bool]$crashArtifact.safe_to_share -or ([string]$crashArtifact.sha256).ToUpperInvariant() -cne (Hash $crashDump)) { throw 'Crash minidump artifact record is invalid.' }
 $crashJournalArtifact=$crashManifest.artifacts.'runtime-journal-private.log'

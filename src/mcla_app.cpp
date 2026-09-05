@@ -3161,6 +3161,13 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
       state.graphics_memory_watch_disarm_us = graphics.memory_watch_disarm_us;
       state.graphics_memory_watch_protect_failures = graphics.memory_watch_protect_failures;
       state.graphics_memory_watch_arm_gap_splits = graphics.memory_watch_arm_gap_splits;
+      state.graphics_vulkan_resolve_count = graphics.vulkan_resolve_count;
+      state.graphics_vulkan_resolve_us = graphics.vulkan_resolve_us;
+      state.graphics_vulkan_resolve_readback_copy_count = graphics.vulkan_resolve_readback_copy_count;
+      state.graphics_vulkan_resolve_readback_bytes = graphics.vulkan_resolve_readback_bytes;
+      state.graphics_vulkan_resolve_readback_copy_us = graphics.vulkan_resolve_readback_copy_us;
+      state.graphics_vulkan_resolve_readback_wait_count = graphics.vulkan_resolve_readback_wait_count;
+      state.graphics_vulkan_resolve_readback_wait_us = graphics.vulkan_resolve_readback_wait_us;
     }
   }
   state.race_back_sequence = race_back_probe_sequence.load();

@@ -12,6 +12,30 @@ function Write-Json([string]$Path, $Value) { [IO.File]::WriteAllText($Path, (($V
 function Hash([string]$Path) { $s=[IO.File]::OpenRead($Path);$h=[Security.Cryptography.SHA256]::Create();try{return -join($h.ComputeHash($s)|ForEach-Object{$_.ToString('X2')})}finally{$h.Dispose();$s.Dispose()} }
 function Expect-Failure([scriptblock]$Action, [string]$Label) { $failed=$false;try{&$Action|Out-Null}catch{$failed=$true};if(-not$failed){throw "Negative diagnostic fixture passed: $Label"};$script:negative++ }
 
+function Set-FrameFixture([string]$Classification, [byte[]]$Pixels) {
+    if ($Pixels.Length -ne 8) { throw 'Frame fixture requires two BGRA pixels.' }
+    $bmp = [byte[]]::new(62)
+    $bmp[0] = 0x42; $bmp[1] = 0x4D
+    [BitConverter]::GetBytes([uint32]62).CopyTo($bmp,2)
+    [BitConverter]::GetBytes([uint32]54).CopyTo($bmp,10)
+    [BitConverter]::GetBytes([uint32]40).CopyTo($bmp,14)
+    [BitConverter]::GetBytes([int32]2).CopyTo($bmp,18)
+    [BitConverter]::GetBytes([int32]-1).CopyTo($bmp,22)
+    [BitConverter]::GetBytes([uint16]1).CopyTo($bmp,26)
+    [BitConverter]::GetBytes([uint16]32).CopyTo($bmp,28)
+    [BitConverter]::GetBytes([uint32]8).CopyTo($bmp,34)
+    $Pixels.CopyTo($bmp,54)
+    $path = Join-Path $live 'frame.bmp'
+    [IO.File]::WriteAllBytes($path,$bmp)
+    $liveManifest.capture.frame = $true
+    $liveManifest.capture['frame_signal'] = [ordered]@{
+        source='win32-client-bitblt';classification=$Classification;width=2;height=1
+    }
+    $liveManifest.artifacts = @($liveManifest.artifacts | Where-Object name -CNE 'frame.bmp') + @(
+        [ordered]@{name='frame.bmp';bytes=$bmp.Length;sha256=(Hash $path);safe_to_share=$false})
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+}
+
 try {
     $diagnostics = Join-Path $root 'diagnostics'
     $live = Join-Path $diagnostics 'live\live-20260903T000000Z-1-1'
@@ -63,6 +87,60 @@ try {
     & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
     $located=& (Join-Path $PSScriptRoot 'show-latest-diagnostic.ps1') -UserDataRoot $root
     if($located.Path-notin@((Resolve-Path $live).Path,(Resolve-Path $crash).Path)){throw 'Latest diagnostic locator returned an unexpected package.'}
+
+    # The old fixture above has no frame_signal group, proving compatibility.
+    $liveManifest.capture['frame_signal'] = [ordered]@{
+        source='win32-client-bitblt';classification='unavailable';width=0;height=0
+    }
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+    Set-FrameFixture 'all-black' ([byte[]](0,0,0,0,0,0,0,255))
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+    Set-FrameFixture 'uniform-nonblack' ([byte[]](7,12,19,0,7,12,19,255))
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+    Set-FrameFixture 'nonuniform' ([byte[]](7,12,19,0,7,12,20,255))
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+
+    $liveManifest.capture.frame_signal.Remove('height');Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'partial frame signal group'
+    $liveManifest.capture.frame_signal['height']=1
+    $liveManifest.capture.frame_signal.source='vulkan-renderer';Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'false frame source'
+    $liveManifest.capture.frame_signal.source='win32-client-bitblt'
+    $liveManifest.capture.frame_signal.classification='healthy-gameplay';Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'unsupported frame quality claim'
+    $liveManifest.capture.frame_signal.classification='nonuniform'
+    $liveManifest.capture.frame_signal.width='2';Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'string frame dimension'
+    $liveManifest.capture.frame_signal.width=-1;Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'negative frame dimension'
+    $liveManifest.capture.frame_signal.width=8193;Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'unbounded frame dimension'
+    $liveManifest.capture.frame_signal.width=0;Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'available frame without dimensions'
+    $liveManifest.capture.frame_signal.width=1;Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'frame dimensions disagree with bitmap'
+    Set-FrameFixture 'nonuniform' ([byte[]](0,0,0,0,0,0,0,255))
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'black pixels falsely called nonuniform'
+    $liveManifest.capture.frame_signal.classification='uniform-nonblack';Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'black pixels falsely called nonblack'
+    $liveManifest.capture.frame_signal=[ordered]@{source='win32-client-bitblt';classification='unavailable';width=0;height=0};Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'unavailable signal with written frame'
+    $liveManifest.capture.frame_signal=$null;Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'null frame signal group'
+    Set-FrameFixture 'nonuniform' ([byte[]](7,12,19,0,7,12,20,255))
+    $framePath=Join-Path $live 'frame.bmp'
+    $wrongHeader=[IO.File]::ReadAllBytes($framePath);$wrongHeader[28]=24
+    [IO.File]::WriteAllBytes($framePath,$wrongHeader)
+    ($liveManifest.artifacts | Where-Object name -CEQ 'frame.bmp').sha256=Hash $framePath
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'unsupported bitmap format despite matching artifact hash'
+
+    Remove-Item -LiteralPath $framePath
+    $liveManifest.artifacts=@($liveManifest.artifacts | Where-Object name -CNE 'frame.bmp')
+    $liveManifest.capture.frame=$false
+    $liveManifest.capture.Remove('frame_signal')
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
 
     [IO.File]::WriteAllText((Join-Path $diagnostics 'latest-live.txt'),"..\escape`n",$utf8)
     Expect-Failure { & (Join-Path $PSScriptRoot 'show-latest-diagnostic.ps1') -UserDataRoot $root -Kind Live } 'unsafe latest pointer'
@@ -122,14 +200,30 @@ try {
         'memory_watch_disarm_calls',
         'memory_watch_disarm_us',
         'memory_watch_protect_failures',
-        'memory_watch_arm_gap_splits'
+        'memory_watch_arm_gap_splits',
+        'vulkan_resolve_count',
+        'vulkan_resolve_us',
+        'vulkan_resolve_readback_copy_count',
+        'vulkan_resolve_readback_bytes',
+        'vulkan_resolve_readback_copy_us',
+        'vulkan_resolve_readback_wait_count',
+        'vulkan_resolve_readback_wait_us'
     )
     foreach ($field in $details) {
         if (-not $header.Contains("uint64_t graphics_$field = 0;")) { throw "Missing initialized detail state: $field" }
         if (-not $app.Contains("state.graphics_$field = graphics.$field;")) { throw "Missing SDK detail mapping: $field" }
         if (-not $writer.Contains(('<< ", \"{0}\": " << runtime.graphics_{0}' -f $field))) { throw "Missing detail JSON field: $field" }
     }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=(53 + 3 * $details.Count)}
+    $frameGuards=@('FrameRgbClassName(frame.signal.classification)',
+        'win32-client-bitblt','MeasureBgraFrame(pixels, width, height, width * 4)',
+        'add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL','MCLA_BUILD_DIAGNOSTIC_TESTS')
+    foreach($needle in $frameGuards){if(-not$source.Contains($needle)){throw "Missing frame source/signal contract: $needle"}}
+    $processGuards=@('GetProcessTimes(GetCurrentProcess()',
+        'creation_time_100ns = FileTimeTicks(process_creation);',
+        '<< ", \"creation_time_100ns\": " << creation_time_100ns',
+        'handles, creation_time_100ns, native_threads)')
+    foreach($needle in $processGuards){if(-not$source.Contains($needle)){throw "Missing process lifetime contract: $needle"}}
+    [pscustomobject]@{Passed=$true;PositiveFixtures=$positive;NegativeFixtures=$negative;SourceChecks=(53 + 3 * $details.Count + $frameGuards.Count + $processGuards.Count)}
 }
 finally {
     if(Test-Path -LiteralPath $root){

@@ -12,7 +12,7 @@ function Write-Utf8([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, $utf8)
 }
 
-function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit, [bool]$WithWait=$false, [long]$WaitScale=1, [string]$Detail='absent') {
+function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vblanks, [bool]$WithAudit, [bool]$WithWait=$false, [long]$WaitScale=1, [string]$Detail='absent', [string]$Resolve='absent', [object]$CreationTime100ns=134330000000000000L) {
     $dir = Join-Path $root "diagnostics\live\$Name"
     [IO.Directory]::CreateDirectory($dir) | Out-Null
     $stamp = [regex]::Match($Name, 'live-(\d{8}T\d{6}Z)-').Groups[1].Value
@@ -33,6 +33,9 @@ function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vb
             [ordered]@{id=100;base_priority=8;kernel_time_100ns=($Outputs * 1000);user_time_100ns=($Outputs * 10000);name='GPU Commands'}
             [ordered]@{id=101;base_priority=8;kernel_time_100ns=($Outputs * 500);user_time_100ns=($Outputs * 1000);name='Main XThread'}
         )
+    }
+    if (-not ($CreationTime100ns -is [string] -and $CreationTime100ns -ceq 'absent')) {
+        $state.process.creation_time_100ns = $CreationTime100ns
     }
     if ($WithWait) {
         $state.graphics.command_ring_idle_us = $Outputs * 10000 * $WaitScale
@@ -71,6 +74,17 @@ function Write-Package([string]$Name, [int]$ProcessId, [long]$Outputs, [long]$Vb
         if ($Detail -ceq 'regressed') { $state.graphics.memory_watch_arm_us = 0 }
         if ($Detail -ceq 'negative') { $state.graphics.memory_watch_arm_us = -1 }
     }
+    if ($Resolve -cne 'absent') {
+        foreach ($field in @('vulkan_resolve_count','vulkan_resolve_us',
+            'vulkan_resolve_readback_copy_count','vulkan_resolve_readback_bytes',
+            'vulkan_resolve_readback_copy_us','vulkan_resolve_readback_wait_count',
+            'vulkan_resolve_readback_wait_us')) {
+            $state.graphics[$field] = if ($Resolve -ceq 'zero') { 0L } elseif ($field.EndsWith('_us')) { $Outputs * 200000L } else { $Outputs * 10L }
+        }
+        if ($Resolve -ceq 'partial') { $state.graphics.Remove('vulkan_resolve_readback_bytes') }
+        if ($Resolve -ceq 'regressed') { $state.graphics.vulkan_resolve_readback_copy_us = 0L }
+        if ($Resolve -ceq 'negative') { $state.graphics.vulkan_resolve_readback_copy_us = -1L }
+    }
     Write-Utf8 (Join-Path $dir 'state.json') ($state | ConvertTo-Json -Depth 8)
     $lines = @('[core] ordinary log')
     if ($WithAudit) {
@@ -99,7 +113,9 @@ try {
     $first = Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false
     $second = Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $true
     $result = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
-    if (-not $result.Passed -or $result.GuestOutputRateHz -ne 20 -or $result.GuestVblankRateHz -ne 60 -or
+    if (-not $result.Passed -or -not $result.ProcessLifetimeVerified -or
+        $result.ProcessCreationTime100ns -ne 134330000000000000L -or
+        $result.GuestOutputRateHz -ne 20 -or $result.GuestVblankRateHz -ne 60 -or
         $result.Audit.Samples -ne 300 -or $result.Audit.SampleRateHz -ne 20 -or
         -not $result.AuditAvailable -or
         $result.Graphics.GuestFramesClosed -ne 600 -or
@@ -114,7 +130,8 @@ try {
         $nativeResult.GuestOutputRateHz -ne 20 -or $null -eq $nativeResult.Graphics -or
         $nativeResult.ThreadCpuTop.Count -ne 2 -or
         $null -ne $nativeResult.Graphics.WaitDiagnostics -or
-        $null -ne $nativeResult.Graphics.DetailDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
+        $null -ne $nativeResult.Graphics.DetailDiagnostics -or
+        $null -ne $nativeResult.Graphics.ResolveDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
 
     $negative = 0
     [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true)
@@ -152,6 +169,98 @@ try {
         catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
     }
     [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete')
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true 1 'complete' 'complete')
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'One-sided resolve fixture unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'complete')
+    $resolveResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    $resolve = $resolveResult.Graphics.ResolveDiagnostics
+    if (-not $resolve.BackendApplicable -or $resolve.Calls -ne 6000 -or
+        $resolve.ReadbackCopies -ne 6000 -or $resolve.ReadbackBytes -ne 6000 -or
+        $resolve.InclusiveSeconds -ne 120 -or $resolve.ReadbackCopySeconds -ne 120 -or
+        $resolve.ReadbackWaitSeconds -ne 120 -or $resolve.ReadbackWaits -ne 6000 -or
+        $resolveResult.Graphics.DominantMeasuredStage -cne 'unattributed_frame_wall') { throw 'Resolve deltas failed or nested totals were subtracted from frame wall.' }
+    foreach ($mode in @('partial','regressed','negative')) {
+        [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' $mode)
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw "$mode resolve fixture unexpectedly passed." }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true 1 'complete' 'zero')
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'zero')
+    $zeroResult = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    if ($null -eq $zeroResult.Graphics.ResolveDiagnostics -or $zeroResult.Graphics.ResolveDiagnostics.ReadbackBytes -ne 0) { throw 'Valid all-zero resolve counters were rejected or treated as absent.' }
+    $explicit = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-10-1' -SecondF10 'live-20260904T120030Z-10-2' -AllowLegacyPidOnly
+    if ($explicit.GuestOutputRateHz -ne 20 -or $explicit.FirstF10 -cne 'live-20260904T120000Z-10-1' -or
+        -not $explicit.ProcessLifetimeVerified) { throw 'Explicit pair selection failed or legacy opt-in weakened a verified lifetime.' }
+    $later = Write-Package 'live-20260904T120050Z-10-3' 10 900 3600 $false $true 1 'complete' 'zero'
+    $partial = Write-Package 'live-20260904T120055Z-10-4.partial' 10 1100 3900 $false $true 1 'complete' 'zero'
+    $latest = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    $selected = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-10-1' -SecondF10 'live-20260904T120030Z-10-2'
+    if ($latest.SecondF10 -cne 'live-20260904T120050Z-10-3' -or $latest.GuestOutputRateHz -ne 10 -or
+        $selected.SecondF10 -cne 'live-20260904T120030Z-10-2' -or $selected.GuestOutputRateHz -ne 20) { throw 'Historical explicit pair or complete-only default selection drifted.' }
+    Remove-Item -LiteralPath $later,$partial -Recurse -Force
+    # A reused PID with larger counters must not look like the same process.
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'zero' 134330000100000000L)
+    foreach ($legacySwitch in @($false, $true)) {
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -AllowLegacyPidOnly:$legacySwitch | Out-Null; throw 'Reused PID default fixture unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-10-1' -SecondF10 'live-20260904T120030Z-10-2' -AllowLegacyPidOnly:$legacySwitch | Out-Null; throw 'Reused PID explicit fixture unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'zero')
+    $restartedFirst = Write-Package 'live-20260904T120050Z-10-1' 10 900 3600 $false $true 1 'complete' 'zero' 134330000100000000L
+    $fallback = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    if (-not $fallback.ProcessLifetimeVerified -or $fallback.SecondF10 -cne 'live-20260904T120030Z-10-2') { throw 'Default selection crossed a reused PID instead of choosing the last valid pair.' }
+    $restartedSecond = Write-Package 'live-20260904T120110Z-10-2' 10 1100 4800 $false $true 1 'complete' 'zero' 134330000100000000L
+    $newLifetime = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    if (-not $newLifetime.ProcessLifetimeVerified -or $newLifetime.FirstF10 -cne 'live-20260904T120050Z-10-1' -or
+        $newLifetime.SecondF10 -cne 'live-20260904T120110Z-10-2' -or
+        $newLifetime.ProcessCreationTime100ns -ne 134330000100000000L) { throw 'Default selection did not choose the latest valid process lifetime.' }
+    Remove-Item -LiteralPath $restartedFirst,$restartedSecond -Recurse -Force
+    # A one-sided creation field is not a legacy pair, even with the override.
+    foreach ($missingFirst in @($true, $false)) {
+        $firstCreation = if ($missingFirst) { 'absent' } else { 134330000000000000L }
+        $secondCreation = if ($missingFirst) { 134330000000000000L } else { 'absent' }
+        [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true 1 'complete' 'zero' $firstCreation)
+        [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'zero' $secondCreation)
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Partial process lifetime default fixture unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-10-1' -SecondF10 'live-20260904T120030Z-10-2' -AllowLegacyPidOnly | Out-Null; throw 'Partial process lifetime explicit fixture unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true 1 'complete' 'zero')
+    foreach ($invalidCreation in @(
+        @{Value=0L}, @{Value=-1L}, @{Value=$null}, @{Value=1.5},
+        @{Value='invalid'}, @{Value='134330000000000000'}, @{Value=$true}, @{Value=@(1,2)})) {
+        [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'zero' $invalidCreation.Value)
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -AllowLegacyPidOnly | Out-Null; throw 'Invalid present creation time unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true 1 'complete' 'zero' 'absent')
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'zero' 'absent')
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Legacy default without opt-in unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-10-1' -SecondF10 'live-20260904T120030Z-10-2' | Out-Null; throw 'Legacy explicit without opt-in unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    $legacyDefault = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -AllowLegacyPidOnly
+    $legacyExplicit = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-10-1' -SecondF10 'live-20260904T120030Z-10-2' -AllowLegacyPidOnly
+    foreach ($legacyResult in @($legacyDefault,$legacyExplicit)) {
+        if (-not $legacyResult.Passed -or $legacyResult.ProcessLifetimeVerified -or
+            $null -ne $legacyResult.ProcessCreationTime100ns -or $legacyResult.GuestOutputRateHz -ne 20 -or
+            $legacyResult.ProcessLifetimeEvidenceScope -notlike '*independently-verified-session-required*') { throw 'Legacy opt-in did not remain explicitly unverified.' }
+    }
+    [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false $true 1 'complete' 'zero')
+    [void](Write-Package 'live-20260904T120030Z-10-2' 10 700 2400 $false $true 1 'complete' 'zero')
+    foreach ($selection in @(
+        @{FirstF10='live-20260904T120000Z-10-1'},
+        @{FirstF10='../live-20260904T120000Z-10-1';SecondF10='live-20260904T120030Z-10-2'},
+        @{FirstF10='live-20260904T120000Z-10-1';SecondF10='live-20260904T120030Z-10-2.partial'},
+        @{FirstF10='live-20260904T120000Z-10-1';SecondF10='live-20260904T120035Z-10-3'},
+        @{FirstF10='live-20260904T120030Z-10-2';SecondF10='live-20260904T120000Z-10-1'},
+        @{FirstF10='live-20260904T120000Z-10-1';SecondF10='live-20260904T120000Z-10-1'})) {
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root @selection | Out-Null; throw 'Invalid explicit pair unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
     Add-Content -LiteralPath (Join-Path $first 'state.json') -Value 'tamper'
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Tampered state fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
@@ -159,7 +268,9 @@ try {
     [void](Write-Package 'live-20260904T120000Z-11-1' 11 100 600 $false)
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Mixed-process fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=4;FailClosedNegatives=$negative}
+    try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-11-1' -SecondF10 'live-20260904T120030Z-10-2' | Out-Null; throw 'Explicit mixed-process fixture unexpectedly passed.' }
+    catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    [pscustomobject]@{Passed=$true;PositiveFixtures=12;FailClosedNegatives=$negative}
 } finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }

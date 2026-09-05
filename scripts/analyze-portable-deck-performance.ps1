@@ -1,6 +1,9 @@
 [CmdletBinding()]
 param(
-    [string]$BundlePath
+    [string]$BundlePath,
+    [string]$FirstF10,
+    [string]$SecondF10,
+    [switch]$AllowLegacyPidOnly
 )
 
 Set-StrictMode -Version Latest
@@ -19,6 +22,17 @@ function Get-OptionalProperty([object]$Object, [string]$Name) {
     $property = $Object.PSObject.Properties[$Name]
     if ($null -eq $property) { return $null }
     return $property.Value
+}
+
+function Test-F10ProcessLifetime([object]$First, [object]$Second, [bool]$AllowLegacy) {
+    if ($First.Pid -ne $Second.Pid) { return $false }
+    if ($null -eq $First.CreationTime100ns -and $null -eq $Second.CreationTime100ns) {
+        return $AllowLegacy
+    }
+    if ($null -eq $First.CreationTime100ns -or $null -eq $Second.CreationTime100ns) {
+        return $false
+    }
+    return $First.CreationTime100ns -eq $Second.CreationTime100ns
 }
 
 function Measure-OptionalCounterSet([object]$First, [object]$Second, [string[]]$Names, [string]$Label) {
@@ -128,6 +142,28 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [doubl
             Scope = 'completed-primary-and-packet-spans-inclusive-and-nested; native-fence-call-wall-only; memory-aggregates-threads; not-additive'
         }
     } else { $null }
+    # Resolve/copy/wait times overlap each other and the existing draw/frame
+    # spans. They answer attribution questions, not an exclusive remainder.
+    $resolveNames = @('vulkan_resolve_count', 'vulkan_resolve_us',
+        'vulkan_resolve_readback_copy_count', 'vulkan_resolve_readback_bytes',
+        'vulkan_resolve_readback_copy_us', 'vulkan_resolve_readback_wait_count',
+        'vulkan_resolve_readback_wait_us')
+    $resolveDelta = Measure-OptionalCounterSet $firstGraphics $secondGraphics $resolveNames 'Vulkan resolve'
+    $resolveDiagnostics = if ($null -ne $resolveDelta) {
+        [pscustomobject]@{
+            BackendApplicable = ($backendSecond -eq 2)
+            Calls = [long]$resolveDelta.vulkan_resolve_count
+            InclusiveSeconds = [Math]::Round($resolveDelta.vulkan_resolve_us / 1000000.0, 6)
+            ReadbackCopies = [long]$resolveDelta.vulkan_resolve_readback_copy_count
+            ReadbackBytes = [long]$resolveDelta.vulkan_resolve_readback_bytes
+            ReadbackMiBPerSecond = [Math]::Round($resolveDelta.vulkan_resolve_readback_bytes / 1048576.0 / $ElapsedSeconds, 3)
+            ReadbackCopySeconds = [Math]::Round($resolveDelta.vulkan_resolve_readback_copy_us / 1000000.0, 6)
+            ReadbackWaits = [long]$resolveDelta.vulkan_resolve_readback_wait_count
+            ReadbackWaitSeconds = [Math]::Round($resolveDelta.vulkan_resolve_readback_wait_us / 1000000.0, 6)
+            RawDelta = $resolveDelta
+            Scope = 'completed-IssueCopy-inclusive; actual-memcpy-including-faults; explicit-resolve-waits-cold-full-resource-resize; nontransactional-nested-not-additive'
+        }
+    } else { $null }
     $closed = [Math]::Max(1L, [long]$delta.guest_frames_closed)
     $submissions = [Math]::Max(1L, [long]$delta.submission_count)
     $trackedSubmissionUs = [long]$delta.pipeline_end_submission_us +
@@ -163,6 +199,7 @@ function Measure-GraphicsDelta([object]$FirstState, [object]$SecondState, [doubl
         RawDelta = [pscustomobject]$delta
         WaitDiagnostics = $waitDiagnostics
         DetailDiagnostics = $detailDiagnostics
+        ResolveDiagnostics = $resolveDiagnostics
     }
 }
 
@@ -226,6 +263,19 @@ function Read-F10Package([IO.DirectoryInfo]$Directory) {
     $state = Get-Content -LiteralPath $verifiedStatePath -Raw | ConvertFrom-Json
     if ($state.schema -cne 'mcla-diagnostic-state-v1' -or $state.reason -cne 'f10' -or
         -not [bool]$state.runtime.available) { throw 'F10 state identity or runtime availability is invalid.' }
+    # A reused PID is not a process lifetime. Preserve absence only for explicit
+    # legacy opt-in; present null, zero, strings, fractions and invalid types are
+    # malformed rather than historical evidence. Native FILETIME creation ticks
+    # fit in signed 64-bit integers for the supported Windows date range.
+    $creationTime100ns = $null
+    $creationProperty = $state.process.PSObject.Properties['creation_time_100ns']
+    if ($null -ne $creationProperty) {
+        $creationValue = $creationProperty.Value
+        if (($creationValue -isnot [long] -and $creationValue -isnot [int]) -or $creationValue -le 0) {
+            throw 'F10 process creation_time_100ns must be a positive integer when present.'
+        }
+        $creationTime100ns = [long]$creationValue
+    }
     $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
     $captured = [DateTime]::ParseExact([string]$manifest.created_utc, "yyyyMMdd'T'HHmmss'Z'",
         [Globalization.CultureInfo]::InvariantCulture, $styles)
@@ -233,6 +283,7 @@ function Read-F10Package([IO.DirectoryInfo]$Directory) {
         Directory = $Directory.FullName
         CapturedUtc = $captured
         Pid = [long]$state.process.pid
+        CreationTime100ns = $creationTime100ns
         GuestOutputs = [long]$state.runtime.guest_output_sequence
         GuestVblanks = [long]$state.runtime.guest_vblank_sequence
         State = $state
@@ -334,6 +385,7 @@ if ($bundleManifest.schema -cne 'mcla-portable-campaign-bundle-v1' -or $bundleMa
 $liveRoot = Assert-PlainDirectory (Join-Path $bundleFull 'diagnostics\live') 'Live diagnostics root'
 $packages = @()
 foreach ($directory in @(Get-ChildItem -LiteralPath $liveRoot -Directory | Sort-Object Name)) {
+    if ($directory.Name -cnotmatch '^live-\d{8}T\d{6}Z-\d+-\d+$') { continue }
     $package = Read-F10Package $directory
     if ($null -ne $package) { $packages += $package }
 }
@@ -341,9 +393,24 @@ if ($packages.Count -lt 2) { throw 'At least two complete F10 packages are requi
 
 $first = $null
 $second = $null
-for ($i = $packages.Count - 1; $i -ge 1; $i--) {
+if ($FirstF10 -or $SecondF10) {
+    if (-not $FirstF10 -or -not $SecondF10) { throw 'Explicit selection requires both FirstF10 and SecondF10.' }
+    foreach ($name in @($FirstF10, $SecondF10)) {
+        if ($name -cnotmatch '^live-\d{8}T\d{6}Z-\d+-\d+$') { throw 'Explicit F10 selection must name a complete direct package, not a path or partial.' }
+    }
+    $firstMatches = @($packages | Where-Object { (Split-Path -Leaf $_.Directory) -ceq $FirstF10 })
+    $secondMatches = @($packages | Where-Object { (Split-Path -Leaf $_.Directory) -ceq $SecondF10 })
+    if ($firstMatches.Count -ne 1 -or $secondMatches.Count -ne 1) { throw 'Explicit F10 package is missing or incomplete.' }
+    $first = $firstMatches[0]; $second = $secondMatches[0]
+    if (-not (Test-F10ProcessLifetime $first $second ([bool]$AllowLegacyPidOnly))) {
+        throw 'Explicit F10 pair must share PID and positive process creation time; two legacy packages without creation time require -AllowLegacyPidOnly and independent session verification.'
+    }
+    if ($second.GuestOutputs -le $first.GuestOutputs -or
+        $second.GuestVblanks -le $first.GuestVblanks) { throw 'Explicit F10 pair must be monotonic within one process lifetime.' }
+} else {
+ for ($i = $packages.Count - 1; $i -ge 1; $i--) {
     for ($j = $i - 1; $j -ge 0; $j--) {
-        if ($packages[$i].Pid -eq $packages[$j].Pid -and
+        if ((Test-F10ProcessLifetime $packages[$j] $packages[$i] ([bool]$AllowLegacyPidOnly)) -and
             $packages[$i].GuestOutputs -gt $packages[$j].GuestOutputs -and
             $packages[$i].GuestVblanks -gt $packages[$j].GuestVblanks) {
             $first = $packages[$j]
@@ -352,8 +419,10 @@ for ($i = $packages.Count - 1; $i -ge 1; $i--) {
         }
     }
     if ($null -ne $second) { break }
+ }
 }
-if ($null -eq $second) { throw 'No monotonic two-F10 pair from one process was found.' }
+if ($null -eq $second) { throw 'No monotonic two-F10 pair from one verified process lifetime was found. Legacy PID-only comparison requires -AllowLegacyPidOnly and independent session verification.' }
+$processLifetimeVerified = $null -ne $first.CreationTime100ns -and $null -ne $second.CreationTime100ns
 $elapsedSeconds = ($second.CapturedUtc - $first.CapturedUtc).TotalSeconds
 if ($elapsedSeconds -le 0) { throw 'The selected F10 pair has a non-positive elapsed time.' }
 $outputDelta = $second.GuestOutputs - $first.GuestOutputs
@@ -372,6 +441,15 @@ $threadCpuTop = @(Measure-ThreadCpuDelta $first.State $second.State $elapsedSeco
     ProjectVersion = [string]$bundleManifest.project_version
     SdkVersion = [string]$bundleManifest.sdk_version
     ProcessId = $second.Pid
+    ProcessCreationTime100ns = $second.CreationTime100ns
+    ProcessLifetimeVerified = $processLifetimeVerified
+    ProcessLifetimeEvidenceScope = if ($processLifetimeVerified) {
+        'same-PID-and-positive-process-creation-time'
+    } else {
+        'legacy-PID-only; independently-verified-session-required; not-process-lifetime-proof'
+    }
+    FirstF10 = Split-Path -Leaf $first.Directory
+    SecondF10 = Split-Path -Leaf $second.Directory
     FirstF10Utc = $first.CapturedUtc.ToString('o')
     SecondF10Utc = $second.CapturedUtc.ToString('o')
     F10ElapsedSeconds = [Math]::Round($elapsedSeconds, 2)

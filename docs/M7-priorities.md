@@ -4,14 +4,16 @@ Date: 2026-09-04. Owner/reviewer: primary Codex agent, with independent
 read-only save/dependency/evidence review. Scope: planning/documentation;
 no runtime fix, physical test or new platform-support claim in that review.
 
-2026-09-05 performance update: both 0.14.1.0 F10s and the complete mutable
-return are accepted/archived. The 100-second pair measures 12.13 new outputs/s;
-native arm/disarm mean cost fell to about 17 us from 64-71 us after the physical
-backing correction. Routes/draw counts differ, so no controlled FPS gain is
-claimed. MCLA 0.14.2.0 / SDK v0.16.1.0 next fixes regression-proven CPU primitive
-cache invalidation and restores its 4096-index threshold; GPU coherency stays
-intact. Full native suites pass; successor Deck improvement remains pending.
-See [the current experiment](evidence/M7-016-deck-primitive-cache.md).
+2026-09-05 performance update: 0.14.2.0 and its full mutable return are
+accepted/archived. BOTH F10s were gameplay: 947 outputs/65s = 14.57/s, versus
+12.13/s previously under a different draw load, not a controlled speedup.
+Owner perceives steadier 10-15 FPS, slower pause at 5-8, and a traffic light
+without earlier dithering. Pause and broad temporal parity are not measured.
+MCLA 0.15.0.0 / SDK v0.17.0.0 adds resolve-readback attribution plus process-
+lifetime/black-frame evidence safeguards. It keeps the previous cache repair
+and all coherency/readback policy intact. Next is one short gameplay pair and
+one pause pair, not another campaign/soak request. See
+[the current experiment](evidence/M7-016-deck-resolve-readback.md).
 Old pending-pair wording below is historical only where explicitly tied to
 the 2026-09-04 review.
 
@@ -43,7 +45,7 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | 0.14.1.0 cost reduction accepted, still 12.13 guest outputs/s; physically compare the 0.14.2.0 primitive-cache correction, then verify actual driving/audio recovery. |
+| 1 | **M7-016 performance**, KI-027 | 0.14.2.0 accepted at 14.57 guest outputs/s, still unusable; separate gameplay/pause resolve-copy/wait intervals on 0.15.0.0, then a measured bounded fix and driving/audio recovery. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |
 | 3 | **M7-016 remaining platform matrix**, then **M7-002** | Short input/audio/window/save/recovery checks; isolated clean-profile new-game/tutorial/unlock/name flow without touching owner progress. |
@@ -96,21 +98,24 @@ to distribute guest-derived shader content.
 
 ## Performance experiment protocol
 
-1. Use the 0.14.2.0 candidate for the primitive-cache comparison. The 0.14.1.0
-   pair is already accepted; do not request it again. Record build/SDK/hash,
+1. Use 0.15.0.0 / SDK 0.17.0.0 for resolve-readback attribution. The 0.14.2.0
+   gameplay pair is accepted; do not repeat the cache test. Record build/SDK/hash,
    Proton/backend/mode, resolution/save/route and cold/warm cache. Do not
    change clocks, renderer and scheduling simultaneously.
-2. Initial check: the requested 30--60-second driving interval between two
-   F10 READY captures, plus owner motion/audio observation. Note capture
-   overhead and the brief visible overlay as measurement caveats.
+2. Capture two F10s 30 seconds apart during driving. Open pause, settle two
+   seconds, then capture two F10s 30 seconds apart while paused. Analyze each
+   pair explicitly with process-lifetime identity. Record owner motion/audio
+   observation; note capture overhead and the brief visible status overlay.
 3. Compare new-output rate, available frame-time percentiles, underrun deltas,
    thread CPU, command waits, memory faults, shader/PSO/stream activity.
    Unavailable is unknown, not zero. Submission spans are not active GPU time;
    one fence metric does not cover all fences; multithread durations overlap.
-4. The UI fix is physically confirmed to correct only MangoHUD. The current
-   candidate must reduce remaining processing/watch overhead and improve actual
-   output cadence/audio, not merely boot. If it does not, investigate the
-   residual measured path; add counters only for a named unanswered question.
+4. The UI fix is physically confirmed to correct the inflated overlay count.
+   This diagnostic candidate answers whether resolve copies/waits account for
+   the slower pause; it does not promise lower overhead. Choose the next bounded
+   correction from measured costs, then require actual output/audio recovery.
+   Only add counters for a named unanswered question, never as a substitute
+   for a defined experiment or indefinitely repeat a completed owner test.
 5. Review/unit-test each correction and run the relevant Windows regression.
    Do not disable coherency, needed readback, checks, sound or stock timing
    to improve an overlay number.
@@ -120,7 +125,7 @@ to distribute guest-derived shader content.
 
 The existing 2--6-month campaign estimate remains provisional, not a promise.
 The feasibility front gate has no reliable date yet; re-estimate after the
-primitive-cache comparison and successor-save reload instead of inventing a deadline.
+resolve-cost comparison and successor-save reload instead of inventing a deadline.
 
 ## Context and review cadence
 

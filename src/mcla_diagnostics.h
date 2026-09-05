@@ -65,6 +65,13 @@ struct RuntimeState {
   uint64_t graphics_memory_watch_disarm_us = 0;
   uint64_t graphics_memory_watch_protect_failures = 0;
   uint64_t graphics_memory_watch_arm_gap_splits = 0;
+  uint64_t graphics_vulkan_resolve_count = 0;
+  uint64_t graphics_vulkan_resolve_us = 0;
+  uint64_t graphics_vulkan_resolve_readback_copy_count = 0;
+  uint64_t graphics_vulkan_resolve_readback_bytes = 0;
+  uint64_t graphics_vulkan_resolve_readback_copy_us = 0;
+  uint64_t graphics_vulkan_resolve_readback_wait_count = 0;
+  uint64_t graphics_vulkan_resolve_readback_wait_us = 0;
   uint64_t race_back_sequence = 0;
   uint64_t race_back_handler_calls = 0;
   uint64_t race_back_apply_calls = 0;

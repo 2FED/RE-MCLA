@@ -111,6 +111,15 @@ claimed. Prior 0.14.1 gameplay control is historical, not successor evidence.
 
 ## Next acceptance boundary
 
+**Return accepted 2026-09-05:** the owner completed this check. Both F10s were
+gameplay; 947 outputs/65s (14.57/s) with changed draw load is not a controlled
+speedup. The full profile/album is unchanged and the complete return archived.
+Owner reports steadier 10-15 FPS, lower 5-8 in pause, and the traffic light no
+longer dithering. Pause was after the pair, not measured inside it. Both GDI
+BMPs are black; they are not visual parity evidence. The next experiment and
+all current identities are in [resolve-readback attribution](M7-016-deck-resolve-readback.md).
+The original requested boundary below is historical, not a request to repeat it.
+
 No Deck performance PASS is inferred from native tests or publication.
 Next owner check stays short: same Proton/Desktop/settings and route if possible,
 two F10s separated by about 60 seconds of driving, then normal exit and full sync.
