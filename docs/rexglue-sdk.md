@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.16.0.0`
-- Immutable project commit: `c949866149be57585751cbe0eeccaf09743576bb`
+- Project release tag: `v0.16.1.0`
+- Immutable project commit: `2fdf4ea4de5ff3c0a686cd627bd865a03d28640a`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -220,6 +220,15 @@ writes, aliases and safe/unsafe watch gaps. RelWithDebInfo and tagged Release
 each pass 1,817 executed cases / four known skips / zero failures (1,821
 registered). See [Deck attribution evidence](evidence/M7-016-deck-command-memory-cost.md).
 
+The v0.16.1.0 delta repairs CPU primitive-cache overlap, cancels insertion after
+in-flight invalidation, bounds no-hit unwatch replies, and restores the 4096-index
+cache threshold. Small converted inputs are recomputed fresh without a primitive
+reuse watch; GPU uploads/coherency and guest rights remain intact. Pre-fix tests
+fail 6/9; final real CPU/Memory coverage passes 800 assertions / 12 cases, and
+both complete configurations pass 1,834 cases plus four known skips. The threshold
+is not yet a measured MCLA/Deck speedup. See
+[cache evidence](evidence/M7-016-deck-primitive-cache.md).
+
 The v0.16.0.0 delta separates the already-precommitted 512 MiB Windows physical
 RAM into one SEC_COMMIT section shared by all five physical aliases. Virtual
 memory stays SEC_RESERVE; POSIX layout, guest metadata/permissions, watch calls
@@ -246,19 +255,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-list -n 1 v0.16.0.0
+git -C third_party/rexglue-sdk rev-list -n 1 v0.16.1.0
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `c949866149be57585751cbe0eeccaf09743576bb`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `2fdf4ea4de5ff3c0a686cd627bd865a03d28640a`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.16.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.16.1.0 project-fork commit:
 
 ```text
-c949866149be57585751cbe0eeccaf09743576bb third_party/rexglue-sdk
+2fdf4ea4de5ff3c0a686cd627bd865a03d28640a third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

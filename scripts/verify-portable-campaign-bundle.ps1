@@ -80,7 +80,7 @@ Assert-ExactProperties $manifest @('schema','task','bundle_id','project_version'
 if ($manifest.schema -cne 'mcla-portable-campaign-bundle-v1' -or $manifest.task -cne 'M7-016' -or
     $manifest.bundle_id -cne $bundleId -or $manifest.project_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or
     $bundleId -cnotmatch ('^mcla-' + [regex]::Escape([string]$manifest.project_version) + '-win64-') -or
-    ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.16.0.0' -or $manifest.sdk_commit -cne 'c949866149be57585751cbe0eeccaf09743576bb')) -or
+    ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.16.1.0' -or $manifest.sdk_commit -cne '2fdf4ea4de5ff3c0a686cd627bd865a03d28640a')) -or
     [string]$manifest.sdk_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or [string]$manifest.sdk_commit -cnotmatch '^[0-9a-f]{40}$' -or
     $manifest.platform -cne 'windows-proton' -or
     $manifest.architecture -cne 'x86_64' -or $manifest.launcher -cne 'Launch-MCLA.exe') { throw 'Bundle manifest identity is invalid.' }

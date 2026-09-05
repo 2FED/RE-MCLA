@@ -86,13 +86,57 @@ Detailed generated logs remain under
 ## Acceptance boundary
 
 MCLA **0.14.1.0** consumes the exact SDK correction. Publication/native control
-is recorded below. Physical Deck throughput/audio recovery is still pending.
-Next comparison: same Proton 9.0-4 / Desktop Mode/settings,
-F10 READY in saved gameplay, about 60 seconds driving, second F10 READY,
-normal exit and completed sync. Compare per-call arm/disarm/query cost,
-real output cadence and audible stability; do not infer a pass from boot.
-No long soak or wheel work. Stay in this chat until this investigation reaches
-a clean outcome. M7 remains 0/16; no milestone push.
+is recorded below. Its Deck return now confirms reduced per-call physical
+memory overhead, **not recovered playable throughput or stable audio**.
+Do not repeat this completed owner test. No long soak or wheel work. Stay in
+this chat until this investigation reaches a clean outcome. M7 remains 0/16;
+no milestone push.
+
+## Accepted 0.14.1.0 return and residual bottleneck
+
+Complete F10s `live-20260905T083803Z-336-1` and
+`live-20260905T083943Z-336-2` pass hashes and same-process analysis (100 seconds).
+`live-20260905T084007Z-336-3.partial` is a shutdown artifact, not a third capture.
+Session `session-20260905T083540Z-296` passes: exit 0, 25 immutable files,
+one profile snapshot, zero watcher errors. The complete profile, save, header
+and photo album are unchanged. Full mutable return archive state:
+`57DD284A930E75452F0073F8F7DA79AA33C18591D2DFC4B253C678658F776EFB`, under
+`private/evidence/M7-016/returned-bundles/<0.14.1 bundle>/`.
+Analysis: `private/evidence/M7-016/deck-return-20260905-0.14.1.0/analysis.json`.
+
+| Same-duration returned intervals | 0.14.0.0 | 0.14.1.0 |
+|---|---:|---:|
+| New guest outputs / second | 9.17 | 12.13 |
+| Closed frames | 925 | 1,219 |
+| Draw packets / inclusive wall | 2,962,008 / 77.315 s | 6,199,135 / 63.474 s |
+| Native watch arm calls / wall | 473,423 / 33.733 s | 896,601 / 14.833 s |
+| Mean native arm / disarm | 71.25 / 64.09 us | 16.54 / 16.95 us |
+| Native disarm calls / wall | 224,370 / 14.380 s | 336,432 / 5.703 s |
+| Handled faults / inclusive wall | 57,371 / 19.535 s | 92,659 / 7.117 s |
+| Fault query wall / mean | 3.846 s / 67.04 us | 0.152 s / 1.64 us |
+| Actual native Vulkan fences | 5,577 / 0.247 s | 7,313 / 0.339 s |
+| Safe arm gaps / protection failures | 54 / 0 | 148 / 0 |
+
+Owner reports possibly 10-15 rather than 5-7 FPS, still poor performance.
+Measured output cadence is consistent with that observation. The routes and
+draw workload differ substantially; **12.13/9.17 is not a controlled 32% A/B
+speedup claim**. The reduction in per-call arm/disarm/query cost supports the
+targeted backing correction. Nested/multithread spans must not be added as
+exclusive frame costs, and per-call integer-us truncation understates fast calls.
+
+Residual GPUCommands CPU is 84.78 CPU-seconds, versus 90.88 for the busiest
+guest thread in this 100-second interval. Native protection still totals many
+calls, but counters combine all watch users; they do not identify the primitive
+cache's share. Next bounded investigation: cache correctness and eligibility
+for small converted index buffers. No coherency/protection bypass is authorized.
+
+The owner's temporary Steam FPS spike while the F10 notification is visible
+is explained by `ImGuiDrawer::Render` requesting another UI paint while a dialog
+is attached. This re-presents an existing guest image; it is not new game work.
+`DiagnosticStatusDialog` hides/detaches outside CAPTURING/READY/FAILED, retaining
+the earlier idle-overlay correction. Guest output sequence/refresh-success
+counters exclude these UI-only presents. This cosmetic spike is not a new
+performance regression or evidence that the game is rendering at 60 FPS.
 
 ## Publication and native control
 
