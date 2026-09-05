@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.17.0.0`
-- Immutable project commit: `e11b30af9e20c36d19ef4ee328473b7fb5627478`
+- Project release tag: `v0.17.1.0`
+- Immutable project commit: `2c7c99c8f7683279295c45b0278cf91b1f88815e`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -244,7 +244,7 @@ acceptance. See [physical-backing evidence](evidence/M7-016-deck-physical-backin
 
 ## Reproduction
 
-The current v0.17.0.0 public snapshot delta adds seven Vulkan resolve counters:
+The preceding v0.17.0.0 public snapshot delta added seven Vulkan resolve counters:
 inclusive IssueCopy calls/time, actual memcpy count/bytes/time and explicit
 resolve readback waits/time. All four wait sites are measured; memexport waits
 are excluded. Copy faults are included, mapped-memory invalidation is not.
@@ -252,7 +252,20 @@ No readback/coherency/scheduling policy changed. Both full native configurations
 and tagged Release pass 1,834 tests plus four known skips. A first parallel run
 exposed a test-only XAM temp-directory collision; atomic unique-directory
 ownership fixes it, with seven saved-game fixtures repeated five times per
-configuration. See [current evidence](evidence/M7-016-deck-resolve-readback.md).
+configuration. See [resolve evidence](evidence/M7-016-deck-resolve-readback.md).
+
+Current v0.17.1.0 preserves the exact Xenon db16cyc hint as one bounded host
+`simde_mm_pause()` instead of emitting only a comment. On x86 this compiles to
+PAUSE, not Sleep or an OS yield; it neither changes PPC state nor reproduces
+exactly sixteen Xenon cycles. Three PPC semantic cases plus an emission
+regression cover neighboring OR instructions as well as the exact hint.
+All-target RelWithDebInfo, Release and tagged Release pass 1,838 tests plus
+four known skips. Actual MCLA non-force regeneration adds exactly 13 hints
+across four files; removing only those lines restores all 67 previous files
+byte-for-byte. The optimized native polling loop contains eight consecutive
+PAUSE instructions. CMake compatibility floor is 0.17.1; the parent pins the
+full four-part tag and commit. Deck performance benefit is NOT proven.
+See [accepted return and correction](evidence/M7-016-deck-delay-hint.md).
 
 After cloning MCLA-R, initialize the pinned graph with:
 
@@ -265,19 +278,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-list -n 1 v0.17.0.0
+git -C third_party/rexglue-sdk rev-list -n 1 v0.17.1.0
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `e11b30af9e20c36d19ef4ee328473b7fb5627478`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `2c7c99c8f7683279295c45b0278cf91b1f88815e`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.17.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.17.1.0 project-fork commit:
 
 ```text
-e11b30af9e20c36d19ef4ee328473b7fb5627478 third_party/rexglue-sdk
+2c7c99c8f7683279295c45b0278cf91b1f88815e third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

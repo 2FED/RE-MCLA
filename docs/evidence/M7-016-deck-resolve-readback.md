@@ -149,7 +149,14 @@ leaving the old current pointer intact. Exact failed staging is preserved at
 sync. A fresh clean build/retry passed unchanged publication/relocation gates;
 do not classify the first attempt as successful or blame Syncthing definitively.
 
-## Next physical check (about two minutes, not another soak)
+## Physical check completed
+
+The requested return is accepted: five complete F10s, first two gameplay and
+last two pause. The extra pause capture is retained, not a reason to repeat
+the test. Measured 12.14 outputs/s gameplay and 10.02 in pause, with zero
+resolve waits in pause. See [the accepted comparison and next bounded
+correction](M7-016-deck-delay-hint.md). The original protocol below records
+what was performed, not an outstanding owner action.
 
 Same Proton 9.0-4 / Desktop settings. First pair: F10 READY in gameplay,
 drive about 30 seconds, second F10 READY. Then open pause, settle two seconds,

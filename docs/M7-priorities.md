@@ -4,16 +4,18 @@ Date: 2026-09-04. Owner/reviewer: primary Codex agent, with independent
 read-only save/dependency/evidence review. Scope: planning/documentation;
 no runtime fix, physical test or new platform-support claim in that review.
 
-2026-09-05 performance update: 0.14.2.0 and its full mutable return are
-accepted/archived. BOTH F10s were gameplay: 947 outputs/65s = 14.57/s, versus
-12.13/s previously under a different draw load, not a controlled speedup.
-Owner perceives steadier 10-15 FPS, slower pause at 5-8, and a traffic light
-without earlier dithering. Pause and broad temporal parity are not measured.
-MCLA 0.15.0.0 / SDK v0.17.0.0 adds resolve-readback attribution plus process-
-lifetime/black-frame evidence safeguards. It keeps the previous cache repair
-and all coherency/readback policy intact. Next is one short gameplay pair and
-one pause pair, not another campaign/soak request. See
-[the current experiment](evidence/M7-016-deck-resolve-readback.md).
+2026-09-05 performance update: the five complete 0.15.0.0 F10s and whole
+profile/album return are accepted and hash-archived. First two captures are
+gameplay (12.14 outputs/s); FINAL two are pause (10.02/s). The intermediate
+pause capture is harmless and is not paired. Pause readback waits are zero;
+59% more draw packets per frame and a busy guest polling thread are grounded
+leads, not exclusive cost attribution or statistical CPU sampling.
+MCLA 0.15.1.0 / SDK v0.17.1.0 restores omitted db16cyc spin hints as bounded
+host PAUSE instructions. Actual non-force generation adds only 13 statements;
+SDK semantics/emission/full suites and parent gates pass. This is a narrow
+correction, not a new counter-only build or proven Deck speedup. Next is a
+short same-settings gameplay/pause comparison of the corrected artifact.
+See [the current experiment](evidence/M7-016-deck-delay-hint.md).
 Old pending-pair wording below is historical only where explicitly tied to
 the 2026-09-04 review.
 
@@ -29,9 +31,9 @@ and the M7-016/M7-009 criteria are refined.
 
 | Priority | Evidence and problem | Disposition |
 |---|---|---|
-| P0 | KI-027: Deck comparisons produce about 7--9 new outputs/s with audio breakup; native Vulkan and forced clocks did not resolve it. | Make throughput/pacing/audio an explicit M7-016 sub-gate before campaign coverage. |
+| P0 | KI-027: latest homogeneous gameplay/pause pairs yield 12.14/10.02 new outputs/s, still below usable stock cadence; native Vulkan and forced clocks did not resolve it. | Make throughput/pacing/audio an explicit M7-016 sub-gate; test the bounded spin-hint correction before campaign coverage. |
 | P0 | Review found an M6-only seed-selection risk in the publisher. | KI-028: developer-side full-tree lineage/archive/publication protection implemented and fixture-tested in 0.13.2.0; actual progressed successor reload remains the next save gate. See [evidence](evidence/M7-009-portable-save-lineage.md). |
-| P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. The task paragraph stopped at the prior 0.12 diagnostic candidate. | Separate implemented tooling from physical gates; identify 0.13.0.0 as the pending binary. Do not rebuild just for this documentation release. |
+| P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. | Separate tooling, accepted historical return and pending physical correction; current experiment is 0.15.1.0, not a boot-only platform PASS. |
 | P1 | M7-001 matrix preparation waits for all of M7-016, while M7 prerequisites require a campaign checklist; reached-import auditing appears last. | Allow planning/save fixtures while awaiting hardware; audit reached imports incrementally, not only after two campaigns. |
 | P2 | Rendering/music defects have generic follow-up owners; wheel centering lacks available hardware. | Assign existing M7 tasks below; keep separate hypotheses and defer physical wheel work. |
 | P2 | README-AI is roughly 278 KB of guidance plus history; current SDK references drifted in architecture/issues. | Add a short replace-in-place handoff and read order; correct current pins without rewriting old evidence. |
@@ -45,7 +47,7 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | 0.14.2.0 accepted at 14.57 guest outputs/s, still unusable; separate gameplay/pause resolve-copy/wait intervals on 0.15.0.0, then a measured bounded fix and driving/audio recovery. |
+| 1 | **M7-016 performance**, KI-027 | Accepted 0.15.0 gameplay/pause pairs reject pause resolve-wait attribution. Test 0.15.1.0 missing-spin-hint correction and driving/audio recovery; if no benefit, investigate measured descriptor work or a named sampling question. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |
 | 3 | **M7-016 remaining platform matrix**, then **M7-002** | Short input/audio/window/save/recovery checks; isolated clean-profile new-game/tutorial/unlock/name flow without touching owner progress. |
@@ -98,8 +100,9 @@ to distribute guest-derived shader content.
 
 ## Performance experiment protocol
 
-1. Use 0.15.0.0 / SDK 0.17.0.0 for resolve-readback attribution. The 0.14.2.0
-   gameplay pair is accepted; do not repeat the cache test. Record build/SDK/hash,
+1. Use 0.15.1.0 / SDK 0.17.1.0 for the actual spin-hint correction. The
+   0.15.0 gameplay/pause pairs are accepted; do not repeat their attribution
+   as a new test of unchanged code. Record build/SDK/hash,
    Proton/backend/mode, resolution/save/route and cold/warm cache. Do not
    change clocks, renderer and scheduling simultaneously.
 2. Capture two F10s 30 seconds apart during driving. Open pause, settle two
@@ -111,9 +114,10 @@ to distribute guest-derived shader content.
    Unavailable is unknown, not zero. Submission spans are not active GPU time;
    one fence metric does not cover all fences; multithread durations overlap.
 4. The UI fix is physically confirmed to correct the inflated overlay count.
-   This diagnostic candidate answers whether resolve copies/waits account for
-   the slower pause; it does not promise lower overhead. Choose the next bounded
-   correction from measured costs, then require actual output/audio recovery.
+   Pause readback waits are now measured at zero, not a remaining theory to
+   retest. The current candidate preserves omitted hints in a captured busy
+   guest polling path; it is not proven to account for all CPU or recover FPS.
+   Require actual output/audio recovery before accepting its benefit.
    Only add counters for a named unanswered question, never as a substitute
    for a defined experiment or indefinitely repeat a completed owner test.
 5. Review/unit-test each correction and run the relevant Windows regression.
@@ -125,7 +129,7 @@ to distribute guest-derived shader content.
 
 The existing 2--6-month campaign estimate remains provisional, not a promise.
 The feasibility front gate has no reliable date yet; re-estimate after the
-resolve-cost comparison and successor-save reload instead of inventing a deadline.
+spin-hint comparison and successor-save reload instead of inventing a deadline.
 
 ## Context and review cadence
 
@@ -142,9 +146,9 @@ reusable instructions: [Codex best practices](https://learn.chatgpt.com/guides/b
 
 No milestone closed, extra physical session was scheduled or commit pushed
 by the 2026-09-04 planning review. The 2026-09-05 experiment above now supersedes
-its pending artifact; the complete 0.14.1.0 return is archived outside sync.
+its pending artifact; the complete 0.15.0.0 return is archived outside sync.
 
-## Review verification
+## Historical review verification (2026-09-04)
 
 - Independent read-only review: no blockers; task IDs/criteria, save-risk
   scope and pending-artifact distinction reconciled by the primary agent.
