@@ -108,12 +108,12 @@ foreach ($name in @('alternate_gpu_verified','alternate_os_verified','cross_mode
 if (-not $Fixture) {
     $doc = Get-Content -LiteralPath (Join-Path $repo 'docs/alpha-compatibility.md') -Raw
     foreach ($needle in @('0.7.0.0','5d3e98c064c38e0769b4f59d11729c8f6270eb83','Windows 11 Pro x86-64 build 26200','AMD Ryzen 9 5900X','NVIDIA GeForce RTX 3090','Thrustmaster T300RS','## Route matrix','## Known issues','known-issues.md','## Reading the status labels','Full campaign / all Complete Edition content','3,600-second mixed gameplay passed')) {
-        if (-not $doc.Contains($needle, [StringComparison]::Ordinal)) { throw "Alpha compatibility document is missing: $needle" }
+        if ($doc.IndexOf($needle, [StringComparison]::Ordinal) -lt 0) { throw "Alpha compatibility document is missing: $needle" }
     }
     $cmake = Get-Content -LiteralPath (Join-Path $repo 'CMakeLists.txt') -Raw
     $bootstrap = Get-Content -LiteralPath (Join-Path $repo 'scripts/bootstrap.ps1') -Raw
-    if ($cmake -notmatch 'MCLA_REXGLUE_VERSION\s+"0\.14\.0\.0"' -or
-        -not $bootstrap.Contains('a88eefcec058975bc01be54ab7a8ee424ce73630', [StringComparison]::Ordinal) -or
+    if ($cmake -notmatch 'MCLA_REXGLUE_VERSION\s+"0\.16\.0\.0"' -or
+        $bootstrap.IndexOf('c949866149be57585751cbe0eeccaf09743576bb', [StringComparison]::Ordinal) -lt 0 -or
         $build.sdk_version -cne '0.10.0.0' -or
         $build.sdk_commit -cne '5d3e98c064c38e0769b4f59d11729c8f6270eb83') {
         throw 'Tested alpha identity or its reviewed SDK hotfix successor drifted.'

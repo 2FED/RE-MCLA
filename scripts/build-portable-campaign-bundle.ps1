@@ -205,8 +205,8 @@ try {
         task = 'M7-016'
         bundle_id = $bundleId
         project_version = $version
-        sdk_version = '0.15.0.0'
-        sdk_commit = 'a88eefcec058975bc01be54ab7a8ee424ce73630'
+        sdk_version = '0.16.0.0'
+        sdk_commit = 'c949866149be57585751cbe0eeccaf09743576bb'
         created_utc = [DateTime]::UtcNow.ToString('O')
         platform = 'windows-proton'
         architecture = 'x86_64'
@@ -277,8 +277,8 @@ try {
         bundle_id = $bundleId
         bundle_path = $final.Substring($repo.TrimEnd('\').Length + 1).Replace('\','/')
         project_version = $version
-        sdk_version = '0.15.0.0'
-        sdk_commit = 'a88eefcec058975bc01be54ab7a8ee424ce73630'
+        sdk_version = '0.16.0.0'
+        sdk_commit = 'c949866149be57585751cbe0eeccaf09743576bb'
         bundle_manifest_sha256 = Get-Sha256 (Join-Path $final 'bundle-manifest.json')
         bundle_lock_sha256 = Get-Sha256 (Join-Path $final 'bundle-files.sha256')
         immutable_file_count = $staged.ImmutableFiles

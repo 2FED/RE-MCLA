@@ -1,5 +1,9 @@
 # M7-016: 0.13.0.0 Deck return and command/memory attribution
 
+The 0.14.0.0 pair requested here has returned. Its accepted analysis and the
+0.14.1.0 correction are in [physical-backing evidence](M7-016-deck-physical-backing.md).
+The pending-capture instructions below describe the preceding experiment.
+
 Date: 2026-09-05. KI-027 remains open. This is a bounded performance
 investigation, not a completed Deck or campaign gate.
 

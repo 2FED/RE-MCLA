@@ -12,8 +12,8 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.15.0.0`
-- Immutable project commit: `a88eefcec058975bc01be54ab7a8ee424ce73630`
+- Project release tag: `v0.16.0.0`
+- Immutable project commit: `c949866149be57585751cbe0eeccaf09743576bb`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -220,6 +220,19 @@ writes, aliases and safe/unsafe watch gaps. RelWithDebInfo and tagged Release
 each pass 1,817 executed cases / four known skips / zero failures (1,821
 registered). See [Deck attribution evidence](evidence/M7-016-deck-command-memory-cost.md).
 
+The v0.16.0.0 delta separates the already-precommitted 512 MiB Windows physical
+RAM into one SEC_COMMIT section shared by all five physical aliases. Virtual
+memory stays SEC_RESERVE; POSIX layout, guest metadata/permissions, watch calls
+and coherency remain unchanged. This avoids Proton 9.0-4's per-protection/query
+SEC_RESERVE committed-range server requests without relaxing memory safety.
+Mapping retry clears completed unmaps and stops on cleanup failure. Five new
+native mapping cases cover 79 assertions. Full **all-target** RelWithDebInfo
+and tagged Release builds/CTest each pass 1,822 cases / four known skips /
+zero failures (1,826 registered). A unit-only build initially left a stale
+PPC runner after the private class-layout change; both complete suites were
+rebuilt and rerun. The CMake ABI floor is 0.16.0. Native control is not Deck
+acceptance. See [physical-backing evidence](evidence/M7-016-deck-physical-backing.md).
+
 ## Reproduction
 
 After cloning MCLA-R, initialize the pinned graph with:
@@ -233,19 +246,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-list -n 1 v0.15.0.0
+git -C third_party/rexglue-sdk rev-list -n 1 v0.16.0.0
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `a88eefcec058975bc01be54ab7a8ee424ce73630`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `c949866149be57585751cbe0eeccaf09743576bb`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.15.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.16.0.0 project-fork commit:
 
 ```text
-a88eefcec058975bc01be54ab7a8ee424ce73630 third_party/rexglue-sdk
+c949866149be57585751cbe0eeccaf09743576bb third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

@@ -4,13 +4,16 @@ Date: 2026-09-04. Owner/reviewer: primary Codex agent, with independent
 read-only save/dependency/evidence review. Scope: planning/documentation;
 no runtime fix, physical test or new platform-support claim in that review.
 
-2026-09-05 performance update: the 0.13.0.0 pair has returned and is archived.
-The owner confirms truthful overlay FPS, but gameplay remains 2--10 FPS;
-the pair measures 6.91 new outputs/s. Published 0.14.0.0 / SDK v0.15.0.0
-adds command/fence/protection/lock attribution under the explicit decision
-rules in [the current experiment](evidence/M7-016-deck-command-memory-cost.md).
-Native tests and relocation pass, not a Deck throughput fix. Old pending-pair
-wording below is historical where explicitly tied to the 2026-09-04 review.
+2026-09-05 performance update: both 0.14.0.0 F10s and its complete mutable
+return are accepted/archived. The 100-second pair measures 9.17 new outputs/s;
+473,423 native watch-arm calls aggregate 33.733 seconds, versus 0.247 seconds
+in actual Vulkan fence calls. Exact Proton 9.0-4 source identifies avoidable
+SEC_RESERVE committed-range server requests. MCLA 0.14.1.0 / SDK v0.16.0.0
+uses separate already-committed physical backing without disabling protections
+or coherency. Full native suites pass; physical Deck recovery is still pending.
+See [the current experiment](evidence/M7-016-deck-physical-backing.md).
+Old pending-pair wording below is historical only where explicitly tied to
+the 2026-09-04 review.
 
 ## Decision
 
@@ -40,7 +43,7 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | 0.13.0.0 return accepted; use the 0.14.0.0 cost split to choose one bounded causal correction, then verify actual driving/audio recovery. |
+| 1 | **M7-016 performance**, KI-027 | 0.14.0.0 cost split accepted; physically compare the 0.14.1.0 shared committed-physical-backing correction, then verify actual driving/audio recovery. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |
 | 3 | **M7-016 remaining platform matrix**, then **M7-002** | Short input/audio/window/save/recovery checks; isolated clean-profile new-game/tutorial/unlock/name flow without touching owner progress. |
@@ -93,7 +96,7 @@ to distribute guest-derived shader content.
 
 ## Performance experiment protocol
 
-1. Use the published 0.14.0.0 candidate for the next cost split. The 0.13.0.0
+1. Use the 0.14.1.0 candidate for the physical-backing comparison. The 0.14.0.0
    pair is already accepted; do not request it again. Record build/SDK/hash,
    Proton/backend/mode, resolution/save/route and cold/warm cache. Do not
    change clocks, renderer and scheduling simultaneously.
@@ -104,9 +107,10 @@ to distribute guest-derived shader content.
    thread CPU, command waits, memory faults, shader/PSO/stream activity.
    Unavailable is unknown, not zero. Submission spans are not active GPU time;
    one fence metric does not cover all fences; multithread durations overlap.
-4. If the UI fix only corrects MangoHUD, say so. Investigate measured remaining
-   CPU/command/memory cost next. Add counters only for a named unanswered
-   question; do not ship diagnostic-only iterations without a decision rule.
+4. The UI fix is physically confirmed to correct only MangoHUD. The current
+   candidate must reduce per-call protection/query cost and improve actual
+   output cadence/audio, not merely boot. If it does not, investigate the
+   residual measured path; add counters only for a named unanswered question.
 5. Review/unit-test each correction and run the relevant Windows regression.
    Do not disable coherency, needed readback, checks, sound or stock timing
    to improve an overlay number.
@@ -116,7 +120,7 @@ to distribute guest-derived shader content.
 
 The existing 2--6-month campaign estimate remains provisional, not a promise.
 The feasibility front gate has no reliable date yet; re-estimate after the
-pending cost split and successor-save reload instead of inventing a deadline.
+physical-backing comparison and successor-save reload instead of inventing a deadline.
 
 ## Context and review cadence
 
@@ -133,7 +137,7 @@ reusable instructions: [Codex best practices](https://learn.chatgpt.com/guides/b
 
 No milestone closed, extra physical session was scheduled or commit pushed
 by the 2026-09-04 planning review. The 2026-09-05 experiment above now supersedes
-its pending artifact; the complete 0.13.0.0 return is archived outside sync.
+its pending artifact; the complete 0.14.0.0 return is archived outside sync.
 
 ## Review verification
 

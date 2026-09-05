@@ -1,131 +1,124 @@
 # Current state / AI handoff
 
 Updated: 2026-09-05. Read this first, then relevant README-AI sections.
-Replace stale facts here; actual Git, manifest hashes and returned evidence
-take precedence. Keep detailed history in linked reports, not this file.
+Replace stale facts here; Git, manifest hashes and returned evidence win.
+Detailed experiment history belongs in linked reports, not this file.
 
 ## Active task and next action
 
-- M6 closed at 0.8.2.2. M7 is **0/16 complete**; M7-016/KI-027 is the active
-  performance investigation. M7-009 portable lineage and M7-001 preparation
-  remain partial, not closed. [Order](M7-priorities.md).
-- User explicitly wants to finish WHY Deck lags **in this chat**, then move to
-  a new thread at a clean outcome. Do not create a new task yet.
-- The requested **0.13.0.0 pair has returned, been analyzed and archived**.
-  Do not ask for it again. Owner confirms truthful 2--10 FPS overlay after
-  idle-dialog fix; real gameplay/audio remain unchanged.
-- Published **MCLA 0.14.0.0 / SDK v0.15.0.0** is a targeted diagnostic
-  candidate, NOT a throughput fix. Await its same-process F10 pair: progressed
-  gameplay, F10 READY, about 60 seconds driving, F10 READY, normal exit and
-  completed sync. Keep Proton 9.0-4 / Desktop Mode/settings fixed. No soak.
-- Decision rules: high watch time plus safe splits -> bounded protection-run
-  coalescing; high fault-lock or arming-lock time -> lock ownership; high actual fence time
-  -> specific wait/readback; high draw preparation with low others -> narrow
-  preparation path. [Full current experiment](evidence/M7-016-deck-command-memory-cost.md).
-- No safe, evidenced throughput correction is identified yet. Do not bypass
-  coherency/readback, guest rights or timing based on a raw stack lead.
+- M6 closed at 0.8.2.2. M7 is **0/16 complete**. Active: M7-016/KI-027
+  stock-mode Deck performance; M7-009 save lineage and M7-001 preparation
+  remain partial. [Order](M7-priorities.md).
+- User wants to finish WHY Deck lags **in this chat**, then use a new thread.
+  Do not create a new task yet or repeat already completed owner tests.
+- **0.14.0.0 returned and is analyzed/archived.** Both F10s are complete.
+  Its 100-second interval measures 9.17 outputs/s, costly native physical-watch
+  protection calls and little actual Vulkan fence time.
+- Published **MCLA 0.14.1.0 / SDK v0.16.0.0** is a bounded throughput
+  candidate, not another counters-only release. Exact Proton source confirms
+  SEC_RESERVE committed-range server requests during protect/query. Separate
+  SEC_COMMIT backing for already-committed physical RAM avoids that path,
+  preserving aliases, guest rights, watch behavior and coherency.
+- **Next owner action:** same Proton 9.0-4 / Desktop Mode/settings, load the
+  progressed game, F10 READY, about 60 seconds driving, second F10 READY,
+  normal exit and completed sync. Report actual motion/FPS and audio breakup.
+  No soak. Compare per-call arm/disarm/query cost and output cadence; physical
+  improvement is not inferred from source, unit tests or Windows boot.
+- [Current evidence and acceptance boundary](evidence/M7-016-deck-physical-backing.md).
+  Previous attribution report is historical. If this correction is insufficient,
+  inspect residual measured cost before adding another mechanism/counter.
 
-## Exact artifacts, save and evidence
+## Exact artifacts and save lineage
 
-- SDK local commit/tag:
-  `a88eefcec058975bc01be54ab7a8ee424ce73630`, `v0.15.0.0`.
-  Root VERSION 0.14.0.0. Local checkpoint only; no milestone push.
+- SDK local commit/tag: `c949866149be57585751cbe0eeccaf09743576bb`,
+  `v0.16.0.0`. Root VERSION **0.14.1.0**. No milestone push.
 - Sync root: `private/bundles/M7-016`; current.txt selects:
-  `mcla-0.14.0.0-win64-92EA61AE9EFC1DF8-BEF9742FB0FFF9D4-58B3385C89D9E499`.
-- Publication:
-  `private/evidence/M7-016/bundle-20260905-054033-dae9f0b0/result.json`.
+  `mcla-0.14.1.0-win64-ED21B43D461B2D00-D7F0EE25CF209E77-58B3385C89D9E499`.
+- Publication receipt:
+  `private/evidence/M7-016/bundle-20260905-073828-79d51fc3/result.json`.
 - Manifest SHA-256:
-  `CA5C1FEEBC4BE7ACE5956489BD606167438F008CE8DCCC0262E016242D787CA3`.
-- Immutable-lock SHA-256:
-  `AFD02379252AB1A490C224C36E8D78018EECAC56983E0F4D28722288173F5DB0`.
-- Selected **complete returned** profile SHA-256:
+  `A52C47196C0A29FC586A04E5AAE83699A2CF4B037191368CA6220FB46DFCC9D2`.
+  Immutable-lock SHA-256:
+  `D6718DF9D7A4B6A0E001331C629F9CC4742F133AFDD92E943CF73D91C3075D76`.
+- Complete returned profile SHA-256 (includes album):
   `3BBC44D0E0CBE03633DFA3BFFBC776B0C5E62CFDC5AA34BEFB346DE022322B5A`.
-  It includes the photo album, not just the save/header.
-- Save SHA-256:
-  `58B3385C89D9E4999B6791CCB95B6F7ED7963CE07F9C47618850841236784585`.
-  Header:
-  `2FAEFBC7FF8CDEADBCE025D9BE914436ED05E27D041F72C8C88798612CFB0D60`.
-- Accepted 0.13 F10s: `live-20260905T044355Z-332-1` and
-  `live-20260905T044532Z-332-2`. The shutdown .partial is not accepted.
-  Session `session-20260905T044215Z-292`: exit 0, 25 immutable files verified,
-  one save snapshot, zero watcher errors; save unchanged.
-- Full old mutable return is outside sync under
-  `private/evidence/M7-016/returned-bundles/<0.13 bundle id>/33C82BF70DF845F487A63B3E362909146D0712E7C71A903D48203914E5466EC4`.
-  The obsolete payload was pruned only after validated archival. No progress
-  discarded; current sync root retains one child.
-- Native control and private maps:
-  `private/evidence/M7-016/deck-return-20260905-0.13.0.0`.
-  Dumps/raw maps stay private. Reconstructed maps match exact executable
-  .text hashes, but raw stack words are NOT validated unwind/profiling data.
+  Save: `58B3385C89D9E4999B6791CCB95B6F7ED7963CE07F9C47618850841236784585`.
+  Header: `2FAEFBC7FF8CDEADBCE025D9BE914436ED05E27D041F72C8C88798612CFB0D60`.
+- Accepted 0.14 F10s: `live-20260905T064756Z-336-1` and
+  `live-20260905T064936Z-336-2`. Shutdown `.partial` is not accepted.
+  Session `session-20260905T064606Z-296`: exit 0, 25 immutable files,
+  one snapshot, zero watcher errors; profile unchanged.
+- Full old mutable return is archived outside sync:
+  `private/evidence/M7-016/returned-bundles/<0.14 bundle id>/87F1C924AAE8198DB3A94FD1170A35CC79588A78B980C43C3D638F4D8A2F0679`.
+  Old payload was pruned only after validated archival. No progress discarded.
+  The new child uses the complete actual return, not an M6-only save.
 
 ## Known, not assumed
 
-- Latest Deck interval: 663 new outputs/96 s = **6.91/s**; 683 closed frames,
-  140.764-ms average frame wall, 60.34 vblanks/s. No output refresh failures.
-  Old measured submission spans cover 5.72% of frame wall; opening fence and
-  ring-idle spans are tiny, WAIT_REG_MEM totals 5.105 s.
-- 52,909 handled non-MMIO write faults aggregate 17.879 s; this includes
-  lock/query/callback cost across threads and excludes earlier OS/Wine fault
-  dispatch. It is not exclusive frame time or a complete root-cause proof.
-- New counters split primary/draw/swap/interrupt, actual Vulkan fence calls,
-  protection arm/disarm and fault lock/query/callback cost. Includes 21
-  fixed-size scalars, no per-page/packet journal, no scheduling/coherency edit.
-  Per-span integer-microsecond truncation undercounts short native calls;
-  compare counts too, not just approximate cumulative time.
-- Isolated Windows Vulkan control reached saved gameplay visually, then
-  collected two F10s: all 21 fields monotonic, zero protection failures,
-  29.33 new outputs/s. Stationary including AFK camera, NOT Deck driving
-  parity. Pre-bump host 0.13.4.0 + final SDK 0.15.0.0. Closed via Alt+F4.
-  Keyboard START pulses did not work; existing opt-in garage START request did.
-- New publication uses a **dedicated portable build tree** and independently
-  copied runtime binaries (all six verified single-link). Legacy developer
-  outputs may still have old hardlinks: do not overwrite them while relying
-  on a hardlinked artifact. Game hardlinks are unchanged/optional.
-- KI-028 developer containment passes full-tree lineage/archive tests and this
-  publication selected the actual Deck return. Physical successor reload is
-  still pending. Never silently select an ambiguous/older unrelated branch.
-- Open graphics/audio/input: KI-013 reflections, KI-015 shimmer, KI-016
-  minimap, KI-017 music, KI-019 neon, KI-020 white paint, KI-022 centering.
-  KI-001 clean new-game/profile and KI-026 Race Back remain open.
-  [Known issues](known-issues.md) owns scope/severity.
-- Campaign preparation: eleven historical scenarios and statically reviewed
-  catalog wrapper/count/descriptor ABI. Mandatory live nodes, prerequisite
-  graph and clean-campaign credit remain unknown. Existing F10 is not a
-  catalog-memory snapshot; no unlock mutation or archive extraction authorized.
+- Latest Deck pair: 917 outputs / 925 closed frames / 100 seconds; frame wall
+  99.070 seconds, draw-packet wall 77.315 seconds. Native fences: 5,577 calls /
+  0.247 seconds. Arm: 473,423 calls / 33.733 seconds; disarm: 224,370 /
+  14.380 seconds. Faults: 57,371 / 19.535 seconds (lock 0.639, query 3.846,
+  callback 14.973 seconds). Only 54 safe arm gaps; zero protection failures.
+- Spans overlap/nest across threads: **do not sum as exclusive frame time**.
+  Per-call integer-microsecond truncation understates fast native operations.
+  9.17 versus previous 6.91/s is not a matched-route improvement claim.
+- Exact Proton 9.0-4 Wine commit: `117daf8d508860a8552f59ebdd6ee16361431136`.
+  SEC_RESERVE protect/query uses get_committed_size/server requests even after
+  MEM_COMMIT. SEC_COMMIT uses local metadata but still applies protections.
+  This does not prove every measured microsecond or all lag came from IPC.
+- Windows control on the **published** artifact reached saved car/HUD, pause,
+  then resumed/AFK-camera rendering; primary inspected renderer BMPs.
+  Native UI and ordinary image helper initialization failed, so existing opt-in
+  START/capture requests were used. No physical F10 keypress or gameplay-F10
+  pair was collected. Two START pulses were needed to reach saved gameplay.
+- Control PID 37896 was deliberately terminated after inspection because native
+  UI tooling was unavailable (exit -1). **Not a spontaneous crash, graceful-exit
+  PASS or Deck performance PASS.** Published guest-free relocated probe exited 0.
+  Control profile remained unchanged; logs/diagnostics were archived from bin/
+  into the isolated run and the published 25-file lock was reverified.
+  Private control: `private/evidence/M7-016/deck-return-20260905-0.14.0.0/windows-control-gameplay`.
+- Dedicated publication build tree: `out/build/win-amd64-portable-release`;
+  runtime binaries are independent copies. Do not overwrite legacy developer
+  output trees while relying on their old hardlinked artifacts.
+- Open: reflections/shimmer/minimap/music/neon/white paint, wheel centering,
+  clean new-game/profile, Race Back, successor-save continuity and Deck matrix.
+  [Known issues](known-issues.md) owns severity/scope.
+- Campaign matrix has eleven historical scenarios and static catalog ABI
+  review, not mandatory live nodes/dependencies or clean-campaign credit.
+  F10 is not an explicit catalog-memory snapshot; no unlock edits authorized.
 
-## Gates completed for this candidate
+## Verified gates
 
-- SDK RelWithDebInfo and tagged Release: **1,817 PASS / four known skips /
-  zero failures** each (1,821 registered); eight new cases. SDK AST 1/1.
-- Parent AST scan clean / 3 fixtures. Analyzer 4 positive / 8 negative;
-  diagnostics 1 positive / 7 negative / 116 source checks; portable bundle
-  1 positive / 13 negative / 41 source checks on PS7 and Windows PS5.1.
-- Save-lineage 46 isolated checks; session 1 positive / 10 negative; build
-  matrix 1 positive / 6 negative; bootstrap 12/12.
-- Native gameplay F10 manifests: 12/12 artifacts hash-verified; all 21 new
-  scalar fields present/monotonic. Final clean 0.14.0.0 publication/Windows
-  relocation passes with exit 0; its guest-free F10 has 21/21 zero defaults.
-- Primary integration and independent memory/command/publisher reviews:
-  no blockers. These do not close physical M7-016 or KI-027.
+- SDK all-target RelWithDebInfo and tagged Release: **1,822 PASS / four known
+  BitStream skips / zero failures** each (1,826 registered). Five new physical
+  mapping cases / 79 assertions; SDK AST 1/1. Initial stale PPC runner failure
+  was resolved by rebuilding ALL targets, then rerunning BOTH full suites.
+- Root AST scan / 3 fixtures. PS7 and PS5.1: analyzer 4 positive / 8 negative;
+  diagnostics 1 / 7 / 116 source checks; bundle 1 / 13 / 41 source checks;
+  save-lineage 46 checks; session 1 / 10; build matrix 1 / 6. Bootstrap 12/12.
+- Clean final publication, relocated launcher/session/guest-free diagnostics
+  PASS (exit 0). Final bundle identity rechecked after isolated native control.
+- Independent SDK/root review: current alpha-version regex drift found and
+  fixed, plus two equivalent IndexOf substitutions for unsupported PS5.1 Contains
+  overloads; actual non-Fixture alpha and 1-positive/31-negative suite pass on
+  both PowerShell versions.
+  No task closed; physical Deck recovery still gates M7-016/KI-027.
 
-## Constraints and entry points
+## Constraints and commands
 
-- Owner has gamepad only; physical T300 unavailable. No wheel reruns.
-- Prefer short targeted tests. Races/story/deliveries may count as ordinary
-  play; never automatically repeat two hours for a small change.
-- Preserve complete owner profiles separately from isolated clean campaigns.
-  Finish sync and stop writers on every host before publication/pruning.
-  Local file locks are not distributed locks.
-- No coherency/readback disablement, guest timing changes, global brightness
-  clamp or muting sound to hide symptoms. Stock performance is M7;
-  dynamic FPS/native Linux/macOS/public packaging remain M8/M9.
-- Local commits only until milestone closure; no push. Follow AGENTS.md
-  usage threshold and bounded independent-agent rules.
-- Architecture/workflow/ledger: README-AI. Commands: [build.md](build.md).
-  SDK pin: [rexglue-sdk.md](rexglue-sdk.md). Gates: [testing.md](testing.md).
+- Owner has gamepad only; no physical T300. Prefer short targeted tests.
+- Preserve complete owner profiles, including album, separately from clean
+  campaign fixtures. Finish sync and stop all writers before publishing/pruning;
+  local locks are not distributed locks. Never pick ambiguous branches silently.
+- No coherency/readback bypass, guest timing change, brightness clamp or audio
+  muting to hide symptoms. Stock performance is M7; dynamic FPS/native Linux/
+  macOS/public packaging remain M8/M9. Local commits only until M7 closure.
+- README-AI owns architecture/workflow/ledger. [Build](build.md),
+  [SDK pin](rexglue-sdk.md), [testing](testing.md).
 - `scripts/analyze-portable-deck-performance.ps1 -BundlePath <child>` is
-  read-only analysis of the returned pair; old all-absent counter sets work,
-  partial/negative/regressing sets fail.
-- `scripts/build-portable-campaign-bundle.ps1` mutates/builds/publishes/prunes.
-  Dedicated output: `out/build/win-amd64-portable-release`. PruneOnly still
-  requires lineage/archive safety. Do not use it to merely inspect returns.
+  read-only; `scripts/build-portable-campaign-bundle.ps1` builds/publishes/prunes.
+- This turn's default exec/apply_patch, node_repl and view_image helpers failed
+  sandbox initialization. Scoped escalated exec with auto-review worked;
+  apply_patch used the Codex --codex-run-as-apply-patch entry point. Do not
+  bypass unavailable native UI with custom SendInput/UIAutomation scripts.
