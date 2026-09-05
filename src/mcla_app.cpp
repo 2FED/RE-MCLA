@@ -31,6 +31,8 @@
 #include <rex/system/user_module.h>
 #include <rex/ui/keybinds.h>
 #include <rex/ui/presenter.h>
+#include <rex/ui/window.h>
+#include <rex/ui/windowed_app_context.h>
 
 #include <imgui.h>
 
@@ -54,6 +56,7 @@
 #include "mcla_diagnostics.h"
 #include "mcla_logging.h"
 #include "mcla_native_crash.h"
+#include "mcla_readback_cost_sample.h"
 
 namespace {
 
@@ -886,6 +889,12 @@ REXCVAR_DEFINE_BOOL(
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(
+    mcla_readback_cost_probe, false, "MCLA Diagnostics",
+    "Private isolated-save readback cost control: START, pause, sample, close; "
+    "diagnostic only, never campaign or audio acceptance")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
     mcla_rendering_smoke_probe, false, "MCLA",
     "Capture bounded saved-gameplay world, street, and particle frames")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -1084,6 +1093,7 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
         "MCLA graphics: selected native Vulkan backend for Proton/Wine");
   }
   if (REXCVAR_GET(mcla_frontend_smoke_probe) ||
+      REXCVAR_GET(mcla_readback_cost_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
       REXCVAR_GET(mcla_environment_effects_probe) ||
       REXCVAR_GET(mcla_gameplay_input_probe) ||
@@ -1794,6 +1804,35 @@ void RunControllerMatrixRumbleProbe(std::stop_token stop_token,
 
 void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
   (void)thread;
+  if (REXCVAR_GET(mcla_readback_cost_probe)) {
+    readback_probe_lifetime_ = std::make_shared<int>(0);
+    const std::weak_ptr<int> lifetime = readback_probe_lifetime_;
+    first_frame_probe_thread_ = std::jthread(
+        [this, lifetime](std::stop_token stop_token) {
+          bool captured = false;
+          try {
+            captured = RunReadbackCostProbe(stop_token);
+          } catch (const std::exception &error) {
+            MCLA_APP_ERROR("MCLA readback cost probe failed: {}", error.what());
+          }
+          if (stop_token.stop_requested()) {
+            return;
+          }
+          MCLA_APP_INFO("MCLA_READBACK_COST_SUMMARY v=1 status={} "
+                        "diagnostic_only=1 audio_counters_available=0 "
+                        "visual_validation_required=1",
+                        captured ? "CAPTURED" : "FAILED");
+          rex::FlushLogging();
+          // Never await the UI here: normal window closure joins this worker.
+          // The token is invalidated on the UI thread before app teardown.
+          app_context().CallInUIThreadDeferred([this, lifetime]() {
+            if (!lifetime.expired() && window()) {
+              window()->RequestClose();
+            }
+          });
+        });
+    return;
+  }
   if (REXCVAR_GET(mcla_first_frame_probe) ||
       REXCVAR_GET(mcla_controller_matrix_probe) ||
       REXCVAR_GET(mcla_frontend_smoke_probe) ||
@@ -1811,6 +1850,93 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
     first_frame_probe_thread_ = std::jthread(
         [this](std::stop_token stop_token) { RunFirstFrameProbe(stop_token); });
   }
+}
+
+bool MclaApp::RunReadbackCostProbe(std::stop_token stop_token) {
+  using namespace std::chrono_literals;
+  const std::string mode = rex::cvar::GetFlagByName("readback_resolve");
+  auto *graphics = runtime() ? runtime()->graphics_system() : nullptr;
+  auto *presenter = graphics ? graphics->presenter() : nullptr;
+  auto *driver =
+      static_cast<FrontendSmokeInputDriver *>(frontend_smoke_input_);
+  if (!presenter || !driver || (mode != "fast" && mode != "some")) {
+    MCLA_APP_ERROR("MCLA readback cost: missing dependencies or invalid mode");
+    return false;
+  }
+  const auto output = runtime()->user_data_root() / "mcla-readback-cost";
+  std::error_code error;
+  if (!std::filesystem::create_directory(output, error) || error) {
+    MCLA_APP_ERROR("MCLA readback cost: requires a fresh private output directory");
+    return false;
+  }
+  auto capture = [&](const char *name, std::chrono::seconds allowance) {
+    const auto deadline = std::chrono::steady_clock::now() + allowance;
+    while (!stop_token.stop_requested() &&
+           std::chrono::steady_clock::now() < deadline) {
+      rex::ui::RawImage image;
+      FrameMetrics metrics;
+      if (presenter->CaptureGuestOutput(image) && MeasureFrame(image, metrics) &&
+          metrics.IsNontrivial() && WriteFrameBmp(output / name, image)) {
+        return true;
+      }
+      if (!SleepUntilOrStop(stop_token,
+                            std::chrono::steady_clock::now() + 100ms)) {
+        return false;
+      }
+    }
+    // The harness also needs an external deadline: an individual graphics
+    // capture call may block beyond this retry allowance.
+    return false;
+  };
+  MCLA_APP_INFO("MCLA_READBACK_COST_CONFIG v=1 mode={} diagnostic_only=1 "
+                "scene=paused warmup_seconds=20 sample_seconds=20 "
+                "audio_counters_available=0", mode);
+  if (!capture("title.bmp", 90s) ||
+      !SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() + 45s) ||
+      !driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_START, 500) ||
+      !SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() + 60s) ||
+      !capture("gameplay.bmp", 10s) ||
+      !driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_START, 501) ||
+      !SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() + 20s) ||
+      !capture("pause-before.bmp", 10s)) {
+    return false;
+  }
+  // Captures, serialization and disk I/O are outside the measured window.
+  // These independent atomic counters are not a transaction or pure GPU time.
+  const auto begin_time = std::chrono::steady_clock::now();
+  const auto begin = CaptureDiagnosticState();
+  if (!SleepUntilOrStop(stop_token, begin_time + 20s)) {
+    return false;
+  }
+  const auto end = CaptureDiagnosticState();
+  const auto end_time = std::chrono::steady_clock::now();
+  if (rex::cvar::GetFlagByName("readback_resolve") != mode ||
+      !begin.runtime_available || !end.runtime_available ||
+      begin.graphics_backend != end.graphics_backend ||
+      end.guest_output_sequence <= begin.guest_output_sequence ||
+      !capture("pause-after.bmp", 10s)) {
+    return false;
+  }
+  const auto micros = [](auto time) {
+    return static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            time.time_since_epoch()).count());
+  };
+  const auto partial = output / "samples.jsonl.partial";
+  std::ofstream stream(partial, std::ios::binary | std::ios::trunc);
+  if (!stream ||
+      !mcla::diagnostics::WriteReadbackCostSample(stream, "begin", mode,
+                                                micros(begin_time), begin) ||
+      !mcla::diagnostics::WriteReadbackCostSample(stream, "end", mode,
+                                                micros(end_time), end)) {
+    return false;
+  }
+  stream.close();
+  if (!stream) {
+    return false;
+  }
+  std::filesystem::rename(partial, output / "samples.jsonl", error);
+  return !error;
 }
 
 void MclaApp::RunFirstFrameProbe(std::stop_token stop_token) {
@@ -3227,6 +3353,7 @@ void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
 }
 
 bool MclaApp::OnWindowCloseRequested() {
+  readback_probe_lifetime_.reset();
   if (diagnostic_keybind_registered_) {
     rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
     diagnostic_keybind_registered_ = false;
@@ -3236,6 +3363,7 @@ bool MclaApp::OnWindowCloseRequested() {
 }
 
 void MclaApp::OnShutdown() {
+  readback_probe_lifetime_.reset();
   if (diagnostic_keybind_registered_) {
     rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
     diagnostic_keybind_registered_ = false;

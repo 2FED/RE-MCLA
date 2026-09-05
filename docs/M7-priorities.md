@@ -16,8 +16,16 @@ guest active-wait block. This is not permission to remove synchronization.
 Both phase-confirmed leaf captures and exact SDK attribution are now complete.
 An additional private GPU-thread stack capture identifies large resolve-readback
 copies and uploads; this is partial cost attribution, not a performance fix.
-Next: a short same-scene diagnostic readback-cost control after normal session
-closure/archive, then choose the measured dependency-safe correction.
+The isolated readback A-B-A is now complete: fast12.15, some14.50,
+fast-repeat14.25 outputs/s. Baseline drift rejects a robust improvement;
+the unsafe indefinitely stale `some` policy is not a shipping candidate.
+A separate timed STL/Proton C++ runtime mismatch explains the failed automatic
+START observation. Official app-local runtime restores four autonomous
+gameplay/pause controls, but not stock FPS. Complete the exact candidate's
+deployment gates, then count safely mergeable disarm gaps before considering
+any memory-protection optimization. No SDK behavior change is justified yet.
+See [readback control](evidence/M7-016-deck-readback-cost.md) and
+[runtime correction](evidence/M7-016-proton-cpp-runtime.md).
 See [CPU findings and limits](evidence/M7-016-deck-cpu-attribution.md).
 See [descriptor results](evidence/M7-016-deck-descriptor-reuse.md) and
 [CPU profiling](evidence/M7-016-deck-cpu-profile-plan.md).
@@ -36,7 +44,8 @@ and the M7-016/M7-009 criteria are refined.
 
 | Priority | Evidence and problem | Disposition |
 |---|---|---|
-| P0 | KI-027: accepted descriptor return yields 12.63/8.63 new outputs/s, without material gain. Direct CPU profiles show guest waiting and serial command/copy/protection work. | Keep stock throughput/audio the front gate; use the exact caller evidence for one bounded readback-cost control, preserving required CPU consumers. |
+| P0 | KI-027: accepted descriptor return yields 12.63/8.63 new outputs/s, without material gain. Readback A-B-A does not establish a robust benefit. | Keep stock throughput/audio the front gate; measure protection-range fragmentation without changing coherency or required CPU consumers. |
+| P0, bounded deployment dependency | KI-030: builtin Proton C++ runtime blocks synthetic input observation until timeout. | Minimal same-PE fixture and four actual-host controls accept app-local CRT; complete exact candidate launcher/diagnostic gates before publication. This is not the main FPS fix. |
 | P0 | Review found an M6-only seed-selection risk in the publisher. | KI-028: developer-side full-tree lineage/archive/publication protection implemented and fixture-tested in 0.13.2.0; actual progressed successor reload remains the next save gate. See [evidence](evidence/M7-009-portable-save-lineage.md). |
 | P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. | Separate tooling, accepted historical returns and pending physical correction; current candidate is 0.16.0.1, not a boot-only platform PASS. |
 | P1 | M7-001 matrix preparation waits for all of M7-016, while M7 prerequisites require a campaign checklist; reached-import auditing appears last. | Allow planning/save fixtures while awaiting hardware; audit reached imports incrementally, not only after two campaigns. |
@@ -52,7 +61,7 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | Descriptor comparison and direct CPU attribution retained; next short same-scene cost control, then reviewed correction with actual cadence/audio and image evidence. Zero resolve waits does not mean zero copies. |
+| 1 | **M7-016 performance**, KI-027 | Descriptor comparison, direct CPU attribution and readback A-B-A retained; complete CRT dependency correction, then a protection-fragmentation diagnostic and evidence-selected correction. Actual cadence/audio/image acceptance remains required. |
 | 1, separate follow-up investigation | **M7-016 Deck CPU scaling / matched Xenia baseline** | Profile work versus waits and synchronization; compare identical scenes/settings before deciding which independent work can safely run in parallel. Produce an evidence-backed optimization backlog, not a core-affinity-only change or promised FPS gain. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |

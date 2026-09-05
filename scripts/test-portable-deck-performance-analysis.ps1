@@ -152,6 +152,38 @@ try {
         $null -ne $nativeResult.Graphics.BindingDiagnostics) { throw 'Audit-optional Vulkan fixture did not produce the expected result.' }
 
     $negative = 0
+    $bundleManifestPath = Join-Path $root 'bundle-manifest.json'
+    $legacyManifestText = [IO.File]::ReadAllText($bundleManifestPath)
+    $v2ManifestText = ([ordered]@{
+        schema='mcla-portable-campaign-bundle-v2';task='M7-016';bundle_id='fixture'
+        project_version='0.9.1.0';sdk_version='0.10.1.0'
+        cpp_runtime=[ordered]@{policy='msvc-14.44-app-local-v1';version='14.44.35211.0'}
+    } | ConvertTo-Json -Depth 5)
+    Write-Utf8 $bundleManifestPath $v2ManifestText
+    $v2Result = & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root
+    if (-not $v2Result.Passed -or $v2Result.GuestOutputRateHz -ne $nativeResult.GuestOutputRateHz -or
+        $v2Result.GuestVblankRateHz -ne $nativeResult.GuestVblankRateHz -or
+        $v2Result.ProjectVersion -cne '0.9.1.0' -or $v2Result.SdkVersion -cne '0.10.1.0' -or
+        -not $v2Result.ProcessLifetimeVerified -or
+        $v2Result.Graphics.DominantMeasuredStage -cne $nativeResult.Graphics.DominantMeasuredStage) {
+        throw 'V2 declaration changed historical version support or performance calculations.'
+    }
+    foreach ($mutation in @(
+        {param($m) $m.cpp_runtime.policy='msvc-any'},
+        {param($m) $m.cpp_runtime.version='14.44.1.0'},
+        {param($m) $m.cpp_runtime.policy=@('msvc-14.44-app-local-v1')},
+        {param($m) $m.cpp_runtime.version=@('14.44.35211.0')},
+        {param($m) $m.cpp_runtime=$null},
+        {param($m) $m.PSObject.Properties.Remove('cpp_runtime')},
+        {param($m) $m.cpp_runtime | Add-Member NoteProperty fallback $true},
+        {param($m) $m.schema='mcla-portable-campaign-bundle-v3'})) {
+        $badManifest = $v2ManifestText | ConvertFrom-Json
+        & $mutation $badManifest
+        Write-Utf8 $bundleManifestPath ($badManifest | ConvertTo-Json -Depth 5)
+        try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'Invalid v2 runtime fixture unexpectedly passed.' }
+        catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
+    }
+    Write-Utf8 $bundleManifestPath $legacyManifestText
     [void](Write-Package 'live-20260904T120000Z-10-1' 10 100 600 $false -Bindings 'complete')
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root | Out-Null; throw 'One-sided binding fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
@@ -315,7 +347,7 @@ try {
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
     try { & (Join-Path $PSScriptRoot 'analyze-portable-deck-performance.ps1') -BundlePath $root -FirstF10 'live-20260904T120000Z-11-1' -SecondF10 'live-20260904T120030Z-10-2' | Out-Null; throw 'Explicit mixed-process fixture unexpectedly passed.' }
     catch { if ($_.Exception.Message -like '*unexpectedly passed*') { throw }; $negative++ }
-    [pscustomobject]@{Passed=$true;PositiveFixtures=14;FailClosedNegatives=$negative}
+    [pscustomobject]@{Passed=$true;PositiveFixtures=15;FailClosedNegatives=$negative}
 } finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }

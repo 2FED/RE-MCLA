@@ -406,8 +406,22 @@ if (-not $BundlePath) {
 }
 $bundleFull = Assert-PlainDirectory ([IO.Path]::GetFullPath($BundlePath)) 'Bundle root'
 $bundleManifest = Get-Content -LiteralPath (Join-Path $bundleFull 'bundle-manifest.json') -Raw | ConvertFrom-Json
-if ($bundleManifest.schema -cne 'mcla-portable-campaign-bundle-v1' -or $bundleManifest.task -cne 'M7-016') {
+if ($bundleManifest.schema -isnot [string] -or $bundleManifest.task -isnot [string] -or
+    $bundleManifest.schema -cnotin @('mcla-portable-campaign-bundle-v1','mcla-portable-campaign-bundle-v2') -or
+    $bundleManifest.task -cne 'M7-016') {
     throw 'Portable bundle identity is invalid.'
+}
+if ($bundleManifest.schema -ceq 'mcla-portable-campaign-bundle-v2') {
+    $cppRuntime = Get-OptionalProperty $bundleManifest 'cpp_runtime'
+    if ($null -eq $cppRuntime -or
+        (@($cppRuntime.PSObject.Properties.Name | Sort-Object) -join '|') -cne 'policy|version' -or
+        $cppRuntime.policy -isnot [string] -or $cppRuntime.version -isnot [string] -or
+        $cppRuntime.policy -cne 'msvc-14.44-app-local-v1' -or $cppRuntime.version -cne '14.44.35211.0') {
+        throw 'Portable v2 C++ runtime declaration is invalid.'
+    }
+    # This validates the historical bundle declaration, not loaded-module
+    # identity or the whole runtime tree. Keep full bundle verification and
+    # actual module provenance separate from these F10 counter calculations.
 }
 
 $liveRoot = Assert-PlainDirectory (Join-Path $bundleFull 'diagnostics\live') 'Live diagnostics root'

@@ -358,6 +358,33 @@ A task may be checked only when all applicable conditions are met:
 - README-AI and other affected documentation are updated
 - no proprietary or secret material is staged
 
+### Portable runtime and opt-in diagnostic workflow
+
+Current new portable packages use manifest `mcla-portable-campaign-bundle-v2`
+and the pinned `config/portable-cpp-runtime.json` policy. The builder resolves
+the signed official x64 VC143 Redist from the selected VS installation,
+validates hashes/file version/PE architecture, and materializes root3/bin4 DLL
+placements. No UCRT/system DLLs, registry edits or static-CRT workaround.
+Legacy v1 is accepted only by `-ReturnedProfile` for archive/lineage migration,
+not by new-publication validation. Root CRT loads before the launcher's hash
+check; integrity validation is not a pre-execution security boundary.
+Run `scripts/test-portable-cpp-runtime.ps1` alongside the bundle, lineage,
+launcher-recovery, session and Deck-analyzer tests under PS7 and WindowsPS5.1.
+Actual Windows/Proton relocation and diagnostic/session controls are separate
+gates. See [CRT evidence](docs/evidence/M7-016-proton-cpp-runtime.md).
+
+`MCLA_BUILD_DIAGNOSTIC_TESTS=ON` adds opt-in CMake targets
+`mcla_cpp_runtime_probe` (/MD timed-wait fixture) and
+`mcla_readback_cost_sample_test`; they are excluded from normal builds.
+`mcla_readback_cost_probe` is a separate default-off, init-only title flag:
+it autonomously enters saved gameplay/pause, captures renderer frames and
+records a short address-free counter interval. Run only with isolated
+profile/cache/output roots outside playable bundles and the Syncthing root.
+`scripts/analyze-readback-cost.py` and `tests/test_readback_cost_analysis.py`
+validate telemetry, not gameplay/audio/performance PASS. Never publish the
+diagnostic `some` readback arm or import its experimental saves. Source,
+published and actually measured artifact identities must remain distinct.
+
 ### 6.4 Definition of Done for every milestone
 
 A milestone closes only when:
@@ -1272,6 +1299,8 @@ Current checkpoint (2026-09-05, primary Codex + independent ABI/count and diagno
 - 2026-09-05 — M7-016 accepted delay-hint return and descriptor-reuse checkpoint, primary plus independent SDK lifetime/timer and root schema/pin reviews. **0/16; YELLOW — NATIVE REUSE VERIFIED, DECK BENEFIT PENDING**. Four complete 0.15.1.0 F10s measure 12.78 gameplay/8.60 pause outputs/s; pause packet density rose 22%, per-packet GPU-thread CPU is unchanged and resolve waits are zero. No material hint gain or causal regression is established. SDK v0.18.0.1/9098e122afa116f4316d6cec47e561ebc5186974 retains conservative same-epoch descriptor sets with exact values, unconditional resource requests and intact barriers/lifetimes; misses allocate fresh sets and partial updates cannot publish snapshots. Six fields expose reuse/nested cost; native short-call truncation found in intermediate0.18.0.0 is corrected with cumulative nanoseconds before exporting microseconds. Full SDK suites pass1845executed/four known skips; descriptor5/37 and focused diagnostics5/53. Root AST/3 and dual-PowerShell contracts/real alpha/bootstrap pass after independent coercion and current-pin findings were fixed. Clean final0.16.0.1 publication/relocation receipt private/evidence/M7-016/bundle-20260905-144002-92771135/result.json passes. Both exact Windows Vulkan and D3D12 built-in START/pause/Settings controls show the saved Eclipse/HUD and menus, exit0 without force, sourceprofile unchanged; primary inspected six captures. About50% cumulative Vulkan stage reuse is avoided work, not Deck speedup proof. Full profile/album and prior mutable returns are archived before obsolete payload pruning. Failed compile/stale CMake metadata/staging rename evidence is retained; fresh clean retry passed, rename holder remains unknown. Details: docs/evidence/M7-016-deck-descriptor-reuse.md. No task closed or pushed; estimate provisional. Next: short same-settings Deck cost/cadence/audio pair and pause pair, then a separate owner-requested CPU-scaling/matched-Xenia research package under M7-016 (not affinity-only tuning), with early M7-009 continuity and remaining platform matrix still required. Owner Xenia15--20FPS is not a controlled benchmark; other threads already consume CPU. M8-011 later reuses the benchmark methodology; criteria unchanged.
 
 - 2026-09-05 — M7-016 direct CPU attribution / launcher recovery checkpoint, primary plus independent producer, parser and symbol/privacy reviews. **0/16; YELLOW — COSTS ATTRIBUTED, STOCK PLAYABILITY STILL OPEN**. Accepted 0.16.0.1 descriptor comparison is unchanged at 12.63/8.63 gameplay/pause outputs/s. Owner-approved Devkit routing/pairing enables exact unprivileged userspace profiles: 4,249 pause and 6,878 moving-gameplay samples, plus 573 phase-unconfirmed GPU-thread stack samples. Exact guest mapping and code/pdata-identical SDK symbols expose shared-helper waits with multiple predicates and verified large-copy callers (47 resolve / 26 upload / 2 binding loop samples). These are residency samples, not call counts or a complete root cause. No performance policy, SDK, game binary or save changed; no projected uplift. Source 0.16.0.2 fixes a separate launcher rejection of inert unfinished F10 directories, retaining recursive safety checks and never promoting their save fragments. Original orphan was archived and reversibly relocated; owner confirmed launch. Root AST/3, unit52/0, native launcher recovery, bundle1/13/41 and lineage46 pass under PS7/5.1. Evidence and review limits: docs/evidence/M7-016-deck-cpu-attribution.md and docs/evidence/M7-016-launcher-diagnostic-partial.md. Current Deck bundle remains 0.16.0.1. No task closed or pushed; acceptance criteria unchanged, front-gate estimate provisional. Next two packages: short same-scene readback-cost diagnostic after normal session close/archive, then the evidence-selected correction with early M7-009 successor reload; no repeated unchanged four-F10 run or soak.
+
+- 2026-09-06 — M7-016 readback-cost / C++ runtime checkpoint, primary plus independent parser/lifetime, runtime closure and package-contract reviews. **0/16; YELLOW — AUTO START CORRECTED, STOCK PERFORMANCE OPEN**. Readback A-B-A12.15/14.50/14.25 outputs/s rejects a robust gain; indefinitely stale `some` cannot ship. Raw physical copies bypass alias write watches. A separate same-PE /MD fixture reproduces builtin-Proton timed mutex failure; official app-local CRT restores3/3~21ms and five actual-host gameplay/pause controls. Source0.17.0.0 adds default-off readback telemetry and v2 root3/bin4 runtime packaging with v1 returned-profile compatibility. DualPS bundle3/34/45, CRT3/8, lineage48, analyzer15/56, session1/10 and native recovery pass; final AST3, serializer127/0, Python24 and clean Windows relocation pass. Isolated32-file AD4D0F58... candidate also passes Proton launcher/live/session, primary-inspected saved gameplay/pause and deliberate crash-helper minidump/privacy checks. Packaged TOML overrides harness log/fullscreen settings; retained failed harness receipt is separately resolved against the actual log without rerun or comparative FPS claim. Candidate12.15outputs/s remains inadequate. Latest owner full profile/album is preserved; experiments are outside the entire sync root. Published0.16.0.1/current.txt unchanged, no task closed or pushed. Evidence: docs/evidence/M7-016-deck-readback-cost.md and M7-016-proton-cpp-runtime.md. NewKI-030 is contained in candidate, publication pending; estimate provisional, acceptance unchanged. Next two packages: safe-disarm-gap measurement with no policy change, then the evidence-selected correction and short cadence/audio acceptance with early M7-009 evolved successor reload.
 
 ## 16. Milestone M8 — Modern enhancements and secondary platforms
 

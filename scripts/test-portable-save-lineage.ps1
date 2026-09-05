@@ -3,6 +3,9 @@ param([switch]$NativeLauncher)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Portable-SaveLineage.ps1')
+. (Join-Path $PSScriptRoot 'Portable-CppRuntime.ps1')
+$cppPolicy=Get-PortableCppRuntimePolicy
+$cppFiles=@(Get-PortableCppRuntimeFiles $cppPolicy)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $testRoot=Join-Path $repo ('private\evidence\M7-009\fixture-'+[guid]::NewGuid().ToString('N'))
 $utf8=[Text.UTF8Encoding]::new($false)
@@ -14,9 +17,11 @@ function Reject([scriptblock]$Action,[string]$Pattern) { $caught=$null;try{& $Ac
 function Profile([string]$Root,[string]$Value) { Put (Join-Path $Root $script:PortableSavePath) $Value;Put (Join-Path $Root $script:PortableHeaderPath) 'header';Put (Join-Path $Root ($script:PortableProfileName+'/photo.jpg')) ('photo-'+$Value);Get-PortableProfile $Root }
 function Lock-Manifest([string]$Root) {
     $paths=@('Launch-MCLA.exe','bundle-id.txt','bundle-manifest.json','game-manifest.json','bin/mcla.exe','bin/mcla_crash_handler.exe','bin/mcla.toml','bin/rexgpu-xenos.dll','bin/rexruntime.dll','bin/TracyClient.dll','game/default.xex')
+    $manifest=Get-Content -LiteralPath (Join-Path $Root 'bundle-manifest.json') -Raw|ConvertFrom-Json
+    if($manifest.schema -ceq 'mcla-portable-campaign-bundle-v2'){$paths+=@($cppFiles|ForEach-Object{$_.RelativePath})}
     Put (Join-Path $Root 'bundle-files.sha256') ((@($paths|Sort-Object|ForEach-Object { '{0} *{1}' -f (Get-PortableSha256 (Join-Path $Root $_)),$_ }) -join "`n")+"`n")
 }
-function Bundle([string]$Root,$Seed,[string]$Id,[string]$SeedRelative,[string[]]$Ancestors=@()) {
+function Bundle([string]$Root,$Seed,[string]$Id,[string]$SeedRelative,[string[]]$Ancestors=@(),[switch]$CppRuntime) {
     foreach($name in @('bin','game','user','cache','logs','diagnostics','results','update','metadata')){[IO.Directory]::CreateDirectory((Join-Path $Root $name))|Out-Null}
     Copy-Item -LiteralPath (Join-Path $Seed.Root $script:PortableProfileName) -Destination (Join-Path $Root 'user') -Recurse
     foreach($file in @('Launch-MCLA.exe','bin/mcla.exe','bin/mcla_crash_handler.exe','bin/rexgpu-xenos.dll','bin/rexruntime.dll','bin/TracyClient.dll','game/default.xex')){Put (Join-Path $Root $file) ('fixture-'+$file)}
@@ -30,6 +35,11 @@ function Bundle([string]$Root,$Seed,[string]$Id,[string]$SeedRelative,[string[]]
         selected_save=[ordered]@{source_snapshot=$SeedRelative;save_relative=$script:PortableSavePath;header_relative=$script:PortableHeaderPath;save_sha256=$Seed.SaveSha256;header_sha256=$Seed.HeaderSha256;profile_sha256=$Seed.Sha256;ancestor_profile_sha256=@($Ancestors)}
         writable_roots=@('user','cache','logs','diagnostics','results','update','metadata');retention=[ordered]@{completed_sessions=32;save_snapshots_per_session=32};private_content=[ordered]@{game_and_save_private=$true;source_iso_included=$false}
     }
+    if($CppRuntime){
+        $manifest.schema='mcla-portable-campaign-bundle-v2';$manifest.immutable_file_count=18
+        $manifest.cpp_runtime=[ordered]@{policy=$cppPolicy.policy;version=$cppPolicy.version}
+        foreach($entry in $cppFiles){Put (Join-Path $Root $entry.RelativePath) ('fixture-'+$entry.RelativePath)}
+    }
     Json (Join-Path $Root 'bundle-manifest.json') $manifest;Lock-Manifest $Root
 }
 function Session([string]$Root,[string]$Stamp,$From,$To,[string]$Kind='complete',[long]$ExitCode=0) {
@@ -37,7 +47,8 @@ function Session([string]$Root,[string]$Stamp,$From,$To,[string]$Kind='complete'
     Json (Join-Path $dir 'session.json') ([ordered]@{schema='mcla-portable-session-v1';bundle_id=$id;session_id=$sessionId;started_utc=$Stamp;mode='gameplay';state='running'})
     $profiles=@($From);if($From.Sha256 -cne $To.Sha256){$profiles+= $To}
     foreach($profile in $profiles){$dst=Join-Path $dir ('saves/'+$profile.SaveSha256.Substring(0,16));$null=Copy-PortableTreeVerified $profile $dst @($script:PortableProfileName);Json (Join-Path $dst 'snapshot.json') ([ordered]@{schema='mcla-portable-save-snapshot-v1';captured_utc=$Stamp;reason=$(if($profile.Sha256 -ceq $From.Sha256){'launcher-start'}else{'process-exit'});save_sha256=$profile.SaveSha256;header_sha256=$profile.HeaderSha256;complete_profile_tree=$true})}
-    $result=[ordered]@{schema='mcla-portable-session-result-v1';bundle_id=$id;session_id=$sessionId;started_utc=$Stamp;completed_utc=$Stamp;mode='gameplay';exit_code=$ExitCode;verified_file_count=11;save_snapshot_count=$profiles.Count;save_watcher_error_count=0;final_save_sha256=$To.SaveSha256;final_header_sha256=$To.HeaderSha256;state='complete'}
+    $bundleManifest=Get-Content -LiteralPath (Join-Path $Root 'bundle-manifest.json') -Raw|ConvertFrom-Json
+    $result=[ordered]@{schema='mcla-portable-session-result-v1';bundle_id=$id;session_id=$sessionId;started_utc=$Stamp;completed_utc=$Stamp;mode='gameplay';exit_code=$ExitCode;verified_file_count=$bundleManifest.immutable_file_count;save_snapshot_count=$profiles.Count;save_watcher_error_count=0;final_save_sha256=$To.SaveSha256;final_header_sha256=$To.HeaderSha256;state='complete'}
     if($Kind -eq 'interrupted'){$result.schema='mcla-portable-interrupted-session-result-v1';$result.state='interrupted';$result.exit_code=$null;$result.Remove('completed_utc');$result.Remove('save_watcher_error_count');$result.recovered_utc=$Stamp;$result.interruption_reason='launcher-terminated-before-session-finalization'}
     Json (Join-Path $dir 'result.json') $result
     # These are isolated fixture paths, never owner profiles.
@@ -71,10 +82,18 @@ try {
     if ($NativeLauncher) {
         $launcher=Join-Path $repo 'out/build/win-amd64-release/Launch-MCLA.exe'
         if(-not (Test-Path -LiteralPath $launcher -PathType Leaf)){throw 'Build the native Release launcher before this optional fixture.'}
-        Copy-Item -LiteralPath $launcher -Destination (Join-Path $bundle 'Launch-MCLA.exe') -Force;Lock-Manifest $bundle
-        $process=Start-Process -FilePath (Join-Path $bundle 'Launch-MCLA.exe') -ArgumentList '--verify-only' -WorkingDirectory $bundle -WindowStyle Hidden -PassThru
+        # A newly built launcher intentionally requires v2 CRT placements. Do
+        # not overwrite the historical v1 parent used by the return tests.
+        $nativeBundle=Join-Path $testRoot 'native-successor'
+        Bundle $nativeBundle $a $id $seedRelative -CppRuntime
+        $toolchain=& (Join-Path $PSScriptRoot 'Resolve-Toolchain.ps1')
+        $cppSource=Resolve-PortableCppRuntimeSource -VisualStudioRoot $toolchain.VisualStudioRoot
+        foreach($entry in $cppFiles){Copy-Item -LiteralPath (Join-Path $cppSource.SourceDirectory $entry.Name) -Destination (Join-Path $nativeBundle $entry.RelativePath) -Force}
+        Copy-Item -LiteralPath $launcher -Destination (Join-Path $nativeBundle 'Launch-MCLA.exe') -Force;Lock-Manifest $nativeBundle
+        $process=Start-Process -FilePath (Join-Path $nativeBundle 'Launch-MCLA.exe') -ArgumentList '--verify-only' -WorkingDirectory $nativeBundle -WindowStyle Hidden -PassThru
+        $null=$process.Handle
         if(-not $process.WaitForExit(15000)){$process.Kill();$process.WaitForExit();throw 'Native fixture verification timed out.'}
-        Check ($process.ExitCode -eq 0) 'native existing launcher accepts successor manifest fields'
+        Check ($process.ExitCode -eq 0) 'native current launcher accepts v2 successor manifest fields'
     }
     Check ((Get-PortableBundleReturn $fakeRepo $bundle -Fixture).Profile.Sha256 -ceq $a.Sha256) 'pristine return'
     Json (Join-Path $bundle 'results/portable-verification-20260904T195959Z.json') ([ordered]@{schema='mcla-portable-verification-v1';bundle_id=$id;verified_utc='20260904T200000Z';verified_file_count=11;relocatable_root_verified=$true;decision='portable-bundle-integrity-pass'})
@@ -86,7 +105,11 @@ try {
         $record=Get-Content -LiteralPath $recordPath -Raw|ConvertFrom-Json;$record.started_utc='20260904T200001Z';Json $recordPath $record
     }
     Check ((Get-PortableBundleReturn $fakeRepo $bundle -Fixture).Profile.Sha256 -ceq $b.Sha256) 'native separate clock readings cross a second boundary'
-    Reject {& (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $bundle -Fixture} 'physical identity drifted'
+    $publicationCandidate=Join-Path $fakeRepo 'private/publication-fixture'
+    Bundle $publicationCandidate $a $id $seedRelative -CppRuntime
+    Check ((& (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $publicationCandidate -Fixture).Passed) 'v2 pristine successor is a valid publication'
+    Session $publicationCandidate '20260904T200000Z' $a $b
+    Reject {& (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $publicationCandidate -Fixture} 'physical identity drifted'
     Session $bundle '20260903T200000Z' $b $c 'interrupted'
     Check ((Get-PortableBundleReturn $fakeRepo $bundle -Fixture).Profile.Sha256 -ceq $c.Sha256) 'clock rollback interrupted descendant'
     Put (Join-Path $bundle $script:PortableSavePath.Insert(0,'user/')) 'b'
@@ -110,7 +133,7 @@ try {
         Check ((Get-PortableProfile $plan.Snapshot).Sha256 -ceq $c.Sha256) 'successor gets entire profile'
         Check ($plan.Receipts.Count -eq 1) 'return archive receipt'
         $id2=$id.Replace('AAAAAAAAAAAAAAAA','DDDDDDDDDDDDDDDD');$next=Join-Path $root $id2
-        Bundle $next (Get-PortableProfile $plan.Snapshot) $id2 ('private/save-archive/M7-009/'+$c.Sha256) $plan.Ancestors
+        Bundle $next (Get-PortableProfile $plan.Snapshot) $id2 ('private/save-archive/M7-009/'+$c.Sha256) $plan.Ancestors -CppRuntime
         Add-PortableWriterLock $state (Join-Path $next 'bundle.lock')
         Check ((Get-PortableBundleReturn $fakeRepo $next -Fixture).Profile.Sha256 -ceq $c.Sha256) 'successor return provenance'
         Reject {Remove-PortableArchivedBundles $state $next @()} 'current.txt'
@@ -157,7 +180,13 @@ try {
     Json (Join-Path $legacyBundle 'bundle-manifest.json') $legacyManifest;Lock-Manifest $legacyBundle
     Session $legacyBundle '20260801T100000Z' $a $b
     Check (-not (Get-PortableBundleReturn $fakeRepo $legacyBundle -Fixture).ProvenSeed) 'historical two-file seed never invents whole-profile ancestry'
-    Reject {& (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $legacyBundle -Fixture} 'manifest identity'
+    Reject {& (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $legacyBundle -Fixture} 'Legacy v1 bundles are accepted only for returned-profile preservation'
+    # Preserve the separate SDK-identity negative on the accepted publication
+    # schema, so the new v1 gate cannot mask the intended rejection.
+    $oldSdkManifest=Get-Content -LiteralPath (Join-Path $publicationCandidate 'bundle-manifest.json') -Raw|ConvertFrom-Json
+    $oldSdkManifest.sdk_version='0.9.0.0';$oldSdkManifest.sdk_commit='a'*40
+    Json (Join-Path $publicationCandidate 'bundle-manifest.json') $oldSdkManifest;Lock-Manifest $publicationCandidate
+    Reject {& (Join-Path $PSScriptRoot 'verify-portable-campaign-bundle.ps1') -BundleRoot $publicationCandidate -Fixture} 'manifest identity'
     $m=Get-Content -LiteralPath (Join-Path $next 'bundle-manifest.json') -Raw|ConvertFrom-Json
     $m.selected_save.ancestor_profile_sha256=@($c.Sha256);Json (Join-Path $next 'bundle-manifest.json') $m;Lock-Manifest $next
     Reject {Get-PortableBundleReturn $fakeRepo $next -Fixture} 'self identity'

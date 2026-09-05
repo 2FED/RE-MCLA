@@ -455,7 +455,13 @@ bool ParseAndVerifyManifest(const std::filesystem::path &root,
       "Launch-MCLA.exe",    "bundle-id.txt",       "bundle-manifest.json",
       "game-manifest.json", "bin/mcla.exe",        "bin/mcla_crash_handler.exe",
       "bin/rexruntime.dll", "bin/TracyClient.dll", "bin/rexgpu-xenos.dll",
-      "bin/mcla.toml",      "game/default.xex"};
+      "bin/mcla.toml",      "game/default.xex",
+      // Each executable directory needs its own app-local CRT closure.
+      // These hashes are an integrity check, not a pre-execution trust boundary:
+      // the loader has already loaded this launcher's imported root DLLs.
+      "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll",
+      "bin/msvcp140.dll", "bin/vcruntime140.dll",
+      "bin/vcruntime140_1.dll", "bin/msvcp140_atomic_wait.dll"};
   for (const auto *name : required) {
     if (!unique.contains(name)) {
       error = std::string("required immutable file is absent from manifest: ") +

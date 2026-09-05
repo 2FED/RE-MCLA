@@ -12,6 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 . (Join-Path $PSScriptRoot 'Portable-SaveLineage.ps1')
+. (Join-Path $PSScriptRoot 'Portable-CppRuntime.ps1')
 if (-not $OutputRoot) { $OutputRoot = Join-Path $repo 'private\bundles\M7-016' }
 $output = [IO.Path]::GetFullPath($OutputRoot)
 $privateRoot = [IO.Path]::GetFullPath((Join-Path $repo 'private'))
@@ -137,9 +138,10 @@ $selectedHeader = Join-Path $selected.Snapshot $headerRelative.Replace('/','\')
 $selectedSaveHash = Get-Sha256 $selectedSave
 $selectedHeaderHash = Get-Sha256 $selectedHeader
 
+$toolchain = & (Join-Path $PSScriptRoot 'Resolve-Toolchain.ps1') -ExportPath
+$cppRuntime = Resolve-PortableCppRuntimeSource -VisualStudioRoot $toolchain.VisualStudioRoot
 if (-not $SkipCleanBuild) {
     Write-Host 'M7-016 [2/6]: clean-building the toolchain-free Release runtime and native launcher...' -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot 'Resolve-Toolchain.ps1') -ExportPath | Out-Null
     & cmake --preset win-amd64-release -B $build *>&1 | Tee-Object -FilePath $buildLog | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Release configure failed. Private evidence: '$evidence'." }
     & cmake --build $build --target mcla --clean-first --parallel 8 *>&1 | Tee-Object -FilePath $buildLog -Append | Out-Null
@@ -174,6 +176,12 @@ try {
     foreach ($name in @('mcla.exe','mcla_crash_handler.exe','rexruntime.dll','TracyClient.dll','rexgpu-xenos.dll')) {
         $null = $copyModes.Add((Copy-OrLink (Join-Path $build $name) (Join-Path $partial ('bin\' + $name)) -Materialize))
     }
+    foreach ($runtimeFile in $cppRuntime.Files) {
+        $null = $copyModes.Add((Copy-OrLink (Join-Path $cppRuntime.SourceDirectory $runtimeFile.Name) (Join-Path $partial $runtimeFile.RelativePath.Replace('/','\')) -Materialize))
+    }
+    # Bind staged bytes again: a source update during copy must not publish a
+    # mixed runtime. The publisher never changes loader overrides or a prefix.
+    Assert-PortableCppRuntimeBundle -Root $partial -Policy $cppRuntime.Policy
     $portableConfig = [IO.File]::ReadAllText((Join-Path $repo 'config\mcla.toml.example'))
     $portableConfig = $portableConfig.Replace('mcla_diagnostics_root = ""','mcla_diagnostics_root = "diagnostics"')
     $portableConfig = $portableConfig.Replace('log_file = ""','log_file = "logs/mcla.log"')
@@ -199,9 +207,9 @@ try {
 
     [IO.File]::WriteAllText((Join-Path $partial 'bundle-id.txt'), $bundleId + "`n", $utf8)
     $sourceSnapshotRelative = $selected.Snapshot.Substring($repo.TrimEnd('\').Length + 1).Replace('\','/')
-    $immutableCount = 4 + 6 + [int]$gameIdentity.FileCount
+    $immutableCount = 4 + 6 + $cppRuntime.Files.Count + [int]$gameIdentity.FileCount
     $manifest = [ordered]@{
-        schema = 'mcla-portable-campaign-bundle-v1'
+        schema = 'mcla-portable-campaign-bundle-v2'
         task = 'M7-016'
         bundle_id = $bundleId
         project_version = $version
@@ -211,6 +219,7 @@ try {
         platform = 'windows-proton'
         architecture = 'x86_64'
         launcher = 'Launch-MCLA.exe'
+        cpp_runtime = [ordered]@{ policy=$cppRuntime.Policy.policy; version=$cppRuntime.Policy.version }
         window_mode = [ordered]@{ startup_fullscreen=$true; alt_enter_toggle=$true; left_double_click_toggle=$true }
         immutable_file_count = $immutableCount
         game = [ordered]@{ manifest_sha256=(Get-Sha256 (Join-Path $partial 'game-manifest.json')); file_count=[int]$gameIdentity.FileCount; payload_bytes=[long]$gameIdentity.PayloadBytes }
@@ -223,6 +232,7 @@ try {
 
     $immutable = @('Launch-MCLA.exe','bundle-id.txt','bundle-manifest.json','game-manifest.json')
     $immutable += @('mcla.exe','mcla_crash_handler.exe','mcla.toml','rexgpu-xenos.dll','rexruntime.dll','TracyClient.dll' | ForEach-Object { 'bin/' + $_ })
+    $immutable += @($cppRuntime.Files | ForEach-Object { $_.RelativePath })
     $immutable += @($gameManifest.Files | ForEach-Object { 'game/' + ([string]$_.Path).Replace('\','/') })
     if ($immutable.Count -ne $immutableCount) { throw 'Immutable bundle inventory cardinality drifted.' }
     $rows = foreach ($relative in @($immutable | Sort-Object)) {

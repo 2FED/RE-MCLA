@@ -1,117 +1,120 @@
 # Current state / AI handoff
 
-Updated: 2026-09-05. Read this first, then relevant README-AI sections.
-Replace stale facts here; actual Git/artifacts and accepted evidence win.
-Detailed current findings: [CPU attribution](evidence/M7-016-deck-cpu-attribution.md).
+Updated: 2026-09-06. Read this first, then relevant README-AI sections.
+Replace stale facts here; actual Git/artifact identities and accepted evidence win.
+Detailed findings: [CPU attribution](evidence/M7-016-deck-cpu-attribution.md),
+[readback A-B-A](evidence/M7-016-deck-readback-cost.md),
+[C++ runtime](evidence/M7-016-proton-cpp-runtime.md).
 
-## Active task and next action
+## Active task / next action
 
-- M6 closed at 0.8.2.2; M7 **0/16**. Active M7-016 / KI-027 stock Deck
-  performance. M7-009 lineage and M7-001 campaign preparation remain partial.
-- Descriptor comparison is complete, **no material cadence gain**: accepted
-  0.16.0.1 gameplay/pause 12.63/8.63 outputs/s versus 12.78/8.60. Reuse
-  38.87%/36.89% is avoided work, not a performance PASS. Pause resolve waits
-  remain zero; this does not imply zero resolve copies.
-- Direct owner-paired Devkit SSH works with pinned host key. Connection details
-  and credentials stay private. No sudo, installs, sysctl, clocks or affinity
-  changes. perf 6.15-3 on kernel 6.16.12-valve24.5-1-neptune-616-gb2f7cfe85e45,
-  perf_event_paranoid=2, exact-user process attachment proven.
-- Both requested captures are DONE: owner-confirmed settled pause 4,249 samples
-  and moving gameplay 6,878, each 20 seconds at 99 Hz task-clock:u, leaf only.
-  The owner was told they can keep playing or close normally; **do not ask
-  them to stay paused, repeat the drive, or run another unchanged F10 set**.
-- Exact SDK names recovered via private relink of existing objects with every
-  .text/.pdata byte, RVA/size and preferred base matching published DLLs.
-  All 30,034 guest mapping keys verified against exact host/generated source.
-- Shared guest wait helper: 921/715 samples in PAUSE-loop/comparison, 52.39% /
-  42.06% of hottest guest thread in pause/gameplay. Six different caller
-  predicates, watchdog/recovery behavior. One static completion producer is
-  GPU Commands' PM4 event write, but leaf samples do not identify all callers.
-  Do not remove waits or add unnotified WaitOnAddress based on this profile.
-- Additional 8-second one-GPU-thread capture has 573 raw samples, private
-  4096-byte user stacks, phase explicitly unconfirmed. Exact SSE2 forward-loop
-  caller attribution: 47 resolve readback / 26 upload / 2 binding samples.
-  Resolve samples represent 64 KiB--5 MiB in-flight copies. Not call counts,
-  total bytes or a controlled FPS estimate. Source already prefers cached
-  readback memory; actual allocation flags remain unknown.
-- Next bounded experiment: after the current game closes normally and its
-  returned full profile is archived, a same-scene diagnostic-only readback-cost
-  A/B using separate launches with existing fast versus some modes and
-  copy/byte/output/audio counters. The some arm retains GPU transfers but
-  skips warm CPU copies; stale data is expected, never a shipping default.
-  Use isolated profile/cache/diagnostics, never import that arm's save. No
-  live cvar mutation (unsynchronized string access); none is overwritten by
-  this host's default override and auto is not a supported value. Full protocol
-  is in the CPU attribution report. Do not ship disabled
-  readbacks: Photo Mode/title-side consumers require them. Use the result to
-  prioritize selective/lazy readback versus command/protection work. No new
-  runtime candidate has been published and no performance fix is claimed.
-- Last inspected game: Linux PID 93337 / start ticks 156476661; exact GPU TID
-  93367 / start ticks 156476785. It was alive for the final capture. Recheck
-  lifetime before any attach; **never kill/relaunch or publish over writers**.
-- Optional new chat at this evidence boundary; no task or milestone closure.
-  No M7 push, physical wheel testing or new long soak.
+- M6 closed at 0.8.2.2. M7 **0/16**, active M7-016 / KI-027 Deck performance;
+  M7-009 full-profile lineage and M7-001 matrix preparation remain partial.
+- Owner closed the profiling game normally. Both requested pause/moving CPU
+  recordings are retained; no owner action, unchanged F10 set, long soak or
+  wheel test is needed now. No game/perf attachment remains from those runs.
+- Descriptor return still measures 12.63/8.63 gameplay/pause outputs/s without
+  material gain. Direct profiles prove multiple guest wait predicates and
+  large resolve/upload copy callers, not one complete root cause.
+- Executed isolated readback A-B-A: fast 12.15, some 14.50, fast-repeat 14.25
+  outputs/s. Initial apparent 19% uplift is not robust against baseline drift.
+  Some eliminates warm CPU copies but permits indefinitely stale guest data:
+  NEVER ship it or import its experimental profiles. Fast copy costs about
+  4.7 ms/output. Timings overlap; raw physical copies bypass alias write watches.
+- New concrete KI-030: /MD timed STL wait under Proton builtin MSVCP140 holds
+  the contender out until timeout. Minimal same-PE fixture: 500-ms failure
+  builtin, 3/3 ~21-ms success official app-local CRT; Windows also succeeds.
+  Five isolated real-host controls now reach saved gameplay and pause, normal
+  exit0. Latest minimal4-DLL control works WITHOUT WINEDLLOVERRIDES, with loaded
+  paths captured. This fixes synthetic START observation, NOT the main FPS gap.
+- Reviewed app-local CRT packaging passes dualPS contracts and actual isolated
+  Windows/Proton launcher, live diagnostics, session/save finalization and
+  deliberate native crash-helper verification. Exact new0.17.0.0 host also
+  reaches primary-inspected saved gameplay/pause and exits0. No owner action
+  needed, no published replacement yet. Fullscreen control12.15outputs/s is
+  not a speedup. TOML redirects logs; failed private harness-path assertion is
+  retained and separately resolved against actual log/samples, not rerun.
+- Next cost lead after the dependency correction: measure safe disarm-range
+  fragmentation before coalescing. No SDK edit, global watch/clock/sync bypass,
+  affinity-only tuning or promised30FPS. The known GPU/audio waits are Win32
+  waits, not this broken timed STL helper.
 
 ## Source versus published identity
 
-- Root source 0.16.0.2: targeted launcher correction plus reviewed attribution.
-  Published/profiled host is STILL 0.16.0.1; source version is not a new Deck
-  artifact. SDK clean 0.18.0.1 / 9098e122afa116f4316d6cec47e561ebc5186974;
-  parent gitlink matches. No SDK source edits or codegen this checkpoint.
-- Sync root private/bundles/M7-016; current.txt remains
+- Prior committed parent3434ab2, reviewed source VERSION0.17.0.0. Checkpoint: default-off
+  readback probe/serializer/analyzer, timed-runtime fixture, CRT bundle contract
+  and documentation; review/tests preceded the version bump. No push.
+- SDK clean0.18.0.1 /9098e122afa116f4316d6cec47e561ebc5186974; gitlink matches.
+  No SDK edits/codegen in this experiment. Prior full SDK1845 +4 known skips.
+- Opt-in measured host SHA256:
+  E1233390F6B12E362FFD4CA7B17E28FB9396103264AA5C7D618AD1368C1AF96C.
+  Build tree out/build/win-amd64-readback-cost. Old identity stays bound to
+  these measurements even after a subsequent source/version rebuild.
+- Published/profiled bundle is STILL0.16.0.1, under private/bundles/M7-016:
   mcla-0.16.0.1-win64-B6A19E748F517476-0BCEBB4FB89A8529-58B3385C89D9E499.
-  Receipt: private/evidence/M7-016/bundle-20260905-144002-92771135/result.json.
-  Manifest 546AF7AA8256738AE37896818338A96A624A6DC73FE9ACE2333229EF04E1FAA2;
-  lock 0AA62A18D247FEF31D2C37B4D4C09E8C573C6AB598D7A654593406487300DBDD.
-  Exact host/runtime/GPU DLL hashes are pinned in private capture receipts.
-- The prior complete four-file profile/album was unchanged before this launch:
-  tree 3BBC44D0E0CBE03633DFA3BFFBC776B0C5E62CFDC5AA34BEFB346DE022322B5A;
-  save 58B3385C89D9E4999B6791CCB95B6F7ED7963CE07F9C47618850841236784585;
-  header 2FAEFBC7FF8CDEADBCE025D9BE914436ED05E27D041F72C8C88798612CFB0D60;
-  album 8EE49926E1DFE804DB923EF2512219FC7A078FEB50944C3D2BD4E9AC39F81588.
-  Owner may have progressed since: inspect the returned session, never reseed
-  from this old hash. Evolved successor reload remains physically unproven.
-- Prior session 20260905T151245Z-296 complete/exit0, one profile snapshot,
-  zero watcher errors. Full mutable archive outside sync:
-  private/evidence/M7-016/returned-bundles/<bundle-id>/
-  3EAEDE327B845C041138C52D578C6A7569B630F302AA73F1CF6F8F62A492CCBF.
-  Additional full-profile archives: private/save-archive/M7-009.
+  current.txt unchanged. Receipt bundle-20260905-144002-92771135/result.json
+  under private/evidence/M7-016; manifest546AF7AA8256738AE37896818338A96A624A6DC73FE9ACE2333229EF04E1FAA2,
+  lock0AA62A18D247FEF31D2C37B4D4C09E8C573C6AB598D7A654593406487300DBDD.
+- Official CRT file version14.44.35211.0 (VS Redist directory14.44.35112).
+  Pins in config/portable-cpp-runtime.json; private source only, no Microsoft
+  binaries in Git. Root launcher imports load before its integrity check.
+- New isolated candidate under private/evidence/M7-016/cpp-runtime-publication:
+  mcla-0.17.0.0-win64-AD4D0F5815126536-2FC8B65D466D35F4-58B3385C89D9E499.
+  HostAD4D0F5815126536C615B8C036C36E27D78D865AE273A379EF89F9A83A9E7440;
+  manifest2CAC1E0FD0535ED63F39A76B10AAAEE1CDCF7B4C1BF528CF56FD7B68D09AF4F4;
+  lockCDC8FA4DE2BAAB610DB828604EA68AE12289653E37A2005F94A221C0C611EE60.
+  Receipt bundle-20260905-203701-1cc3a1a9/result.json,32immutablefiles.
 
-## Evidence, recovery and tests
+## Owner save and experimental evidence
 
-- Private CPU folders: cpu-20260905T175611Z-93337,
-  cpu-20260905T181559Z-93337, cpu-gpu-stack-20260905T183135Z-93337.
-  Original recordings retained in bundle diagnostics and private/evidence/M7-016.
-  No lost/throttled records. Gameplay excludes one newly created non-inherited
-  TID; GPU capture phase/overhead unverified. Do not publish stacks or raw maps.
-- Startup recovery: exact shutdown F10 live-20260905T151532Z-336-5.partial
-  matched archived nine files, reversibly moved on both hosts to
-  diagnostics/interrupted/*.interrupted. No deletion, promotion, save or
-  binary change. Owner confirmed existing Steam shortcut launched afterward.
-  Narrow launcher source fix is tested, **not deployed to current bundle**.
-  [Recovery evidence](evidence/M7-016-launcher-diagnostic-partial.md).
-- Root AST scan and 3 rule tests pass; path-policy unit 52/0. Native launcher
-  recovery/verify-only plus bundle 1 positive/13 negatives/41 contracts and
-  lineage 46 checks pass under PowerShell 7 and 5.1. WinPS handle-lifetime
-  fixture bug fixed. No native reparse-negative rerun claimed.
-- Independent CPU-parser/caller review accepted exact results. Fixed reusable
-  decoded-line count and strengthened memcpy thunk/IAT validation; original
-  GPU receipt's 775 sample_lines means decoded lines, not 573 sample records.
-- Prior SDK full tests: 1,845 executed + 4 known BitStream skips, zero failures.
-  Existing exact published Windows Vulkan/D3D12 saved-gameplay/pause/Settings
-  controls pass, not Deck cadence evidence. Deck F10 GDI images remain black;
-  overlay READY is package completion and can inflate presentation FPS.
+- Completed owner session20260905T175147Z-296 ended20260905T190534Z, exit0,
+  one snapshot/zero watcher errors. Hash-verified return121files/67,307,014bytes:
+  private/evidence/M7-016/paired-return-20260905T190534Z/transfer.
+- Full mutable archive under returned-bundles/<bundle-id>/:
+  B673A45B17051658213F9055B67A894CF3E43E53C9DE8070335A2225CEC80951.
+- Full four-file profile/album unchanged, private/save-archive/M7-009/:
+  3BBC44D0E0CBE03633DFA3BFFBC776B0C5E62CFDC5AA34BEFB346DE022322B5A.
+  Save58B3385C89D9E4999B6791CCB95B6F7ED7963CE07F9C47618850841236784585;
+  header2FAEFBC7FF8CDEADBCE025D9BE914436ED05E27D041F72C8C88798612CFB0D60;
+  album8EE49926E1DFE804DB923EF2512219FC7A078FEB50944C3D2BD4E9AC39F81588.
+  Evolved successor reload is still physically unproven; never claim progress
+  from one of the isolated experimental copies.
+- Original A-B-A experiment archive115files/218,804,182bytes, locally checked
+  every member: readback-experiment-return-20260905 under private/evidence/M7-016;
+  tar SHA25627BC295E72E33E35BCF4362E363BE31719C6B598CCC1AF75618CCF36AAD5CDEC.
+  Final remote tree is OUTSIDE entire sync root: /home/deck/MCLA-Diagnostics-20260905.
+  Relocation preserved276entries with no deletion; receipt
+  experiment-final-relocation-20260905.json. No nested experimental child in
+  playable bundle or sync-root inventory; normal Steam shortcut unchanged.
+- Minimal no-override control returned24hash-verifiedfiles under
+  readback-minimal-crt-return-20260905. Latest candidate return62files/
+  38,995,747bytes under cpp-candidate-return-20260905; archive
+  BDC9F53F592514E0081D9A07F946448D620AAC596E0FABA2B21BD4405E4BC728.
+  All member hashes verified. Candidate gameplayPID99739/start157558636 and
+  deliberate crash control ended; no game/perf attachment remains.
+- Prior raw CPU/stack records and exact private symbols remain in evidence;
+  never publish stacks, maps, proprietary frames or saves.
 
-## Operational constraints
+## Verification and operational constraints
 
-- Publication uses out/build/win-amd64-portable-release. Runtime files must
-  be independent copies; old developer DLL hardlinks can mutate bundles.
-  Only immutable prepared game files may be hardlinked. Do not rebuild an
-  artifact merely to label already-completed owner evidence.
-- Serialize runtime/private/build writes, stop writers and archive before
-  publication/pruning. Never select ambiguous or divergent save branches.
-- WSL/native UI helper unavailable; no system feature changes. Scoped shell
-  and Codex apply_patch fallback work. No custom UIAutomation/SendInput.
-- Preserve unrelated untracked source-directory .stfolder. No private game,
-  saves, generated source, dumps or profiling captures in Git/public packages.
-- README-AI owns ledger/history; this is a replace-in-place handoff.
+- Serializer127/0; Python24; ASTscan/3. DualPS bundle3/34/45,CRT3/8,lineage48,
+  analyzer15/56,session1/10,native recovery8/8 pass. Exact candidate Windows
+  relocation + Proton launcher/session + live/crash verifier pass, dumpflags
+  0x1020, live48687bytes/crash93479bytes. Primary inspected gameplay/pause.
+  Final /MD fixture03A052741F20E1FC8D7679C87F52253C0B4C4CECCBA1B285E61A5D4EFDEDEB18
+  passes Windows3/3, fails builtin Proton, passes app-local Proton3/3~21ms.
+- Source0.16.0.2 unfinished-F10 recovery correction was previously
+  tested but not deployed. Do not weaken recursive conflict/reparse checks.
+- Direct paired SSH with pinned hostkey works; keep addresses/key paths private.
+  Desktop-mode controls are not GamingMode/gamescope/controller/audio PASS.
+  No sudo, installs, sysctl, clocks, affinity, global prefix or Steam edits.
+- Serialize game launches/private captures/build outputs. Stop writers, archive
+  and validate full profile before publication/pruning. No hardlinks from
+  mutable runtime/build outputs; only prepared immutable game files may link.
+- Elevated scoped shell and Codex apply_patch fallback work; normal sandbox
+  helpers/view_image can fail. Read-only in-memory image preview fallback is
+  available; no custom UIAutomation/SendInput. All source edits use apply_patch.
+- Preserve unrelated source-directory .stfolder. No private/game/generated
+  content or DLLs in Git. Publish only at a reviewed exact-artifact boundary.
+- Last observed weekly allowance29%; re-read rather than infer. Continue safe
+  milestone work while above20%, never mark KI-027 or M7 complete on tooling.

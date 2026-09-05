@@ -43,6 +43,7 @@ function Resolve-Contained([string]$Root, [string]$Relative, [string]$Label, [sw
 
 $root = (Resolve-Path -LiteralPath $BundleRoot).Path.TrimEnd('\')
 . (Join-Path $PSScriptRoot 'Portable-SaveLineage.ps1')
+. (Join-Path $PSScriptRoot 'Portable-CppRuntime.ps1')
 $null = Assert-PortablePath $root $root
 if ((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Bundle root must not be a reparse point.' }
 $all = [Collections.Generic.List[object]]::new()
@@ -65,8 +66,6 @@ foreach ($item in $all) {
 }
 
 $requiredTop = @('Launch-MCLA.exe','bin','bundle-files.sha256','bundle-id.txt','bundle-manifest.json','cache','diagnostics','game','game-manifest.json','logs','metadata','results','update','user')
-$actualTop = @((Get-ChildItem -LiteralPath $root -Force).Name | Where-Object { -not ($ReturnedProfile -and $_ -ceq 'bundle.lock') } | Sort-Object)
-if (($actualTop -join '|') -cne (($requiredTop | Sort-Object) -join '|')) { throw 'Portable bundle root topology is not exact.' }
 foreach ($directory in @('bin','cache','diagnostics','game','logs','metadata','results','update','user')) {
     $null = Resolve-Contained $root $directory "Writable/content root '$directory'" -Container
 }
@@ -76,8 +75,25 @@ $bundleId = ([IO.File]::ReadAllText($bundleIdPath)).Trim()
 if ($bundleId -cnotmatch '^mcla-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+-win64-[0-9A-F]{16}-[0-9A-F]{16}-[0-9A-F]{16}$') { throw 'Bundle ID is malformed.' }
 $manifestPath = Resolve-Contained $root 'bundle-manifest.json' 'Bundle manifest' -Leaf
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-Assert-ExactProperties $manifest @('schema','task','bundle_id','project_version','sdk_version','sdk_commit','created_utc','platform','architecture','launcher','window_mode','immutable_file_count','game','selected_save','writable_roots','retention','private_content') 'Bundle manifest'
-if ($manifest.schema -cne 'mcla-portable-campaign-bundle-v1' -or $manifest.task -cne 'M7-016' -or
+if ($manifest.schema -isnot [string]) { throw 'Portable bundle schema must be a string.' }
+$legacyRuntime = $manifest.schema -ceq 'mcla-portable-campaign-bundle-v1'
+if ($legacyRuntime -and -not $ReturnedProfile) { throw 'Legacy v1 bundles are accepted only for returned-profile preservation.' }
+if (-not $legacyRuntime -and $manifest.schema -cne 'mcla-portable-campaign-bundle-v2') { throw 'Unsupported portable bundle schema.' }
+$manifestProperties = @('schema','task','bundle_id','project_version','sdk_version','sdk_commit','created_utc','platform','architecture','launcher','window_mode','immutable_file_count','game','selected_save','writable_roots','retention','private_content')
+$runtimeFiles = @()
+if (-not $legacyRuntime) {
+    $manifestProperties += 'cpp_runtime'
+    $runtimePolicy = Get-PortableCppRuntimePolicy
+    Assert-ExactProperties $manifest.cpp_runtime @('policy','version') 'C++ runtime contract'
+    if ($manifest.cpp_runtime.policy -isnot [string] -or $manifest.cpp_runtime.version -isnot [string] -or
+        $manifest.cpp_runtime.policy -cne $runtimePolicy.policy -or $manifest.cpp_runtime.version -cne $runtimePolicy.version) { throw 'Portable C++ runtime policy/version drifted.' }
+    $runtimeFiles = @(Get-PortableCppRuntimeFiles $runtimePolicy)
+    $requiredTop += @($runtimeFiles | Where-Object { $_.RelativePath -cnotmatch '/' } | ForEach-Object { $_.RelativePath })
+}
+Assert-ExactProperties $manifest $manifestProperties 'Bundle manifest'
+$actualTop = @((Get-ChildItem -LiteralPath $root -Force).Name | Where-Object { -not ($ReturnedProfile -and $_ -ceq 'bundle.lock') } | Sort-Object)
+if (($actualTop -join '|') -cne (($requiredTop | Sort-Object) -join '|')) { throw 'Portable bundle root topology is not exact.' }
+if ($manifest.task -cne 'M7-016' -or
     $manifest.bundle_id -cne $bundleId -or $manifest.project_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or
     $bundleId -cnotmatch ('^mcla-' + [regex]::Escape([string]$manifest.project_version) + '-win64-') -or
     ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.18.0.1' -or $manifest.sdk_commit -cne '9098e122afa116f4316d6cec47e561ebc5186974')) -or
@@ -125,9 +141,11 @@ if (-not $Fixture -and ([int]$gameManifest.SchemaVersion -ne 1 -or [string]$game
 
 $expectedImmutable = @('Launch-MCLA.exe','bundle-id.txt','bundle-manifest.json','game-manifest.json')
 $expectedBin = @('mcla.exe','mcla_crash_handler.exe','mcla.toml','rexgpu-xenos.dll','rexruntime.dll','TracyClient.dll')
-$actualBin = @((Get-ChildItem -LiteralPath (Join-Path $root 'bin') -File -Force).Name | Sort-Object)
+$expectedBin += @($runtimeFiles | Where-Object { $_.RelativePath.StartsWith('bin/',[StringComparison]::Ordinal) } | ForEach-Object { $_.Name })
+$actualBin = @((Get-ChildItem -LiteralPath (Join-Path $root 'bin') -Force).Name | Sort-Object)
 if (($actualBin -join '|') -cne (($expectedBin | Sort-Object) -join '|')) { throw 'Portable runtime binary topology is not exact.' }
 $expectedImmutable += @($expectedBin | ForEach-Object { 'bin/' + $_ })
+$expectedImmutable += @($runtimeFiles | Where-Object { $_.RelativePath -cnotmatch '/' } | ForEach-Object { $_.RelativePath })
 $expectedGamePaths = @()
 $payloadBytes = [long]0
 foreach ($file in @($gameManifest.Files)) {
@@ -144,6 +162,9 @@ $expectedImmutable += $expectedGamePaths
 if ((@($entries.Keys | Sort-Object) -join '|') -cne (($expectedImmutable | Sort-Object) -join '|')) { throw 'Bundle hash-lock topology is not exact.' }
 foreach ($entry in $entries.GetEnumerator()) {
     if ((Get-Sha256 $entry.Value.path) -cne $entry.Value.sha256) { throw "Bundle immutable SHA-256 drifted for '$($entry.Key)'." }
+}
+if (-not $legacyRuntime -and -not $Fixture) {
+    Assert-PortableCppRuntimeBundle -Root $root -Policy $runtimePolicy
 }
 
 $configPath = Resolve-Contained $root 'bin/mcla.toml' 'Portable host config' -Leaf

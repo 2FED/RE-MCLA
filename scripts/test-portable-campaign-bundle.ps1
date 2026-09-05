@@ -9,6 +9,9 @@ $testRoot = Join-Path $repo ('private\evidence\M7-016\test-' + [guid]::NewGuid()
 $fixture = Join-Path $testRoot 'fixture'
 $utf8 = [Text.UTF8Encoding]::new($false)
 $negative = 0
+. (Join-Path $PSScriptRoot 'Portable-CppRuntime.ps1')
+$runtimePolicy = Get-PortableCppRuntimePolicy
+$runtimeFiles = @(Get-PortableCppRuntimeFiles $runtimePolicy)
 
 function Get-Sha256([string]$Path) {
     $stream = [IO.File]::OpenRead($Path)
@@ -19,8 +22,9 @@ function Get-Sha256([string]$Path) {
     } finally { $stream.Dispose() }
 }
 
-function Write-Lock([string]$Root) {
+function Write-Lock([string]$Root, [switch]$Legacy) {
     $immutable = @('Launch-MCLA.exe','bundle-id.txt','bundle-manifest.json','game-manifest.json','bin/mcla.exe','bin/mcla_crash_handler.exe','bin/mcla.toml','bin/rexgpu-xenos.dll','bin/rexruntime.dll','bin/TracyClient.dll','game/default.xex')
+    if (-not $Legacy) { $immutable += @($runtimeFiles | ForEach-Object { $_.RelativePath }) }
     $rows = foreach ($relative in $immutable | Sort-Object) { '{0} *{1}' -f (Get-Sha256 (Join-Path $Root $relative.Replace('/','\'))),$relative }
     [IO.File]::WriteAllText((Join-Path $Root 'bundle-files.sha256'), (($rows -join "`n") + "`n"), $utf8)
 }
@@ -45,6 +49,9 @@ try {
         $path = Join-Path $fixture $relative.Replace('/','\')
         [IO.File]::WriteAllText($path, "fixture:$relative`n", $utf8)
     }
+    foreach ($entry in $runtimeFiles) {
+        [IO.File]::WriteAllText((Join-Path $fixture $entry.RelativePath.Replace('/','\')), "fixture:$($entry.RelativePath)`n", $utf8)
+    }
 $config = @'
 mcla_diagnostics_root = "diagnostics"
 log_file = "logs/mcla.log"
@@ -66,7 +73,8 @@ metadata_root = ""
     $id = 'mcla-0.9.0.0-win64-AAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB-CCCCCCCCCCCCCCCC'
     [IO.File]::WriteAllText((Join-Path $fixture 'bundle-id.txt'), $id + "`n", $utf8)
     $manifest = [ordered]@{
-        schema='mcla-portable-campaign-bundle-v1';task='M7-016';bundle_id=$id;project_version='0.9.0.0';sdk_version='0.18.0.1';sdk_commit='9098e122afa116f4316d6cec47e561ebc5186974';created_utc=[DateTime]::UtcNow.ToString('O');platform='windows-proton';architecture='x86_64';launcher='Launch-MCLA.exe';window_mode=[ordered]@{startup_fullscreen=$true;alt_enter_toggle=$true;left_double_click_toggle=$true};immutable_file_count=11
+        schema='mcla-portable-campaign-bundle-v2';task='M7-016';bundle_id=$id;project_version='0.9.0.0';sdk_version='0.18.0.1';sdk_commit='9098e122afa116f4316d6cec47e561ebc5186974';created_utc=[DateTime]::UtcNow.ToString('O');platform='windows-proton';architecture='x86_64';launcher='Launch-MCLA.exe';window_mode=[ordered]@{startup_fullscreen=$true;alt_enter_toggle=$true;left_double_click_toggle=$true};immutable_file_count=18
+        cpp_runtime=[ordered]@{policy=$runtimePolicy.policy;version=$runtimePolicy.version}
         game=[ordered]@{manifest_sha256=Get-Sha256 (Join-Path $fixture 'game-manifest.json');file_count=1;payload_bytes=[long](Get-Item $gameFile).Length}
         selected_save=[ordered]@{source_snapshot='private/save-archive/M6-014/fixture/20260904-000000Z-AAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB';save_relative='B13EBABEBABEBABE/545407F8/00000001/mc4.sav/mc4.sav';header_relative='B13EBABEBABEBABE/545407F8/Headers/00000001/mc4.sav.header';save_sha256=Get-Sha256 $save;header_sha256=Get-Sha256 $header}
         writable_roots=@('user','cache','logs','diagnostics','results','update','metadata');retention=[ordered]@{completed_sessions=32;save_snapshots_per_session=32};private_content=[ordered]@{game_and_save_private=$true;source_iso_included=$false}
@@ -74,6 +82,25 @@ metadata_root = ""
     [IO.File]::WriteAllText((Join-Path $fixture 'bundle-manifest.json'), (($manifest|ConvertTo-Json -Depth 8)+"`n"), $utf8)
     Write-Lock $fixture
     $positive = & $verify -BundleRoot $fixture -Fixture
+    $returnedV2 = & $verify -BundleRoot $fixture -Fixture -ReturnedProfile
+
+    # Historical children remain readable for save-lineage preservation, never
+    # acceptable as a newly published toolchain-free runtime.
+    $legacy = Join-Path $testRoot 'legacy-return'
+    Copy-Item -LiteralPath $fixture -Destination $legacy -Recurse
+    foreach ($entry in $runtimeFiles) { Remove-Item -LiteralPath (Join-Path $legacy $entry.RelativePath.Replace('/','\')) }
+    $legacyManifestPath = Join-Path $legacy 'bundle-manifest.json'
+    $legacyManifest = Get-Content -LiteralPath $legacyManifestPath -Raw | ConvertFrom-Json
+    $legacyManifest.schema = 'mcla-portable-campaign-bundle-v1'
+    $legacyManifest.immutable_file_count = 11
+    $legacyManifest.PSObject.Properties.Remove('cpp_runtime')
+    [IO.File]::WriteAllText($legacyManifestPath, (($legacyManifest | ConvertTo-Json -Depth 8) + "`n"), $utf8)
+    Write-Lock $legacy -Legacy
+    $legacyReturn = & $verify -BundleRoot $legacy -Fixture -ReturnedProfile
+    $rejectedLegacyPublication = $false
+    try { & $verify -BundleRoot $legacy -Fixture | Out-Null } catch { $rejectedLegacyPublication = $true }
+    if (-not $rejectedLegacyPublication) { throw 'Legacy v1 bundle was accepted as a new publication.' }
+    $negative++
 
     $script:index = 0
     Expect-Failure { param($r) [IO.File]::AppendAllText((Join-Path $r 'bin\mcla.exe'),'drift') }
@@ -89,6 +116,31 @@ metadata_root = ""
     Expect-Failure { param($r) Add-Content -LiteralPath (Join-Path $r 'bundle-files.sha256') -Value (('D' * 64) + ' *../escape') }
     Expect-Failure { param($r) Remove-Item -LiteralPath (Join-Path $r 'user') -Recurse }
     Expect-Failure { param($r) [IO.File]::WriteAllText((Join-Path $r 'game\extra.rpf'),'x') }
+    foreach ($entry in $runtimeFiles) {
+        $missingRelative = $entry.RelativePath
+        Expect-Failure { param($r) Remove-Item -LiteralPath (Join-Path $r $missingRelative.Replace('/','\')) }
+    }
+    Expect-Failure { param($r) [IO.File]::AppendAllText((Join-Path $r 'bin\msvcp140.dll'),'drift') }
+    Expect-Failure { param($r) [IO.File]::WriteAllText((Join-Path $r 'bin\msvcp140d.dll'),'debug-runtime') }
+    Expect-Failure { param($r) [IO.File]::WriteAllText((Join-Path $r 'msvcp140_atomic_wait.dll'),'wrong-placement') }
+    Expect-Failure { param($r) [IO.File]::WriteAllText((Join-Path $r 'bin\concrt140.dll'),'unrequired-runtime') }
+    Expect-Failure { param($r) [IO.Directory]::CreateDirectory((Join-Path $r 'bin\unexpected-runtime')) | Out-Null }
+    Expect-Failure { param($r) $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.cpp_runtime.policy='msvc-any';[IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8) } -RewriteLock
+    Expect-Failure { param($r) $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.cpp_runtime.version='14.44.1.0';[IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8) } -RewriteLock
+    Expect-Failure { param($r) $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.cpp_runtime.policy=@('msvc-14.44-app-local-v1');[IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8) } -RewriteLock
+    Expect-Failure { param($r) $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.cpp_runtime.version=@('14.44.35211.0');[IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8) } -RewriteLock
+    Expect-Failure { param($r) $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.cpp_runtime|Add-Member NoteProperty fallback $true;[IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8) } -RewriteLock
+    Expect-Failure { param($r) $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.PSObject.Properties.Remove('cpp_runtime');[IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8) } -RewriteLock
+    Expect-Failure { param($r) $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.schema='mcla-portable-campaign-bundle-v3';[IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8) } -RewriteLock
+    # A structurally self-consistent v2 missing its whole runtime is rejected,
+    # even if the attacker rewrites both the manifest count and hash lock.
+    Expect-Failure {
+        param($r)
+        foreach ($entry in $runtimeFiles) { Remove-Item -LiteralPath (Join-Path $r $entry.RelativePath.Replace('/','\')) }
+        $p=Join-Path $r 'bundle-manifest.json';$j=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$j.immutable_file_count=11
+        [IO.File]::WriteAllText($p,(($j|ConvertTo-Json -Depth 8)+"`n"),$utf8)
+        Write-Lock $r -Legacy
+    }
 
     $source = [IO.File]::ReadAllText((Join-Path $repo 'src\mcla_portable_launcher_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'scripts\build-portable-campaign-bundle.ps1')) + [IO.File]::ReadAllText((Join-Path $repo 'CMakeLists.txt'))
     $sourceChecks = 0
@@ -103,7 +155,11 @@ metadata_root = ""
         "cmake --preset win-amd64-release -B `$build",
         "cmake --build `$build --target mcla --clean-first",
         "Copy-OrLink `$launcherSource (Join-Path `$partial 'Launch-MCLA.exe') -Materialize",
-        "Copy-OrLink (Join-Path `$build `$name) (Join-Path `$partial ('bin\' + `$name)) -Materialize"
+        "Copy-OrLink (Join-Path `$build `$name) (Join-Path `$partial ('bin\' + `$name)) -Materialize",
+        "Copy-OrLink (Join-Path `$cppRuntime.SourceDirectory `$runtimeFile.Name) (Join-Path `$partial `$runtimeFile.RelativePath.Replace('/','\')) -Materialize",
+        'Resolve-PortableCppRuntimeSource -VisualStudioRoot $toolchain.VisualStudioRoot',
+        "schema = 'mcla-portable-campaign-bundle-v2'",
+        'Assert-PortableCppRuntimeBundle -Root $partial -Policy $cppRuntime.Policy'
     )) {
         if (-not $publisher.Contains($copyCall)) { throw 'Published runtime is not independent of mutable build output.' }
         $sourceChecks++
@@ -125,7 +181,7 @@ metadata_root = ""
     if ([IO.File]::ReadAllText($published) -cne 'before') { throw 'Rebuilding mutated a published binary.' }
     & git -C $repo check-ignore -q -- 'private/bundles/M7-016/probe/game/default.xex'
     if ($LASTEXITCODE -ne 0) { throw 'Private portable bundle output is not ignored by Git.' }
-    [pscustomobject]@{Passed=$true;Positive=1;FailClosedNegatives=$negative;SourceContractChecks=$sourceChecks;ImmutableFiles=$positive.ImmutableFiles;GitIgnored=$true}
+    [pscustomobject]@{Passed=$true;Positive=3;FailClosedNegatives=$negative;SourceContractChecks=$sourceChecks;ImmutableFiles=$positive.ImmutableFiles;RuntimeFiles=$runtimeFiles.Count;V2Return=$returnedV2.Passed;LegacyReturn=$legacyReturn.Passed;GitIgnored=$true}
 } finally {
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }

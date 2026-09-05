@@ -136,8 +136,9 @@ and `readback_resolve=some`, not a new runtime binary or a global off switch.
 In SDK src/graphics/vulkan/command_processor.cpp:4464--4771 both modes retain
 the actual resolve, readback allocation, GPU transfer/downscale, barriers and
 double-buffer alternation. Once slots are warm, `some` suppresses host mapping
-invalidation and the CPU memcpy into guest RAM, including its downstream write
-fault/invalidation effects. This is a narrower intervention than disabling
+invalidation and the CPU memcpy into guest RAM. That raw physical view bypasses
+virtual-alias write watches; it does not directly exercise their fault handlers.
+Stale guest contents can indirectly change consumers. This is narrower than disabling
 the whole readback path, but still not a pure memcpy-only timing subtraction.
 
 The `some` miss condition tests missing/undersized/unmapped slots, **not content
@@ -167,7 +168,8 @@ No live F4/console mutation: although tagged hot-reloadable, the cvar's plain
 string storage is read by the GPU worker without the setter's registry lock
 or a demonstrated worker handoff (cvar.h:315--324, core/cvar.cpp:271--291).
 Separate launches avoid introducing that additional race into the experiment.
-This protocol is reviewed preparation, not an executed A/B or a shipping fix.
+This was the reviewed protocol. The later [executed A-B-A control](M7-016-deck-readback-cost.md)
+does not establish a robust material gain and is not a shipping fix.
 True read-demand/lazy coherence is separate work: PhysicalHeap::TriggerCallbacks
 currently explicitly rejects read watches (SDK system/xmemory.cpp:1985--1988).
 

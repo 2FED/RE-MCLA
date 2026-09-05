@@ -18,6 +18,18 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_portable_path_policy_test.cpp)
     target_include_directories(mcla_portable_path_policy_test PRIVATE src)
     target_compile_features(mcla_portable_path_policy_test PRIVATE cxx_std_23)
+    add_executable(mcla_readback_cost_sample_test EXCLUDE_FROM_ALL
+        tests/mcla_readback_cost_sample_test.cpp)
+    target_include_directories(mcla_readback_cost_sample_test PRIVATE src)
+    target_compile_features(mcla_readback_cost_sample_test PRIVATE cxx_std_23)
+    add_executable(mcla_cpp_runtime_probe EXCLUDE_FROM_ALL
+        tests/mcla_cpp_runtime_probe.cpp)
+    target_compile_features(mcla_cpp_runtime_probe PRIVATE cxx_std_23)
+    if(WIN32)
+        # Match Release consumers: /MD, never a static-CRT false positive.
+        set_property(TARGET mcla_cpp_runtime_probe PROPERTY
+            MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
+    endif()
 endif()
 
 set(MCLA_REXGLUE_VERSION "0.18.0.1")

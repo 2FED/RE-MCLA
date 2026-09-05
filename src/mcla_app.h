@@ -6,6 +6,7 @@
 
 #include <rex/rex_app.h>
 
+#include <memory>
 #include <stop_token>
 #include <thread>
 
@@ -47,6 +48,7 @@ private:
   bool ValidateGameVfsContract();
   bool WriteSyntheticCrashReport();
   void RunFirstFrameProbe(std::stop_token stop_token);
+  bool RunReadbackCostProbe(std::stop_token stop_token);
   void StopFirstFrameProbe();
   mcla::diagnostics::RuntimeState CaptureDiagnosticState();
   mcla::diagnostics::UiState CaptureDiagnosticUiState() const;
@@ -56,6 +58,8 @@ private:
   size_t function_mapping_count_ = 0;
   rex::input::InputDriver *frontend_smoke_input_ = nullptr;
   std::jthread first_frame_probe_thread_;
+  // UI-owned cancellation token for a diagnostic worker's deferred close.
+  std::shared_ptr<int> readback_probe_lifetime_;
   std::unique_ptr<mcla::diagnostics::Manager> diagnostics_;
   std::unique_ptr<rex::ui::ImGuiDialog> diagnostic_status_dialog_;
   bool diagnostic_keybind_registered_ = false;

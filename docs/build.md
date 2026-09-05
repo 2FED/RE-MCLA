@@ -46,6 +46,15 @@ physical gate; tooling fixtures are not a substitute. See
 
 ## Deterministic toolchain discovery
 
+New portable packages additionally require the exact official x64 VC143
+runtime policy in `config/portable-cpp-runtime.json`. The selected VS Redist
+source is signature/hash/version/architecture checked; seven root/bin DLL
+placements are materialized and sealed in manifest v2. Legacy v1 remains a
+returned-profile migration input only. See [runtime deployment and tests](
+evidence/M7-016-proton-cpp-runtime.md); no system UCRT, global DLL override or
+static-CRT switch is used. Keep experimental candidates outside the normal
+Syncthing root until their complete deployment gates pass.
+
 Run the resolver from any PowerShell working directory:
 
 ```powershell
