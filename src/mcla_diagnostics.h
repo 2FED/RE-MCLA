@@ -65,6 +65,8 @@ struct RuntimeState {
   uint64_t graphics_memory_watch_disarm_us = 0;
   uint64_t graphics_memory_watch_protect_failures = 0;
   uint64_t graphics_memory_watch_arm_gap_splits = 0;
+  uint64_t graphics_memory_watch_disarm_safe_gap_splits = 0;
+  uint64_t graphics_memory_watch_disarm_gap_lock_misses = 0;
   uint64_t graphics_vulkan_resolve_count = 0;
   uint64_t graphics_vulkan_resolve_us = 0;
   uint64_t graphics_vulkan_resolve_readback_copy_count = 0;

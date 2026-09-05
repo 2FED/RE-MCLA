@@ -21,9 +21,13 @@ fast-repeat14.25 outputs/s. Baseline drift rejects a robust improvement;
 the unsafe indefinitely stale `some` policy is not a shipping candidate.
 A separate timed STL/Proton C++ runtime mismatch explains the failed automatic
 START observation. Official app-local runtime restores four autonomous
-gameplay/pause controls, but not stock FPS. Complete the exact candidate's
-deployment gates, then count safely mergeable disarm gaps before considering
-any memory-protection optimization. No SDK behavior change is justified yet.
+gameplay/pause controls, but not stock FPS. Exact candidate launcher/diagnostic
+gates now pass privately. SDK19 safe-gap measurement is complete:65,942 splits
+over84,274 disarm calls, only1.129 seconds inclusive disarm time in20 seconds,
+12.75 outputs/s. Defer coalescing; next review eligible Type-0 constant-register
+batching through the existing bulk route, with unchanged side-effect fallbacks
+and matched private A-B-A. No speedup or owner retest is claimed.
+See [fragmentation result](evidence/M7-016-disarm-fragmentation.md).
 See [readback control](evidence/M7-016-deck-readback-cost.md) and
 [runtime correction](evidence/M7-016-proton-cpp-runtime.md).
 See [CPU findings and limits](evidence/M7-016-deck-cpu-attribution.md).
@@ -44,8 +48,8 @@ and the M7-016/M7-009 criteria are refined.
 
 | Priority | Evidence and problem | Disposition |
 |---|---|---|
-| P0 | KI-027: accepted descriptor return yields 12.63/8.63 new outputs/s, without material gain. Readback A-B-A does not establish a robust benefit. | Keep stock throughput/audio the front gate; measure protection-range fragmentation without changing coherency or required CPU consumers. |
-| P0, bounded deployment dependency | KI-030: builtin Proton C++ runtime blocks synthetic input observation until timeout. | Minimal same-PE fixture and four actual-host controls accept app-local CRT; complete exact candidate launcher/diagnostic gates before publication. This is not the main FPS fix. |
+| P0 | KI-027: descriptor/readback/gap controls do not establish a robust cadence benefit. Disarm work is bounded at1.129/20 seconds. | Keep stock throughput/audio the front gate; review eligible Type-0 batching, preserve coherency and sequential side-effectful register writes. |
+| P0, bounded deployment dependency | KI-030: builtin Proton C++ runtime blocks synthetic input observation until timeout. | Minimal same-PE fixture and actual-host controls accept app-local CRT; exact candidate launcher/diagnostic gates pass privately. Normal publication pending; this is not the main FPS fix. |
 | P0 | Review found an M6-only seed-selection risk in the publisher. | KI-028: developer-side full-tree lineage/archive/publication protection implemented and fixture-tested in 0.13.2.0; actual progressed successor reload remains the next save gate. See [evidence](evidence/M7-009-portable-save-lineage.md). |
 | P1 | Boot/garage/F10 is proven; usable performance and save evolution/reload are not. | Separate tooling, accepted historical returns and pending physical correction; current candidate is 0.16.0.1, not a boot-only platform PASS. |
 | P1 | M7-001 matrix preparation waits for all of M7-016, while M7 prerequisites require a campaign checklist; reached-import auditing appears last. | Allow planning/save fixtures while awaiting hardware; audit reached imports incrementally, not only after two campaigns. |
@@ -61,7 +65,7 @@ the builder's inspected save-selection/staging code.
 
 | Order | Work package | Completion signal |
 |---|---|---|
-| 1 | **M7-016 performance**, KI-027 | Descriptor comparison, direct CPU attribution and readback A-B-A retained; complete CRT dependency correction, then a protection-fragmentation diagnostic and evidence-selected correction. Actual cadence/audio/image acceptance remains required. |
+| 1 | **M7-016 performance**, KI-027 | CRT controls and protection-fragmentation measurement retained; next test existing bulk constant-write routing for eligible Type-0 packets. Actual cadence/audio/image acceptance remains required. |
 | 1, separate follow-up investigation | **M7-016 Deck CPU scaling / matched Xenia baseline** | Profile work versus waits and synchronization; compare identical scenes/settings before deciding which independent work can safely run in parallel. Produce an evidence-backed optimization backlog, not a core-affinity-only change or promised FPS gain. |
 | 1, independent | **M7-009 portable save lineage**, KI-028; prerequisite subset of M7-016 | Validated complete return selection/import, provenance/backups, rejection of conflict/incomplete data, successor-build reload without regressing progress. |
 | 2, preparation now | **M7-001 campaign matrix** | Mandatory nodes/categories/dependencies/restart saves and reusable evidence; unknown coverage stays unverified. |
@@ -115,9 +119,11 @@ to distribute guest-derived shader content.
 
 ## Performance experiment protocol
 
-1. Keep 0.16.0.1 / SDK 0.18.0.1 fixed for direct CPU attribution. Its descriptor
-   gameplay/pause pairs are already accepted; do not repeat them as a new
-   owner test. Record build/SDK/hash,
+1. Preserve 0.16.0.1 / SDK 0.18.0.1 as the completed direct-CPU baseline. Its
+   descriptor gameplay/pause pairs are already accepted; do not repeat them
+   as a new owner test. New isolated candidates have their own exact identity:
+   official app-local CRT fixes AUTO START, SDK0.19.0.0 measures disarm gaps
+   and skipped metadata ranges without coalescing. Record build/SDK/hash,
    Proton/backend/mode, resolution/save/route and cold/warm cache. Do not
    change clocks, renderer and scheduling simultaneously.
 2. Inspect the short exact-process userspace leaf capture before requesting

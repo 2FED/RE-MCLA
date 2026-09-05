@@ -41,6 +41,7 @@ def sample_pair(mode="fast", duration_us=20_000_000):
     end["draw_packet_count"] = begin["draw_packet_count"] + 600_000
     end["resolve_count"] = begin["resolve_count"] + 4000
     end["watch_protect_failures"] = begin["watch_protect_failures"]
+    end["watch_disarm_gap_lock_misses"] = begin["watch_disarm_gap_lock_misses"]
     return begin, end
 
 
@@ -82,6 +83,52 @@ class ReadbackCostAnalysisTests(unittest.TestCase):
         self.assertEqual(
             analysis.analyze_samples(encode_pair(sample_pair("some")))["mode"], "some"
         )
+
+    def test_legacy_samples_keep_unavailable_gaps_explicit(self):
+        pair = sample_pair()
+        for sample in pair:
+            sample["schema"] = analysis.LEGACY_SAMPLE_SCHEMA
+            for field in analysis.GAP_FIELDS:
+                del sample[field]
+        result = analysis.analyze_samples(encode_pair(pair))
+        self.assertIs(result["disarm_fragmentation"]["available"], False)
+        self.assertIsNone(result["disarm_fragmentation"]["safe_gap_splits"])
+        self.assertEqual(set(result["deltas"]), set(analysis.LEGACY_COUNTER_FIELDS))
+
+    def test_schema_mismatch_and_legacy_extra_gaps_rejected(self):
+        pair = sample_pair()
+        pair[0]["schema"] = analysis.LEGACY_SAMPLE_SCHEMA
+        self.assert_rejected(encode_pair(pair))
+        for field in analysis.GAP_FIELDS:
+            del pair[0][field]
+        self.assert_rejected(encode_pair(pair))
+
+    def test_fragmentation_is_not_a_saved_time_estimate(self):
+        pair = sample_pair()
+        result = analysis.analyze_samples(encode_pair(pair))["disarm_fragmentation"]
+        self.assertIs(result["available"], True)
+        self.assertEqual(result["safe_gap_splits"], 200)
+        self.assertIs(result["interval_consistent_failure_free_and_complete"], True)
+        self.assertIs(result["estimated_saved_time_available"], False)
+        # Atomic totals can straddle boundaries: retain raw data but do not
+        # accept an inconsistent interval as an actionable opportunity bound.
+        pair[1]["watch_disarm_safe_gap_splits"] += 1
+        result = analysis.analyze_samples(encode_pair(pair))["disarm_fragmentation"]
+        self.assertIs(result["interval_consistent_failure_free_and_complete"], False)
+        pair = sample_pair()
+        pair[1]["watch_protect_failures"] += 1
+        result = analysis.analyze_samples(encode_pair(pair))["disarm_fragmentation"]
+        self.assertIs(result["interval_consistent_failure_free_and_complete"], False)
+
+    def test_skipped_gap_metadata_is_not_exhaustive(self):
+        pair = sample_pair()
+        pair[1]["watch_disarm_gap_lock_misses"] += 1
+        pair[1]["watch_disarm_safe_gap_splits"] = pair[0]["watch_disarm_safe_gap_splits"]
+        result = analysis.analyze_samples(encode_pair(pair))["disarm_fragmentation"]
+        self.assertIs(result["available"], True)
+        self.assertEqual(result["safe_gap_splits"], 0)
+        self.assertEqual(result["skipped_metadata_ranges"], 1)
+        self.assertIs(result["interval_consistent_failure_free_and_complete"], False)
 
     def test_duration_boundaries(self):
         for duration in (19_500_000, 25_000_000):
@@ -183,7 +230,7 @@ class ReadbackCostAnalysisTests(unittest.TestCase):
 
     def test_schema_and_literal_flags(self):
         for field, values in (
-            ("schema", ("wrong", "mcla-readback-cost-sample-v2", None)),
+            ("schema", ("wrong", "mcla-readback-cost-sample-v3", None)),
             ("diagnostic_only", (False, 1, "true")),
             ("audio_counters_available", (True, 0, "false")),
         ):

@@ -37,6 +37,7 @@ function Bundle([string]$Root,$Seed,[string]$Id,[string]$SeedRelative,[string[]]
     }
     if($CppRuntime){
         $manifest.schema='mcla-portable-campaign-bundle-v2';$manifest.immutable_file_count=18
+        $manifest.sdk_version='0.19.0.0';$manifest.sdk_commit='c2e67161f1207ddcee609507c399efe7a1981b72'
         $manifest.cpp_runtime=[ordered]@{policy=$cppPolicy.policy;version=$cppPolicy.version}
         foreach($entry in $cppFiles){Put (Join-Path $Root $entry.RelativePath) ('fixture-'+$entry.RelativePath)}
     }

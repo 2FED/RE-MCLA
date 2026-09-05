@@ -73,7 +73,7 @@ metadata_root = ""
     $id = 'mcla-0.9.0.0-win64-AAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB-CCCCCCCCCCCCCCCC'
     [IO.File]::WriteAllText((Join-Path $fixture 'bundle-id.txt'), $id + "`n", $utf8)
     $manifest = [ordered]@{
-        schema='mcla-portable-campaign-bundle-v2';task='M7-016';bundle_id=$id;project_version='0.9.0.0';sdk_version='0.18.0.1';sdk_commit='9098e122afa116f4316d6cec47e561ebc5186974';created_utc=[DateTime]::UtcNow.ToString('O');platform='windows-proton';architecture='x86_64';launcher='Launch-MCLA.exe';window_mode=[ordered]@{startup_fullscreen=$true;alt_enter_toggle=$true;left_double_click_toggle=$true};immutable_file_count=18
+        schema='mcla-portable-campaign-bundle-v2';task='M7-016';bundle_id=$id;project_version='0.9.0.0';sdk_version='0.19.0.0';sdk_commit='c2e67161f1207ddcee609507c399efe7a1981b72';created_utc=[DateTime]::UtcNow.ToString('O');platform='windows-proton';architecture='x86_64';launcher='Launch-MCLA.exe';window_mode=[ordered]@{startup_fullscreen=$true;alt_enter_toggle=$true;left_double_click_toggle=$true};immutable_file_count=18
         cpp_runtime=[ordered]@{policy=$runtimePolicy.policy;version=$runtimePolicy.version}
         game=[ordered]@{manifest_sha256=Get-Sha256 (Join-Path $fixture 'game-manifest.json');file_count=1;payload_bytes=[long](Get-Item $gameFile).Length}
         selected_save=[ordered]@{source_snapshot='private/save-archive/M6-014/fixture/20260904-000000Z-AAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB';save_relative='B13EBABEBABEBABE/545407F8/00000001/mc4.sav/mc4.sav';header_relative='B13EBABEBABEBABE/545407F8/Headers/00000001/mc4.sav.header';save_sha256=Get-Sha256 $save;header_sha256=Get-Sha256 $header}
@@ -92,6 +92,8 @@ metadata_root = ""
     $legacyManifestPath = Join-Path $legacy 'bundle-manifest.json'
     $legacyManifest = Get-Content -LiteralPath $legacyManifestPath -Raw | ConvertFrom-Json
     $legacyManifest.schema = 'mcla-portable-campaign-bundle-v1'
+    $legacyManifest.sdk_version = '0.18.0.1'
+    $legacyManifest.sdk_commit = '9098e122afa116f4316d6cec47e561ebc5186974'
     $legacyManifest.immutable_file_count = 11
     $legacyManifest.PSObject.Properties.Remove('cpp_runtime')
     [IO.File]::WriteAllText($legacyManifestPath, (($legacyManifest | ConvertTo-Json -Depth 8) + "`n"), $utf8)
@@ -144,7 +146,7 @@ metadata_root = ""
 
     $source = [IO.File]::ReadAllText((Join-Path $repo 'src\mcla_portable_launcher_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'scripts\build-portable-campaign-bundle.ps1')) + [IO.File]::ReadAllText((Join-Path $repo 'CMakeLists.txt'))
     $sourceChecks = 0
-    foreach ($needle in @('bundle-files.sha256','bundle.lock','.sync-conflict-','.partial','JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE','--game_data_root','--user_data_root','--cache_root','--metadata_root','--update_data_root','--diagnostics-probe','--gpu-backend=','--gpu_backend=','mcla-portable-session-result-v1','mcla-portable-interrupted-session-result-v1','RecoverInterruptedSessions','Recovered stale bundle.lock','save_watcher_error_count','session_root / L"saves"','kMaximumCompletedSessions = 32','kMaximumSnapshotsPerSession = 32','WriteTextAtomic','MoveFileExW','CreateFileW(lock.path.c_str()','HasReparseAttribute(root)','add_executable(mcla_portable_launcher','OUTPUT_NAME "Launch-MCLA"','private\bundles\M7-016','verify-game-manifest.ps1','Resolve-LatestSave','Clone-Relocated','Remove-ObsoleteBundles','$PruneOnly','fullscreen = true','left_double_click_toggle','9098e122afa116f4316d6cec47e561ebc5186974')) {
+    foreach ($needle in @('bundle-files.sha256','bundle.lock','.sync-conflict-','.partial','JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE','--game_data_root','--user_data_root','--cache_root','--metadata_root','--update_data_root','--diagnostics-probe','--gpu-backend=','--gpu_backend=','mcla-portable-session-result-v1','mcla-portable-interrupted-session-result-v1','RecoverInterruptedSessions','Recovered stale bundle.lock','save_watcher_error_count','session_root / L"saves"','kMaximumCompletedSessions = 32','kMaximumSnapshotsPerSession = 32','WriteTextAtomic','MoveFileExW','CreateFileW(lock.path.c_str()','HasReparseAttribute(root)','add_executable(mcla_portable_launcher','OUTPUT_NAME "Launch-MCLA"','private\bundles\M7-016','verify-game-manifest.ps1','Resolve-LatestSave','Clone-Relocated','Remove-ObsoleteBundles','$PruneOnly','fullscreen = true','left_double_click_toggle','c2e67161f1207ddcee609507c399efe7a1981b72')) {
         if (-not $source.Contains($needle)) { throw "Portable bundle source contract is missing '$needle'." }
         $sourceChecks++
     }

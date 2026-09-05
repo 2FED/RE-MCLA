@@ -20,6 +20,8 @@ Current verified host components:
 The aggregate prerequisite gate passed 12/12 on 2026-09-05 with SDK v0.18.0.1
 on PowerShell 7 and 5.1 for the 0.16.0.1 candidate. Rerun `scripts/bootstrap.ps1` when the
 environment changes; historical results do not verify a different machine.
+The current SDK0.19.0.0/c2e6716 install passed12/12 again on2026-09-06
+under PowerShell7; this does not imply another host or portable performance PASS.
 
 ## Private portable updates and save preservation
 
@@ -86,9 +88,9 @@ git submodule status --recursive
 
 The first status line must contain the ReXGlue project-fork commit recorded in `docs/rexglue-sdk.md`; no line may begin with `-`, `+`, or `U`.
 
-The current v0.17.0.0 Windows build uses:
+The current Windows SDK build uses:
 
-- ReXGlue 0.17.0.0 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.19.0.0 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -140,7 +142,7 @@ rexglue --version
 Test-Path (Join-Path $ReXGlueInstall 'lib\cmake\rexglue\rexglueConfig.cmake')
 ```
 
-Expected output is ReXGlue `0.17.0.0` and `True`. The application presets consume this session-local `CMAKE_PREFIX_PATH` so the configured SDK is explicit.
+Expected output is ReXGlue `0.19.0.0` and `True`. The application presets consume this session-local `CMAKE_PREFIX_PATH` so the configured SDK is explicit.
 
 The first clean build evidence is in `docs/evidence/M1-005-rexglue-build.md`. ReXGlue unit tests are not enabled by the stock preset and are not claimed by M1-005/M1-006; SDK-changing work must configure `REXGLUE_BUILD_TESTS=ON` and run the matching CTest preset.
 
@@ -252,7 +254,7 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.18.0.1`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.19.0.0`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
 
 ```powershell
 scripts\verify-generated-integration.ps1

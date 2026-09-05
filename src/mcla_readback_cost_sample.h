@@ -28,7 +28,7 @@ inline bool WriteReadbackCostSample(std::ostream &output, std::string_view edge,
   // Whitelisted strings need no JSON escaping; all other values are unsigned.
   std::ostringstream record;
   record.imbue(std::locale::classic());
-  record << "{\"schema\":\"mcla-readback-cost-sample-v1\","
+  record << "{\"schema\":\"mcla-readback-cost-sample-v2\","
             "\"diagnostic_only\":true,\"audio_counters_available\":false,"
             "\"edge\":\""
          << edge << "\",\"mode\":\"" << mode
@@ -59,6 +59,11 @@ inline bool WriteReadbackCostSample(std::ostream &output, std::string_view edge,
          << ",\"watch_arm_us\":" << state.graphics_memory_watch_arm_us
          << ",\"watch_disarm_calls\":" << state.graphics_memory_watch_disarm_calls
          << ",\"watch_disarm_us\":" << state.graphics_memory_watch_disarm_us
+         << ",\"watch_arm_gap_splits\":" << state.graphics_memory_watch_arm_gap_splits
+         << ",\"watch_disarm_safe_gap_splits\":"
+         << state.graphics_memory_watch_disarm_safe_gap_splits
+         << ",\"watch_disarm_gap_lock_misses\":"
+         << state.graphics_memory_watch_disarm_gap_lock_misses
          << ",\"non_mmio_write_fault_count\":"
          << state.graphics_memory_non_mmio_write_fault_count
          << ",\"non_mmio_write_fault_us\":"

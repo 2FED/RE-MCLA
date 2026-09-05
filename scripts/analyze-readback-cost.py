@@ -19,9 +19,10 @@ TITLE_ID = 0x545407F8
 VULKAN_BACKEND = 2
 MIN_DURATION_US = 19_500_000
 MAX_DURATION_US = 25_000_000
-SAMPLE_SCHEMA = "mcla-readback-cost-sample-v1"
+LEGACY_SAMPLE_SCHEMA = "mcla-readback-cost-sample-v1"
+SAMPLE_SCHEMA = "mcla-readback-cost-sample-v2"
 
-COUNTER_FIELDS = (
+LEGACY_COUNTER_FIELDS = (
     "guest_output_sequence",
     "guest_vblank_sequence",
     "frames_closed",
@@ -46,7 +47,10 @@ COUNTER_FIELDS = (
     "binding_update_count",
     "binding_update_us",
 )
-EXPECTED_KEYS = frozenset(COUNTER_FIELDS) | {
+GAP_FIELDS = ("watch_arm_gap_splits", "watch_disarm_safe_gap_splits",
+              "watch_disarm_gap_lock_misses")
+COUNTER_FIELDS = LEGACY_COUNTER_FIELDS + GAP_FIELDS
+METADATA_KEYS = {
     "schema",
     "diagnostic_only",
     "audio_counters_available",
@@ -56,6 +60,8 @@ EXPECTED_KEYS = frozenset(COUNTER_FIELDS) | {
     "title_id",
     "backend",
 }
+EXPECTED_KEYS = frozenset(COUNTER_FIELDS) | METADATA_KEYS
+LEGACY_EXPECTED_KEYS = frozenset(LEGACY_COUNTER_FIELDS) | METADATA_KEYS
 
 
 class AnalysisError(ValueError):
@@ -91,10 +97,14 @@ def _unsigned(value: Any, name: str, maximum: int = UINT64_MAX) -> int:
 
 
 def _validate_sample(sample: Any, edge: str) -> dict[str, Any]:
-    if type(sample) is not dict or set(sample) != EXPECTED_KEYS:
+    if type(sample) is not dict:
         raise AnalysisError(f"{edge} sample has missing, extra, or invalid fields")
-    if sample["schema"] != SAMPLE_SCHEMA:
+    schema = sample.get("schema")
+    if schema not in (SAMPLE_SCHEMA, LEGACY_SAMPLE_SCHEMA):
         raise AnalysisError(f"{edge} sample has an unsupported schema")
+    expected = EXPECTED_KEYS if schema == SAMPLE_SCHEMA else LEGACY_EXPECTED_KEYS
+    if set(sample) != expected:
+        raise AnalysisError(f"{edge} sample has missing, extra, or invalid fields")
     if sample["diagnostic_only"] is not True:
         raise AnalysisError(f"{edge} sample must be diagnostic-only")
     if sample["audio_counters_available"] is not False:
@@ -109,7 +119,7 @@ def _validate_sample(sample: Any, edge: str) -> dict[str, Any]:
         raise AnalysisError("The sample title is not MCLA")
     if _unsigned(sample["backend"], "backend", (1 << 32) - 1) != VULKAN_BACKEND:
         raise AnalysisError("The sample backend is not Vulkan")
-    for field in COUNTER_FIELDS:
+    for field in COUNTER_FIELDS if schema == SAMPLE_SCHEMA else LEGACY_COUNTER_FIELDS:
         _unsigned(sample[field], field)
     return sample
 
@@ -138,13 +148,16 @@ def analyze_samples(raw: bytes) -> dict[str, Any]:
         samples.append(_validate_sample(decoded, edge))
 
     begin, end = samples
+    if begin["schema"] != end["schema"]:
+        raise AnalysisError("Sample schema changed inside the interval")
     if begin["mode"] != end["mode"]:
         raise AnalysisError("Readback mode changed between the samples")
     duration_us = end["monotonic_us"] - begin["monotonic_us"]
     if not MIN_DURATION_US <= duration_us <= MAX_DURATION_US:
         raise AnalysisError("Sample duration must be between 19.5 and 25 seconds")
     deltas = {}
-    for field in COUNTER_FIELDS:
+    has_gaps = begin["schema"] == SAMPLE_SCHEMA
+    for field in COUNTER_FIELDS if has_gaps else LEGACY_COUNTER_FIELDS:
         if end[field] < begin[field]:
             raise AnalysisError(f"Cumulative counter regressed: {field}")
         deltas[field] = end[field] - begin[field]
@@ -153,13 +166,26 @@ def analyze_samples(raw: bytes) -> dict[str, Any]:
         raise AnalysisError("No new guest output was published in the interval")
 
     return {
-        "schema": "mcla-readback-cost-analysis-v1",
+        "schema": "mcla-readback-cost-analysis-v2",
+        "sample_schema": begin["schema"],
         "diagnostic_only": True,
         "visual_validation_required": True,
         "scene_equality_verified": False,
         "sample_process_identity_available": False,
         "audio_counters_available": False,
         "counter_timings_overlap": True,
+        "disarm_fragmentation": {
+            "available": has_gaps,
+            "safe_gap_splits": deltas["watch_disarm_safe_gap_splits"] if has_gaps else None,
+            "skipped_metadata_ranges": deltas["watch_disarm_gap_lock_misses"] if has_gaps else None,
+            "interval_consistent_failure_free_and_complete": (
+                deltas["watch_protect_failures"] == 0
+                and deltas["watch_disarm_gap_lock_misses"] == 0
+                and deltas["watch_disarm_safe_gap_splits"] <= deltas["watch_disarm_calls"]
+            ) if has_gaps else None,
+            "estimated_saved_time_available": False,
+            "scope": "structural-opportunities-only; independent-cumulative-snapshots; no-protection-policy-change",
+        },
         "mode": begin["mode"],
         "title_id": TITLE_ID,
         "backend": VULKAN_BACKEND,

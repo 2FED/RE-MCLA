@@ -96,7 +96,7 @@ if (($actualTop -join '|') -cne (($requiredTop | Sort-Object) -join '|')) { thro
 if ($manifest.task -cne 'M7-016' -or
     $manifest.bundle_id -cne $bundleId -or $manifest.project_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or
     $bundleId -cnotmatch ('^mcla-' + [regex]::Escape([string]$manifest.project_version) + '-win64-') -or
-    ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.18.0.1' -or $manifest.sdk_commit -cne '9098e122afa116f4316d6cec47e561ebc5186974')) -or
+    ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.19.0.0' -or $manifest.sdk_commit -cne 'c2e67161f1207ddcee609507c399efe7a1981b72')) -or
     [string]$manifest.sdk_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or [string]$manifest.sdk_commit -cnotmatch '^[0-9a-f]{40}$' -or
     $manifest.platform -cne 'windows-proton' -or
     $manifest.architecture -cne 'x86_64' -or $manifest.launcher -cne 'Launch-MCLA.exe') { throw 'Bundle manifest identity is invalid.' }

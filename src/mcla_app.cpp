@@ -3302,6 +3302,8 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
       state.graphics_memory_watch_disarm_us = graphics.memory_watch_disarm_us;
       state.graphics_memory_watch_protect_failures = graphics.memory_watch_protect_failures;
       state.graphics_memory_watch_arm_gap_splits = graphics.memory_watch_arm_gap_splits;
+      state.graphics_memory_watch_disarm_safe_gap_splits = graphics.memory_watch_disarm_safe_gap_splits;
+      state.graphics_memory_watch_disarm_gap_lock_misses = graphics.memory_watch_disarm_gap_lock_misses;
       state.graphics_vulkan_resolve_count = graphics.vulkan_resolve_count;
       state.graphics_vulkan_resolve_us = graphics.vulkan_resolve_us;
       state.graphics_vulkan_resolve_readback_copy_count = graphics.vulkan_resolve_readback_copy_count;

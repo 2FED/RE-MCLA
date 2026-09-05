@@ -86,7 +86,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.18.0.1 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.19.0.0 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -182,7 +182,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.18.0.1` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.19.0.0` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -191,7 +191,7 @@ Known installed components:
 
 Resolved M2 feasibility questions:
 
-- target-XEX non-force codegen is successful and deterministic; M3-005 preserves the 64-file/128,038,099-byte pre-instrumentation baseline and M3-013 the 67-file/133,908,410-byte crash-instrumented checkpoint. Current SDK 0.18.0.1 regeneration is 67 files / 133,916,451 bytes, 65 C++ sources and 30,034 registered functions; all 67 files remain byte-identical to the 0.17.1.0 corpus, including its 13 spin hints (docs/evidence/M7-016-deck-descriptor-reuse.md).
+- target-XEX non-force codegen is successful and deterministic; M3-005 preserves the 64-file/128,038,099-byte pre-instrumentation baseline and M3-013 the 67-file/133,908,410-byte crash-instrumented checkpoint. Current SDK 0.19.0.0 regeneration is 67 files / 133,916,451 bytes, 65 C++ sources and 30,034 registered functions; all 67 files remain byte-identical to the 0.18.0.1/0.17.1.0 corpus, including its 13 spin hints (docs/evidence/M7-016-disarm-fragmentation.md).
 - stock Xenia visual/save/controller baseline coverage is complete
 - eight M2 analysis entries plus twelve runtime-discovered M3 callable entries are required; switch-table, exception, invalid-data, and setjmp/longjmp overrides remain zero
 - all load-time variables and the 26-import pre-main function set have SDK registrations
@@ -1302,6 +1302,8 @@ Current checkpoint (2026-09-05, primary Codex + independent ABI/count and diagno
 
 - 2026-09-06 — M7-016 readback-cost / C++ runtime checkpoint, primary plus independent parser/lifetime, runtime closure and package-contract reviews. **0/16; YELLOW — AUTO START CORRECTED, STOCK PERFORMANCE OPEN**. Readback A-B-A12.15/14.50/14.25 outputs/s rejects a robust gain; indefinitely stale `some` cannot ship. Raw physical copies bypass alias write watches. A separate same-PE /MD fixture reproduces builtin-Proton timed mutex failure; official app-local CRT restores3/3~21ms and five actual-host gameplay/pause controls. Source0.17.0.0 adds default-off readback telemetry and v2 root3/bin4 runtime packaging with v1 returned-profile compatibility. DualPS bundle3/34/45, CRT3/8, lineage48, analyzer15/56, session1/10 and native recovery pass; final AST3, serializer127/0, Python24 and clean Windows relocation pass. Isolated32-file AD4D0F58... candidate also passes Proton launcher/live/session, primary-inspected saved gameplay/pause and deliberate crash-helper minidump/privacy checks. Packaged TOML overrides harness log/fullscreen settings; retained failed harness receipt is separately resolved against the actual log without rerun or comparative FPS claim. Candidate12.15outputs/s remains inadequate. Latest owner full profile/album is preserved; experiments are outside the entire sync root. Published0.16.0.1/current.txt unchanged, no task closed or pushed. Evidence: docs/evidence/M7-016-deck-readback-cost.md and M7-016-proton-cpp-runtime.md. NewKI-030 is contained in candidate, publication pending; estimate provisional, acceptance unchanged. Next two packages: safe-disarm-gap measurement with no policy change, then the evidence-selected correction and short cadence/audio acceptance with early M7-009 evolved successor reload.
 
+- 2026-09-06 — M7-016 safe-disarm-fragmentation checkpoint, primary plus independent metadata-lock/test and next-lead reviews. **0/16; YELLOW — GAP COST BOUNDED, STOCK PERFORMANCE OPEN**. Diagnostic-only SDK0.19.0.0/c2e67161f1207ddcee609507c399efe7a1981b72 counts eligible internal gaps and skipped metadata ranges without changing protection calls. Review caught an allocation-metadata race before deployment; nonblocking heap locking plus explicit miss accounting preserves fallback behavior. Both full all-target SDK configurations pass1,856 cases/four known skips; focused11/479, root AST3, serializer133/0, Python28, dualPS diagnostics5/20/170, portable3/34/45, lineage48, build-matrix1/6, alpha1/31 and bootstrap12/12 pass. All67 regenerated files remain byte-identical. The isolated exact pre-bump0.17.0.0+SDK19 host0E90319E... reaches primary-inspected saved gameplay and pause, exits0 and preserves source/published state. Its20-second pause interval gives255 outputs/12.75 per second,65,942 safe gaps across84,274 disarm calls, no interval lock misses/failures, but only1.129 seconds total inclusive disarm work. No speedup or complete FPS explanation; defer coalescing in favor of reviewing existing Type-0 constant-register batching. Source checkpoint0.18.0.0 does not relabel that measured binary. Evidence: docs/evidence/M7-016-disarm-fragmentation.md. Normal0.16.0.1 bundle and owner profile unchanged; no task closed or push, estimate remains provisional and acceptance unchanged. Next two packages: bounded GPU command-work experiment under M7-016, then actual cadence/audio and early M7-009 evolved successor reload. No repeat owner START/F10 or long-soak request.
+
 ## 16. Milestone M8 — Modern enhancements and secondary platforms
 
 **Goal:** add optional improvements without changing stock behavior by default or regressing campaign compatibility.
@@ -1720,8 +1722,8 @@ Execute in this order unless a new blocker changes the plan:
     cadence/audio and KI-028 cross-build progression preservation, then finish
     the physical pinned-Proton platform matrix before broad campaign coverage.
     The early M7-009 save subset and M7-001 matrix preparation can proceed
-    alongside the active direct CPU-profile attribution on unchanged0.16.0.1.
-    Descriptor comparison is complete; CPU-scaling/matched-Xenia research follows;
+    alongside the caller-guided disarm-fragmentation control on isolated SDK0.19.0.0.
+    Preserve completed0.16.0.1 CPU profiles; CPU-scaling/matched-Xenia research follows;
     M8-011 later reuses the benchmark method for optional enhancements.
 
 Do not skip directly to enhancement patches, 60 FPS, or public packaging.

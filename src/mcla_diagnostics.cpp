@@ -804,6 +804,8 @@ BuildStateJson(std::string_view reason, const UiState &ui,
       << ", \"memory_watch_disarm_us\": " << runtime.graphics_memory_watch_disarm_us
       << ", \"memory_watch_protect_failures\": " << runtime.graphics_memory_watch_protect_failures
       << ", \"memory_watch_arm_gap_splits\": " << runtime.graphics_memory_watch_arm_gap_splits
+      << ", \"memory_watch_disarm_safe_gap_splits\": " << runtime.graphics_memory_watch_disarm_safe_gap_splits
+      << ", \"memory_watch_disarm_gap_lock_misses\": " << runtime.graphics_memory_watch_disarm_gap_lock_misses
       << ", \"vulkan_resolve_count\": " << runtime.graphics_vulkan_resolve_count
       << ", \"vulkan_resolve_us\": " << runtime.graphics_vulkan_resolve_us
       << ", \"vulkan_resolve_readback_copy_count\": " << runtime.graphics_vulkan_resolve_readback_copy_count

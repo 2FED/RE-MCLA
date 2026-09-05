@@ -53,6 +53,11 @@ constexpr CounterField counter_fields[] = {
     {"watch_arm_us", &RuntimeState::graphics_memory_watch_arm_us},
     {"watch_disarm_calls", &RuntimeState::graphics_memory_watch_disarm_calls},
     {"watch_disarm_us", &RuntimeState::graphics_memory_watch_disarm_us},
+    {"watch_arm_gap_splits", &RuntimeState::graphics_memory_watch_arm_gap_splits},
+    {"watch_disarm_safe_gap_splits",
+     &RuntimeState::graphics_memory_watch_disarm_safe_gap_splits},
+    {"watch_disarm_gap_lock_misses",
+     &RuntimeState::graphics_memory_watch_disarm_gap_lock_misses},
     {"non_mmio_write_fault_count",
      &RuntimeState::graphics_memory_non_mmio_write_fault_count},
     {"non_mmio_write_fault_us",
@@ -108,7 +113,7 @@ int main() {
   Check("representative write",
         WriteReadbackCostSample(representative, "begin", "fast", 1234567, state));
   const std::string expected =
-      "{\"schema\":\"mcla-readback-cost-sample-v1\","
+      "{\"schema\":\"mcla-readback-cost-sample-v2\","
       "\"diagnostic_only\":true,\"audio_counters_available\":false,"
       "\"edge\":\"begin\",\"mode\":\"fast\",\"monotonic_us\":1234567,"
       "\"title_id\":1234567890,\"backend\":2,\"guest_output_sequence\":100,"
@@ -120,9 +125,11 @@ int main() {
       "\"resolve_readback_copy_us\":111,\"resolve_readback_wait_count\":112,"
       "\"resolve_readback_wait_us\":113,\"watch_arm_calls\":114,"
       "\"watch_arm_us\":115,\"watch_disarm_calls\":116,\"watch_disarm_us\":117,"
-      "\"non_mmio_write_fault_count\":118,\"non_mmio_write_fault_us\":119,"
-      "\"watch_protect_failures\":120,\"binding_update_count\":121,"
-      "\"binding_update_us\":122}\n";
+      "\"watch_arm_gap_splits\":118,\"watch_disarm_safe_gap_splits\":119,"
+      "\"watch_disarm_gap_lock_misses\":120,"
+      "\"non_mmio_write_fault_count\":121,\"non_mmio_write_fault_us\":122,"
+      "\"watch_protect_failures\":123,\"binding_update_count\":124,"
+      "\"binding_update_us\":125}\n";
   Check("exact JSON schema and member mapping", representative.str() == expected);
 
   for (const std::string_view edge : {"begin", "end"}) {
