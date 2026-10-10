@@ -1237,7 +1237,7 @@ optimization date or guaranteed frame-time reduction is implied.
 - [ ] **M7-002** Verify new game, local-profile naming/renaming, tutorials, contacts, mission unlocks, reputation progression, and end-game state. Replace the current fixed `User` presentation with a validated persistent local display name without fabricating Xbox Live identity.
 - [ ] **M7-003** Validate every race/event category with representative failures, retries, restarts, and wins. Prioritize transition/menu recovery (KI-026) and own HUD/minimap flicker triage (KI-016); capture F10 on recurrence without forcing endless non-repro retries.
 - [ ] **M7-004** Validate all vehicle classes, motorcycles, customization categories, and performance upgrades. Own controlled vehicle-lighting/neon/white-paint investigations for KI-013, KI-019 and KI-020; preserve separate hypotheses until evidence proves a shared cause.
-- [ ] **M7-005** Validate South Central map expansion and all Complete Edition vehicles/events.
+- [~] **M7-005** Deferred to M8 or natural unlock by explicit owner decision, without PASS. South Central event access/content lifecycle is unconfirmed; Doc's Garage location and Complete Edition data do not prove expansion completion or entitlement. No unlock grind. [Reviewed disposition](docs/evidence/M7-005-unavailable-content-disposition-20261010.md).
 - [ ] **M7-006** Validate cutscenes, phone calls, scripted sequences, Bink playback, subtitles, and skip behavior. Own KI-017 music-lifetime/continuity investigation separately from KI-027 starvation/performance.
 - [ ] **M7-007** Validate all garages, shops, map transitions, interiors, and streaming boundaries. Own temporal coverage/shimmer triage (KI-015) using bounded same-scene evidence, not a global alpha threshold workaround.
 - [x] **M7-008** Representative recovery accepted: Restart/Abandon and police arrest/fine/release restore driving/pause, with purchases retained after restart on isolated DCDE2F12 Sandbox. All27 returned payloads and full archive5D6CB88B verify. Exact vehicle/items and other police/AI/damage/respawn variants stay untested; KI-026 remains open. [Recovery closure](docs/evidence/M7-008-recovery-acceptance-20261010.md).
@@ -1290,6 +1290,8 @@ M7-016 has four separately recorded sub-gates: implemented private tooling; **un
 `GO M8/M9` requires complete campaign evidence. Enhancements cannot substitute for compatibility.
 
 ### Checkpoint log
+
+Unavailable-content disposition (2026-10-10, primary plus independent content/release review): **3 completed + 1 deferred /16; YELLOW**. M7-005 moves to M8/natural unlock under the owner's explicit no-grind authorization, without physical PASS. [Disposition](docs/evidence/M7-005-unavailable-content-disposition-20261010.md). No runtime/save change; unknown available-category distinctions remain M7-003 work. Next two engineering items: SDK profile dependency integration and M7-014 reached-import disposition; owner action remains one final-package F10. No milestone closure/push or acceptance relaxation.
 
 Inventory closure (2026-10-10, primary plus independent content reviewer): **3/16; YELLOW**. M7-001's17 family/axis and7 lifecycle rows now bind current/historical/unknown/deferred evidence explicitly; no source label receives invented gameplay credit. PS5/7 seed1/13 passes,11historical entries unchanged. [Inventory evidence](docs/evidence/M7-001-representative-inventory-20261003.md). Scope/criteria unchanged; no exhaustive taxonomy or full playthrough claim. Next: record owner-approved M7-005 deferral, then continue SDK/import integration and final-package F10 review. Milestone gate not ready; no push.
 
@@ -1603,7 +1605,7 @@ The criterion below is additional to the task wording and universal Definition o
 | M7-002 | Core progression chain completes from clean save and a validated persistent local profile name can be changed without fabricating Live identity / playthrough and restart log |
 | M7-003 | Every event category has win/fail/retry evidence; KI-026 transition and KI-016 HUD triage have linked regression or honest open disposition / matrix |
 | M7-004 | All vehicle/customization categories exercised; KI-013/019/020 have controlled evidence and separate fix/regression or explicit open dispositions / coverage sheet |
-| M7-005 | South Central mandatory content loads and completes / coverage evidence |
+| M7-005 | Representative currently available South Central expansion access/event/content lifecycle and persistence pass; unavailable content is explicitly deferred without PASS by Oct10 owner decision, with no all-expansion claim / coverage and availability disposition |
 | M7-006 | Scripted media/subtitles pass representative/blocker cases; KI-017 music continuity has class-specific evidence or an explicit unresolved limitation / media matrix |
 | M7-007 | Listed transitions complete without stream softlock; KI-015 temporal coverage has controlled evidence or an explicit unresolved limitation / transition log |
 | M7-008 | Gameplay edge cases recover without progression corruption / scenario tests |
