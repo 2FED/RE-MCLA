@@ -120,9 +120,10 @@ independent source/evidence review:
 
 The [SDK/profile integration report](M7-002-sdk-profile-integration-20261010.md)
 binds the history repair and SDK0.20 source pin
-`5dd58f894bf34b9ea85e59d3903c7f0e8044d853`. The new launcher is
+`5dd58f894bf34b9ea85e59d3903c7f0e8044d853`. The first repaired launcher build is
 `D8A954C71C99D334FE372559AD2EA9B75AD91B680CDFD9113947D77066317D30`.
-Its32-record guard is verified with synthetic native children only. The accepted
+The later fresh-build launcherA75B8D8B is separately pinned in that report.
+The32-record guard is verified with synthetic native children only. The accepted
 p1 launcher remains `67B8F5272016D686EDF2E8B5FBAE43945B8E00E19917637AC8DF29C1DEB5F927`;
 no owner gameplay or deployment of the new launcher is inferred. The old p1
 must not be used to claim that guard already protects its future launches.
