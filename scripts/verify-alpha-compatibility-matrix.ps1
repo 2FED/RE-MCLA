@@ -19,6 +19,38 @@ function Required-Text($Value, [string]$Label) {
     if ($Value -isnot [string] -or [string]::IsNullOrWhiteSpace($Value)) { throw "$Label must be nonempty text." }
 }
 
+function Get-CurrentKnownIssueRegister([string]$Text, [string[]]$HistoricalTuples) {
+    $allowedStatuses = @(
+        'Open','Closed','Contained','Policy',
+        'Bounded clean-start route PASS; rename pending',
+        'Fixed in isolated DCDE2F12; physical route PASS',
+        'Contained; physical reload pending','Contained; deployment pending',
+        'Contained in isolated candidate; publication pending'
+    )
+    $issueLines = [regex]::Matches($Text, '(?m)^\|[ \t]*KI-[^\r\n]*$')
+    $byId = @{}
+    foreach ($line in $issueLines) {
+        $row = [regex]::Match($line.Value, '^\|\s*(KI-\d{3})\s*\|\s*(S[0-3])\s*\|\s*([^|\r\n]+?)\s*\|')
+        if (-not $row.Success) { throw 'Current known-issue ID or severity is invalid.' }
+        $id = $row.Groups[1].Value
+        $status = $row.Groups[3].Value.Trim()
+        if ($allowedStatuses -cnotcontains $status) { throw 'Current known-issue status is not recognized.' }
+        if ($byId.ContainsKey($id)) { throw 'Duplicate current known-issue ID.' }
+        $byId[$id] = [pscustomobject]@{severity=$row.Groups[2].Value;status=$status}
+    }
+    if ($byId.Count -lt $HistoricalTuples.Count) { throw 'Current known-issue register is missing historical IDs.' }
+    for ($i = 1; $i -le $byId.Count; $i++) {
+        if (-not $byId.ContainsKey(('KI-{0:D3}' -f $i))) { throw 'Current known-issue ID set is not complete and sequential.' }
+    }
+    foreach ($tuple in $HistoricalTuples) {
+        $fields = $tuple.Split('|')
+        if (-not $byId.ContainsKey($fields[0]) -or $byId[$fields[0]].severity -cne $fields[1]) {
+            throw 'Current known-issue historical ID or severity drifted.'
+        }
+    }
+    return $byId
+}
+
 function Resolve-PublicEvidence([string]$RelativePath) {
     Required-Text $RelativePath 'Evidence path'
     if ([IO.Path]::IsPathRooted($RelativePath) -or $RelativePath.Contains('..')) { throw 'Evidence path is not repository-relative.' }
@@ -84,17 +116,29 @@ for ($i = 0; $i -lt $rows.Count; $i++) {
     foreach ($limit in @($row.limitations)) { Required-Text $limit "Compatibility row $($row.id) limitation" }
 }
 
+# Freeze the M6 snapshot independently of later issue additions/status changes.
+# Current register presence is not retrospective physical coverage of new issues.
+$historicalIssueTuples = @(
+    'KI-001|S1|Open','KI-002|S1|Closed','KI-003|S2|Open',
+    'KI-004|S2|Open','KI-005|S1|Closed','KI-006|S1|Closed',
+    'KI-007|S2|Open','KI-008|S2|Open','KI-009|S2|Open',
+    'KI-010|S2|Contained','KI-011|S1|Closed','KI-012|S2|Closed',
+    'KI-013|S2|Open','KI-014|S2|Contained','KI-015|S2|Open',
+    'KI-016|S2|Open','KI-017|S2|Open','KI-018|S3|Policy',
+    'KI-019|S2|Open','KI-020|S2|Open','KI-021|S2|Closed',
+    'KI-022|S2|Open','KI-023|S1|Contained','KI-024|S1|Closed',
+    'KI-025|S3|Closed','KI-026|S2|Open','KI-027|S2|Open'
+)
 $knownText = Get-Content -LiteralPath (Join-Path $repo 'docs/known-issues.md') -Raw
-$matches = [regex]::Matches($knownText, '(?m)^\|\s*(KI-\d{3})\s*\|\s*(S\d)\s*\|\s*(Open|Closed|Contained|Policy)\s*\|')
-if ($matches.Count -ne 27) { throw 'Canonical known-issue register must contain exactly twenty-seven rows.' }
+$currentIssues = Get-CurrentKnownIssueRegister $knownText $historicalIssueTuples
 $inventory = @($matrix.known_issue_inventory)
-if ($inventory.Count -ne $matches.Count) { throw 'Known-issue inventory cardinality drifted.' }
-for ($i = 0; $i -lt $matches.Count; $i++) {
+if ($inventory.Count -ne $historicalIssueTuples.Count) { throw 'Historical known-issue inventory cardinality drifted.' }
+for ($i = 0; $i -lt $historicalIssueTuples.Count; $i++) {
     Exact-Properties $inventory[$i] @('id','severity','status') "Known issue $i"
-    $expectedId = 'KI-{0:D3}' -f ($i + 1)
-    if ($matches[$i].Groups[1].Value -cne $expectedId -or $inventory[$i].id -cne $expectedId -or
-        $inventory[$i].severity -cne $matches[$i].Groups[2].Value -or $inventory[$i].status -cne $matches[$i].Groups[3].Value) {
-        throw 'Known-issue ID, order, severity, or status drifted.'
+    $expectedTuple = $historicalIssueTuples[$i].Split('|')
+    if ($inventory[$i].id -cne $expectedTuple[0] -or
+        $inventory[$i].severity -cne $expectedTuple[1] -or $inventory[$i].status -cne $expectedTuple[2]) {
+        throw 'Historical known-issue ID, order, severity, or status drifted.'
     }
 }
 
@@ -112,8 +156,8 @@ if (-not $Fixture) {
     }
     $cmake = Get-Content -LiteralPath (Join-Path $repo 'CMakeLists.txt') -Raw
     $bootstrap = Get-Content -LiteralPath (Join-Path $repo 'scripts/bootstrap.ps1') -Raw
-    if ($cmake -notmatch 'MCLA_REXGLUE_VERSION\s+"0\.19\.0\.0"' -or
-        $bootstrap.IndexOf('c2e67161f1207ddcee609507c399efe7a1981b72', [StringComparison]::Ordinal) -lt 0 -or
+    if ($cmake -notmatch 'MCLA_REXGLUE_VERSION\s+"0\.20\.0\.0"' -or
+        $bootstrap.IndexOf('5dd58f894bf34b9ea85e59d3903c7f0e8044d853', [StringComparison]::Ordinal) -lt 0 -or
         $build.sdk_version -cne '0.10.0.0' -or
         $build.sdk_commit -cne '5d3e98c064c38e0769b4f59d11729c8f6270eb83') {
         throw 'Tested alpha identity or its reviewed SDK hotfix successor drifted.'
@@ -124,6 +168,8 @@ if (-not $Fixture) {
     Decision = $matrix.decision
     CompatibilityRows = $rows.Count
     KnownIssues = $inventory.Count
+    CurrentKnownIssues = $currentIssues.Count
+    AdditionalCurrentIssuesClaimedCovered = $false
     ReferenceHosts = 1
     BroadClaimsRejected = 8
     Passed = $true

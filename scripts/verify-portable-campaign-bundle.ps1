@@ -81,6 +81,19 @@ if ($legacyRuntime -and -not $ReturnedProfile) { throw 'Legacy v1 bundles are ac
 if (-not $legacyRuntime -and $manifest.schema -cne 'mcla-portable-campaign-bundle-v2') { throw 'Unsupported portable bundle schema.' }
 $manifestProperties = @('schema','task','bundle_id','project_version','sdk_version','sdk_commit','created_utc','platform','architecture','launcher','window_mode','immutable_file_count','game','selected_save','writable_roots','retention','private_content')
 $runtimeFiles = @()
+$wgcCapture = [bool]$manifest.PSObject.Properties['image_capture']
+if ($wgcCapture) {
+    if ($legacyRuntime) { throw 'Legacy bundles cannot declare WGC image capture.' }
+    $manifestProperties += 'image_capture'
+    Assert-ExactProperties $manifest.image_capture @('mode','helper_path','helper_sha256','helper_bytes','host_sha256') 'Image capture contract'
+    $capture = $manifest.image_capture
+    if ($capture.mode -isnot [string] -or $capture.mode -cne 'window-wgc-v1' -or
+        $capture.helper_path -isnot [string] -or $capture.helper_path -cne 'bin/mcla_diagnostic_image_helper.exe' -or
+        $capture.helper_sha256 -isnot [string] -or $capture.helper_sha256 -cnotmatch '^[0-9A-F]{64}$' -or
+        $capture.host_sha256 -isnot [string] -or $capture.host_sha256 -cnotmatch '^[0-9A-F]{64}$' -or
+        ($capture.helper_bytes -isnot [int] -and $capture.helper_bytes -isnot [long]) -or
+        $capture.helper_bytes -le 0 -or $capture.helper_bytes -gt 16MB) { throw 'Image capture capability/identity is invalid.' }
+}
 if (-not $legacyRuntime) {
     $manifestProperties += 'cpp_runtime'
     $runtimePolicy = Get-PortableCppRuntimePolicy
@@ -96,7 +109,7 @@ if (($actualTop -join '|') -cne (($requiredTop | Sort-Object) -join '|')) { thro
 if ($manifest.task -cne 'M7-016' -or
     $manifest.bundle_id -cne $bundleId -or $manifest.project_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or
     $bundleId -cnotmatch ('^mcla-' + [regex]::Escape([string]$manifest.project_version) + '-win64-') -or
-    ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.19.0.0' -or $manifest.sdk_commit -cne 'c2e67161f1207ddcee609507c399efe7a1981b72')) -or
+    ((-not $ReturnedProfile) -and ($manifest.sdk_version -cne '0.20.0.0' -or $manifest.sdk_commit -cne '5dd58f894bf34b9ea85e59d3903c7f0e8044d853')) -or
     [string]$manifest.sdk_version -cnotmatch '^\d+\.\d+\.\d+\.\d+$' -or [string]$manifest.sdk_commit -cnotmatch '^[0-9a-f]{40}$' -or
     $manifest.platform -cne 'windows-proton' -or
     $manifest.architecture -cne 'x86_64' -or $manifest.launcher -cne 'Launch-MCLA.exe') { throw 'Bundle manifest identity is invalid.' }
@@ -141,6 +154,7 @@ if (-not $Fixture -and ([int]$gameManifest.SchemaVersion -ne 1 -or [string]$game
 
 $expectedImmutable = @('Launch-MCLA.exe','bundle-id.txt','bundle-manifest.json','game-manifest.json')
 $expectedBin = @('mcla.exe','mcla_crash_handler.exe','mcla.toml','rexgpu-xenos.dll','rexruntime.dll','TracyClient.dll')
+if ($wgcCapture) { $expectedBin += 'mcla_diagnostic_image_helper.exe' }
 $expectedBin += @($runtimeFiles | Where-Object { $_.RelativePath.StartsWith('bin/',[StringComparison]::Ordinal) } | ForEach-Object { $_.Name })
 $actualBin = @((Get-ChildItem -LiteralPath (Join-Path $root 'bin') -Force).Name | Sort-Object)
 if (($actualBin -join '|') -cne (($expectedBin | Sort-Object) -join '|')) { throw 'Portable runtime binary topology is not exact.' }
@@ -162,6 +176,16 @@ $expectedImmutable += $expectedGamePaths
 if ((@($entries.Keys | Sort-Object) -join '|') -cne (($expectedImmutable | Sort-Object) -join '|')) { throw 'Bundle hash-lock topology is not exact.' }
 foreach ($entry in $entries.GetEnumerator()) {
     if ((Get-Sha256 $entry.Value.path) -cne $entry.Value.sha256) { throw "Bundle immutable SHA-256 drifted for '$($entry.Key)'." }
+}
+if ($wgcCapture) {
+    $helperPath = $entries[$capture.helper_path].path
+    $hostPath = $entries['bin/mcla.exe'].path
+    if ((Get-Item -LiteralPath $helperPath).Length -ne $capture.helper_bytes -or
+        $entries[$capture.helper_path].sha256 -cne $capture.helper_sha256 -or
+        $entries['bin/mcla.exe'].sha256 -cne $capture.host_sha256) { throw 'Image capture manifest and locked artifacts differ.' }
+    if ((Get-Item -LiteralPath $hostPath).Length -gt 256MB) { throw 'Host exceeds the bounded capture-pin scan.' }
+    $hostBytes = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($hostPath))
+    if ([regex]::Matches($hostBytes, [regex]::Escape($capture.helper_sha256)).Count -ne 1) { throw 'Host does not contain exactly one matching image-helper pin.' }
 }
 if (-not $legacyRuntime -and -not $Fixture) {
     Assert-PortableCppRuntimeBundle -Root $root -Policy $runtimePolicy
@@ -233,4 +257,5 @@ if ($RunLauncherVerify) {
     GameBytes = $payloadBytes
     SelectedSaveSha256 = [string]$manifest.selected_save.save_sha256
     LauncherVerified = [bool]$RunLauncherVerify
+    F10Wgc = $wgcCapture
 }

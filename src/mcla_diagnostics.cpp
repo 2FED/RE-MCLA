@@ -4,6 +4,10 @@
 
 #include "mcla_frame_signal.h"
 #include "mcla_native_crash.h"
+#if defined(MCLA_EXPERIMENTAL_F10_WGC)
+#include "mcla_diagnostic_image_client_win.h"
+#include "mcla_image_helper_pin.h"
+#endif
 
 #include <rex/crypto/sha256.h>
 #include <rex/filesystem/file.h>
@@ -347,7 +351,7 @@ void WriteLe32(std::ofstream &stream, uint32_t value) {
 
 bool WriteBgraBmp(const std::filesystem::path &path, uint32_t width,
                   uint32_t height, uint32_t stride,
-                  const std::vector<uint8_t> &pixels) {
+                  std::span<const uint8_t> pixels) {
   if (!width || !height || width > 8192 || height > 8192) {
     return false;
   }
@@ -395,11 +399,42 @@ bool WriteBgraBmp(const std::filesystem::path &path, uint32_t width,
 struct WindowFrameCapture {
   bool written = false;
   FrameSignal signal;
+  const char *source = "win32-client-bitblt";
+#if defined(MCLA_EXPERIMENTAL_F10_WGC)
+  image::CaptureResult helper;
+#endif
 };
 
 WindowFrameCapture CaptureWindowFrame(const std::filesystem::path &path,
-                                     const UiState &ui) {
-#if defined(_WIN32)
+                                     const UiState &ui, std::stop_token token) {
+#if defined(MCLA_EXPERIMENTAL_F10_WGC)
+  WindowFrameCapture frame;
+  frame.source = "win32-client-wgc-image-only";
+  std::array<wchar_t, 32768> module{};
+  const DWORD length = GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+  if (!length || length >= module.size()) return frame;
+  const auto helper = std::filesystem::path(std::wstring_view(module.data(), length)).parent_path() /
+                      L"mcla_diagnostic_image_helper.exe";
+  frame.helper = image::CaptureOwnedWindow(ui.native_window_handle, helper,
+                                          MCLA_IMAGE_HELPER_SHA256, token);
+  if (!frame.helper.captured || token.stop_requested()) return frame; // No GDI fallback.
+  const auto width = static_cast<uint32_t>(frame.helper.metadata.request.client_width);
+  const auto height = static_cast<uint32_t>(frame.helper.metadata.request.client_height);
+  const std::span<const uint8_t> pixels(
+      reinterpret_cast<const uint8_t *>(frame.helper.pixels.data()), frame.helper.pixels.size());
+  const auto signal = MeasureBgraFrame(pixels, width, height, width * 4);
+  if (signal.classification != FrameRgbClass::kUnavailable &&
+      WriteBgraBmp(path, width, height, width * 4, pixels)) {
+    frame.written = true;
+    frame.signal = signal;
+  } else {
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored); // Only this request's partial BMP.
+  }
+  std::vector<std::byte>().swap(frame.helper.pixels); // Retain status, release accepted bytes.
+  return frame;
+#elif defined(_WIN32)
+  (void)token;
   const HWND window = reinterpret_cast<HWND>(ui.native_window_handle);
   if (!window || !IsWindow(window)) {
     return {};
@@ -471,6 +506,7 @@ WindowFrameCapture CaptureWindowFrame(const std::filesystem::path &path,
 #else
   (void)path;
   (void)ui;
+  (void)token;
   return {};
 #endif
 }
@@ -973,7 +1009,7 @@ public:
       }
       bool captured = false;
       try {
-        captured = Capture(reason, ui);
+        captured = Capture(reason, ui, token);
       } catch (const std::exception &e) {
         REXLOG_ERROR("MCLA diagnostics: snapshot worker failed: {}", e.what());
       } catch (...) {
@@ -988,7 +1024,8 @@ public:
     }
   }
 
-  bool Capture(std::string_view reason, const UiState &ui) {
+  bool Capture(std::string_view reason, const UiState &ui, std::stop_token token) {
+    if (token.stop_requested()) return false;
     const uint64_t sequence = sequence_.fetch_add(1) + 1;
     const std::string name = "live-" + UtcStamp() + "-" +
                              std::to_string(ProcessId()) + "-" +
@@ -1018,11 +1055,11 @@ public:
           "MCLA diagnostics: state provider failed with unknown exception");
     }
 
-    // Capture the already-presented client area. This deliberately avoids a
-    // GPU readback/fence wait, so an F10 snapshot cannot hang behind a wedged
-    // guest renderer.
+    // No in-process GPU readback/fence wait. The experimental image helper is
+    // isolated/cancellable; this does not bound all package or OS operations.
     const WindowFrameCapture frame =
-        CaptureWindowFrame(partial / "frame.bmp", ui);
+        CaptureWindowFrame(partial / "frame.bmp", ui, token);
+    if (token.stop_requested()) return false;
     const bool frame_written = frame.written;
 
     uint64_t working_set = 0;
@@ -1110,6 +1147,7 @@ public:
       journal_sink_->flush();
     }
 
+    if (token.stop_requested()) return false;
     const SaveCopyStats save =
         CopySaveTrees(user_data_root_, partial / "save-private");
     std::ostringstream save_metadata;
@@ -1132,6 +1170,7 @@ public:
       return false;
     }
 
+    if (token.stop_requested()) return false;
     std::string dump_error;
     bool dump_written =
         native_ready_ &&
@@ -1190,11 +1229,21 @@ public:
                 "\"save-files-private.json\", \"save-private\"]},\n"
              << "  \"capture\": {\"frame\": "
              << (frame_written ? "true" : "false")
-             << ", \"frame_signal\": {\"source\": \"win32-client-bitblt\", "
+             << ", \"frame_signal\": {\"source\": \"" << frame.source << "\", "
+                "\"freshness\": \"not-established\", "
                 "\"classification\": \""
              << FrameRgbClassName(frame.signal.classification)
              << "\", \"width\": " << frame.signal.width
              << ", \"height\": " << frame.signal.height << "}"
+#if defined(MCLA_EXPERIMENTAL_F10_WGC)
+             << ", \"image_helper\": {\"protocol_version\": 1, \"sha256\": \""
+             << MCLA_IMAGE_HELPER_SHA256 << "\", \"admitted\": "
+             << (frame.helper.captured ? "true" : "false")
+             << ", \"cleanup_complete\": " << (frame.helper.cleanup_complete ? "true" : "false")
+             << ", \"client_failure\": " << static_cast<unsigned>(frame.helper.failure)
+             << ", \"helper_exit\": " << frame.helper.helper_exit
+             << ", \"helper_failure\": " << static_cast<unsigned>(frame.helper.metadata.failure) << "}"
+#endif
              << ", \"minidump\": " << (dump_written ? "true" : "false")
              << ", \"save_found\": " << (save.found ? "true" : "false")
              << ", \"save_files\": " << save.files
@@ -1210,10 +1259,12 @@ public:
       manifest << (i + 1 == artifacts.size() ? "\n" : ",\n");
     }
     manifest << "  ]\n}\n";
+    if (token.stop_requested()) return false;
     if (!WriteText(partial / "manifest.json", manifest.str())) {
       REXLOG_ERROR("MCLA diagnostics: manifest write failed");
       return false;
     }
+    if (token.stop_requested()) return false;
     std::filesystem::rename(partial, complete, ec);
     if (ec) {
       REXLOG_ERROR("MCLA diagnostics: snapshot publish failed: {}",

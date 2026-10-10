@@ -3,6 +3,7 @@ Set-StrictMode -Version Latest
 $script:PortableProfileName = 'B13EBABEBABEBABE'
 $script:PortableSavePath = 'B13EBABEBABEBABE/545407F8/00000001/mc4.sav/mc4.sav'
 $script:PortableHeaderPath = 'B13EBABEBABEBABE/545407F8/Headers/00000001/mc4.sav.header'
+$script:PortableDisplayNamePath = 'B13EBABEBABEBABE/local-display-name.txt'
 
 function Get-PortableSha256([string]$Path) {
     $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
@@ -278,6 +279,132 @@ function Get-PortableReturnedSession([string]$SessionRoot, $BundleManifest) {
     return [pscustomobject]@{SessionId=$sessionId;StartProfile=$starts[0];FinalProfile=$finals[0];State=[string]$result.state;ExitCode=$result.exit_code}
 }
 
+function Get-PortableProfileDisplayName($Profile, [switch]$Required) {
+    $entry = @($Profile.Entries | Where-Object { $_.path -ceq $script:PortableDisplayNamePath })
+    if (-not $entry.Count) {
+        if ($Required) { throw 'Portable profile rename lacks its new display-name preference.' }
+        return 'User'
+    }
+    if ($entry.Count -ne 1 -or $entry[0].kind -cne 'file' -or $entry[0].bytes -lt 1 -or $entry[0].bytes -gt 15) {
+        throw 'Portable profile display-name preference is invalid.'
+    }
+    $path = Assert-PortablePath $Profile.Root (Join-Path $Profile.Root $script:PortableDisplayNamePath)
+    $bytes = [IO.File]::ReadAllBytes($path)
+    # Decode only after checking every byte: no BOM, Unicode replacement,
+    # newline trimming, or locale-dependent acceptance of an invalid name.
+    if ($bytes.Length -ne $entry[0].bytes -or $bytes[0] -eq 32 -or $bytes[$bytes.Length-1] -eq 32) {
+        throw 'Portable profile display-name preference is invalid.'
+    }
+    foreach ($byte in $bytes) {
+        if (-not (($byte -ge 65 -and $byte -le 90) -or ($byte -ge 97 -and $byte -le 122) -or
+            ($byte -ge 48 -and $byte -le 57) -or $byte -in @(32,45,95))) { throw 'Portable profile display-name preference is invalid.' }
+    }
+    if ((Get-PortableSha256 $path) -cne $entry[0].sha256) { throw 'Portable profile display-name preference changed during interpretation.' }
+    return [Text.Encoding]::ASCII.GetString($bytes)
+}
+
+function Get-PortableReturnedProfileRename([string]$TransitionRoot, $BundleManifest) {
+    $null = Assert-PortablePath $TransitionRoot $TransitionRoot
+    $transitionId = Split-Path -Leaf $TransitionRoot
+    if ($transitionId -cnotmatch '^profile-rename-(\d{8}T\d{6}Z)-\d+$') { throw 'Portable profile rename is incomplete or malformed.' }
+    Assert-PortableUtcStamp $Matches[1]
+    $top = @((Get-ChildItem -LiteralPath $TransitionRoot -Force -ErrorAction Stop).Name | Sort-Object)
+    if (($top -join '|') -cne 'after|before|rename.json') { throw 'Portable profile rename topology drifted.' }
+    $record = Read-PortableRecord (Join-Path $TransitionRoot 'rename.json')
+    Assert-PortableRecord $record @('schema','bundle_id','transition_id','completed_utc','verified_file_count') 'Portable profile rename record'
+    Assert-PortableUtcStamp $record.completed_utc
+    Assert-PortableInteger $record.verified_file_count 1 16384 'Portable profile rename verified file count'
+    if ($record.schema -isnot [string] -or $record.schema -cne 'mcla-portable-profile-rename-v1' -or
+        $record.bundle_id -isnot [string] -or $record.bundle_id -cne $BundleManifest.bundle_id -or
+        $record.transition_id -isnot [string] -or $record.transition_id -cne $transitionId -or
+        $record.verified_file_count -ne $BundleManifest.immutable_file_count) { throw 'Portable profile rename identity drifted.' }
+    $profiles = @()
+    foreach ($side in @('before','after')) {
+        $sideRoot = Assert-PortablePath $TransitionRoot (Join-Path $TransitionRoot $side)
+        if (-not (Test-Path -LiteralPath $sideRoot -PathType Container)) { throw 'Portable profile rename tree is missing.' }
+        $sideTop = @(Get-ChildItem -LiteralPath $sideRoot -Force -ErrorAction Stop)
+        if ($sideTop.Count -ne 1 -or $sideTop[0].Name -cne $script:PortableProfileName -or -not $sideTop[0].PSIsContainer) {
+            throw 'Portable profile rename tree topology drifted.'
+        }
+        $profiles += Get-PortableProfile $sideRoot
+    }
+    $before = $profiles[0]; $after = $profiles[1]
+    $oldName = Get-PortableProfileDisplayName $before
+    $newName = Get-PortableProfileDisplayName $after -Required
+    if ($oldName -ceq $newName -or $before.Sha256 -ceq $after.Sha256) { throw 'Portable profile rename is a no-op, not a provenance transition.' }
+    # A rename changes one preference only, not saves, headers, photos, other
+    # users, empty-directory topology, or any unrelated profile bytes.
+    $unchanged = @($profiles | ForEach-Object {
+        (@($_.Entries | Where-Object { $_.path -cne $script:PortableDisplayNamePath } | ForEach-Object {
+            '{0}|{1}|{2}|{3}' -f $_.kind,$_.path,$_.bytes,$_.sha256
+        }) -join "`n")
+    })
+    if ($unchanged[0] -cne $unchanged[1] -or $before.SaveSha256 -cne $after.SaveSha256 -or $before.HeaderSha256 -cne $after.HeaderSha256) {
+        throw 'Portable profile rename changed data outside its display-name preference.'
+    }
+    # SessionId is the existing graph edge identifier, explicitly namespaced
+    # profile-rename-*; this state is never represented as completed gameplay.
+    return [pscustomobject]@{SessionId=$transitionId;StartProfile=$before;FinalProfile=$after;State='profile-rename';ExitCode=$null}
+}
+
+function Resolve-PortableRenamedSessionTip($Sessions, $LiveProfile, $SeedProfile) {
+    # Only independently validated name-only edges define equivalence. Never
+    # strip the preference from arbitrary gameplay/live trees to make a match.
+    $nodes = @{}; $component = @{}; $renames = @($Sessions | Where-Object { $_.State -ceq 'profile-rename' })
+    foreach ($session in $Sessions) {
+        foreach ($profile in @($session.StartProfile,$session.FinalProfile)) {
+            $nodes[$profile.Sha256] = $profile; $component[$profile.Sha256] = $profile.Sha256
+        }
+    }
+    foreach ($rename in $renames) {
+        $from = $component[$rename.StartProfile.Sha256]; $to = $component[$rename.FinalProfile.Sha256]
+        if ($from -ceq $to) { continue }
+        foreach ($key in @($component.Keys)) { if ($component[$key] -ceq $to) { $component[$key] = $from } }
+    }
+    if (-not $component.ContainsKey($SeedProfile.Sha256)) { throw 'Portable retained session history does not start at the bundle seed.' }
+    if (-not $component.ContainsKey($LiveProfile.Sha256)) { throw 'Portable live profile is not a recorded session or rename tip.' }
+    $quotient = @($Sessions | ForEach-Object {
+        if ($_.State -cne 'profile-rename' -and $_.StartProfile.Sha256 -cne $_.FinalProfile.Sha256 -and
+            $component[$_.StartProfile.Sha256] -ceq $component[$_.FinalProfile.Sha256]) {
+            throw 'Portable gameplay changed a name-only profile without an administrative transition.'
+        }
+        [pscustomobject]@{SessionId=$_.SessionId;StartProfile=$nodes[$component[$_.StartProfile.Sha256]];FinalProfile=$nodes[$component[$_.FinalProfile.Sha256]]}
+    })
+    # Preserve the existing branch, merge, disconnected/cycle and live-tip
+    # protections for every non-name byte and for ordinary gameplay.
+    $tip = Resolve-PortableSessionTip $quotient $nodes[$component[$LiveProfile.Sha256]]
+    if ($tip.RootProfile.Sha256 -cne $component[$SeedProfile.Sha256]) { throw 'Portable retained session history does not start at the bundle seed.' }
+    foreach ($class in @($component.Values | Sort-Object -Unique)) {
+        $members = @($component.Keys | Where-Object { $component[$_] -ceq $class })
+        $entries = @()
+        if ($class -ceq $component[$SeedProfile.Sha256]) { $entries += $SeedProfile.Sha256 }
+        foreach ($session in $Sessions) {
+            if ($session.State -cne 'profile-rename' -and $component[$session.FinalProfile.Sha256] -ceq $class -and
+                $component[$session.StartProfile.Sha256] -cne $class) { $entries += $session.FinalProfile.Sha256 }
+        }
+        if (-not $entries.Count) { throw 'Portable profile rename component has no proven entry.' }
+        foreach ($entry in @($entries | Sort-Object -Unique)) {
+            $reachable = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            $pending = [Collections.Generic.Queue[string]]::new(); $pending.Enqueue($entry); $null = $reachable.Add($entry)
+            while ($pending.Count) {
+                $node = $pending.Dequeue()
+                foreach ($rename in $renames) {
+                    if ($rename.StartProfile.Sha256 -ceq $node -and $reachable.Add($rename.FinalProfile.Sha256)) { $pending.Enqueue($rename.FinalProfile.Sha256) }
+                }
+            }
+            # This covers every rename endpoint, outgoing gameplay start, and
+            # the live tree. Undirected equivalence alone is never provenance.
+            foreach ($member in $members) {
+                if (-not $reachable.Contains($member)) { throw 'Portable profile rename history is not directed-reachable from its proven entry.' }
+            }
+        }
+    }
+    # The live exact tree is authoritative among proved reachable preferences;
+    # timestamps/record counts do not assert which name was chosen most recently.
+    $finalIds = @($Sessions | Where-Object { $_.FinalProfile.Sha256 -ceq $LiveProfile.Sha256 } | ForEach-Object SessionId | Sort-Object)
+    return [pscustomobject]@{RootProfile=$SeedProfile;SessionIds=$finalIds}
+}
+
 function Resolve-PortableSessionTip($Sessions, $LiveProfile) {
     $nodes = @{}; $children = @{}; $parents = @{}
     foreach ($session in $Sessions) {
@@ -335,7 +462,7 @@ function Get-PortableBundleReturn([string]$RepoRoot, [string]$BundleRoot, [switc
     $profile = Get-PortableProfile (Join-Path $BundleRoot 'user')
     $sessions = @()
     foreach ($item in @(Get-ChildItem -LiteralPath (Join-Path $BundleRoot 'results') -Force -ErrorAction Stop)) {
-        if ($item.PSIsContainer -and $item.Name -cmatch '^session-\d{8}T\d{6}Z-\d+$') { $sessions += $item; continue }
+        if ($item.PSIsContainer -and $item.Name -cmatch '^(session|profile-rename)-\d{8}T\d{6}Z-\d+$') { $sessions += $item; continue }
         if ($item.PSIsContainer -or $item.Name -cnotmatch '^portable-verification-(\d{8}T\d{6}Z)\.json$') { throw 'Portable results contain unrecognized or incomplete session state.' }
         Assert-PortableUtcStamp $Matches[1]
         $verification = Read-PortableRecord $item.FullName
@@ -349,11 +476,15 @@ function Get-PortableBundleReturn([string]$RepoRoot, [string]$BundleRoot, [switc
     $sessionId = $null
     $sessionIds = @()
     if (-not $sessions.Count) {
-        if ($profile.Sha256 -cne $seed.Sha256) { throw 'Changed portable profile has no completed session provenance.' }
+        if ($profile.Sha256 -cne $seed.Sha256) { throw 'Changed portable profile has no completed session or profile-rename provenance.' }
     } else {
-        if ($sessions.Count -gt 32) { throw 'Portable completed-session inventory exceeds its retention bound.' }
-        $validated = @($sessions | ForEach-Object { Get-PortableReturnedSession $_.FullName $manifest })
-        $tip = Resolve-PortableSessionTip $validated $profile
+        if ($sessions.Count -gt 32) { throw 'Portable completed-session/profile-rename inventory exceeds its combined retention bound.' }
+        $validated = @($sessions | ForEach-Object {
+            if ($_.Name.StartsWith('profile-rename-',[StringComparison]::Ordinal)) { Get-PortableReturnedProfileRename $_.FullName $manifest }
+            else { Get-PortableReturnedSession $_.FullName $manifest }
+        })
+        if (@($validated | Where-Object { $_.State -ceq 'profile-rename' }).Count) { $tip = Resolve-PortableRenamedSessionTip $validated $profile $seed }
+        else { $tip = Resolve-PortableSessionTip $validated $profile }
         if ($tip.RootProfile.Sha256 -cne $seed.Sha256) { throw 'Portable retained session history does not start at the bundle seed; explicit recovery review required.' }
         $sessionIds = @($tip.SessionIds)
         if ($sessionIds.Count -eq 1) { $sessionId = $sessionIds[0] }
@@ -462,7 +593,14 @@ function Assert-PortablePublicationUnchanged($State, $Receipts) {
     }
 }
 
-function New-PortableSavePlan([string]$RepoRoot, $State, [string]$LegacySnapshot, [string]$SaveSource, [switch]$Fixture) {
+function New-PortableSavePlan([string]$RepoRoot, $State, [string]$LegacySnapshot, [string]$SaveSource, [switch]$Fixture, [ValidateNotNullOrEmpty()][string]$SaveArchive) {
+    if ($SaveArchive -and $SaveSource) { throw 'SaveArchive and SaveSource are mutually exclusive.' }
+    $imported = $null; $importRecordSha256 = $null
+    if ($SaveArchive) {
+        if ($SaveArchive -notmatch '^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+\\)') { throw 'Explicit save archive must be an absolute content-addressed archive path.' }
+        $imported = Get-PortableProfileArchive $RepoRoot $SaveArchive
+        $importRecordSha256 = Get-PortableSha256 (Join-Path $imported.Root 'profile.json')
+    }
     $legacy = Get-PortableProfile $LegacySnapshot
     $candidates = @([pscustomobject]@{Source='legacy';Profile=$legacy})
     $edges = @(); $receipts = @()
@@ -480,11 +618,19 @@ function New-PortableSavePlan([string]$RepoRoot, $State, [string]$LegacySnapshot
         $archive = Save-PortableProfileArchive $RepoRoot $candidate.Profile ([ordered]@{source=$candidate.Source})
         $candidate | Add-Member NoteProperty Archive $archive
     }
+    if ($imported) {
+        # This is a new provenance root, not a native return or a legacy seed.
+        # Do not infer a session/edge from archive metadata, age or equal hashes.
+        $SaveSource = 'archive:' + $imported.Sha256
+        $candidates += [pscustomobject]@{Source=$SaveSource;Profile=$imported;Archive=$imported.Root}
+    }
+    # Explicit selection still validates every existing branch and graph cycle.
     $chosen = Resolve-PortableLineage $candidates $edges $SaveSource
     # Carry previously proven ancestry in the next immutable manifest so pruning
     # a predecessor never erases the connection to the desktop baseline.
     $ancestry = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    $pending = [Collections.Generic.Queue[string]]::new(); $pending.Enqueue($chosen.Profile.Sha256)
+    $pending = [Collections.Generic.Queue[string]]::new()
+    if (-not $imported) { $pending.Enqueue($chosen.Profile.Sha256) }
     while ($pending.Count) {
         $node = $pending.Dequeue()
         foreach ($edge in @($edges | Where-Object { $_.To -ceq $node -and $_.From -cne $node })) {
@@ -493,7 +639,20 @@ function New-PortableSavePlan([string]$RepoRoot, $State, [string]$LegacySnapshot
     }
     if ($ancestry.Count -gt 256 -or $ancestry.Contains($chosen.Profile.Sha256)) { throw 'Save ancestry is oversized or cyclic.' }
     Assert-PortablePublicationUnchanged $State $receipts
-    return [pscustomobject]@{Snapshot=$chosen.Archive;Profile=$chosen.Profile;Source=$chosen.Source;Receipts=$receipts;Ancestors=@($ancestry | Sort-Object)}
+    $recordSha256 = if ($imported) { $importRecordSha256 } else { Get-PortableSha256 (Join-Path $chosen.Archive 'profile.json') }
+    $plan = [pscustomobject]@{Snapshot=$chosen.Archive;Profile=$chosen.Profile;Source=$chosen.Source;Receipts=$receipts;Ancestors=@($ancestry | Sort-Object);ArchiveRecordSha256=$recordSha256}
+    Assert-PortableSavePlanUnchanged $RepoRoot $plan
+    return $plan
+}
+
+function Assert-PortableSavePlanUnchanged([string]$RepoRoot, $Plan) {
+    # Validate topology, full profile bytes, inventory and metadata again after
+    # potentially long build/proof work. This does not replace publication locks.
+    $profile = Get-PortableProfileArchive $RepoRoot $Plan.Snapshot
+    if ($profile.Sha256 -cne $Plan.Profile.Sha256 -or
+        (Get-PortableSha256 (Join-Path $profile.Root 'profile.json')) -cne $Plan.ArchiveRecordSha256) {
+        throw 'Selected portable profile archive changed after admission.'
+    }
 }
 
 function Publish-PortablePointer($State, [string]$BundleId) {

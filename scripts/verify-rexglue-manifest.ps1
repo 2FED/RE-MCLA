@@ -119,7 +119,7 @@ foreach ($rawLine in Get-Content -LiteralPath $resolvedManifest) {
 
 $expected = [ordered]@{
     'project.name'                 = 'mcla'
-    'project.sdk_version'          = '0.9.0'
+    'project.sdk_version'          = '0.20.0'
     'project.game_root'            = 'private/game'
     'entrypoint.file_path'         = 'private/game/default.xex'
     'entrypoint.out_directory_path'= 'generated/default'

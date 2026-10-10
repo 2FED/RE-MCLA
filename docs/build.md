@@ -4,7 +4,61 @@ Owner: MCLA-R maintainers
 
 Purpose: provide reproducible setup, codegen, build, test, and package commands without relying on undocumented machine state.
 
-Current verified host components:
+## M7 WGC and local profile candidate
+
+The portable publisher supports explicit `-EnableF10Wgc` together with
+`-CppWinRtIncludeDir` pointing to the installed Windows SDK's absolute cppwinrt
+directory. This opt-in requires a clean Release build (no `-SkipCleanBuild`),
+pins the image helper to the host and includes it in the immutable manifest.
+Default builds explicitly keep WGC OFF; historical v1 bundles remain return-only.
+Run `scripts/test-portable-campaign-bundle.ps1` on PowerShell 5 and 7 after edits.
+
+Do not publish over the existing normal bundle while testing this integration:
+the publisher changes its output pointer and performs retention. The first
+candidate uses a fresh private `-OutputRoot` and the explicitly verified
+`-SaveArchive`. Opt-in fixture PASS alone is not package acceptance.
+See [M7 closure readiness](evidence/M7-closure-readiness-20261010.md).
+
+`-ResolutionScale 2` selects the candidate's immutable 2x target; the default
+remains 1x. `-RexglueInstallPrefix <absolute-prefix>` pins explicit package/runtime
+inputs and requires a clean build. Never point it at an unreviewed SDK install.
+The accepted p1 profile candidate used the separately staged
+`win-amd64-profile-20261010` prefix, retaining the accepted GPU DLL while replacing
+the runtime/name header. Its complete staging manifest supplements the base SDK
+commit in bundle metadata; do not rewrite that historical manifest after a pin
+upgrade. New source builds require SDK `0.20.0.0` from the explicit isolated
+`private/sdk20install-unpublished` prefix described below. This local tag/install
+is not yet published, and no new runtime has replaced the owner-accepted p1.
+
+The native launcher accepts
+`--d3d12-adapter-name="NVIDIA GeForce RTX 5060 Laptop GPU"` and resolves the current
+adapter index without fallback. Add `--verify-adapter-only` for discovery without
+a game launch or bundle writes. Persistent local rename is a separate command:
+`Launch-MCLA.exe --set-profile-name="New Name"`. Use 1–15 ASCII letters, digits,
+spaces, `_` or `-`, without edge spaces. Close the game first. The operation
+preserves the XUID/storage paths and records complete before/after snapshots;
+subsequent launches read the stored name. Do not edit immutable `bin/mcla.toml`
+or inject an environment override to rename. Physical acceptance of the rebuilt
+runtime remains separate from fixture PASS.
+[Implementation, tests and recovery limits](evidence/M7-profile-rename-20261010.md).
+
+Keep publication paths short. The publisher now budgets complete selected-profile
+paths under actual staging, session snapshot, rename and known diagnostic roots,
+before building and before staging. A successful short temporary relocation
+does not prove snapshot creation under a deeper destination. The October10
+profile candidate is byte-preserved at `private/p1` after this exact failure;
+its owner wrapper points there, with the completed rename intact. No registry
+changes or general long-path support are required or claimed.
+
+## Toolchain history
+
+The following verified toolchain belongs to the original ITX11 host. After the
+2026-10-02 verified copy to NoobSaibot, destination setup and fresh Debug/Release
+builds subsequently passed as recorded in the [machine handoff](noobsaibot-handoff.md).
+Use fresh build directories after destination toolchain verification; historical
+cache paths and physical PASS receipts must not be mechanically rewritten.
+
+Original verified host components:
 
 - Visual Studio Build Tools 2022 17.14
 - MSVC 14.44
@@ -20,7 +74,7 @@ Current verified host components:
 The aggregate prerequisite gate passed 12/12 on 2026-09-05 with SDK v0.18.0.1
 on PowerShell 7 and 5.1 for the 0.16.0.1 candidate. Rerun `scripts/bootstrap.ps1` when the
 environment changes; historical results do not verify a different machine.
-The current SDK0.19.0.0/c2e6716 install passed12/12 again on2026-09-06
+The historical SDK0.19.0.0/c2e6716 install passed12/12 again on2026-09-06
 under PowerShell7; this does not imply another host or portable performance PASS.
 
 ## Private portable updates and save preservation
@@ -39,6 +93,14 @@ branch. It does not bypass incomplete, corrupt or conflicted data. A legacy
 two-file-only manifest may require this one-time recovery decision because it
 does not prove full-profile ancestry. Never remove a stale lock or `.partial`
 folder just to make publication proceed.
+
+For a reviewed non-portable local pilot, `-SaveArchive` accepts an explicit
+absolute content-addressed directory under `private/save-archive/M7-009`.
+It is mutually exclusive with `-SaveSource`. The full profile and archive record
+are pinned/rechecked; the import starts a new provenance root, never invented
+portable sessions or inherited ancestry. Existing legacy/return validation,
+publication and pruning gates still apply. This option is not an automatic
+"newest save" selector or permission to publish before physical successor review.
 
 Complete profiles are kept under `private/save-archive/M7-009`; old mutable
 bundle evidence is under `private/evidence/M7-016/returned-bundles`. Those paths
@@ -78,7 +140,7 @@ Dot-sourcing is required because a child PowerShell process cannot modify its pa
 
 ## ReXGlue SDK source and dependencies
 
-MCLA-R tracks ReXGlue as a Git submodule. The authoritative source tag, commit, and complete recursive SHA manifest are in `docs/rexglue-sdk.md`. Initialize exactly that graph after cloning:
+MCLA-R tracks ReXGlue as a Git submodule. The authoritative source tag, commit, and complete recursive SHA manifest are in `docs/rexglue-sdk.md`. The current `v0.20.0.0` tag and commit `5dd58f894bf34b9ea85e59d3903c7f0e8044d853` are local and not yet pushed. After dependency and parent publication, initialize exactly that graph after cloning:
 
 ```powershell
 git submodule sync --recursive
@@ -90,7 +152,7 @@ The first status line must contain the ReXGlue project-fork commit recorded in `
 
 The current Windows SDK build uses:
 
-- ReXGlue 0.19.0.0 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
+- ReXGlue 0.20.0.0 project fork, based on upstream v0.9.0, with the exact nested dependencies in `docs/rexglue-sdk.md`
 - Visual Studio Build Tools 2022 17.14.37 and Windows SDK 10.0.26200
 - Clang/Clang++ 20.1.8 in GNU-compatible driver mode
 - CMake 3.31.6 and Ninja 1.12.1
@@ -100,7 +162,24 @@ The current Windows SDK build uses:
 
 ## Build and install ReXGlue
 
-Run these commands from the MCLA-R repository root in a new PowerShell session. They initialize the Visual Studio compiler/SDK environment without requiring an interactive Developer Prompt:
+The October 10 source integration is already built and installed from isolated
+`private/sdk20s` into `private/sdk20install-unpublished`. Tagged-source tests pass
+401 unit cases/3364 assertions across 41 suites, with four known skips, and 1462
+PPC cases/5753 assertions. Windows file-symlink privilege was unavailable;
+15 libmspack file symlinks were materialized from their targets only in the
+isolated checkout. No unrelated graphics work or other source changes entered
+that build. See [SDK provenance](rexglue-sdk.md).
+
+Do not run the generic default-install commands below against the original dirty
+SDK checkout during integration. They are the standard recipe for a reviewed
+clean checkout after publication, not a claim that the default install is already
+updated. The fresh WGC-enabled host build at `out/build/m7-final-sdk20` passed
+all 82 build actions; compilation and SDK test success are not physical
+acceptance or permission to overwrite p1.
+
+For that clean-checkout recipe, run from the MCLA-R repository root in a new
+PowerShell session. The commands initialize the Visual Studio compiler/SDK
+environment without requiring an interactive Developer Prompt:
 
 ```powershell
 $RepoRoot = (git rev-parse --show-toplevel).Trim()
@@ -125,24 +204,28 @@ cmake --build (Join-Path $SdkSource 'out\build\win-amd64') --target install --pa
 
 ## Discover the local ReXGlue install
 
-Use explicit session-local paths instead of relying on CMake's per-user package registry:
+Until the default install is updated and verified, select the existing isolated
+install explicitly. Do not infer the new SDK from an old PATH entry or CMake
+cache. The repository presets contain a default prefix, so configure commands
+must also override that cache value; setting the environment alone is insufficient.
 
 ```powershell
-$ReXGlueInstall = Join-Path $SdkSource 'out\install\win-amd64'
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$ReXGlueInstall = Join-Path $RepoRoot 'private\sdk20install-unpublished'
 $ReXGlueBin = Join-Path $ReXGlueInstall 'bin'
 
 $env:PATH = "$ReXGlueBin;$env:PATH"
-if ([string]::IsNullOrEmpty($env:CMAKE_PREFIX_PATH)) {
-    $env:CMAKE_PREFIX_PATH = $ReXGlueInstall
-} else {
-    $env:CMAKE_PREFIX_PATH = "$ReXGlueInstall;$env:CMAKE_PREFIX_PATH"
-}
+$env:CMAKE_PREFIX_PATH = $ReXGlueInstall
 
-rexglue --version
+& (Join-Path $ReXGlueBin 'rexglue.exe') --version
 Test-Path (Join-Path $ReXGlueInstall 'lib\cmake\rexglue\rexglueConfig.cmake')
 ```
 
-Expected output is ReXGlue `0.19.0.0` and `True`. The application presets consume this session-local `CMAKE_PREFIX_PATH` so the configured SDK is explicit.
+Expected output is ReXGlue `0.20.0.0` and `True`. Also verify the installed
+`rexglueConfigVersion.cmake` declares that exact package version; a tag alone
+does not refresh cached metadata. Switch back to the standard
+`third_party/rexglue-sdk/out/install/win-amd64` prefix only after its own install
+and identity checks pass. Preserve the independent accepted p1 artifacts.
 
 The first clean build evidence is in `docs/evidence/M1-005-rexglue-build.md`. ReXGlue unit tests are not enabled by the stock preset and are not claimed by M1-005/M1-006; SDK-changing work must configure `REXGLUE_BUILD_TESTS=ON` and run the matching CTest preset.
 
@@ -185,11 +268,17 @@ M6-014 archives**, not newer Deck returns. Preserve full returned profiles
 and their session/bundle provenance. Do not replace/prune a progressed child
 until the returned progression is verified in the successor seed; ambiguous
 branches require owner selection. This safety gate is not automated yet.
-The existing developer command is:
+The existing developer command publishes to the normal root and is shown for
+reference only. Do not run it during this unpromoted SDK integration:
 
 ```powershell
 & .\scripts\build-portable-campaign-bundle.ps1
 ```
+
+For an independently reviewed candidate, pass `-RexglueInstallPrefix` with the
+absolute isolated install path, a fresh private `-OutputRoot`, and the exact
+validated `-SaveArchive`; never reuse p1 or the normal publication root.
+This option requires a clean build and verifies the selected install/cache.
 
 The command clean-builds Release in the dedicated `out/build/win-amd64-portable-release` tree, selects the newest complete hash-verified profile snapshot, stages the exact runtime and prepared game below ignored `private/bundles/M7-016`, publishes it atomically, and updates `current.txt`. It then clones that exact folder to a clean temporary path with spaces and runs both native immutable verification and a diagnostics/save-session probe. The immutable bundle contract requires `fullscreen = true` plus declared Alt+Enter and LMB-double-click runtime toggles. This developer build requires PowerShell and the build toolchain; the resulting child requires neither. Runtime and launcher binaries are materialized copies, never developer-output hardlinks. Prepared game-file hardlinks remain optional. This preserves the previous child while its successor builds.
 
@@ -245,7 +334,8 @@ From any working directory, run the complete read-only gate in a fresh PowerShel
 
 ```powershell
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
-  -File C:\BDU\MCLA-Recomp\scripts\bootstrap.ps1
+  -File C:\BDU\MCLA-Recomp\scripts\bootstrap.ps1 `
+  -ReXGluePath C:\BDU\MCLA-Recomp\private\sdk20install-unpublished\bin\rexglue.exe
 ```
 
 The default run validates all pinned build, source, extraction, emulator, reverse-engineering, and graphics-debug prerequisites. It hashes the complete ISO and extracted payload, so it can take tens of seconds and perform substantial read I/O. It never installs or repairs a missing component. Every check is reported, and any failure produces a nonzero exit code after the remaining checks have run.
@@ -254,13 +344,20 @@ Use the named path parameters only when the private layout differs from the docu
 
 ## Generate, verify, and build the MCLA application
 
-The presets pin the installed project-fork SDK at ReXGlue `0.19.0.0`. After successful non-force codegen, verify the ignored corpus, configure, build, and verify the Release integration with:
+The presets pin the installed project-fork SDK at ReXGlue `0.20.0.0`. After
+successful non-force codegen, use an unused build directory and explicitly
+select the isolated install. The fresh WGC-enabled build at
+`out/build/m7-final-sdk20` passed 82/82 build actions. The following is a generic
+source-build reproduction recipe, not a package publication or physical test;
+do not overwrite or launch that candidate without its separate review gates.
 
 ```powershell
 scripts\verify-generated-integration.ps1
-cmake --preset win-amd64-release -B out/build/win-amd64-portable-release
-cmake --build out/build/win-amd64-portable-release --target mcla --parallel 8
-scripts\verify-generated-integration.ps1 -BuildRoot out\build\win-amd64-portable-release
+cmake --preset win-amd64-release -B out/build/sdk20-reproduction `
+  "-DCMAKE_PREFIX_PATH=$ReXGlueInstall" `
+  "-Drexglue_DIR=$ReXGlueInstall/lib/cmake/rexglue" -DREXSDK_DIR:PATH=
+cmake --build out/build/sdk20-reproduction --target mcla --parallel 8
+scripts\verify-generated-integration.ps1 -BuildRoot out\build\sdk20-reproduction
 ```
 
 With the accepted M3-013 corpus present, the configured Ninja graph exposes `mcla` and `mcla_codegen`; the native target must consume exactly 65 generated C++ sources. If `generated/default` is absent, configuration succeeds in codegen-only mode: `mcla_codegen` remains available and `mcla` is intentionally omitted. Run codegen and configure again. A mismatched `REXSDK_VERSION` is rejected.

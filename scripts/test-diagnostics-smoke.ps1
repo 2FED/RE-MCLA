@@ -11,6 +11,19 @@ $negative = 0
 function Write-Json([string]$Path, $Value) { [IO.File]::WriteAllText($Path, (($Value | ConvertTo-Json -Depth 12) + [Environment]::NewLine), $utf8) }
 function Hash([string]$Path) { $s=[IO.File]::OpenRead($Path);$h=[Security.Cryptography.SHA256]::Create();try{return -join($h.ComputeHash($s)|ForEach-Object{$_.ToString('X2')})}finally{$h.Dispose();$s.Dispose()} }
 function Expect-Failure([scriptblock]$Action, [string]$Label) { $failed=$false;try{&$Action|Out-Null}catch{$failed=$true};if(-not$failed){throw "Negative diagnostic fixture passed: $Label"};$script:negative++ }
+function Expect-ManifestFailure([string]$Label) {
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } $Label
+}
+
+function Set-WgcMetadata {
+    $liveManifest.capture.frame_signal.source = 'win32-client-wgc-image-only'
+    $liveManifest.capture.frame_signal['freshness'] = 'not-established'
+    $liveManifest.capture['image_helper'] = [ordered]@{
+        protocol_version=1;sha256=('A' * 64);admitted=$true;cleanup_complete=$true
+        client_failure=0;helper_exit=0;helper_failure=0
+    }
+}
 
 function Set-FrameFixture([string]$Classification, [byte[]]$Pixels) {
     if ($Pixels.Length -ne 8) { throw 'Frame fixture requires two BGRA pixels.' }
@@ -101,6 +114,17 @@ try {
     Set-FrameFixture 'nonuniform' ([byte[]](7,12,19,0,7,12,20,255))
     & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
 
+    $liveManifest.capture.frame_signal['freshness']='not-established'
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+    $liveManifest.capture.frame_signal.freshness='fresh'
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'GDI cannot claim fresh pixels'
+    $liveManifest.capture.frame_signal.freshness=$true
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'boolean freshness is not a provenance claim'
+    $liveManifest.capture.frame_signal.freshness='not-established'
+
     $liveManifest.capture.frame_signal.Remove('height');Write-Json (Join-Path $live 'manifest.json') $liveManifest
     Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'partial frame signal group'
     $liveManifest.capture.frame_signal['height']=1
@@ -136,9 +160,103 @@ try {
     Write-Json (Join-Path $live 'manifest.json') $liveManifest
     Expect-Failure { &$verify -LivePackage $live -CrashPackage $crash -Fixture } 'unsupported bitmap format despite matching artifact hash'
 
+    # WGC is explicitly image-only. Protocol admission does not establish
+    # freshness, game identity, exact timestamp or renderer health.
+    Set-FrameFixture 'nonuniform' ([byte[]](7,12,19,0,7,12,20,255))
+    Set-WgcMetadata
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+    $liveManifest.capture.frame_signal.Remove('freshness')
+    Expect-ManifestFailure 'WGC requires freshness marker'
+    $liveManifest.capture.frame_signal['freshness']='fresh'
+    Expect-ManifestFailure 'WGC cannot claim freshness'
+    $liveManifest.capture.frame_signal.freshness=$false
+    Expect-ManifestFailure 'WGC freshness must be a string'
+    $liveManifest.capture.frame_signal.freshness='not-established'
+    $validHelper = $liveManifest.capture.image_helper
+    $liveManifest.capture.Remove('image_helper')
+    Expect-ManifestFailure 'WGC missing helper metadata'
+    foreach ($badGroup in @($null,'invalid',17,$false,@())) {
+        $liveManifest.capture['image_helper']=$badGroup
+        Expect-ManifestFailure 'WGC helper metadata must be an object'
+    }
+    $liveManifest.capture.image_helper=$validHelper
+    foreach ($field in @('protocol_version','sha256','admitted','cleanup_complete',
+                          'client_failure','helper_exit','helper_failure')) {
+        $saved = $validHelper[$field]
+        $validHelper.Remove($field)
+        Expect-ManifestFailure "WGC missing helper field $field"
+        $validHelper[$field]=$saved
+    }
+    foreach ($case in @(
+        @{Field='protocol_version';Value=0}, @{Field='protocol_version';Value=2},
+        @{Field='protocol_version';Value='1'}, @{Field='protocol_version';Value=1.5},
+        @{Field='sha256';Value=('a' * 64)}, @{Field='sha256';Value=('A' * 63)},
+        @{Field='sha256';Value=(('A' * 64) + "`n")},
+        @{Field='sha256';Value=('G' * 64)}, @{Field='sha256';Value=17},
+        @{Field='sha256';Value=$null}, @{Field='admitted';Value='true'},
+        @{Field='admitted';Value=1}, @{Field='cleanup_complete';Value='true'},
+        @{Field='cleanup_complete';Value=$null},
+        @{Field='client_failure';Value=-1}, @{Field='client_failure';Value=9},
+        @{Field='client_failure';Value='0'}, @{Field='client_failure';Value=$false},
+        @{Field='helper_exit';Value=-1}, @{Field='helper_exit';Value=[long]4294967296},
+        @{Field='helper_exit';Value='0'}, @{Field='helper_exit';Value=0.5},
+        @{Field='helper_failure';Value=-1}, @{Field='helper_failure';Value=7},
+        @{Field='helper_failure';Value='0'}, @{Field='helper_failure';Value=$null},
+        @{Field='cleanup_complete';Value=$false}, @{Field='client_failure';Value=1},
+        @{Field='helper_exit';Value=1}, @{Field='helper_failure';Value=1}
+    )) {
+        $saved=$validHelper[$case.Field]
+        $validHelper[$case.Field]=$case.Value
+        Expect-ManifestFailure "WGC malformed or contradictory helper field $($case.Field)"
+        $validHelper[$case.Field]=$saved
+    }
+    $validHelper.admitted=$false
+    Expect-ManifestFailure 'WGC rejected admission cannot report client success'
+    $validHelper.client_failure=6
+    Expect-ManifestFailure 'WGC rejected admission cannot publish a frame'
+    $validHelper.admitted=$true;$validHelper.client_failure=0
+    $liveManifest.capture.frame_signal.source='win32-client-bitblt'
+    Expect-ManifestFailure 'BitBlt cannot carry WGC helper metadata'
+    $liveManifest.capture.frame_signal.source='unexpected-source'
+    Expect-ManifestFailure 'helper metadata cannot authorize unknown capture source'
+    $validSignal=$liveManifest.capture.frame_signal
+    $liveManifest.capture.Remove('frame_signal')
+    Expect-ManifestFailure 'helper metadata requires explicit frame source'
+    $liveManifest.capture['frame_signal']=$validSignal
+    $validSignal.source='win32-client-wgc-image-only'
+
+    # Successful helper admission can precede a BMP write failure. There must
+    # then be neither a frame artifact nor nonzero classified dimensions.
     Remove-Item -LiteralPath $framePath
     $liveManifest.artifacts=@($liveManifest.artifacts | Where-Object name -CNE 'frame.bmp')
     $liveManifest.capture.frame=$false
+    $validSignal.classification='unavailable';$validSignal.width=0;$validSignal.height=0
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+    $validHelper.admitted=$false;$validHelper.client_failure=8
+    $validHelper.cleanup_complete=$false;$validHelper.helper_exit=[long]4294967295
+    $validHelper.helper_failure=6
+    Write-Json (Join-Path $live 'manifest.json') $liveManifest
+    & $verify -LivePackage $live -CrashPackage $crash -Fixture | Out-Null;$positive++
+    $validHelper.client_failure=0
+    Expect-ManifestFailure 'rejected no-frame WGC still needs client failure'
+    $validHelper.client_failure=8
+    $validSignal.classification='nonuniform';$validSignal.width=2;$validSignal.height=1
+    Expect-ManifestFailure 'rejected WGC cannot carry classified image dimensions'
+    $validSignal.classification='unavailable';$validSignal.width=0;$validSignal.height=0
+    # Artifact truth is independent of the boolean metadata assertion.
+    Set-FrameFixture 'nonuniform' ([byte[]](7,12,19,0,7,12,20,255))
+    Set-WgcMetadata
+    $liveManifest.capture.image_helper.admitted=$false
+    $liveManifest.capture.image_helper.client_failure=8
+    $liveManifest.capture.frame=$false
+    $liveManifest.capture.frame_signal.classification='unavailable'
+    $liveManifest.capture.frame_signal.width=0;$liveManifest.capture.frame_signal.height=0
+    Expect-ManifestFailure 'rejected WGC cannot smuggle a listed frame artifact'
+    Remove-Item -LiteralPath $framePath
+    $liveManifest.artifacts=@($liveManifest.artifacts | Where-Object name -CNE 'frame.bmp')
+    $liveManifest.capture.Remove('image_helper')
     $liveManifest.capture.Remove('frame_signal')
     Write-Json (Join-Path $live 'manifest.json') $liveManifest
 
@@ -167,7 +285,7 @@ try {
     $source = [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_app.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_diagnostics.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_native_crash_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'src/mcla_crash_handler_win.cpp')) + [IO.File]::ReadAllText((Join-Path $repo 'CMakeLists.txt'))
     foreach($needle in @('bind_mcla_debug_snapshot','"F10"','QueueDiagnosticSnapshot("f10")','mcla_diagnostics_snapshot_probe','mcla_native_crash_probe','mcla_native_crash_post_setup_probe','mcla_crash_reporter_dialog','MessageBoxW','RefreshCrashHandlers','live_completed_sequence','PROC_THREAD_ATTRIBUTE_HANDLE_LIST','EXTENDED_STARTUPINFO_PRESENT','rotating_file_sink_mt','kMaxSaveEntries','kMaxLiveDumpBytes','kMaxCrashDumpBytes','WriteTextAtomic','snapshot worker failed','CaptureWindowFrame','GPU readback/fence wait','MiniDumpWriteDump','SetUnhandledExceptionFilter','std::set_terminate','SIGABRT','CREATE_NO_WINDOW','MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules','automatic_upload','package_safe_to_share','save-private','save-files-private.json','runtime-journal-private.log','"frame.bmp", false','FILE_ATTRIBUTE_REPARSE_POINT','if (!WriteText(partial / "manifest.json", manifest.str()))','add_executable(mcla_crash_handler WIN32','GetThreadTimes','GetThreadDescription','graphics_guest_frames_opened','NativeThreadSample')) { if(-not$source.Contains($needle)){throw "Diagnostic source contract missing: $needle"} }
     foreach($forbidden in @('MiniDumpWithFullMemory |','MiniDumpWithHandleData |','MiniDumpWithPrivateReadWriteMemory |','basic_file_sink_mt')) { if($source.Contains($forbidden)){throw "Forbidden diagnostic mode found: $forbidden"} }
-    foreach($needle in @('F10: RECORDING...','F10: READY','F10: BUSY','F10: FAILED','snapshot_status() const','SnapshotStatus::kCapturing')) {
+    foreach($needle in @('F10: RECORDING...','F10: PACKAGE READY (IMAGE UNVERIFIED)','F10: BUSY','F10: FAILED','snapshot_status() const','SnapshotStatus::kCapturing','not-established','diagnostic_hotkey_.Request(')) {
         if(-not$source.Contains($needle)){throw "Diagnostic status overlay contract missing: $needle"}
     }
     foreach($needle in @('void ShowCapture()', 'SetVisible(false)', 'SetVisible(true)',
@@ -223,7 +341,8 @@ try {
         if (-not $writer.Contains(('<< ", \"{0}\": " << runtime.graphics_{0}' -f $field))) { throw "Missing detail JSON field: $field" }
     }
     $frameGuards=@('FrameRgbClassName(frame.signal.classification)',
-        'win32-client-bitblt','MeasureBgraFrame(pixels, width, height, width * 4)',
+        'win32-client-bitblt','win32-client-wgc-image-only','MeasureBgraFrame(',
+        'image_helper','protocol_version','cleanup_complete','client_failure','helper_exit','helper_failure',
         'add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL','MCLA_BUILD_DIAGNOSTIC_TESTS')
     foreach($needle in $frameGuards){if(-not$source.Contains($needle)){throw "Missing frame source/signal contract: $needle"}}
     $processGuards=@('GetProcessTimes(GetCurrentProcess()',

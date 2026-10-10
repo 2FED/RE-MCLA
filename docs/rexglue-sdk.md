@@ -8,12 +8,25 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
+The current source pin is locally tagged v0.20.0.0; the commit/tag are not yet
+pushed or available as a public release. Its isolated build and install at
+`private/sdk20install-unpublished` passed. The fresh WGC-enabled host build at
+`out/build/m7-final-sdk20` also passed all 82 build actions; neither compilation
+nor SDK test success promotes new binaries or establishes physical gameplay acceptance.
+
+The accepted October 10 p1 candidate remains the separately staged hybrid:
+host82A69B5E, runtime542DD347 and GPU E2EA29B7 are unchanged. Its original
+`out/install/win-amd64-profile-20261010` prefix replaced only the runtime
+DLL/import library/profile header, retaining the accepted GPU and Tracy binaries.
+Name/progress reload and actual F10 now have accepted owner returns. Keep their
+artifact identities separate from v0.20.0.0; see [profile rename evidence](evidence/M7-profile-rename-20261010.md).
+
 - Repository: `https://github.com/2FED/rexglue-sdk.git`
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Project release tag: `v0.19.0.0`
-- Immutable project commit: `c2e67161f1207ddcee609507c399efe7a1981b72`
+- Local project tag, publication pending: `v0.20.0.0`
+- Immutable project commit: `5dd58f894bf34b9ea85e59d3903c7f0e8044d853`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
 
@@ -290,7 +303,7 @@ full all-target RelWithDebInfo/Release pass: 1,845 executed, four known skips
 CMake configure before rebuilding/installing: tags alone do not invalidate
 cached package-version metadata. Exact installed metadata is a release gate.
 
-Current v0.19.0.0 adds safe-disarm-gap and metadata-lock-miss counters with no
+Preceding v0.19.0.0 adds safe-disarm-gap and metadata-lock-miss counters with no
 native protection/coherency policy change. Independent review caught and
 corrected new unsynchronized metadata reads before deployment: classification
 now tries the heap mutex nonblocking after callbacks, with exact legacy
@@ -299,7 +312,23 @@ watched-only fallback and explicit incompleteness on contention. Eleven cases /
 four known skips (1,860 registered). Public API floor0.19.0; no guest codegen
 change. Physical results and limits: [disarm fragmentation](evidence/M7-016-disarm-fragmentation.md).
 
-After cloning MCLA-R, initialize the pinned graph with:
+Current v0.20.0.0 separates the local display name from its stable storage key;
+the changed public constructor ABI raises the API floor to 0.20.0. The isolated
+source at `private/sdk20s` excludes unrelated renderer work. Windows lacked
+file-symlink privilege, so 15 libmspack file symlinks were materialized from their
+targets in that isolated dependency checkout; no other source changes were
+introduced there. This is a recorded checkout accommodation, not a new dependency
+revision or a claim that the materialized dependency worktree is Git-clean.
+
+Tagged-source tests pass 401 unit cases/3364 assertions across 41 suites, with four
+known skips, and 1462 PPC cases/5753 assertions. Full SDK build/install to
+`private/sdk20install-unpublished` passes. These results do not turn the earlier
+monolithic test-process collision into a PASS or relabel p1's tested runtime.
+Use the explicit isolated prefix in [the build recipe](build.md) until the
+default install has separately been updated and verified.
+
+After the commit/tag and parent gitlink are published, a fresh clone can
+initialize the pinned graph with:
 
 ```powershell
 git submodule sync --recursive
@@ -310,19 +339,19 @@ Verify the root pin and recursive cleanliness with:
 
 ```powershell
 git -C third_party/rexglue-sdk rev-parse HEAD
-git -C third_party/rexglue-sdk rev-list -n 1 v0.19.0.0
+git -C third_party/rexglue-sdk rev-list -n 1 v0.20.0.0
 git submodule status --recursive
 git -C third_party/rexglue-sdk status --short --ignore-submodules=none
 ```
 
-The first two commands must return `c2e67161f1207ddcee609507c399efe7a1981b72`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict.
+The first two commands must return `5dd58f894bf34b9ea85e59d3903c7f0e8044d853`. The upstream base remains available as `refs/tags/v0.9.0` at `3eb9b511b4140d2769e27be63eae57d41bfa2afa`. Every `git submodule status --recursive` line must begin with one space: `-` means uninitialized, `+` means a commit mismatch, and `U` means a merge conflict. Source changes must be reviewed separately; matching submodule commits alone do not prove clean worktrees. Do not rebuild the original checkout's unrelated graphics experiments into the accepted profile integration.
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10; the root line is the reviewed v0.19.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10 and remain unchanged; the root line is the reviewed, locally tagged v0.20.0.0 project-fork commit:
 
 ```text
-c2e67161f1207ddcee609507c399efe7a1981b72 third_party/rexglue-sdk
+5dd58f894bf34b9ea85e59d3903c7f0e8044d853 third_party/rexglue-sdk
 0604b464c7cb4ebc94940cf1f324a3b26b87717c third_party/rexglue-sdk/thirdparty/FFmpeg
 88abf9bf325c798c33f54f6b9220ef885b267f4f third_party/rexglue-sdk/thirdparty/catch2
 bfffd37e1f804ca4fae1caae106935791696b6a9 third_party/rexglue-sdk/thirdparty/cli11

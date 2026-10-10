@@ -9,7 +9,48 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(MCLA_BUILD_DIAGNOSTIC_TESTS "Expose nonshipping pure diagnostic tests" OFF)
+option(MCLA_BUILD_IMAGE_CAPTURE_TESTS "Expose experimental nonshipping image helper/client" OFF)
+option(MCLA_EXPERIMENTAL_F10_WGC "Private Windows F10 image-only WGC candidate (unaccepted)" OFF)
+if(MCLA_EXPERIMENTAL_F10_WGC AND NOT WIN32)
+    message(FATAL_ERROR "Experimental F10 WGC is Windows-only")
+endif()
+if((MCLA_BUILD_IMAGE_CAPTURE_TESTS OR MCLA_EXPERIMENTAL_F10_WGC) AND WIN32)
+    set(MCLA_CPPWINRT_INCLUDE_DIR "" CACHE PATH "Windows SDK cppwinrt include directory")
+    if(NOT EXISTS "${MCLA_CPPWINRT_INCLUDE_DIR}/winrt/Windows.Graphics.Capture.h")
+        message(FATAL_ERROR "Set MCLA_CPPWINRT_INCLUDE_DIR to the installed Windows SDK cppwinrt directory")
+    endif()
+    add_executable(mcla_diagnostic_image_helper WIN32 EXCLUDE_FROM_ALL
+        src/mcla_diagnostic_image_helper_win.cpp)
+    target_include_directories(mcla_diagnostic_image_helper SYSTEM PRIVATE "${MCLA_CPPWINRT_INCLUDE_DIR}")
+    target_link_libraries(mcla_diagnostic_image_helper PRIVATE windowsapp d3d11 dxgi dwmapi user32)
+    target_link_options(mcla_diagnostic_image_helper PRIVATE "LINKER:/ENTRY:wmainCRTStartup")
+    add_library(mcla_diagnostic_image_client STATIC EXCLUDE_FROM_ALL
+        src/mcla_diagnostic_image_client_win.cpp)
+    target_link_libraries(mcla_diagnostic_image_client PRIVATE dwmapi user32 bcrypt)
+    add_executable(mcla_diagnostic_image_fake_helper EXCLUDE_FROM_ALL
+        tests/mcla_diagnostic_image_fake_helper.cpp)
+    target_include_directories(mcla_diagnostic_image_fake_helper PRIVATE src)
+    target_link_options(mcla_diagnostic_image_fake_helper PRIVATE "LINKER:/ENTRY:wmainCRTStartup")
+    add_executable(mcla_diagnostic_image_client_test EXCLUDE_FROM_ALL
+        tests/mcla_diagnostic_image_client_test.cpp src/mcla_diagnostic_image_client_win.cpp)
+    target_include_directories(mcla_diagnostic_image_client_test PRIVATE src)
+    target_compile_definitions(mcla_diagnostic_image_client_test PRIVATE MCLA_IMAGE_CLIENT_TEST_SEAM=1)
+    target_link_libraries(mcla_diagnostic_image_client_test PRIVATE dwmapi user32 bcrypt)
+    add_executable(mcla_diagnostic_image_fixture EXCLUDE_FROM_ALL
+        tests/mcla_diagnostic_image_fixture_win.cpp)
+    target_include_directories(mcla_diagnostic_image_fixture PRIVATE src)
+    target_link_options(mcla_diagnostic_image_fixture PRIVATE "LINKER:/ENTRY:wmainCRTStartup")
+    target_link_libraries(mcla_diagnostic_image_fixture PRIVATE
+        mcla_diagnostic_image_client dwmapi user32 gdi32)
+endif()
 if(MCLA_BUILD_DIAGNOSTIC_TESTS)
+    add_executable(mcla_diagnostic_image_protocol_test EXCLUDE_FROM_ALL
+        tests/mcla_diagnostic_image_protocol_test.cpp)
+    target_include_directories(mcla_diagnostic_image_protocol_test PRIVATE src)
+    add_executable(mcla_diagnostic_hotkey_test EXCLUDE_FROM_ALL
+        tests/mcla_diagnostic_hotkey_test.cpp)
+    target_include_directories(mcla_diagnostic_hotkey_test PRIVATE src)
+    target_compile_features(mcla_diagnostic_hotkey_test PRIVATE cxx_std_23)
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -18,6 +59,15 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_portable_path_policy_test.cpp)
     target_include_directories(mcla_portable_path_policy_test PRIVATE src)
     target_compile_features(mcla_portable_path_policy_test PRIVATE cxx_std_23)
+    add_executable(mcla_portable_adapter_policy_test EXCLUDE_FROM_ALL
+        tests/mcla_portable_adapter_policy_test.cpp)
+    target_include_directories(mcla_portable_adapter_policy_test PRIVATE src)
+    target_compile_features(mcla_portable_adapter_policy_test PRIVATE cxx_std_23)
+    if(WIN32)
+        add_executable(mcla_portable_child_fixture EXCLUDE_FROM_ALL
+            tests/mcla_portable_child_fixture_win.cpp)
+        target_compile_features(mcla_portable_child_fixture PRIVATE cxx_std_23)
+    endif()
     add_executable(mcla_readback_cost_sample_test EXCLUDE_FROM_ALL
         tests/mcla_readback_cost_sample_test.cpp)
     target_include_directories(mcla_readback_cost_sample_test PRIVATE src)
@@ -32,7 +82,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     endif()
 endif()
 
-set(MCLA_REXGLUE_VERSION "0.19.0.0")
+set(MCLA_REXGLUE_VERSION "0.20.0.0")
 if(DEFINED REXSDK_VERSION AND
    NOT REXSDK_VERSION STREQUAL "" AND
    NOT REXSDK_VERSION STREQUAL "${MCLA_REXGLUE_VERSION}")
@@ -44,6 +94,18 @@ set(REXSDK_VERSION "${MCLA_REXGLUE_VERSION}" CACHE STRING
     "Exact ReXGlue SDK version required by MCLA-R")
 
 include(generated/rexglue.cmake)
+
+if(MCLA_BUILD_DIAGNOSTIC_TESTS AND WIN32)
+    add_executable(mcla_frame_audit_rearm_test EXCLUDE_FROM_ALL
+        tests/mcla_frame_audit_rearm_test.cpp)
+    target_include_directories(mcla_frame_audit_rearm_test PRIVATE src)
+    target_link_libraries(mcla_frame_audit_rearm_test PRIVATE rex::runtime)
+    add_custom_command(TARGET mcla_frame_audit_rearm_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:mcla_frame_audit_rearm_test>
+            $<TARGET_FILE_DIR:mcla_frame_audit_rearm_test>
+        COMMAND_EXPAND_LISTS)
+endif()
 
 if(NOT DEFINED REXGLUE_ENTRYPOINT_GENERATED_SOURCES)
     message(STATUS
@@ -113,6 +175,21 @@ endif()
 
 rexglue_setup_target(mcla GPU_PLUGINS xenos)
 target_compile_definitions(mcla PRIVATE MCLA_VERSION="${MCLA_VERSION}")
+if(MCLA_EXPERIMENTAL_F10_WGC)
+    set(MCLA_IMAGE_PIN_HEADER "${CMAKE_CURRENT_BINARY_DIR}/mcla_image_helper_pin.h")
+    add_custom_command(OUTPUT "${MCLA_IMAGE_PIN_HEADER}"
+        COMMAND ${CMAKE_COMMAND}
+            "-DINPUT=$<TARGET_FILE:mcla_diagnostic_image_helper>"
+            "-DOUTPUT=${MCLA_IMAGE_PIN_HEADER}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/write-image-helper-pin.cmake"
+        DEPENDS mcla_diagnostic_image_helper "${CMAKE_CURRENT_SOURCE_DIR}/scripts/write-image-helper-pin.cmake"
+        VERBATIM)
+    target_sources(mcla PRIVATE "${MCLA_IMAGE_PIN_HEADER}")
+    set_source_files_properties(src/mcla_diagnostics.cpp PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}"
+        COMPILE_DEFINITIONS MCLA_EXPERIMENTAL_F10_WGC=1)
+    target_link_libraries(mcla PRIVATE mcla_diagnostic_image_client)
+endif()
 
 if(WIN32)
     target_link_libraries(mcla PRIVATE psapi bcrypt gdi32 user32)
@@ -129,7 +206,7 @@ if(WIN32)
     set_target_properties(mcla_portable_launcher PROPERTIES
         OUTPUT_NAME "Launch-MCLA")
     target_compile_features(mcla_portable_launcher PRIVATE cxx_std_23)
-    target_link_libraries(mcla_portable_launcher PRIVATE bcrypt user32)
+    target_link_libraries(mcla_portable_launcher PRIVATE bcrypt user32 dxgi d3d12)
     add_dependencies(mcla mcla_portable_launcher)
 endif()
 

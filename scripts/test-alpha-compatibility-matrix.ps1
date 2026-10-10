@@ -27,9 +27,35 @@ function Expect-Fail([string]$Name, [scriptblock]$Mutate) {
 }
 
 try {
+    # Exercise the pure register parser with in-memory text; never edit the live doc.
+    $tokens = $null; $parseErrors = $null
+    $verifierAst = [Management.Automation.Language.Parser]::ParseFile($verify, [ref]$tokens, [ref]$parseErrors)
+    if ($parseErrors.Count) { throw 'Verifier source does not parse.' }
+    $registerFunction = @($verifierAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Get-CurrentKnownIssueRegister'}, $true))
+    if ($registerFunction.Count -ne 1) { throw 'Expected one pure known-issue register parser.' }
+    . ([scriptblock]::Create($registerFunction[0].Extent.Text))
+    $historicalTuples = @((Clone-Matrix).known_issue_inventory | ForEach-Object { '{0}|{1}|{2}' -f $_.id,$_.severity,$_.status })
+    $registerText = (@($historicalTuples | ForEach-Object { '| ' + $_.Replace('|',' | ') + ' | description | workaround | target |' }) -join "`n") + "`n"
+    function Expect-RegisterFailure([string]$Name, [string]$Text, [string]$ExpectedError) {
+        $failure = $null
+        try { Get-CurrentKnownIssueRegister $Text $historicalTuples | Out-Null } catch { $failure = $_.Exception.Message }
+        if (-not $failure -or $failure -notmatch $ExpectedError) { throw "Register negative '$Name' failed: $failure" }
+        $script:negative++
+    }
+
     $positive = & $verify
-    if (-not $positive.Passed -or $positive.CompatibilityRows -ne 13 -or $positive.KnownIssues -ne 27) { throw 'Positive matrix verification failed.' }
+    if (-not $positive.Passed -or $positive.CompatibilityRows -ne 13 -or $positive.KnownIssues -ne 27 -or
+        $positive.CurrentKnownIssues -lt 27 -or $positive.AdditionalCurrentIssuesClaimedCovered -ne $false) { throw 'Positive matrix verification failed.' }
     $negative = 0
+    $reorderedRegister = "| KI-028 | S1 | Contained; physical reload pending | extra | extra | extra |`n" +
+        $registerText.Replace('| KI-001 | S1 | Open |','| KI-001 | S1 | Bounded clean-start route PASS; rename pending |')
+    if ((Get-CurrentKnownIssueRegister $reorderedRegister $historicalTuples).Count -ne 28) { throw 'Later reordered register with changed status was rejected.' }
+    Expect-RegisterFailure unknown-status ($registerText.Replace('| Open |','| Invented |')) 'status is not recognized'
+    Expect-RegisterFailure missing-id ([regex]::Replace($registerText,'(?m)^\| KI-010[^\r\n]*\r?\n','')) 'missing historical IDs'
+    Expect-RegisterFailure duplicate-id ($registerText + "| KI-027 | S2 | Open | duplicate | duplicate | duplicate |`n") 'Duplicate current'
+    Expect-RegisterFailure gapped-id ($registerText.Replace('KI-027','KI-028')) 'not complete and sequential'
+    Expect-RegisterFailure invalid-severity ($registerText.Replace('| KI-001 | S1 |','| KI-001 | S9 |')) 'ID or severity is invalid'
+    Expect-RegisterFailure changed-historical-severity ($registerText.Replace('| KI-001 | S1 |','| KI-001 | S2 |')) 'historical ID or severity drifted'
     Expect-Fail bad-schema { param($m) $m.schema = 'bad' }
     Expect-Fail bad-task { param($m) $m.task = 'M6-015' }
     Expect-Fail bad-decision { param($m) $m.decision = 'unbounded' }
@@ -55,13 +81,16 @@ try {
     Expect-Fail missing-evidence-file { param($m) $m.rows[0].evidence = @('docs/evidence/does-not-exist.md') }
     Expect-Fail missing-limitation { param($m) $m.rows[0].limitations = @() }
     Expect-Fail missing-known-issue { param($m) $m.known_issue_inventory = @($m.known_issue_inventory | Select-Object -First 22) }
+    Expect-Fail extra-historical-issue { param($m) $m.known_issue_inventory = @($m.known_issue_inventory) + [pscustomobject]@{id='KI-028';severity='S1';status='Contained'} }
+    Expect-Fail changed-historical-id { param($m) $m.known_issue_inventory[0].id = 'KI-031' }
+    Expect-Fail changed-historical-status { param($m) $m.known_issue_inventory[0].status = 'Closed' }
     Expect-Fail bad-known-severity { param($m) $m.known_issue_inventory[12].severity = 'S0' }
     Expect-Fail bad-known-status { param($m) $m.known_issue_inventory[17].status = 'Open' }
     Expect-Fail broad-host-claim { param($m) $m.claims.single_reference_host_only = $false }
     Expect-Fail alternate-gpu-claim { param($m) $m.claims.alternate_gpu_verified = $true }
     Expect-Fail campaign-claim { param($m) $m.claims.full_campaign_claim = $true }
     Expect-Fail soak-complete-claim { param($m) $m.claims.current_five_stage_soak_complete = $true }
-    [pscustomobject]@{ PositiveFixtures = 1; FailClosedNegatives = $negative; CompatibilityRows = 13; KnownIssues = 27; Passed = $true }
+    [pscustomobject]@{ PositiveFixtures = 2; FailClosedNegatives = $negative; CompatibilityRows = 13; KnownIssues = 27; CurrentKnownIssues = $positive.CurrentKnownIssues; AdditionalCurrentIssuesClaimedCovered = $false; Passed = $true }
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force }

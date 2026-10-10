@@ -118,7 +118,7 @@ protected:
       color = ImVec4(0.30f, 0.86f, 1.0f, 1.0f);
     } else if (now < result_until_ &&
                status == mcla::diagnostics::SnapshotStatus::kComplete) {
-      text = "F10: READY";
+      text = "F10: PACKAGE READY (IMAGE UNVERIFIED)";
       color = ImVec4(0.35f, 1.0f, 0.45f, 1.0f);
     } else if (now < result_until_ &&
                status == mcla::diagnostics::SnapshotStatus::kFailed) {
@@ -895,6 +895,12 @@ REXCVAR_DEFINE_BOOL(
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(
+    mcla_readback_unpaused_window, false, "MCLA Diagnostics",
+    "Add a fixed 20-second neutral gameplay window before the readback-cost "
+    "pause; requires mcla_readback_cost_probe")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
     mcla_rendering_smoke_probe, false, "MCLA",
     "Capture bounded saved-gameplay world, street, and particle frames")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -1046,14 +1052,15 @@ void MclaApp::OnPostInitLogging() {
       rex::ui::RegisterBind(
           "bind_mcla_debug_snapshot", "F10",
           "Capture an MCLA-R live diagnostic package", [this]() {
-            if (!diagnostic_performance_audit_requested_) {
-              const bool armed = rex::perf::ArmFrameAuditForDiagnostics();
-              diagnostic_performance_audit_requested_ = armed;
+            const auto request = diagnostic_hotkey_.Request(
+                [this]() { return QueueDiagnosticSnapshot("f10"); },
+                []() { return rex::perf::ArmFrameAuditForDiagnostics(); });
+            if (request.audit_attempted) {
               MCLA_APP_INFO("MCLA diagnostics: F10 performance audit "
                             "armed={}",
-                            armed ? 1 : 0);
+                            request.audit_armed ? 1 : 0);
             }
-            const bool queued = QueueDiagnosticSnapshot("f10");
+            const bool queued = request.queued;
             if (diagnostic_status_dialog_) {
               auto *dialog = static_cast<DiagnosticStatusDialog *>(
                   diagnostic_status_dialog_.get());
@@ -1895,8 +1902,67 @@ bool MclaApp::RunReadbackCostProbe(std::stop_token stop_token) {
       !SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() + 45s) ||
       !driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_START, 500) ||
       !SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() + 60s) ||
-      !capture("gameplay.bmp", 10s) ||
-      !driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_START, 501) ||
+      !capture("gameplay.bmp", 10s)) {
+    return false;
+  }
+  if (REXCVAR_GET(mcla_readback_unpaused_window)) {
+    if (!driver->ReleaseGameplayGamepad(stop_token, 502) ||
+        !capture("unpaused-before.bmp", 10s)) {
+      return false;
+    }
+    MCLA_APP_INFO("MCLA_READBACK_UNPAUSED_PHASE v=1 phase=begin "
+                  "sample_seconds=20 diagnostic_only=1 probe_input=neutral "
+                  "visual_validation_required=1");
+    rex::FlushLogging();
+    // The probe does no input, capture, log or file I/O during this wait.
+    // Neutral probe input does not prove a stationary or unpaused guest scene.
+    const auto unpaused_begin_time = std::chrono::steady_clock::now();
+    const auto unpaused_begin = CaptureDiagnosticState();
+    if (!SleepUntilOrStop(stop_token, unpaused_begin_time + 20s)) {
+      return false;
+    }
+    const auto unpaused_end = CaptureDiagnosticState();
+    const auto unpaused_end_time = std::chrono::steady_clock::now();
+    if (rex::cvar::GetFlagByName("readback_resolve") != mode ||
+        !unpaused_begin.runtime_available || !unpaused_end.runtime_available ||
+        unpaused_begin.graphics_backend != unpaused_end.graphics_backend ||
+        unpaused_end.guest_output_sequence <=
+            unpaused_begin.guest_output_sequence ||
+        !capture("unpaused-after.bmp", 10s)) {
+      return false;
+    }
+    const auto unpaused_micros = [](auto time) {
+      return static_cast<uint64_t>(
+          std::chrono::duration_cast<std::chrono::microseconds>(
+              time.time_since_epoch()).count());
+    };
+    const auto unpaused_partial = output / "unpaused-samples.jsonl.partial";
+    std::ofstream unpaused_stream(unpaused_partial,
+                                 std::ios::binary | std::ios::trunc);
+    if (!unpaused_stream ||
+        !mcla::diagnostics::WriteReadbackCostSample(
+            unpaused_stream, "begin", mode,
+            unpaused_micros(unpaused_begin_time), unpaused_begin) ||
+        !mcla::diagnostics::WriteReadbackCostSample(
+            unpaused_stream, "end", mode,
+            unpaused_micros(unpaused_end_time), unpaused_end)) {
+      return false;
+    }
+    unpaused_stream.close();
+    if (!unpaused_stream) {
+      return false;
+    }
+    std::filesystem::rename(unpaused_partial, output / "unpaused-samples.jsonl",
+                            error);
+    if (error) {
+      return false;
+    }
+    MCLA_APP_INFO("MCLA_READBACK_UNPAUSED_PHASE v=1 phase=end "
+                  "samples=unpaused-samples.jsonl diagnostic_only=1 "
+                  "visual_validation_required=1");
+    rex::FlushLogging();
+  }
+  if (!driver->Pulse(stop_token, rex::input::X_INPUT_GAMEPAD_START, 501) ||
       !SleepUntilOrStop(stop_token, std::chrono::steady_clock::now() + 20s) ||
       !capture("pause-before.bmp", 10s)) {
     return false;

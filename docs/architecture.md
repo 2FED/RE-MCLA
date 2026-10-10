@@ -4,9 +4,27 @@ Owner: MCLA-R maintainers
 
 Purpose: describe the implemented host/runtime architecture and the boundaries between generated guest code, ReXGlue, and MCLA-R-owned compatibility code.
 
-Current state: the canonical ReXGlue v0.19.0.0 `mcla` application consumes the ignored generated corpus and produces a native Windows executable plus a separate local crash helper. Crash instrumentation expands the current corpus to 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic and native crash paths, visible F10 live-snapshot status, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, bounded title force feedback, and runtime fullscreen shortcuts are verified independently. Explicit F10 captures now include monotonic active-backend stage counters and native-thread CPU samples without continuous file I/O. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 accepts retained 7,202-second frontend evidence plus one current-artifact 3,600-second mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities remain explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, KI-026 Race Back camera restoration, and KI-027 Proton performance remain open and carry into M7 without invalidating the bounded M6 long-session result.
+Current source integration pins ReXGlue v0.20.0.0 at
+`5dd58f894bf34b9ea85e59d3903c7f0e8044d853`. The tag/commit are local and not yet
+pushed. Display-name/storage-key separation changes the public constructor ABI,
+so the SDK API floor is 0.20.0. The isolated SDK build/install and tagged-source
+tests pass; the fresh WGC-enabled host build passes 82/82 build actions and no
+new runtime is promoted.
+Use the explicit `private/sdk20install-unpublished` prefix in the
+[build recipe](build.md), not the original checkout's unrelated graphics work.
+The accepted p1 host82A69B5E/runtime542DD347/GPU E2EA29B7 remain unchanged;
+[profile evidence](evidence/M7-profile-rename-20261010.md) owns their physical
+name/progress/F10 acceptance. Source version changes do not relabel those binaries.
+
+Established architecture and historical evidence: the ReXGlue-based `mcla` application consumes the ignored generated corpus and produces a native Windows executable plus a separate local crash helper. The M7-016 SDK0.19.0.0 checkpoint had 65 generated translation units and 30,034 registered guest functions; the project-owned host lifecycle, loaded-image probes, privacy-safe synthetic and native crash paths, visible F10 live-snapshot status, guest-frame presentation and timing telemetry, scoped frontend render-path audit, reached single-local-user XAM contract, locale/path boundary, explicit network-disabled offline-service boundary, privacy-safe audio event windows and long-session recovery, reached unsupported-operation coverage, stable latest-active routing across virtual controller mirrors, model-agnostic wheel input, bounded title force feedback, and runtime fullscreen shortcuts are verified independently. Explicit F10 captures now include monotonic active-backend stage counters and native-thread CPU samples without continuous file I/O. Photo Mode readback and the delivery-transition callable boundary are physically closed. M6-014 accepts retained 7,202-second frontend evidence plus one current-artifact 3,600-second mixed-gameplay process rather than the legacy five-stage operator marathon; the two artifact identities remain explicit. KI-019 neon projection geometry, KI-022 wheel-centering stability, KI-026 Race Back camera restoration, and KI-027 Proton performance remain open and carry into M7 without invalidating the bounded M6 long-session result.
 
 ## Private portable campaign-test boundary
+
+Current scope correction (owner, 2026-10-03): M7 targets representative local
+Windows RTX 5060 compatibility. KI-027/Proton platform follow-ups now belong to
+deferred M8 review; historical M6/M7 architecture evidence above does not change.
+Windows session/save lineage remains an active M7 gate; neither full campaign
+completion nor Deck support is inferred from the scope change.
 
 M7-016 adds a native `Launch-MCLA.exe` beside an owner-private, fingerprinted Windows x64 bundle. The launcher obtains its root from its own executable path, creates only the seven sibling writable roots, takes an exclusive `bundle.lock`, rejects reparse points plus Syncthing conflict/incomplete names, and SHA-256-verifies the exact immutable lock before spawning `bin/mcla.exe`. Absolute game/user/update/cache/metadata arguments are then derived solely from that root; the portable config routes ordinary logs and live/crash diagnostics into sibling folders as well.
 
@@ -65,7 +83,7 @@ distribution model.
 
 Implemented bootstrap boundary:
 
-- `CMakeLists.txt` pins ReXGlue 0.19.0.0, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching dual-backend runtime-loaded Xenos plugin
+- `CMakeLists.txt` pins ReXGlue 0.20.0.0, validates the contained 65-source generated graph, owns the host target, and invokes `rexglue_setup_target(mcla GPU_PLUGINS xenos)` so every configuration stages the matching dual-backend runtime-loaded Xenos plugin
 - `CMakePresets.json` provides the host/architecture/configuration matrix plus deterministic installed-SDK prefixes
 - `mcla_manifest.toml` identifies the private entrypoint and ignored output roots
 - `src/main.cpp` binds the generated module initialization to `MclaApp`

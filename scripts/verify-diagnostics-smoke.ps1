@@ -30,13 +30,25 @@ function Assert-FrameSignal([string]$PackageRoot, $Capture) {
     # Historical packages predate this optional, all-or-nothing group. A frame
     # remains optional; its RGB class never establishes freshness/gameplay health.
     $property = $Capture.PSObject.Properties['frame_signal']
-    if (-not $property) { return }
+    $helperProperty = $Capture.PSObject.Properties['image_helper']
+    if (-not $property) {
+        if ($helperProperty) { throw 'Image helper metadata requires an explicit frame source.' }
+        return
+    }
     $signal = $property.Value
     if ($null -eq $signal) { throw 'Live frame signal group is null.' }
+    # Older packages omit this marker. Presence must never turn GDI success or
+    # RGB diversity into a claim that pixels match the current guest frame.
+    $freshness = $signal.PSObject.Properties['freshness']
+    if ($freshness -and ($freshness.Value -isnot [string] -or
+        $freshness.Value -cne 'not-established')) {
+        throw 'Live frame freshness is not established.'
+    }
     foreach ($name in @('source','classification','width','height')) {
         if (-not $signal.PSObject.Properties[$name]) { throw "Live frame signal field is missing: $name." }
     }
-    if ($signal.source -isnot [string] -or $signal.source -cne 'win32-client-bitblt' -or
+    if ($signal.source -isnot [string] -or
+        $signal.source -cnotin @('win32-client-bitblt','win32-client-wgc-image-only') -or
         $signal.classification -isnot [string] -or
         $signal.classification -cnotin @('unavailable','all-black','uniform-nonblack','nonuniform')) {
         throw 'Live frame signal source or RGB classification is invalid.'
@@ -48,6 +60,45 @@ function Assert-FrameSignal([string]$PackageRoot, $Capture) {
         }
     }
     if ($Capture.frame -isnot [bool]) { throw 'Live frame presence must be a boolean.' }
+    if ($signal.source -ceq 'win32-client-wgc-image-only') {
+        if (-not $freshness) { throw 'WGC image-only capture requires explicit unestablished freshness.' }
+        if (-not $helperProperty -or $helperProperty.Value -isnot [pscustomobject]) {
+            throw 'WGC image-only capture requires an image helper object.'
+        }
+        $helper = $helperProperty.Value
+        foreach ($name in @('protocol_version','sha256','admitted','cleanup_complete',
+                             'client_failure','helper_exit','helper_failure')) {
+            if (-not $helper.PSObject.Properties[$name]) { throw "Image helper field is missing: $name." }
+        }
+        foreach ($name in @('protocol_version','client_failure','helper_exit','helper_failure')) {
+            $value = $helper.$name
+            $maximum = switch ($name) {
+                'protocol_version' { 1 }
+                'client_failure' { 8 }
+                'helper_exit' { [long]4294967295 }
+                'helper_failure' { 6 }
+            }
+            if (($value -isnot [int] -and $value -isnot [long]) -or
+                $value -lt 0 -or $value -gt $maximum) {
+                throw "Image helper integer field is invalid: $name."
+            }
+        }
+        if ($helper.protocol_version -ne 1 -or $helper.sha256 -isnot [string] -or
+            $helper.sha256 -cnotmatch '\A[0-9A-F]{64}\z' -or
+            $helper.admitted -isnot [bool] -or $helper.cleanup_complete -isnot [bool]) {
+            throw 'Image helper version, identity hash or boolean fields are invalid.'
+        }
+        if ($helper.admitted) {
+            if (-not $helper.cleanup_complete -or $helper.client_failure -ne 0 -or
+                $helper.helper_exit -ne 0 -or $helper.helper_failure -ne 0) {
+                throw 'Admitted image helper result reports incomplete cleanup or failure.'
+            }
+        } elseif ($helper.client_failure -eq 0 -or $Capture.frame) {
+            throw 'Rejected image helper result requires a client failure and no frame.'
+        }
+    } elseif ($helperProperty) {
+        throw 'Historical BitBlt capture cannot carry image helper metadata.'
+    }
     if ($signal.classification -ceq 'unavailable') {
         if ($Capture.frame -or $signal.width -ne 0 -or $signal.height -ne 0) {
             throw 'Unavailable live frame signal has pixels or an artifact.'

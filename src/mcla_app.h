@@ -5,6 +5,7 @@
 #pragma once
 
 #include <rex/rex_app.h>
+#include "mcla_diagnostic_hotkey.h"
 
 #include <memory>
 #include <stop_token>
@@ -63,5 +64,5 @@ private:
   std::unique_ptr<mcla::diagnostics::Manager> diagnostics_;
   std::unique_ptr<rex::ui::ImGuiDialog> diagnostic_status_dialog_;
   bool diagnostic_keybind_registered_ = false;
-  bool diagnostic_performance_audit_requested_ = false;
+  mcla::diagnostics::DiagnosticHotkey diagnostic_hotkey_;
 };

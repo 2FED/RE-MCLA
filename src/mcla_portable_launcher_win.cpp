@@ -3,6 +3,9 @@
 
 #include <Windows.h>
 #include <bcrypt.h>
+#include <d3d12.h>
+#include <dxgi1_3.h>
+#include <wrl/client.h>
 
 #include <algorithm>
 #include <array>
@@ -22,6 +25,7 @@
 #include <vector>
 
 #include "mcla_portable_path_policy.h"
+#include "mcla_portable_adapter_policy.h"
 
 namespace {
 
@@ -956,8 +960,34 @@ bool RecoverInterruptedSessions(const std::filesystem::path &root,
     std::cout << "Recovered interrupted MCLA session: " << session_id
               << " (save snapshots " << snapshots << ")\n";
   }
-  if (!interrupted.empty()) {
-    PruneDirectories(results, kMaximumCompletedSessions, "session-");
+  return true;
+}
+
+bool HasHistoryCapacity(const std::filesystem::path &root, std::string &error) {
+  // Keep the complete seed-to-tip provenance, including administrative rename
+  // edges. Pruning only sessions can both exceed the reader's combined bound
+  // and remove the seed edge. Require an archived successor before record33.
+  std::error_code ec;
+  size_t records = 0;
+  for (std::filesystem::directory_iterator it(root / L"results", ec), end;
+       !ec && it != end; it.increment(ec)) {
+    const auto name = it->path().filename().wstring();
+    if (name.starts_with(L"session-") || name.starts_with(L"profile-rename-")) {
+      if (HasReparseAttribute(it->path()) || !it->is_directory(ec) || ec) {
+        error = "invalid portable history entry; preserve results for recovery";
+        return false;
+      }
+      if (++records >= kMaximumCompletedSessions) {
+        error = "portable session/profile-rename history is full (32 records); "
+                "preserve this bundle and publish an archived successor before "
+                "playing or renaming again; do not delete history";
+        return false;
+      }
+    }
+  }
+  if (ec) {
+    error = "cannot inspect portable history; preserve results for recovery";
+    return false;
   }
   return true;
 }
@@ -970,32 +1000,269 @@ int Fail(std::string_view message) {
   return 1;
 }
 
+bool EnvironmentVariablePresent(const wchar_t *name) {
+  SetLastError(ERROR_SUCCESS);
+  const DWORD size = GetEnvironmentVariableW(name, nullptr, 0);
+  // Windows lookup is case insensitive. Empty variables and unexpected API
+  // errors also fail closed; never disclose the inherited value.
+  return size != 0 || GetLastError() != ERROR_ENVVAR_NOT_FOUND;
+}
+
+bool WriteProfileName(const std::filesystem::path &path, std::string_view name) {
+  // Exclusive temporary creation prevents following a preexisting file or
+  // hardlink. Rename replaces only the directory entry, never another link's
+  // contents. Keep failed temporary state for explicit recovery.
+  const auto temporary = path.parent_path() / L"local-display-name.partial";
+  Handle file(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr,
+                          CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+  if (!file) {
+    return false;
+  }
+  DWORD written = 0;
+  if (!WriteFile(file.value, name.data(), static_cast<DWORD>(name.size()),
+                 &written, nullptr) || written != name.size() ||
+      !FlushFileBuffers(file.value)) {
+    return false;
+  }
+  file = Handle{};
+  return MoveFileExW(temporary.c_str(), path.c_str(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+}
+
+using ProfileInventory = std::map<std::filesystem::path, std::string>;
+std::optional<ProfileInventory> ProfileInventoryOf(const std::filesystem::path &root) {
+  std::error_code ec;
+  if (!std::filesystem::is_directory(root, ec) || ec || HasReparseAttribute(root)) {
+    return std::nullopt;
+  }
+  ProfileInventory inventory;
+  uint64_t total = 0;
+  for (std::filesystem::recursive_directory_iterator it(root, ec), end;
+       it != end; it.increment(ec)) {
+    if (ec || inventory.size() >= kMaximumSaveEntries || HasReparseAttribute(it->path())) {
+      return std::nullopt;
+    }
+    const auto relative = it->path().lexically_relative(root);
+    if (!SafeRelative(relative)) {
+      return std::nullopt;
+    }
+    if (it->is_directory(ec) && !ec) {
+      inventory.emplace(relative, "directory");
+    } else if (it->is_regular_file(ec) && !ec) {
+      const auto bytes = it->file_size(ec);
+      if (ec || bytes > kMaximumSaveBytes - total) {
+        return std::nullopt;
+      }
+      total += bytes;
+      const auto hash = Sha256(it->path());
+      if (!hash) {
+        return std::nullopt;
+      }
+      inventory.emplace(relative, std::to_string(bytes) + ":" + *hash);
+    } else {
+      return std::nullopt;
+    }
+  }
+  return ec ? std::nullopt : std::optional(std::move(inventory));
+}
+
+bool RenameProfileWithReceipt(const std::filesystem::path &root,
+                              const std::string &bundle_id, size_t verified_files,
+                              std::string_view name, std::string &error) {
+  if (!HasHistoryCapacity(root, error)) {
+    return false;
+  }
+  const auto profile = root / L"user" / L"B13EBABEBABEBABE";
+  const auto before_state = ReadSaveState(root / L"user");
+  const auto before = ProfileInventoryOf(profile);
+  const auto nonempty = [&before](const std::filesystem::path &path) {
+    if (!before) { return false; }
+    const auto found = before->find(path);
+    return found != before->end() && found->second != "directory" &&
+           !found->second.starts_with("0:");
+  };
+  if (!before_state || !before ||
+      !nonempty(L"545407F8/00000001/mc4.sav/mc4.sav") ||
+      !nonempty(L"545407F8/Headers/00000001/mc4.sav.header")) {
+    error = "rename requires a complete existing save/profile; no profile will be seeded";
+    return false;
+  }
+  const std::string id = "profile-rename-" + UtcStamp() + "-" + std::to_string(GetCurrentProcessId());
+  const auto partial = root / L"results" / FromUtf8(id + ".partial");
+  const auto completed = root / L"results" / FromUtf8(id);
+  std::error_code ec;
+  if (!std::filesystem::create_directory(partial, ec) || ec) {
+    error = "cannot exclusively create profile rename journal";
+    return false;
+  }
+  const auto before_copy = partial / L"before" / L"B13EBABEBABEBABE";
+  const auto after_copy = partial / L"after" / L"B13EBABEBABEBABE";
+  if (!CopyProfileTree(profile, before_copy, error) ||
+      ProfileInventoryOf(before_copy) != before || ProfileInventoryOf(profile) != before) {
+    error = "profile changed while preserving pre-rename snapshot; journal retained";
+    return false;
+  }
+  if (!WriteProfileName(profile / L"local-display-name.txt", name)) {
+    error = "profile preference publication failed; journal retained";
+    return false;
+  }
+  const auto after = ProfileInventoryOf(profile);
+  if (!after) {
+    error = "cannot verify renamed profile; journal retained";
+    return false;
+  }
+  auto before_game = *before;
+  auto after_game = *after;
+  before_game.erase(L"local-display-name.txt");
+  after_game.erase(L"local-display-name.txt");
+  if (before_game != after_game ||
+      !CopyProfileTree(profile, after_copy, error) ||
+      ProfileInventoryOf(after_copy) != after || ProfileInventoryOf(profile) != after) {
+    error = "unexpected profile change during rename; journal retained for recovery";
+    return false;
+  }
+  const std::string receipt =
+      "{\"schema\":\"mcla-portable-profile-rename-v1\",\"bundle_id\":\"" +
+      JsonEscape(bundle_id) + "\",\"transition_id\":\"" + id +
+      "\",\"completed_utc\":\"" + UtcStamp() +
+      "\",\"verified_file_count\":" + std::to_string(verified_files) + "}\n";
+  if (!WriteTextAtomic(partial / L"rename.json", receipt) ||
+      !RenameDirectoryAtomic(partial, completed, error)) {
+    error = "cannot publish completed profile rename journal; preserve partial state";
+    return false;
+  }
+  return true;
+}
+
+std::optional<uint32_t> ResolveNamedAdapter(std::wstring_view name,
+                                          std::string &error) {
+  Microsoft::WRL::ComPtr<IDXGIFactory2> factory;
+  if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(factory.GetAddressOf())))) {
+    error = "cannot create DXGI factory for named adapter selection";
+    return std::nullopt;
+  }
+  std::vector<mcla::portable::AdapterCandidate> candidates;
+  // Use the same raw EnumAdapters1 ordinal and FL11_0 capability check as the
+  // SDK provider. Do not compact indices after excluding incapable adapters.
+  for (UINT index = 0; index < 128; ++index) {
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+    const HRESULT result = factory->EnumAdapters1(index, adapter.GetAddressOf());
+    if (result == DXGI_ERROR_NOT_FOUND) {
+      return mcla::portable::SelectExactAdapter(candidates, name, error);
+    }
+    if (FAILED(result)) {
+      error = "DXGI adapter enumeration failed; no partial-list selection";
+      return std::nullopt;
+    }
+    DXGI_ADAPTER_DESC1 description{};
+    if (FAILED(adapter->GetDesc1(&description))) {
+      error = "DXGI adapter description unavailable; no partial-list selection";
+      return std::nullopt;
+    }
+    const bool capable = SUCCEEDED(D3D12CreateDevice(
+        adapter.Get(), D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr));
+    candidates.push_back({index, description.Description, capable});
+  }
+  error = "DXGI adapter enumeration exceeds its bound";
+  return std::nullopt;
+}
+
 } // namespace
 
 int wmain(int argc, wchar_t **argv) {
+  bool adapter_check_requested = false;
+  bool rename_requested = false;
+  for (int index = 1; index < argc; ++index) {
+    adapter_check_requested |=
+        std::wstring_view(argv[index]) == L"--verify-adapter-only";
+    rename_requested |= std::wstring_view(argv[index]).starts_with(L"--set-profile-name=");
+  }
+  const auto argument_fail = [adapter_check_requested, rename_requested](std::string_view message) {
+    if (adapter_check_requested || rename_requested) {
+      std::cerr << "MCLA adapter verification: " << message << '\n';
+      return 1;
+    }
+    return Fail(message);
+  };
   bool verify_only = false;
   bool diagnostics_probe = false;
+  bool verify_adapter_only = false;
   std::optional<std::wstring> gpu_backend;
+  std::optional<std::wstring> adapter_name;
+  std::optional<std::string> requested_profile_name;
   for (int index = 1; index < argc; ++index) {
     const std::wstring_view argument(argv[index]);
-    if (argument == L"--verify-only") {
+    if (argument.starts_with(L"--set-profile-name=")) {
+      const auto value = ToUtf8(argument.substr(std::wstring_view(L"--set-profile-name=").size()));
+      if (requested_profile_name || !mcla::portable::ValidLocalProfileName(value)) {
+        return argument_fail("profile name requires 1-15 ASCII letters, digits, spaces, _ or -; no edge spaces");
+      }
+      requested_profile_name = value;
+    } else if (argument == L"--verify-only") {
       verify_only = true;
     } else if (argument == L"--diagnostics-probe") {
       diagnostics_probe = true;
+    } else if (argument == L"--verify-adapter-only") {
+      if (verify_adapter_only) {
+        return argument_fail("--verify-adapter-only must be specified once");
+      }
+      verify_adapter_only = true;
+    } else if (argument.starts_with(L"--d3d12-adapter-name=")) {
+      const auto value = argument.substr(std::wstring_view(L"--d3d12-adapter-name=").size());
+      if (adapter_name || !mcla::portable::ValidAdapterName(value)) {
+        return argument_fail("--d3d12-adapter-name requires one bounded exact name");
+      }
+      adapter_name = value;
     } else if (argument.starts_with(L"--gpu-backend=")) {
       const std::wstring value(argument.substr(14));
       if ((value != L"any" && value != L"d3d12" && value != L"vulkan") ||
           gpu_backend) {
-        return Fail(
+        return argument_fail(
             "--gpu-backend must be specified once as any, d3d12, or vulkan");
       }
       gpu_backend = value;
     } else {
-      return Fail("unknown launcher argument");
+      return argument_fail("unknown launcher argument");
     }
   }
   if (verify_only && diagnostics_probe) {
-    return Fail("--verify-only and --diagnostics-probe are mutually exclusive");
+    return argument_fail("--verify-only and --diagnostics-probe are mutually exclusive");
+  }
+  if (verify_adapter_only && (verify_only || diagnostics_probe || !adapter_name)) {
+    return argument_fail("--verify-adapter-only requires a name and excludes bundle modes");
+  }
+  if (requested_profile_name && (verify_only || diagnostics_probe || verify_adapter_only || gpu_backend || adapter_name)) {
+    return argument_fail("profile rename is a standalone operation, not a game/verification mode");
+  }
+  if (((gpu_backend || adapter_name) && EnvironmentVariablePresent(L"REX_GPU_BACKEND")) ||
+      (adapter_name && EnvironmentVariablePresent(L"REX_D3D12_ADAPTER"))) {
+    return argument_fail("remove inherited REX_GPU_BACKEND/REX_D3D12_ADAPTER before explicit GPU selection");
+  }
+  if (!verify_adapter_only && EnvironmentVariablePresent(L"REX_LOCAL_USER_DISPLAY_NAME")) {
+    return argument_fail("remove inherited REX_LOCAL_USER_DISPLAY_NAME; use the persistent launcher profile setting");
+  }
+  std::optional<uint32_t> adapter_index;
+  if (adapter_name) {
+    if (!mcla::portable::CompatibleNamedBackend(gpu_backend.value_or(L""))) {
+      return argument_fail("named D3D12 adapter conflicts with requested GPU backend");
+    }
+    gpu_backend = L"d3d12";
+    std::string adapter_error;
+    adapter_index = ResolveNamedAdapter(*adapter_name, adapter_error);
+    if (!adapter_index) {
+      return argument_fail(adapter_error);
+    }
+    std::cout << "Named D3D12 adapter selected: " << ToUtf8(*adapter_name)
+              << " (EnumAdapters1 index " << *adapter_index << ")\n";
+  }
+  if (verify_adapter_only) {
+    // Hardware discovery only: no bundle lock, directory/result/save writes,
+    // host launch or retained D3D device (capability calls use nullptr).
+    std::cout << "{\"schema\":\"mcla-portable-adapter-verification-v1\","
+                 "\"name\":\"" << JsonEscape(ToUtf8(*adapter_name))
+              << "\",\"d3d12_adapter\":" << *adapter_index
+              << ",\"game_launched\":false}\n";
+    return 0;
   }
 
   const auto root = ExecutableRoot();
@@ -1019,7 +1286,7 @@ int wmain(int argc, wchar_t **argv) {
   if (!lock) {
     return Fail(error);
   }
-  if (!ValidateTree(root, error, !verify_only)) {
+  if (!ValidateTree(root, error, !verify_only && !requested_profile_name)) {
     return Fail(error);
   }
   std::cout << "Verifying the portable MCLA-R bundle..." << std::endl;
@@ -1027,9 +1294,50 @@ int wmain(int argc, wchar_t **argv) {
   if (!ParseAndVerifyManifest(root, verified_files, error)) {
     return Fail(error);
   }
+  {
+    const auto config_path = root / L"bin" / L"mcla.toml";
+    const auto config_bytes = std::filesystem::file_size(config_path, ec);
+    if (ec || config_bytes > 1024 * 1024) {
+      return Fail("immutable GPU configuration missing or exceeds bound");
+    }
+    const auto config = ReadText(config_path);
+    if (!config || !mcla::portable::ValidateExplicitGpuConfig(
+                       *config, adapter_name.has_value(), error, true, gpu_backend.has_value())) {
+      return Fail(config ? error : "cannot read immutable GPU configuration");
+    }
+  }
   const auto bundle_id = ReadBundleId(root);
   if (!bundle_id) {
     return Fail("bundle-id.txt is malformed");
+  }
+
+  const auto profile_root = root / L"user" / L"B13EBABEBABEBABE";
+  const auto profile_name_path = profile_root / L"local-display-name.txt";
+  std::string profile_name = "User";
+  const bool has_profile_name = std::filesystem::exists(profile_name_path, ec);
+  if (ec) {
+    return argument_fail("cannot inspect stored profile name");
+  }
+  if (has_profile_name) {
+    const auto bytes = std::filesystem::file_size(profile_name_path, ec);
+    if (ec || bytes < 1 || bytes > 15) {
+      return argument_fail("stored profile name is invalid; preserve it for recovery");
+    }
+    const auto stored = ReadText(profile_name_path);
+    if (!stored || !mcla::portable::ValidLocalProfileName(*stored)) {
+      return argument_fail("stored profile name is invalid; preserve it for recovery");
+    }
+    profile_name = *stored;
+  }
+  if (requested_profile_name) {
+    // No guest, snapshots, recovery or main save mutation. The held bundle lock
+    // excludes another launcher session. Preference belongs to archived XUID tree.
+    if (*requested_profile_name != profile_name &&
+        !RenameProfileWithReceipt(root, *bundle_id, verified_files, *requested_profile_name, error)) {
+      return argument_fail(error);
+    }
+    std::cout << "Local profile name saved; XUID and save paths unchanged. No game launched.\n";
+    return 0;
   }
 
   if (!verify_only) {
@@ -1059,6 +1367,11 @@ int wmain(int argc, wchar_t **argv) {
     return 0;
   }
 
+  if (!HasHistoryCapacity(root, error)) {
+    // A normal, recoverable admission stop, also usable by unattended callers.
+    std::cerr << "MCLA portable launcher: " << error << '\n';
+    return 1;
+  }
   const std::string session_id =
       "session-" + UtcStamp() + "-" + std::to_string(GetCurrentProcessId());
   const auto session_partial =
@@ -1094,6 +1407,10 @@ int wmain(int argc, wchar_t **argv) {
       L"--mnk_mode=false"};
   if (gpu_backend) {
     arguments.push_back(L"--gpu_backend=" + *gpu_backend);
+  }
+  arguments.push_back(L"--local_user_display_name=" + Quote(FromUtf8(profile_name)));
+  if (adapter_index) {
+    arguments.push_back(L"--d3d12_adapter=" + std::to_wstring(*adapter_index));
   }
   if (diagnostics_probe) {
     arguments.push_back(L"--mcla_diagnostics_snapshot_probe=true");
@@ -1192,7 +1509,6 @@ int wmain(int argc, wchar_t **argv) {
   if (!RenameDirectoryAtomic(session_partial, session_completed, error)) {
     return Fail("cannot atomically complete the session directory: " + error);
   }
-  PruneDirectories(root / L"results", kMaximumCompletedSessions, "session-");
   std::cout << "MCLA session complete: " << session_id << " (exit " << exit_code
             << ", save snapshots " << snapshots << ")\n";
   return exit_code == 0 ? 0 : static_cast<int>(exit_code);
