@@ -6,7 +6,39 @@ This file is the authoritative working context and milestone plan for **MCLA-R**
 
 It is written for human contributors and AI agents. Update it whenever architecture, prerequisites, supported platforms, commands, milestone state, risks, or project conventions change materially.
 
-**Start here:** read [docs/current-state.md](docs/current-state.md) for the short current handoff, then the relevant sections below and their linked evidence. [docs/M7-priorities.md](docs/M7-priorities.md) records the 2026-09-04 priority review. This file remains the authoritative milestone ledger; historical checkpoints are not current build instructions. Do not load the entire checkpoint history into every new chat or grow the handoff into a second history log.
+**Start here:** read [docs/current-state.md](docs/current-state.md) for the short current handoff, then the relevant sections below and their linked evidence. [docs/M7-priorities.md](docs/M7-priorities.md) records the current 2026-10-03 owner rescope and execution order. This file remains the authoritative milestone ledger; historical checkpoints are not current build instructions. Do not load the entire checkpoint history into every new chat or grow the handoff into a second history log.
+
+The verified2026-10-02 migration to NoobSaibot and DGX Spark/local-model context
+are in [docs/noobsaibot-handoff.md](docs/noobsaibot-handoff.md). Preserve full dirty
+Git/submodule state and private/generated/build artifacts; a clean clone is not
+the current project. The owner accepts hour-long local inference and authorizes
+all project/private data on their Spark. Historical pilot caps are not permanent
+latency requirements. Only pilot tests/results/context were moved; no PC-local
+model weights or engines. Migration does not close a milestone or prove runtime PASS.
+
+For bounded real routine tasks on Spark, use the reviewed advisory client and
+[worker contract](docs/dgx-spark-worker.md). Explicit packets only; no model-driven
+shell actions, automatic task acceptance or PC-local inference. Primary verifies
+source references/numbers/tests and retains actual mutations and physical gates.
+
+The private Oct2 Windows diagnostic now has a GPU/render-scale/VSync launcher.
+Both exact EXEs pass guest-free D3D12 startup on this laptop's NVIDIA RTX 5060;
+named DXGI selection, settings/backup and concurrent-session checks pass. This
+does not close M8/M9 or promote B256. See
+[Windows GPU launcher evidence](docs/evidence/M8-001-windows-gpu-launcher-20261002.md).
+
+The deferred M8 Deck performance reference remains ABF/AEE/U8/H100/all8. Recent private
+cached-uniform, completion-counter, Zen2-tuning and empty-memexport-query controls
+have not established another meaningful game-rate gain; no candidate was promoted.
+See [GPU control](docs/evidence/M7-016-memexport-empty-query.md) and linked history.
+
+Finite preset4 now supports bounded native/Deck approach tests. External active-output
+observation is verified live; preparation moves invariant file parsing out of the
+measurement interval. Traffic, pursuit and collision differences still limit causal
+comparison. See [moving observation evidence](docs/evidence/M7-016-motion-active-output.md).
+The active next control and exact tested/pending identities are in docs/current-state.md.
+The [two-TU ThinLTO witness](docs/evidence/M7-016-guest-ipo-feasibility.md) did not
+remove the observed calls and failed its zero-import gate; no whole-game LTO build.
 
 Status markers used in this document:
 
@@ -86,7 +118,7 @@ Secondary targets, only after the primary target is stable:
 
 ### 2.3 Recommended technical foundation
 
-- **MCLA-R ReXGlue SDK v0.19.0.0 fork**, pinned to an exact tag and commit over upstream v0.9.0, is the primary runtime and code-generation base.
+- **MCLA-R ReXGlue SDK v0.20.0.0 fork**, pinned to commit5dd58f894bf34b9ea85e59d3903c7f0e8044d853 over upstream v0.9.0, is the current source integration base. The accepted p1 hybrid binaries remain separately pinned; source integration is not automatic runtime promotion.
 - **XenonRecomp** is a reference for PPC translation, function analysis, jump-table handling, and patch techniques, not the primary runtime.
 - **Xenia Canary** is the behavioral oracle for baseline execution, import discovery, graphics comparison, and regression triage.
 
@@ -171,6 +203,12 @@ The source dump must never be uploaded, modified, bundled, or deleted by prepare
 
 ## 4. Current environment
 
+The original ITX11 toolchain list below is historical where versions differ.
+NoobSaibot now has VS BuildTools/Windows SDK, LLVM20.1.8, CMake/Ninja, CDB,
+Java21 and RenderDoc installed. Fresh SDK20 and WGC ON/OFF Release host builds
+pass on this laptop; use the explicit isolated prefix and Developer PowerShell
+recipe in [build.md](docs/build.md). The old default SDK install stays preserved.
+
 Known installed components:
 
 - Visual Studio Build Tools 2022 `17.14`
@@ -182,7 +220,7 @@ Known installed components:
 - Git `2.46.2`
 - Rust/Cargo installed
 - ast-grep `0.45.0`
-- ReXGlue SDK project fork `0.19.0.0` pinned recursively at the immutable commit recorded in `docs/rexglue-sdk.md` (upstream v0.9.0 base)
+- ReXGlue SDK project fork `0.20.0.0` source pin, with a separate verified isolated Release install; original0.19install and accepted p1 hybrid remain distinct (see `docs/rexglue-sdk.md`)
 - XboxDev `extract-xiso` release `build-202505152050`
 - Xenia Canary `canary_experimental@7d8db5a2c`
 - Eclipse Temurin JDK `21.0.12+8`
@@ -191,7 +229,7 @@ Known installed components:
 
 Resolved M2 feasibility questions:
 
-- target-XEX non-force codegen is successful and deterministic; M3-005 preserves the 64-file/128,038,099-byte pre-instrumentation baseline and M3-013 the 67-file/133,908,410-byte crash-instrumented checkpoint. Current SDK 0.19.0.0 regeneration is 67 files / 133,916,451 bytes, 65 C++ sources and 30,034 registered functions; all 67 files remain byte-identical to the 0.18.0.1/0.17.1.0 corpus, including its 13 spin hints (docs/evidence/M7-016-disarm-fragmentation.md).
+- target-XEX non-force codegen is successful and deterministic. M3-005/M3-013 and SDK0.19disarm reports retain historical corpus identities. The M7-012 callback repair produces67files/133916828bytes/65C++sources and30035 mappings; both fresh SDK20 host builds verify65objects against manifest34505E79. [Callback evidence](docs/evidence/M7-pinkslip-crash-20261010.md), [integration](docs/evidence/M7-002-sdk-profile-integration-20261010.md).
 - stock Xenia visual/save/controller baseline coverage is complete
 - eight M2 analysis entries plus twelve runtime-discovered M3 callable entries are required; switch-table, exception, invalid-data, and setjmp/longjmp overrides remain zero
 - all load-time variables and the 26-import pre-main function set have SDK registrations
@@ -313,7 +351,7 @@ No commit or push is permitted before review and required tests pass.
 Project delivery cadence:
 
 - Subagents may own bounded, explicitly scoped work or provide independent read-only research and review under the repository-local `AGENTS.md`. Because all agents share one worktree, edit ownership and GUI/runtime operations are serialized; the primary agent retains integration, acceptance testing, task status, commits, usage checks, milestone closure, and pushes.
-- Continue autonomously until the active milestone is reviewed, closed, committed, and pushed; user input/authorization is genuinely required; or an observable weekly usage allowance reaches 20%. After each closed task, read the live ChatGPT Settings -> Usage value or the interactive Codex `/status` fallback before starting another task. If usage is not exposed to the agent, never invent a value—continue to milestone closure or a real blocker and rely on the user to signal an external quota threshold. The repository-local `AGENTS.md` is authoritative for this persistence rule.
+- Continue autonomously until the active milestone is reviewed, closed, committed, and pushed; user input/authorization is genuinely required; or observable weekly allowance reaches **30% remaining**, per current repository-local `AGENTS.md`. Older dated 25% overrides are historical, not current policy. After each closed task, read live usage before starting another task. If usage is not exposed, never invent a value—continue to milestone closure or a real blocker and rely on the user to signal an external quota threshold.
 - Close one task per commit. A task commit may be created only after that task's acceptance criterion, review, and relevant tests pass.
 - Do not combine unrelated completed task IDs in one commit. If two tasks are inseparable, revise the ledger and dependency rationale before implementation.
 - Recommended task commit subject: `task(Mx-nnn): concise outcome`.
@@ -380,10 +418,87 @@ gates. See [CRT evidence](docs/evidence/M7-016-proton-cpp-runtime.md).
 it autonomously enters saved gameplay/pause, captures renderer frames and
 records a short address-free counter interval. Run only with isolated
 profile/cache/output roots outside playable bundles and the Syncthing root.
+The default-off `mcla_readback_unpaused_window` extension adds a fixed
+20-second neutral-input interval before PAUSE, with separate phase frames and
+`unpaused-samples.jsonl`. It requires the cost probe. Source/build and native
+OFF/ON/cancellation gates pass; new instrumented packages remain distinct
+from the owner's tested single-TU FMA package. Neutral probe
+input alone does not establish the actual guest scene or physical inactivity.
+See [unpaused window evidence](docs/evidence/M7-016-unpaused-fma-window.md).
 `scripts/analyze-readback-cost.py` and `tests/test_readback_cost_analysis.py`
 validate telemetry, not gameplay/audio/performance PASS. Never publish the
 diagnostic `some` readback arm or import its experimental saves. Source,
 published and actually measured artifact identities must remain distinct.
+
+Gaming Mode diagnostics use a separate SteamOS SDK game entry and the official
+run-game RPC. Preserve Steam-assigned AppIDs and the game's display environment;
+borrowing Steam's own display can render the title behind Big Picture. SDK game
+IDs permit underscores, and the executable must be relative to its game folder.
+A whole bounded test runner may be the SDK entry, retaining its private profile,
+configuration, artifact and normal-closure gates. Keep SDK debug logs suppressed
+because they may expose IPC authentication material.
+
+Stock MangoApp reports Gamescope presentation timing. A visible ImGui Guest FPS
+dialog can create extra presentations, so use mcla_guest_fps_hud=false when
+calibrating Mango against internal guest-output counters. Keep internal samples
+as the measurement reference. For logging, explicitly show the stock overlay
+and require actual complete CSV rows before a measured window; IPC exit0 alone
+did not establish logging. Repeated logger arming remains unreliable, including
+an attempt with the game running. A uniform Mango-off comparison may instead
+use intrinsic guest counters and the validated CPU sidecar for every arm.
+Restore the exact per-session config and stop logging after the test. The CSV
+has aggregate hardware data; bounded /proc/stat and cpufreq collection adds
+per-core data. Frequencies are reported values, not measured effective clocks.
+Exclude Steam focus and transition rows, and do not assume guest and Linux clock
+epochs are identical. Preserve the full terminal owner profile for every successor.
+See [Gamescope/Mango evidence](docs/evidence/M7-016-gamescope-mangohud.md).
+The [same-Deck protection API diagnostic](docs/evidence/M7-016-protection-api-comparison.md)
+compares own scratch mappings only; it does not predict native-game FPS.
+[U8 comparison](docs/evidence/M7-016-invalidation-expansion8.md) retains U16
+because the completed 16/8/16 cohort does not establish a robust additional gain.
+The [draw-timer overhead control](docs/evidence/M7-016-draw-timer-overhead.md)
+retains a private count-only GPU candidate after a modest matched-cohort signal;
+three elapsed totals are unavailable, not zero-cost measurements.
+The [gap-scan control](docs/evidence/M7-016-gap-scan-overhead.md) found no
+reproducible benefit in its completed retry, so runtimeAEE remains the reference.
+The [combined count-only U8 control](docs/evidence/M7-016-count-only-u8.md)
+retains a private combined candidate after a5.35–7.18% unpaused parked-scene
+signal; broader gameplay acceptance remains pending.
+The [pacing-state probe](docs/evidence/M7-016-pacing-state.md) confirms sampled
+I2/H8/rate60/no override. The [controlled H100 experiment](docs/evidence/M7-016-pacing-threshold-control.md)
+shows16.63–20.37% higher parked-scene cadence. The [optional setter host](docs/evidence/M7-016-pacing-setter-cvar.md)
+has passed unchanged host reproduction,200 semantic cases/6400 checks,
+independent candidate binary review and native launch regression. The repinned
+Deck reader passed34 mocktests. The same-host Deck OFF/ON/OFF control passed
+full independent review:21.70/25.40/20.85 outputs/s (+17.05–21.82%), with
+unpaused draws/output within0.057%. A later owner drive reports15-20FPS moving
+and no sound breakup; stable30 remains unaccepted (manual evidence below).
+The [parked H100 CPU profile](docs/evidence/M7-016-pacing-setter-profile.md)
+passes full review with3303 leaf samples after isolating perf from Steam loader
+variables. [Qualified first-hop evidence](docs/evidence/M7-016-pacing-caller-stacks.md)
+now binds the wait to82411E98 and sampled GPU copies to resolve readback/upload.
+That later runtime remains failed after a parser cardinality rejection; a reviewed
+offline correction validates only the diagnostic data, without a new FPS claim.
+The [allocation diagnostic](docs/evidence/M7-016-readback-allocation.md) subsequently
+passed native/Deck review: cached/coherent/non-device-local readback memory on both.
+The [paused U4 control](docs/evidence/M7-016-paused-u4-control.md) established no
+repeatable material gain, so H100/U8 remains the reference.
+The [owner H100 drive](docs/evidence/M7-016-manual-h100.md) is closed by owner;
+[its symptomatic moving capture](docs/evidence/M7-016-manual-h100-profile.md)
+validated3688 leaves and process I/O brackets. CPU placement was not recorded.
+The [per-game affinity comparison](docs/evidence/M7-016-deck-affinity.md)
+now passes reviewed8/4/8 execution after one-time native-worker correction.
+Cadence21.75/21.65/20.70 and4.83% control drift establish no stable benefit;
+keep all eight logical CPUs. The [manual follow-up](docs/evidence/M7-016-manual-affinity4.md)
+also reports no perceived improvement after final native-worker corrections;
+67threads still had the requested four-CPU mask at the follow-up observation.
+The [coherent-invalidation control](docs/evidence/M7-016-coherent-invalidate.md)
+passed source, model, binary and runtime checks but gave21.90/21.90/21.95
+outputs/s, so it is not promoted.
+The [audio DSP audit](docs/evidence/M7-016-audio-mixer-cost.md) identifies
+filter/mixer context traffic but no validated code candidate or predicted gain.
+These probes do not close M7-016 or establish stable30 gameplay acceptance.
+
 
 ### 6.4 Definition of Done for every milestone
 
@@ -1232,64 +1347,185 @@ optimization date or guaranteed frame-time reduction is implied.
 ### Tasks
 
 - [x] **M7-016** Bounded relocated Windows p1 acceptance passes named RTX5060, stock2x/VSync, physical input/audio/window/F10 and progressed successor reload, with separate native-fixture interruption/recovery tests. Primary/independent review keeps p1 WGC-ON distinct from default-OFF source and unpromoted SDK20 builds. Normal pointer unchanged; no Deck, clean-machine or graceful-teardown claim. [Windows portable acceptance](docs/evidence/M7-016-windows-acceptance-20261010.md).
-- [x] **M7-001** Reviewed identified-family and critical-lifecycle inventory complete:17 overlapping family/axis rows and7 lifecycle dimensions map to observed routes, exact cohort evidence, historical-only coverage, unknown distinctions or owner-approved deferrals. Unknown is not unavailable or PASS; M7-003 gameplay gaps remain open. Historical11-row seed and fail-closed no-credit policy are unchanged; PS5/7 fixtures pass1 positive/13 negatives. [Matrix](docs/campaign-coverage-matrix.md), [inventory review](docs/evidence/M7-001-representative-inventory-20261003.md).
-  Repository 0.13.4.0 records the independently reviewed wrapper ABI, catalog count/array layout and unlock-query scan limits in docs/evidence/M7-001-campaign-source-feasibility.md. These static facts are not live nodes or dependency edges. Current compact F10 requests no catalog ranges/translation metadata; no collector, runtime probe or pending-bundle replacement was added.
+- [x] **M7-001** Reviewed identified-family and critical-lifecycle inventory complete:17 overlapping family/axis rows and7 lifecycle dimensions map to observed routes, exact cohort evidence, historical-only coverage, unknown distinctions or owner-approved deferrals. Unknown is not unavailable or PASS; M7-003 now records bounded accepted routes and explicit deferrals. Historical11-row seed and fail-closed no-credit policy are unchanged; PS5/7 fixtures pass1 positive/13 negatives. [Matrix](docs/campaign-coverage-matrix.md), [inventory review](docs/evidence/M7-001-representative-inventory-20261003.md).
 - [x] **M7-002** Bounded isolated clean startup/tutorial/save/restart and visible persistent local rename accepted on exact DCDE2F12/p1 cohorts, with representative contact/unlock transitions; no fabricated Live identity or full-story claim. SDK0.20 profile-only integration and shared launcher/lineage/F10 dependencies reviewed; source-isolated401unit/1462PPC cases, fresh WGC ON/OFF builds and native/dual-shell gates PASS. New artifacts are not promoted or granted p1 physical PASS. [Source integration and acceptance](docs/evidence/M7-002-sdk-profile-integration-20261010.md), [owner rename](docs/evidence/M7-profile-rename-20261010.md).
 - [x] **M7-003** Representative available offline mechanisms/containers accepted, including owner-confirmed Freeway5+ and targeted Arcade Landmark completion/result/return. Prior route outcomes/reloads retain their bounded provenance; no every-outcome/full-story claim. Payback/SC/observed-unavailable Unordered deferred without PASS; unknown source labels do not invent retail categories. KI-026/KI-016 remain documented open limitations. [Event acceptance](docs/evidence/M7-003-event-acceptance-20261010.md).
 - [x] **M7-004** Representative cars/motorcycle and tuning/purchase-reload accepted on current Windows cohorts, with historical exterior/performance/paint/switch categories retained separately. Exact current bike/item IDs and untested categories remain unknown; KI-013/019/020 retain explicit open S2 dispositions. Primary/independent review and27Sandbox payload rehash pass; no repeated purchase tour. [Acceptance](docs/evidence/M7-004-vehicle-acceptance-20261010.md).
 - [~] **M7-005** Deferred to M8 or natural unlock by explicit owner decision, without PASS. South Central event access/content lifecycle is unconfirmed; Doc's Garage location and Complete Edition data do not prove expansion completion or entitlement. No unlock grind. [Reviewed disposition](docs/evidence/M7-005-unavailable-content-disposition-20261010.md).
+  Oct10 owner exception: content not currently available is deferred without PASS; Doc's Garage access alone is not event/content acceptance. Record the actual availability/coverage boundary rather than require campaign grind.
 - [x] **M7-006** Representative media accepted: owner startup video/Y skip and repaired phone tutorial, plus independently reviewed Great Palace dialogue subtitles in the Clean-derived s2 replay. KI-017 remains an explicit unresolved music-continuity limitation; no all-video/phone-caption/decoder-parity claim. Source0.18.6.0 does not relabel tested binaries. [Media acceptance](docs/evidence/M7-006-subtitle-replay-20261010.md#task-closure-and-media-limits).
+  Oct10 subtitle case PASS: owner completed Sunset Strip in the isolated existing-Clean-save copy s2, saw Lester scene/SUBTITLES ON/captions; primary and independent F10 review confirm Great Palace with readable English subtitle (frame0CADE932). Session exit0/3snapshots/0watcher errors,6F10 artifact hashes and300sequential audit samples verify. Separate unexpected-guest-exit package follows window-closing log, not secondF10 or a proven gameplay crash; teardown remains limited. No all-scene/telephone claim; bounded media closure is recorded above. Preserve rejected s1 and separate s2 profileEBBDB184; no repeat/merge. [Accepted result](docs/evidence/M7-006-subtitle-replay-20261010.md).
 - [x] **M7-007** Listed representative garage/shop/free-roam/event/cinematic transitions accepted across exact current cohorts; historical9-checkpoint city/map route remains separately bound. KI-015 temporal shimmer, unvisited interiors and busy-area performance retain explicit unresolved limits; no temporal-harness or all-city-current-build PASS. Primary/independent report review, links and historical result hashes pass. [Acceptance](docs/evidence/M7-007-transition-acceptance-20261010.md).
 - [x] **M7-008** Representative recovery accepted: Restart/Abandon and police arrest/fine/release restore driving/pause, with purchases retained after restart on isolated DCDE2F12 Sandbox. All27 returned payloads and full archive5D6CB88B verify. Exact vehicle/items and other police/AI/damage/respawn variants stay untested; KI-026 remains open. [Recovery closure](docs/evidence/M7-008-recovery-acceptance-20261010.md).
+  Oct10 isolated Sandbox: owner confirms motorcycle, tuning purchase, Restart/Abandon, arrest/release after fine, recovered driving/pause and purchases persisted after restart. Exact model/items and untested recovery variants remain unknown; this is bounded evidence, not automatic task closure. Main campaign profile unchanged. [Evidence](docs/evidence/M7-closure-readiness-20261010.md).
 - [x] **M7-009** Bounded Windows progressed successor/name/reload and complete-profile lineage accepted on p1; archive693B31EB to profileEFF52498/saveEE824CF5 is preserved without merging branches. Primary/independent review, dual-shell123lineage/106bundle negatives and native recovery/history-boundary tests PASS. New32-record admission hardening is source/native-only, not deployed into immutable p1; external writers and arbitrary interruption remain limited. [Save acceptance](docs/evidence/M7-009-save-acceptance-20261010.md).
 - [x] **M7-010** English UI/gameplay is the only M7 language claim. Exact82A69B5E gameplay F10 shows English phone/UI text and the owner accepts boot/play/reload; other disc locales remain untested. Historical French/Russian title checks do not confer gameplay support. [English boundary](docs/evidence/M7-010-language-acceptance-20261010.md).
-- [x] **M7-011** First bounded representative evidence set accepted after primary/independent review: four exact runtime cohorts, separately preserved MAIN/Clean/Sandbox/p1/s2 profiles, representative routes/lifecycle/media and explicit defects. Latest Freeway5+ owner report is not falsely pinned to individual sessions; Landmark disposition remains M7-003. No full campaign or release-regression claim. [Collected set](docs/evidence/M7-011-representative-set-20261010.md).
+- [x] **M7-011** First bounded representative evidence set accepted after primary/independent review: four exact runtime cohorts, separately preserved MAIN/Clean/Sandbox/p1/s2 profiles, representative routes/lifecycle/media and explicit defects. Latest Freeway5+ owner report is not falsely pinned to individual sessions; later Arcade Landmark acceptance is separately recorded in M7-003. No full campaign or release-regression claim. [Collected set](docs/evidence/M7-011-representative-set-20261010.md).
 - [x] **M7-012** Close the reproduced progression blocker on the claimed Tournament/Pinkslip route. KI-031's exact callback boundary passes deterministic codegen, real SDK lookup and owner tutorial/win/reload regression. Final PS5/7 analysis-config tests pass1 positive/16 negatives; reviewed hooks and adjacent boundaries remain exact. Source checkpoint0.18.0.1 does not relabel tested DCDE2F12 or82A69B5E binaries. Unseen routes and open S2 issues are not claimed fixed. [Closure evidence](docs/evidence/M7-pinkslip-crash-20261010.md#task-closure-review).
 - [x] **M7-013** Primary and independent review accept the artifact-bound repaired callback, p1 profile/save/window/audio/F10 and s2 subtitle regression set, plus final source/native gates. Historical routes are not relabelled as new p1 runs; SDK20 fresh builds remain unpromoted. No second campaign or owner replay required for unchanged p1. [Targeted regression](docs/evidence/M7-013-targeted-regression-20261010.md).
 - [x] **M7-014** Bounded reached-import audit reviewed: observed UNAVAILABLE/COMPAT paths retain explicit dispositions; DEBUG-only signature verification is unimplemented, with its exact direct caller taking fallback rather than verified success. PS5/7 pass8source pins/11facts/8drift rejections/9synthetic cases; successor and subtitle logs add no new unsupported category. Unobserved exports and indirect paths remain unproven, not supported. [Final audit](docs/evidence/M7-014-reached-imports-20261004.md).
-- [ ] **M7-015** Keep compatibility and known-issues documentation current throughout M7, then finalize it against both campaign evidence sets.
+- [x] **M7-015** Primary and independent review reconcile compatibility, known issues, matrix and task criteria with representative coverage and targeted regression. Historical source reports are published only as sanitized provenance, not new runtime PASS. Relative links, dual-shell alpha/seed contracts and staged private-data checks pass. [Documentation review](docs/evidence/M7-015-documentation-review-20261010.md).
 
-### Current execution priority (2026-09-05)
+Oct4 owner coverage update: Delivery progress/reward reload and Ian Red Light
+completion/save, plus Time Trial win and a Series win comprising one Circuit and
+three Sprints, are bound in the [current matrix](docs/campaign-coverage-matrix.md).
+Owner identifies Kenneth Hahn State Park Series and the first in-game Time Trial,
+confirms persisted progress and working controls/sound/music. Exact Time Trial
+title, individual Series places and rewards remain unknown.
+Red Light fresh-process reload, loss/Race Back and KI-026 recovery remain unverified.
+These are representative subsets, not full task closure or historical seed promotion.
 
-The detailed reviewed order and experiment protocol are in [docs/M7-priorities.md](docs/M7-priorities.md). Task IDs and total count remain unchanged.
+### Current execution priority (2026-10-10)
 
-1. M7-016 stock-mode throughput/pacing/audio (KI-027), with early M7-009 save lineage (KI-028). Descriptor comparison is complete without material gain; direct pause/gameplay and narrow GPU-copy attribution are retained on unchanged 0.16.0.1. Next: normal session closure/archive, a short diagnostic-only same-scene readback-cost control, then a measured ordering-safe correction. Do not globally disable readbacks or replace a shared wait helper without all caller predicates/notifications. Whole profile/album must be preserved. See docs/evidence/M7-016-deck-cpu-attribution.md and docs/M7-priorities.md. Matched Xenia is still pending; owner-reported FPS is not a controlled comparator. A new chat is optional at the retained-evidence boundary, not a performance PASS.
-2. M7-001 matrix preparation may proceed while physical input is pending. Once the local route is usable, finish M7-016's input/audio/window/save/recovery matrix and establish isolated clean new-game/profile flow (M7-002, KI-001).
-3. Prioritize representative event/retry/garage/delivery/recovery transitions, then broaden content/render/audio coverage. M7-012 blocker fixes and M7-014 reached-import auditing run throughout progression.
-4. Full clean campaigns remain M7-011/M7-013, with resumable ordinary play sessions and distinct clean profiles. No blanket two-hour physical retest is required after each change. M7-015 finalization remains evidence-gated.
+Detailed scope and gates: [docs/M7-priorities.md](docs/M7-priorities.md).
+Current status is **15 completed + 1 deferred / 16**: all mandatory tasks complete; M7-005 is explicitly deferred without PASS. Earlier counts are historical. Aggregate closure and publication are pending.
 
-M7-016 has four separately recorded sub-gates: implemented private tooling; **unverified stock-performance recovery**; **open cross-build save continuity**; and the **incomplete physical platform matrix**. Target stock-paced 30-frame/s driving and stable audio, report actual frame-time tails, and require owner acceptance of any lower-performance limitation. Optional higher/dynamic FPS remains M8.
+Finish compatibility documentation, aggregate review and SDK/parent publication.
+No current owner replay is required. The dated investigation notes below preserve
+past gates and failures; their pending actions are not current instructions.
+
+Oct3 native continuation: original159 offline component tests PASS; real no-game
+Job/PID/birth/HWND/normal close exit0/Job0 observed. Initial-paint race corrected.
+Owner14:02 run:13 valid frames/8 states,6 source pins/receipts/hashes,normal exit0/
+Job0,primary integrity+independent visual PASS. **No-game fixture gate accepted**;
+not game/scene/timing acceptance. Real isolated staging A1/B/A2 passed53 pins,
+independent seeds and empty roots. One stock A1 startup failed the harness's second
+HWND binding before ACK/capture, but closed normally exit0/Job0/no force and kept
+source/seed/binaries unchanged. Offline regression fixes the held-window branch.
+Owner cohort2 then stopped on a harness false-positive: seven known developer
+asset probes,normal exit0/Job0/no force,all source/seed/binaries preserved. Exact
+21-record source/historical proof and mandatory caller complete+7 guard fixed;
+separate one-shot owned physical1280x720 sizing keeps frozen guest flags.
+Owner cohort3 then proved stock startup/passive guest ACK,physical1280x720 resize
+and normal exit0/Job0; client BMP was entirely black: pixel gate **NO-GO**.
+Owner saw legal splash,not Press START; legal/logo/title are distinct stages.
+Stock gate disabled; original evidence preserved,no automatic retry.
+Black-before-persistence guard and window-only WGC replacement/source-reviewed
+non-console helper were prepared. Owner WGC attempt1 helper exit0/Job0 and32
+centers matched,but full-grid RGB mismatch correctly FAILED with no frame saved.
+Fixture cleanup normal,no game. Cause unrecoverable from aggregate-free old receipt;
+do not infer crop/border/color defect. New bounded aggregate-only diagnostic
+delta keeps exact rejection/no retry. Attempt2 located54 mismatches at bottom9
+rows; +/-1 shifts worse,rounded-edge preference is a hypothesis,not proven cause.
+Helper/fixture normal exit0/Job0,sources unchanged,no frames saved. Attempt3
+square fixture saved five exact full-grid frames/phases2,4,6,0,2: primary replay
+and independent integrity/visual review accept partial pixels only. Helper6
+exit1/Job0/no force; failure header absent,cause unknown,full fixture FAILED.
+Fixture normal exit0/Job0,sources unchanged,no game.380 offline tests/1514 CPU
+checks PASS. One fresh attempt4 was admitted with failure-header-only diagnostics
+through `Run WGC Harness Test.cmd`. Owner then went AFK;
+one autonomous fresh attempt4 stopped at visibility:480 foregroundfalse/occluded
+samples,no helper/frame,normal exit0/Job0/sources preserved. No automatic rerun.
+Owner6 passed visibility/four exact frames; helper5 rejected compositor timestamp
+14.8us ahead of early QPC (customer0xA0040002). Build4 shifts strict upper-bound
+validation after GPU completion, before Map; early nonstale/deadline and final
+strict checks remain.1528 CPU checks/381 Python mocks and independent review PASS.
+Primary7 failed visibility before capture. Owner8 then completed13 exact frames/
+all8 states/all14pins/normal helper+fixture cleanup; primary and independent visual
+review accept the no-game WGC fixture. Fixture source gate now disabled/consumed.
+Owner cohort4 stock A1 now passes startup/passive ACK/owned WGC legal-splash
+pixels,source/seed preservation and normal cleanup,including independent review.
+Stock/fixture gates disabled/consumed.384 mocks/1528 CPU checks PASS.
+Actual one-shot cadence fails cycle gates (outer0.191..0.949s,gaps0.420..1.200s);
+owner burst1 failed with generic E_INVALIDARG/stage8 after1warmup+16timed slots,
+no pixels/cadence admitted, normal cleanup. Reviewed ABI2 diagnostic build3 adds
+precise guards and failed-slot metadata only;2314 CPU checks pass, no gate relaxation.
+Owner burst2 identifies Guard15 LateSchedule before18th timed sample, after
+1warmup+17timed; comparison at least100ms late, subsequent catch107.8573ms late.
+No pixels/cadence admitted; clean helper exit1/fixture exit0/Job0. Underlying
+wait/readback/scheduling cost remains unknown. Reviewed parent-only completed-
+prefix header export adds stage-cost diagnostics, same helper/producer/gates.
+429 full Python tests and44 focused review tests PASS. Temporal-model research
+finds strict host-bracket cadence may conflict with fresh-frame wait; synthetic
+models are not measurements. Owner burst3 also fails LateSchedule, beforetimed21;
+validated21-header prefix locates growing wait and ~15ms GPU-ready observation
+buckets. Independent17pin/cleanup review GO only; exact timestamps still NO-GO.
+Separate CPU-only Sleep1 probe measures median15.5373ms. Preparing helper-owned
+highres wait comparison with unchanged producer/ABI/strict gates now reviewed:
+build5B39D1BC1...,492inputs/21outputs,2314protocol+270waitmockchecks PASS. CPU-only
+A/B/A medians15.94015/1.53965/15.6746ms; full431Python/final39focused PASS.
+Owner burst4 failed Guard26GpuFreshness at firsttimed sample: compositor timestamp
+2.3384ms ahead of GPU-ready, exact10MHz conversion. No pixel read; all18pins and
+normal cleanup verified. Full432Python PASS; all burst attempts remain FAILED.
+Owner then explicitly deferred exact timing/harness work to M8 and resumed M7
+on stock. All capture gates disabled/consumed; no further colored-window test.
+No normal-speed/cadence credit from this deferral. Preserve all old evidence.
+No B/A2 or interval1 admission.
+Same crop/oracle/notification, no tolerance/clamp/retry.
+Owner later granted unrestricted access; supported Computer Use initialization
+failed three times including reset. No GUI action executed; native continuation
+remains blocked by runtime/foreground,not missing authorization.
+No game/save/input/desktop capture in fixture8. Separate stock A1 gate consumed;
+full Live/game cohort remains disabled,candidate unrun.
+[Native checkpoint](docs/evidence/M8-001-native-windows-harness-20261003.md).
+[Category inventory leads/gaps](docs/evidence/M7-001-representative-inventory-20261003.md)
+are source preparation, not current coverage PASS. Latest usage92% remaining/stop30%.
+Later source review binds separate RaceType/SubType descriptor axes and DevOnly
+storage,not retail availability. Seed1 positive/13 negatives PASS,no gameplay
+credit. Same bounded packet on Qwen/Gemma rejected for schema/source-fact errors;
+no returned enum/count claims adopted. See the category report.
+
+1. Integrate Spark for bounded routine analysis/test suggestions/log triage. Primary
+   agent retains patches, deterministic checks, artifact/save handling and acceptance.
+2. Exact M8-001 temporal harness/cycle extraction and stock/interval1/stock
+   experiment are deferred to M8 by explicit Oct4 owner decision. They no longer
+   precede M7. Keep all Live/candidate gates disabled; no failed result is PASS.
+3. Historical sequence, now complete: M7-016 local Windows lifecycle on stock and early M7-009 actual progressed successor reload.
+   M7-001 category matrix preparation may proceed independently of physical feedback.
+4. M7-002 clean-profile flow, then representative event/content/media/garage/AI
+   coverage. M7-012 blocker fixes and M7-014 reached-import audit run throughout.
+5. M7-011 bounded coverage set, M7-013 release-like regression, M7-015 aggregate
+   evidence review and gated closure/commit/push.
+6. After M7 closure, fully review/rethink M8 scope and acceptance. Deferred Deck
+   optimization is not silently reactivated before that review.
 
 ### Deliverables
 
-- two documented full-campaign runs
-- Complete Edition content coverage matrix
-- stable save/progression behavior
-- no known single-player progression blockers
-- a private toolchain-free local campaign-test bundle and copy/launch workflow, with Steam Deck/Proton support only if physically verified
+- reviewed event-type and representative Complete Edition coverage matrix
+- first bounded coverage set plus release-like targeted regression
+- stable save/progression behavior on claimed tested routes
+- owner-private relocatable Windows local-test bundle and explicit limitations
+- linked known issues and untested categories/story/content/platforms
 
 ### Verification evidence
 
-- clean save reaches campaign completion twice
-- South Central and all mandatory Complete Edition content load and complete
-- no S0/S1 defect remains open
-- all skipped, unavailable, or retired online functionality is explicitly documented
-- release-like build reproduces campaign completion without debug-only patches
-- a copied bundle launches without Visual Studio, CMake, PowerShell, or repository paths; any Steam Deck claim includes a physical frontend/gameplay/input/audio/save/diagnostics smoke
+- claimed available event mechanisms have representative route evidence with
+  observed outcomes explicitly bounded; save/recovery evidence is separately
+  identified, not projected onto every category or outcome combination
+- representative vehicle/garage/media/AI routes retain exact artifact provenance;
+  South Central access/content remains deferred without PASS
+- no unresolved S0/S1 defect on a claimed supported route; any broader defect remains
+  tracked without expanding the compatibility claim
+- real progressed Windows save reloads in the successor bundle; backups/conflicts
+  and interrupted-session recovery preserve lineage
+- copied Windows bundle launches without developer tools/repository paths; current
+  physical input/audio/window/F10/settings tests are distinguished from fixtures
+- release-like targeted regression reproduces the claimed scope without unsafe
+  diagnostic patches; all unavailable/untested functionality is documented
 
 ### Exit criteria
 
-- Full single-player campaign is completable from a clean save.
-- Complete Edition on-disc content is accessible.
-- Save data remains stable across the validated version line.
-- Remaining issues are non-blocking S2/S3 items with workarounds or accepted limitations.
-- M7-016 records either a physically verified pinned-Proton Deck route with usable stock-mode cadence/audio (or an explicitly owner-accepted performance limitation), or an exact no-go disposition while retaining the clean-path Windows bundle. It proves that all mutable state/evidence round-trip inside the Syncthing folder and that validated progressed returns reload across bundle replacement without silent reseeding. Severe KI-027 cadence cannot pass by boot evidence alone.
+- Reviewed representative Windows matrix and required lifecycle/save gates pass.
+- No known reproducible blocker remains on a claimed tested route; open S2/S3
+  defects have evidence, mitigation or explicit owner-accepted limitations.
+- Full campaign/end-game completion and exhaustive content coverage remain
+  unverified, not retroactively accepted.
+- Deck/Proton and native Linux/macOS remain deferred; historical no-gos and
+  diagnostic saves are preserved, not changed into PASS.
+- M7-016 mutable state/evidence remain contained and progressed successor reload
+  is proved without reseeding or erasing conflicting save branches.
 
 ### Gate
 
-`GO M8/M9` requires complete campaign evidence. Enhancements cannot substitute for compatibility.
+`GO M8 REVIEW` requires the revised representative Windows evidence and aggregate
+review, not complete-campaign evidence. M8 enhancement and M9 distribution claims
+still require their own individual gates; M7 closure alone is not public readiness.
 
 ### Checkpoint log
+
+Documentation checkpoint (2026-10-10, primary plus independent acceptance/publication reviewers): **15 completed + 1 deferred /16; GREEN for bounded M7, publication pending**. M7-015 reconciles public docs, criteria and sanitized evidence links with the accepted representative scope; unobserved per-event outcomes remain unknown, not PASS. [Documentation review](docs/evidence/M7-015-documentation-review-20261010.md). No new owner test or artifact promotion. M8/M9 are draft planning. Next: dependency-first publication and aggregate closure commit/push; estimate one publication verification cycle. Weekly78% remains; no milestone push yet.
+
+Windows regression checkpoint (2026-10-10, primary plus independent acceptance reviewer): **14 completed + 1 deferred /16; GREEN for bounded routes, aggregate gate pending**. M7-013 committed3a351ef and M7-016 committedb0872c5 accept the exact p1/s2 and repaired-route evidence, not unrun SDK20 artifacts. [Regression](docs/evidence/M7-013-targeted-regression-20261010.md), [portable route](docs/evidence/M7-016-windows-acceptance-20261010.md). WGC defaultOFF remains distinct from accepted p1 ON; launcher recovery uses native fixtures and gameplay recovery has its M7-008 owner evidence. Unchanged p1 still requires archived succession before32combined records. No new owner test or scope change; next M7-015 documentation, then aggregate review/closure/dependency-first push. Remaining estimate is one documentation/review cycle plus publication verification, not gameplay grinding. Weekly79% remains; no milestone closure or push yet.
 
 Profile and save integration checkpoint (2026-10-10, primary and independent source/save reviewers): **12 completed + 1 deferred /16; YELLOW, final review pending**. M7-002 is committed8da30b0; M7-009 meets its bounded successor criterion with reviewed p1 evidence and final dual-shell/native tests. [Integration](docs/evidence/M7-002-sdk-profile-integration-20261010.md), [save acceptance](docs/evidence/M7-009-save-acceptance-20261010.md). SDK0.20 local commit/tag,401unit/1462PPC cases and fresh WGC ON82/82/OFF77/77 builds pass; accepted p1 remains unchanged, new binaries have no physical PASS. Combined history overflow is fixed in new source/native fixtures, not retroactively deployed. No owner replay remains identified. Scope is unchanged; estimated remaining work is two document/review passes, with no promised duration. Next M7-013 and M7-016, then M7-015 and aggregate publication review. Weekly80% remains; no push or milestone closure yet.
 
@@ -1310,6 +1546,12 @@ Unavailable-content disposition (2026-10-10, primary plus independent content/re
 Inventory closure (2026-10-10, primary plus independent content reviewer): **3/16; YELLOW**. M7-001's17 family/axis and7 lifecycle rows now bind current/historical/unknown/deferred evidence explicitly; no source label receives invented gameplay credit. PS5/7 seed1/13 passes,11historical entries unchanged. [Inventory evidence](docs/evidence/M7-001-representative-inventory-20261003.md). Scope/criteria unchanged; no exhaustive taxonomy or full playthrough claim. Next: record owner-approved M7-005 deferral, then continue SDK/import integration and final-package F10 review. Milestone gate not ready; no push.
 
 Closure checkpoint (2026-10-10, primary plus independent release/content reviewers): **2/16; YELLOW**. M7-012 callback blocker and M7-008 representative recovery are reviewed/tested and locally committed as1fd51c2 and349d9cd. Evidence: [callback closure](docs/evidence/M7-pinkslip-crash-20261010.md#task-closure-review), [recovery](docs/evidence/M7-008-recovery-acceptance-20261010.md). Final analysis-config audit repaired stale B8/hook validation; PS5/7 pass1/16, AST3/3, real SDK30035 registrations and67-file integration PASS. Owner name/UI/progress/reload/pause/audio/Alt+Enter are accepted with full returned profileEFF52498; owner corrected F10 as NOT pressed, so physical F10 remains pending. SDK profile dependency/pin/reproducible build and DEBUG-only import dispositions remain engineering work. Next two tasks: finalize M7-001 inventory, then M7-005 explicit unavailable-content deferral. Scope remains the owner-approved representative Windows route, not full campaign/Deck; no further acceptance relaxation. Estimate: documentation closures are actionable now; final M7 date remains conditional on F10 and SDK/import integration. Gate not ready;88% weekly remains, no reset, no push.
+
+Owner-directed priority checkpoint (2026-10-04, primary + independent evidence/stock-route reviews): **0/16; YELLOW — RESUME REPRESENTATIVE M7 ON STOCK**. Owner explicitly chose deferring exact stock/interval1/stock timing and its WGC temporal harness to M8. Burst4 contradicted the assumed GPU-ready source-timestamp upper bound; no tolerance/new timing claim admitted. Next two items: isolated exact-stock local lifecycle/save/reload session, then representative category matrix/discovery and bounded event coverage. All M7 save/progression/current-artifact review and commit/push criteria remain; no full campaign required. Timing prerequisite removal is an approved ordering change, not acceptance or closure of M8-001. Estimate remains provisional pending physical stock feedback. [Current priorities](docs/M7-priorities.md), [clock/evidence boundary](docs/evidence/M8-001-native-windows-harness-20261003.md).
+
+Feasibility checkpoint (2026-10-04, primary Codex + independent burst timing/design reviews): **0/16; YELLOW — POLLING LATENCY AND SOURCE-WAIT BOTTLENECKS OBSERVED**. No task closed. Owner burst3 source/cleanup integrity passes; prefix timing still fails unchanged cadence. Completed late-prefix whole spans median109.2223ms versus100ms targets; direct CPU-only Sleep1 median15.5373ms corroborates coarse polling, not isolated GPU cost. Next two items: scoped wait utility CPU/error-lifecycle/A-B-A review, then one separately admitted owner fixture to measure the intervention. Source availability may remain limiting; no promised native PASS or new time schema. No changes to M7 scope, saves, normal bundles, game runtime or candidate admission. Estimate remains provisional until transport/cadence evidence; no task commit/push. Evidence: [burst3 diagnosis](docs/evidence/M8-001-native-windows-harness-20261003.md).
+
+Feasibility checkpoint (2026-10-04, primary Codex + independent capture/stock review): **0/16; YELLOW — OWNED WGC PIXELS ACCEPTED, CYCLE CADENCE NOT READY**. No task closed. Owner fixture8 passes13 exact frames/all8 states; stock4 passes startup/passiveACK/legal-splash capture/normal cleanup and source/seed preservation.384 offline mocks/1528 CPU checks PASS. Actual one-shot cadence (capture brackets0.191..0.949s, conservative gaps0.420..1.200s) rejects existing cycle gates; source existence and pixel PASS cannot establish timing readiness. Next two items: bounded persistent WGC series design/review, then CPU/mock and separately admitted native fixture cadence proof. Additional backend work is required; estimate provisional until that proof. M7 representative-Windows scope unchanged; no timing candidate, promotion, task commit or push. Evidence: [native checkpoint](docs/evidence/M8-001-native-windows-harness-20261003.md).
 
 Priority review (2026-09-04, primary Codex + independent read-only review): **0/16; YELLOW — DECK PERFORMANCE AND SAVE-LINEAGE FRONT GATES OPEN**. No task closed. Reviewed runtime commit `6d9bec7`, current SDK v0.14.0.0, returned 0.12.0.0 trace, pending 0.13.0.0 child, builder save selection and known issues. KI-027 requires measured stock-mode recovery; new KI-028 records the M6-only seed selection risk without claiming observed lost progress. Next two work packages: M7-016 pending-pair analysis and M7-009 early portable lineage; M7-001 source/evidence planning can proceed while physical input is pending. Current order/criteria supersede the original entry's blanket planning dependency. Detailed review: `docs/M7-priorities.md`; short handoff: `docs/current-state.md`. Campaign estimate remains provisional pending the front gates. No new runtime artifact or support claim; no push.
 
@@ -1346,7 +1588,58 @@ Current checkpoint (2026-09-05, primary Codex + independent ABI/count and diagno
 
 - 2026-09-06 — M7-016 safe-disarm-fragmentation checkpoint, primary plus independent metadata-lock/test and next-lead reviews. **0/16; YELLOW — GAP COST BOUNDED, STOCK PERFORMANCE OPEN**. Diagnostic-only SDK0.19.0.0/c2e67161f1207ddcee609507c399efe7a1981b72 counts eligible internal gaps and skipped metadata ranges without changing protection calls. Review caught an allocation-metadata race before deployment; nonblocking heap locking plus explicit miss accounting preserves fallback behavior. Both full all-target SDK configurations pass1,856 cases/four known skips; focused11/479, root AST3, serializer133/0, Python28, dualPS diagnostics5/20/170, portable3/34/45, lineage48, build-matrix1/6, alpha1/31 and bootstrap12/12 pass. All67 regenerated files remain byte-identical. The isolated exact pre-bump0.17.0.0+SDK19 host0E90319E... reaches primary-inspected saved gameplay and pause, exits0 and preserves source/published state. Its20-second pause interval gives255 outputs/12.75 per second,65,942 safe gaps across84,274 disarm calls, no interval lock misses/failures, but only1.129 seconds total inclusive disarm work. No speedup or complete FPS explanation; defer coalescing in favor of reviewing existing Type-0 constant-register batching. Source checkpoint0.18.0.0 does not relabel that measured binary. Evidence: docs/evidence/M7-016-disarm-fragmentation.md. Normal0.16.0.1 bundle and owner profile unchanged; no task closed or push, estimate remains provisional and acceptance unchanged. Next two packages: bounded GPU command-work experiment under M7-016, then actual cadence/audio and early M7-009 evolved successor reload. No repeat owner START/F10 or long-soak request.
 
+- 2026-09-06 — M7-016 Type-0/residual-profile checkpoint, primary plus independent parser/backend, harness-lifecycle and evidence/ELF reviews. **0/16; YELLOW — TARGET WORK REDUCED, STOCK PERFORMANCE OPEN**. Five-file SDK experiment caches a default-off flag and routes only whitelisted contiguous constants through the existing bulk writer, retaining scalar side-effect and malformed-packet behavior. Both full SDK configurations pass1865 cases/four known skips; parser9/11968, SDK AST1, host serializer133/0, primary-inspected Windows Vulkan+D3D12 gameplay/pause and exact isolated Deck off/on/off controls pass. Cadence12.55/12.90/11.85 outputs/s does not establish a repeatable benefit; target GPU leaf group90/1054 ->24/1045 ->89/1066 does establish reduced sampled command work, not total route or FPS savings. Same retained recordings resolve official CRT memmove146/152/151 and Unix ntdll protection-scan78/83/75; internal RADV symbols and current copy/protection callers remain unresolved. Source parent0.18.0.0/201c3a6 plus dirty SDK19 is experimental, uncommitted and unpromoted, with private install and exact binary pins; clean installed SDK19 and normal0.16.0.1 bundle/save remain untouched. Diagnostic host tree now uses that private prefix, not the clean SDK install. Evidence: docs/evidence/M7-016-type0-constant-batching.md. No task closed or pushed; estimate provisional and acceptance unchanged. Next two packages: current caller/volume attribution under M7-016, then evidence-selected correction with cadence/audio and M7-009 evolved successor reload. No repeat owner START/F10/long-soak request.
+
+- 2026-09-06 — M7-016 current-caller checkpoint, primary plus independent raw/provenance, CRT/ELF/stack and upstream-source reviews. **0/16; YELLOW — OLD PROTON SCAN DEFECT IDENTIFIED, NEW RUNTIME UNTESTED**. Same exact default-off Type-0 candidate:601 scout samples select one GPU thread;556 bounded stack samples prove34 resolve-copy and22 upload-copy callers, plus36 NtProtectVirtualMemory commitment scans. Exact caller frames distinguish4–128KiB PAGE_READONLY requests from53–437MB internal remaining-view bounds. Upstream Wine d9172b0/MR8151 already limits that scan to the request, and installed official Proton10.0-4b binary contains the fix. No SDK watch-policy workaround or new upstream report. Primary inspected saved gameplay and both pause frames; exit0/no force/survivors;40files/35,577,584bytes hash-verified. Root AST/3fixtures pass. Source0.18.0.0 plus dirty SDK19 and normal0.16.0.1 publication remain distinct; no task closure/version bump/push. Owner resumed with3% weekly stop threshold for this run; latest19% remaining and no reset used. Owner additionally proposed GE-Proton11-6: next two packages are exact Proton/GE documentation and isolated runtime comparison, then evidence-selected cadence/audio plus M7-009 successor reload. Details: docs/evidence/M7-016-current-caller-attribution.md. Acceptance unchanged; performance estimate remains provisional.
+
+- 2026-09-06 — M7-016 Proton/GE comparison checkpoint, primary plus independent launcher/lifecycle, exact-source, collector and returned-data reviews. **0/16; YELLOW — NEWER PROTON REDUCES COST, STOCK PLAYABILITY OPEN**. Wine d9172b0/MR8151 is present in installed official10 and GE11. Same candidate/profile/settings: Proton9 12.60, Proton10 14.10, GE11 13.70 and Proton9 repeat13.10 outputs/s in20-second paused-scene windows. Arm/disarm time per output falls; resolve-copy time stays nearly unchanged. Same RADV/Mesa identity, FSync on9/10 and NTSync on GE; no GE-specific advantage or single-fix attribution. Three observer failures are preserved: first container-helper identity, GE Unix-loader identity, and a final snapshot racing title teardown. Only accepted arms enter the result; repeat changes observer timing with all baseline fields except helper hash proven equal. All accepted runs exit0/no force/survivors/source-prefix drift. Primary inspected12gameplay/pause frames;117files/115,043,897bytes are hash-verified and independently reanalyzed. Lighting differs, timings overlap, repeat has no end-window map snapshot, and gameplay/audio/GamingMode remain unproven. Normal bundle/shortcut/prefix and source versions are unchanged; no task closure/version bump/push. Details: docs/evidence/M7-016-proton-runtime-comparison.md. Next two packages: residual GPU profiling on fixed official10, then evidence-selected correction plus cadence/audio and M7-009 successor reload. Acceptance and provisional estimate remain unchanged.
+
+- 2026-09-06 — M7-016 fixed-Proton residual checkpoint, primary plus independent capture, exact-symbol and analyzer reviews. **0/16; YELLOW — OLD SCAN HOTSPOT REMOVED, STOCK PERFORMANCE OPEN**. Same default-off candidate on official10:625-sample scout uniquely selects GPU;887 userspace leaves resolve GPU410, official CRT147 including142 memmove, RADV129 and Unix ntdll69. Exact bounded-scan functions have0 sampled leaves, syscall dispatcher55; zero leaves is not zero calls and leaf-only data cannot identify copy sizes/callers. Exact SDK targets include UpdateBindings51 and the scalar-write/Type0 group75. All43 files/27,221,121bytes, raw/text/header tuples, lifetimes, maps and PE/pdata/MAP/ELF identities are verified; primary reproduction agrees with independent counts. Saved gameplay/pause frames inspected; normal exit0/source preservation pass. Clock domains and profiler overhead prohibit a clean FPS/whole-pipeline claim. Evidence: docs/evidence/M7-016-proton10-residual-profile.md. Latest live14% weekly remains above this run's owner3% threshold. No task closure/version bump/promotion/push; acceptance and provisional estimate unchanged. Next two packages: one fresh profiler-free official10 Type0 OFF/ON/OFF using existing binaries, then evidence-selected correction and actual cadence/audio plus M7-009 successor reload. Stop repeating Type0 if ON is within control variation or workload is confounded.
+
+- 2026-09-06 — M7-016 fixed-Proton Type0/owner-readiness checkpoint, primary plus independent harness, return/analyzer, exact-PC and save-gate reviews. **0/16; YELLOW — POSITIVE PAUSE SIGNAL, OWNER DRIVING REQUIRED**. Fresh no-profiler OFF/ON/OFF on the same official10 candidate produces13.80/14.60/13.60 outputs/s; ON5.8–7.4% higher with1.6–1.9% fewer draws/output, so full attribution and repeatable gameplay gain remain unproved. All67 files/68,195,910bytes, exact launch/module identities, frame hashes and counter deltas independently reproduce; primary inspected9 saved-gameplay/pause frames. All runs exit0/no force/survivors/source drift. No further identical pause series or default-ON promotion. Read-only exact-PC review localizes binding packing and texture-map searches but lacks repeated-key frequency to justify a new cache. The direct manual Proton10/Type0-ON session is prepared with isolated full seed/cache and an empty fresh prefix; review fixed rotating-log startup-proof loss before deployment. Preparation launches no game and is not portable-successor lineage proof. Next two packages: owner representative driving/controller/audio, then evidence-selected disposition and real persisted-progress return/successor reload. Latest live13% remains above owner3% stop threshold; stopping for the physical owner gate, not quota. M7-016 awaits owner readiness, acceptance unchanged, estimate provisional. No source/build/version change, SDK promotion, task closure, commit or push. Evidence: docs/evidence/M7-016-proton10-type0-control.md and docs/current-state.md.
+
+- 2026-09-06 — M7-016 owner-driving / inline-gather checkpoint, primary plus independent source, binary, protocol and returned-data reviews. **0/16; YELLOW — TARGET COST LOWER, STOCK GAMEPLAY/AUDIO NO-GO**. The exact Proton10/Type0-ON owner drive feels slightly better but still gives approximately10–17 FPS with intermittent audio/music stutter and crackle. Its16-file return verifies normal exit0, unchanged complete seed and source preservation; the251.261980918 seconds is harness elapsed, not exact title lifetime. A four-file inline Vulkan gather correction preserves raw bytes/bank/order/state and removes imported calls from all eight inner loops. Focused4/1968, SDK AST1, both full suites1869executed+4known skips, exact ABI/import/code review and primary-inspected Windows Vulkan gameplay/pause/Settings pass. Only GPU changes in the new nine-file package. Exact Proton10 old/gather/old controls yield14.75/14.65/14.80 outputs/s: binding cost falls6.2–8.0%, without cadence improvement. All59files/64,347,346bytes, loaded mappings and raw counter deltas independently reproduce;9 frames inspected; all runs exit0/no force/survivors/source drift. No further identical pause repeat or promotion. Next: prepare one bounded owner-controlled moving-gameplay CPU profile using the exact owner-tested old candidate; audio remains an owner symptom and Vulkan quantitative underrun telemetry is unavailable. M7-009 evolved successor selection/reload remains separate. Latest live app API9% remaining; UI kernel unavailable, no reset used. User3% threshold applies. No task closure/version bump/commit/push; acceptance and provisional estimate unchanged. Evidence: docs/evidence/M7-016-proton10-owner-driving.md and M7-016-inline-float-gather.md.
+
+- 2026-09-06 — M7-016 moving-profile checkpoint, primary plus independent protocol/raw/address/archive review. **0/16; YELLOW — MOVING CAPTURE COMPLETE, STOCK PERFORMANCE OPEN**. The first3s scout fails the two-hit GPU selector with one packet hit; its32-file failure return is independently verified and preserved. A new single12s all-title protocol removes preselection and saves brackets before analysis;28+3 tests and exact helper review pass. Owner confirms gameplay with traffic stops and no pause/menu/loading. All4094 samples/30 files/6,675,980bytes, helpers, inputs and normal-exit receipts independently verify.19 sampled TIDs retain birth across67-thread snapshots; no observed add/depart/reuse. Raw span11.991234646s and CPU bracket12.171116276s remain distinct. Known sharedwait355 leaves corroborate earlier work; another busy thread has393 ProtonUCRT leaves, so exact mapped UCRT bytes are returned for offline attribution. No new source change, FPS/audio PASS, save progression, promotion, task closure, version bump, commit or push. Latest live5% remains above the user3% threshold; no reset used. Evidence: docs/evidence/M7-016-moving-gameplay-profile.md and M7-016-moving-allthreads-profile.md.
+- 2026-09-06 — M7-016 software-FMA checkpoint, primary plus independent attribution/compiler/state/numerical review. **0/16; YELLOW — SOFTWARE MATH COST FOUND, NO NEW GAMEPLAY RESULT**. Exact busy-thread UCRT leaves resolve365fma/23scalbn/5_dclass; measured guest function has96 static imported fma calls. Host enables only SSE4.1 while SDK already targets v3. Clang20.1.8 lowers explicit double FMA in hardware and retains narrow conversions.28+12 compiler wrapper checks pass; state controls expose baseline-existing merging across MXCSR changes and newly enabled implicit contraction under plain -mfma. Strict+FMA retains ordered operations and separate ordinary arithmetic. Reviewed native Windows witnesses complete13 compile/link/run commands, all exit0, with21 scoped numerical checks; this is not exact-Proton/full guest-semantic acceptance. No game binary changed or FPS/audio improvement claimed. Live weekly allowance reaches owner3% threshold; stop after durable handoff. Next: complete numerical/state coverage, review isolated candidate, then exact gameplay/audio measurement. M7-016/KI-027 remains open; no version bump, SDK promotion, task closure, commit or push. Evidence: docs/evidence/M7-016-software-fma.md.
+
+
+- 2026-09-06 — M7 FMA numerical gate after owner limit renewal. M7 remains0/16 and KI-027 remains NO-GO. Same guest-free PE passes native Windows and exact Proton:17,280 matrix rows+12 state rows; all5,760 hardware records match across runtimes and960 finite oracle checks pass. Proton software20tiny-result zero-sign differences and NaN/flags/errno differences are explicit; this is not exact CRT equivalence. SDK-shaped cached-CSR sequence also passes both runtimes with12rows/16hardware values/all12restorations. Independent source/binary/raw-return/arithmetic reviews and60+9pure tests pass. No game candidate/source/version change at this checkpoint, task closure, commit or push. Next: isolated single-TU strict-only/hardware builds, exact command/binary review and native/Deck controls. No immediate owner input; live weekly97% remains. Evidence: docs/evidence/M7-016-fma-runtime-matrix.md.
+
+- 2026-09-06 — M7 isolated FMA candidate checkpoint. Both strict/hardware single-TU builds and Windows controls pass; exact command, import, object and96-operation lowering reviews pass. Deck old/strict/hardware/strict/old paused outputs/s14.50/14.75/14.65/14.70/14.75 show no cadence gain; workload varies. The owner subsequently reports a clear subjective driving/audio improvement on hardwareB0C90E33..., roughly15–20moving and possibly25–30parked without anFPSmonitor, but no stable30. Session97556 is closed with wrapper0/noexternalforce/fullseedunchanged; exit-path qualification is under review. Its24-file return is retained. Next autonomous work while ownerAFK: default-off unpaused stationary counter/profile window, using fresh instrumented binaries distinct from the tested candidate. M7 remains0/16; KI-027 open, no task/version/SDK promotion/commit/push. Evidence: docs/evidence/M7-016-fma-tu-candidate.md.
+
+- 2026-09-06 — M7 unpaused/guest-scope checkpoint. M7 remains0/16; stock30/audio gate stays open. New default-off unpaused probe passes source/build and Windows OFF/ON/cancellation checks. Clean Deck strict/hardware/strict gives18.00/18.80/18.35outputs/s (bounded+2.45–4.44%, strict drift1.94%); all130returnedfiles and20phaseframes verify. Separate2933-sample profile identifies220VCRUNTIME exception-count/helper leaves and83559static host calls to std::uncaught_exceptions from function-scope bookkeeping. Guest-free standard-C++ witnesses pass Windows/exactProton; eight resumed scalar read-faults per runtime retain expected/equal breadcrumbs under Windows volatile-acquire lowering. Three ABI/control strategies also match across six native/Proton executions, including platform-longjmp destructor traces. Nonvolatile vector controls demonstrate that plain continuation loses breadcrumbs, while compiler publication retains all five tested sites; both runtimes finish normally and final return analysis is pending. More stores and changed loop unrolling require actual game measurement. Next: validate the exact private wrapper header, then compare an isolated game candidate against hardware44E8. Latest live weekly73% remains, above owner3% threshold. No task closure, SDK promotion, version bump, commit or push. Evidence: docs/evidence/M7-016-unpaused-fma-window.md, M7-016-guest-scope-overhead.md, M7-016-guest-scope-abi.md and M7-016-guest-scope-vector.md.
+
+- 2026-09-06 — M7 published-scope candidate checkpoint. **0/16; YELLOW — STATIC CPU WORK REMOVED, DECK CADENCE PENDING**. Native/Proton vector and actual-header ABI controls pass final independent review. Private header3157F9BC... applies only to63 recompilation TUs; all67 generated files, SDK and eight companion binaries remain unchanged. CandidateE54C42E5... builds77steps/131.297s;78CMake/72Ninja commands and six generation pins verify. All29,788 alias pairs remain, with171 private bodies;665 imports and96 hardware FMA pipelines remain intact. Decoded direct exception-count calls fall83,559→8; the reviewed hot poll loop preserves23instructions/eightPAUSE/onePCstore. Windows Vulkan gameplay/unpaused/pause passes with seven exact images, unchanged fullseed and normal exit0; primary-inspected idle-camera variation prevents a comparative performance claim. Package09BAE976... and clean Deck baseline/published/baseline helpers are reviewed. Transfer59193 stops at Tailscale reauthentication before preparation/game launch; owner action is required, with remote partial transfer state unverified. Latest69% weekly remains above owner3% threshold. Next: reauthenticate and complete three-arm Deck controls, then evidence-selected cadence/audio and M7-009 evolved successor proof. Normal bundle/shortcut untouched; no SDK promotion, task closure, version bump, commit or push. Acceptance and provisional estimate unchanged. Evidence: docs/evidence/M7-016-guest-scope-candidate.md and docs/current-state.md.
+
+- 2026-09-07 — M7 current-scope/copy disposition checkpoint, primary plus independent source, emitted-code, runner and returned-data reviews. **0/16; YELLOW — NO GLOBAL COPY REPLACEMENT, STOCK PERFORMANCE OPEN**. Clean E54 published-scope Deck controls18.45/18.80/18.55 outputs/s show modest variation with changed draw work. Separate exact profiles identify69 accepted memcpy observations:47 resolve readback/22 upload, without invocation/volume weights. Pre-triggering virtual watch callbacks is rejected because these raw physical-view copies deliberately bypass them; it would alter valid/GPU-written state. A guest-free four-kernel byte witness passes728 aggregate cases and224 balanced rows on native Windows and exact Proton10, normalexit0/no drift/survivors. All11 returned files and exact loaded images verify. REP often regresses; streaming gains depend on size/reuse and disappear for larger rotating copies. Reject global CRT replacement; owned WB memory is not actual Vulkan/cache-consumer/FPS evidence. Static/native/return reviews pass; a parser time-consistency finding is fixed and reanalysis/12 negatives pass without rerunning the witness. Next two packages: conservative shared-watchdog host-scheduling semantics, then the evidence-selected correction with exact runtime/game controls. Owner is asleep and authorized work until20% weekly remains; live59%, no reset used. Own-device Tailscale SSH accept is explicitly approved, saved and verified. Normal bundle/save/SDK promotion remain unchanged; no task closure/version bump/commit/push. Evidence: docs/evidence/M7-016-published-scope-profile.md, M7-016-gpu-copy-callers.md, M7-016-resolve-copy-witness.md and docs/current-state.md.
+
+- 2026-09-07 — M7 caller-yield disposition checkpoint, primary plus independent source, semantic, compiler, relocation, ABI, package, runner and returned-data reviews. **0/16; YELLOW — NO SCHEDULING GAIN, STOCK PERFORMANCE OPEN**. A failed scout-to-stack deadline is retained; cached immutable-map parsing fixes the helper without widening timing gates. The accepted644-sample capture proves325 exact PAUSE observations through sub_82419E98/sub_82411E98/shared helper. A narrower one-call insertion passes32 exact-caller cases on native/exactProton, then a private title build preserves71 other objects and559/560 TU27 function spans; only one real runtime import is added. Windows gameplay/lifecycle and clean E54/yield/E54 Deck controls pass all mechanical gates, but19.25/19.05/19.20 unpaused and15.05/14.75/14.90 paused outputs/s provide no positive signal. All84returnedfiles/88996272bytes and15primary-inspected phaseframes verify with scene/work variation retained. Reject promotion/repetition; normal bundle and full save lineage remain unchanged. Next: export already-available descriptor/submission/fence/watch counters at existing phase endpoints before adding any per-draw timers. Existing draw packet durations truncate per call and overlapping counters are not additive CPU budgets. Owner remains asleep; live48% weekly above20% stop threshold, no reset used. No task closure/version bump/SDK promotion/commit/push. Evidence: docs/evidence/M7-016-watchdog-scheduling.md, M7-016-watchdog-yield-witness.md, M7-016-caller-yield-candidate.md and docs/current-state.md.
+
+- 2026-09-07 — M7 existing-counter attribution checkpoint, primary plus independent schema, emitted-code, lifecycle, source/return and timer-semantics reviews. **0/16; YELLOW — DRAW WORK STILL UNATTRIBUTED, STOCK PERFORMANCE OPEN**. Private J v3 exports21 existing fields (47total) with no new per-draw clocks or SDK changes.37Python methods and4688C++checks pass; two-file VFS changes only the app serializer, preserving71otherobjects,665imports, all guest aliases and96FMAs. Native and exactProton10 runs close normally with unchanged source/fullseed/images. All36returnedfiles/31256641bytes verify; root and independent raw94delta checks/reproductions pass. Deck19.10unpaused/15.00paused outputs/s is a diagnostic observation, not a speedup comparison. Draw34.948/40.973ms peroutput remains material; descriptor2.124/3.257 and deferred5.391/6.363 are nested, while Vulkan-fence0.119/0.055 and pipeline-end0.003/0.004 do not identify a dominant stall. Root inspects five phaseframes with endpoint scene/work limitations. Next: private8stage IssueDraw attribution, first reconstruct exact18A3 baseline from SDKHEAD VulkanCPP (exclude rejected dirty gather) and prove private relink identity; preserve ABI/safe publication. Owner asleep; live41% weekly above20% threshold, no reset redeemed. Normal bundle/save unchanged; no task closure/version bump/SDK promotion/commit/push. Evidence: docs/evidence/M7-016-existing-draw-counters.md and docs/current-state.md.
+
+- 2026-09-07 — M7 eight-phase attribution checkpoint, primary plus independent source/lifecycle, compiler/ABI, parser and returned-data reviews. **0/16; YELLOW — BUFFER PREPARATION LEAD, STOCK PERFORMANCE OPEN**. K first reconstructs exact18A3 GPU bytes apart from four COFF timestamp bytes, then adds private POD-TLS timing without changing class ABI, watches, queues or coherence. Source reversal preserves all original lines;46fixturechecks and33Python tests pass. A Job accounting false rejection is preserved and fixed with bounded normal drain, retaining zero-active admission. Linked review preserves51objects/vtable and resolves the two added identity imports; OFF initialization and clock overhead remain explicit. Native OFF/ON and exactProton10 single Deck control close normally with fullseed/source/images preserved.39returnedfiles/31277479bytes, all94ordinary/64phase deltas and four getter joins/ages independently verify. Instrumented17.80unpaused/14.35paused outputs/s is not a speedup comparison. P2/P7 each~9.3ms/rawoutput dominate unpaused non-COPY work; P6~10.55ms is largest paused. No sampler retries occur. Source/object review identifies a shared RequestRange→RequestRanges temporary vector allocation even for one already-valid range. Next: a private stack-snapshot specialization with exact-body/independent-oracle witness, then clean J/18A controls if gates pass. No cache threshold or synchronization bypass. Owner remains asleep; live29% weekly above20% stop threshold, no reset used. Normal bundle/save remain unchanged; no task closure/version bump/SDK promotion/commit/push. Evidence: docs/evidence/M7-016-draw-phase-probe.md and docs/current-state.md.
+
+- 2026-09-09 — M7 allocation-property checkpoint, primary plus independent source, binary, lifecycle and returned-evidence reviews. **0/16; YELLOW — OBSERVED READBACK MEMORY CACHED ON PC AND DECK, STOCK PERFORMANCE OPEN**. Private default-off metadata probe retains allocation/copy/reuse/synchronization behavior. Unchanged GPU reproduction, candidate binary review,25config checks,23parser tests and15staged contract gates pass. Native and Deck both close normally;32logged allocations each are host-visible/cached/coherent, not device-local. Deck142files/116264433bytes,24maps,2x13B/2x120B,94deltas and six root-viewed frames verify, with full profile/source preserved and Mango restored. All metadata precedes the measured window; no census or later-allocation claim.26.20/22.05diagnostic outputs/s is not a new gain. Existing capacity reuse already avoids shrink reallocation. Retain prior H100 benefit/private candidate; driving/audio/stable30 remain unproven. Next: residual FMA scope/caller feasibility, then evidence-selected correction or necessary owner driving gate. Latest live92%weeklyremaining exceeds owner3%stop; no reset redeemed. Acceptance/estimate unchanged; no task closure/version bump/promotion/commit/push. Evidence: docs/evidence/M7-016-readback-allocation.md and docs/current-state.md.
+
+- 2026-09-09 — M7 U4 endpoint checkpoint, primary plus independent source/model, controller, binary, native and cohort audits. **0/16; YELLOW — LESS PROTECTION WORK, FPS SIGNAL CAMERA-CONFOUNDED**. Exacttwo-mask8->4 candidate passes U8 reproduction,960cases/20162checks, fullDLL-difference review and native launch/configuration. MatchedH100/U8/U4/U8 yields24.55/25.50/24.50unpaused and21.10/20.85/20.60paused outputs/s. U4has3.87–4.08%higher unpaused cadence but2.27–3.65%fewer draws/output and a different camera; no clean/general gain or promotion. Arm calls/output fall21–25%, faults rise9–13%; no protection failures.229files/181412260B,282deltas,6x13B+6x120B,72maps,18root-viewedframes/fullprofiles/normalclosures/Mango restore verify. Qualified residual FMA12firsthops spread over10functions/nineTUs; no blanket flags. Next: two identical paused-only H100/U8 references using the existing app route, then evidence-selected fixed-view comparison or verified camera setup. Scope/acceptance/estimate unchanged; stable30 and physical driving/audio open. Live84%weeklyremaining exceeds owner3%stop. No normal-source/package promotion, version bump, task closure, commit or push. Evidence: docs/evidence/M7-016-invalidation-expansion4.md, M7-016-residual-fma.md and docs/current-state.md.
+
+- 2026-09-09 — M7 paused-route disposition / owner-readiness checkpoint, primary plus independent protocol and full-return audits. **0/16; YELLOW — U4 NOT PROMOTED, MANUAL H100/U8 DRIVE ACTIVE**. Existing paused-only route gives twoU8 references21.65/21.70 withsamecategoricalcamera and1.798%draw variation;171files/94deltas/8views verify. NewpausedU8/U4/U8 gives21.65/21.75/21.40, work+0.052/−0.332% andmatchingcategorical12views. U4+0.462/+1.636% versus−1.155%control drift is insufficientforrepeatablematerialgain; keepH100/U8.218files/141deltas/6x13B+6x120B/72maps/fullprofiles/normalclosures/Mango restore verify. ThreeclosedregenerableU4prefixes removedwith229evidencefiles rehashed unchanged. Ownerconfirmedmanualdrive availability; exactH100/U8 isnowfocusedviaexistingmanualSDKentry, allautoprobesoff/HUDoff/noautoexit. Separatefullprofile mayevolve; physical driving/audio feedback andsafeprofile return are next. Live80%weeklyremaining, owner3%stop. No normalpromotion/version/taskclosure/commit/push. Evidence: docs/evidence/M7-016-paused-reference.md, M7-016-paused-u4-control.md, M7-016-manual-h100.md and docs/current-state.md.
+
 ## 16. Milestone M8 — Modern enhancements and secondary platforms
+
+The roadmap below is draft planning for the owner's post-M7 review. M7 closure
+does not approve a new experiment, promote prior candidates or validate any M8
+capability. Re-rank scope and measurable gates with the owner before execution.
+
+Historical owner bridge decision 2026-10-03 proposed finishing M8-001 before M7;
+the October4 owner decision superseded that order and deferred exact timing.
+Deferred Deck cadence/
+audio/platform work belongs here (performance method under M8-011), but is not
+currently active. After M7 closes, perform a full scope/priority/acceptance review
+of M8; the tasks below are a provisional backlog, not renewed delivery promises.
+M8-012 uses the revised representative M7 matrix, not two full campaigns. No M8
+task is closed or hardware performance guaranteed by this planning change.
 
 **Goal:** add optional improvements without changing stock behavior by default or regressing campaign compatibility.
 
@@ -1362,10 +1655,10 @@ Current checkpoint (2026-09-05, primary Codex + independent ABI/count and diagno
 
 - [ ] **M8-001** Port the known Complete Edition 60 FPS/delta-time patch behind an explicit option, separating the guest timing fix from host presentation rate and VSync policy.
 - [ ] **M8-002** Implement and audit a variable-frame-rate route that keeps simulation time correct through sustained 40–59 FPS dips, fixed 60/90/120 FPS targets, VRR-like fluctuation, and VSync-off uncapped presentation. Validate physics, traffic, AI, animation, UI, audio, timers, streaming, input, race logic, cutscenes, and mission scripting rather than inferring correctness from average FPS.
-- [ ] **M8-003** Define supported frame-rate modes and their fallback policy: stock 30, validated fixed higher caps, validated dynamic/VRR range, and uncapped only if its full timing matrix passes. A missed target must reduce smoothness rather than slow simulation; UI/config must not expose unverified modes.
-- [ ] **M8-004** Add resolution and aspect-ratio controls with correct HUD, culling, projection, and presentation behavior.
+- [ ] **M8-003** Define supported frame-rate modes and their fallback policy: stock 30, validated fixed higher caps, validated dynamic/VRR range, and uncapped only if its full timing matrix passes. A missed target must reduce smoothness rather than slow simulation. Publish a machine-readable capability contract for the launcher/settings UI; UI and config must not expose unverified modes.
+- [ ] **M8-004** Add resolution, window/fullscreen, monitor and aspect-ratio controls with correct HUD, culling, projection, and presentation behavior; expose only validated modes through the launcher capability contract.
 - [ ] **M8-005** Validate ultrawide modes and cutscene handling.
-- [ ] **M8-006** Add optional motion-blur, MSAA, and imposter-shadow controls using verified addresses or native runtime settings.
+- [ ] **M8-006** Add optional motion-blur, MSAA, and imposter-shadow controls using verified addresses or native runtime settings, and register each control for the launcher only after its individual compatibility gate passes.
 - [ ] **M8-007** Separate compatibility fixes from gameplay cheats and accessibility options in UI/config.
 - [ ] **M8-008** Evaluate shader precompilation/cache distribution without shipping proprietary shader data improperly.
 - [ ] **M8-009** Prototype Linux x86-64/Vulkan only after Windows D3D12 correctness is stable.
@@ -1404,9 +1697,37 @@ Enhancements enter M9 packaging only after their individual compatibility gates 
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M8-001, M8-002.
+- 2026-09-13 — Private M8-001/M8-002 diagnostic checkpoint while M7 public gating remains open. Health: `YELLOW — DELTA ARITHMETIC PASSES; WINDOWS 60 AND DECK 45/60 PERFORMANCE TARGETS OPEN`. The isolated TU5 `0x821BDB08` branch selects the common delta path with the separate present-interval patch absent; ten-second Windows samples preserve approximately one second of simulated time per wall second above 30 guest publications/s. Worker profiling narrows `82305E38 -> 82131008 -> 82304398 -> 821775D8 -> 8217B7B0 -> 82419E98 -> 82411E98`; V40 measures 6.7116643/6.7117704 seconds and 13,479,689 polls inside the internal completion scope, with the worker at 97.30% of one core. Yield-before-every-256th-poll is NO-GO: Windows A/B/A 51.098/50.096/48.600 publications/s does not reduce worker CPU; a qualified official-SDK Deck gameplay run gives 21.400/s and is far below the owner target of stable45, ideally60 with70–90 headroom. The Deck harness correctly preserves all data but forced cleanup after an overly strict immediate-mode gate; Gamescope mailbox mode1 is non-FIFO and passes corrected offline replay. Full evidence and next GPU-producer counters: `docs/evidence/M8-001-dynamic-delta-windows.md`. CppStudio and xbox360-decomp were adopted only as reference guidance: `docs/evidence/M8-001-cppstudio-reference-trial.md`. No product option, stable-FPS claim, version bump, commit, push or public promotion.
+- 2026-09-13 - M8 GPU-producer and native-backend checkpoint. Completed task count remains 0/16; health: YELLOW - NATIVE D3D12 AVERAGES ABOVE 60, HOST STABILITY AND DECK 45/60 OPEN. Accepted Tracy localizes the Vulkan GPU Commands core: IssueDraw 17.78%, deferred replay 15.94%, SharedMemory::RequestRanges 14.79%, IssueCopy 12.21%, UpdateBindings 8.81%, indirect buffers 8.04% and swap 7.50%; per-opcode replay is dominated by BindDescriptorSets, PipelineBarrier, BeginRendering, BindPipeline and CopyBuffer driver recording rather than the 0.568-ms/swap outer decode loop. Descriptor-prefix retention, index-repeat caching, legacy render passes, non-sparse 512-MiB shared memory, submit-at-frame-boundary and single-range stack normalization are reviewed NO-GO or no-promotion results; the last candidate passed focused826/826 and isolated CTest413/413 before its exact source/build rollback. On the same Release package and dynamic-delta route, native D3D12 produces66.496 and79.200 guest outputs/s. Its closest draw-density comparison handles2.06% more draws/output than Vulkan while cadence is42.97% higher, GPU Commands CPU/draw5.55% lower and primary elapsed/draw31.51% lower. Independent review verifies four results,36 package files,374 loaded modules,12 frames and eight saves. This supports D3D12 as a provisional native-Windows preference, not stable host-present60,1% lows, other-hardware or Proton proof. FvSvc remains running; direct PresentMon needs elevation and the latest UAC attempt was canceled. Steam Deck remains Vulkan and blocked from a fresh prefix by787,738,624 free bytes below the1-GiB gate. Evidence: docs/evidence/M8-001-dynamic-delta-windows.md and docs/current-state.md. No version bump, commit, push or product promotion.
+
+- 2026-09-13 - M8 persistent-descriptor disposition checkpoint. Official xenia-canary 710102115028e4b51acb551655abd6b3a9042e29 was evaluated in isolated V88 OFF/ON/OFF: 53.996/44.499/44.000 guest publications/s. Integrity passes, but the predeclared performance gate is NO-GO; cumulative avoided operations are not matched-window speedup proof. Three candidate sources were restored, RD/Release GPUs rebuilt, and full CTest passed 1,869 tests with four known skips and zero failures in 61.97 s. No Deck/product promotion. Next: count-only render-scope/barrier fragmentation census. FrameView capture remains blocked on UAC; Deck is online but below its fresh-prefix space gate. Latest allowance44% remains above owner30% stop. Exact metrics/hashes/limits: docs/evidence/M8-001-dynamic-delta-windows.md; handoff: docs/current-state.md. Milestone/task counts and release gates unchanged.
+
+- 2026-09-13 - M8 V90 render-scope census checkpoint. Integrity passes for one normal Windows run at46.4 guest publications/s and six cumulative reports through6,000 closed frames. Pending barriers explain96.2433% of scope endings, target changes3.7566%, submissions only5; empty/query/external reasons are zero. Entry reuse66.782%; compatible-key flushes3,036 (0.06391%) do not prove redundancy. The12,438,106 barrier commands average1.121 elements,90.40% buffers, with no duplicate/overlap-split/queue-transfer counts. Default0 census CVar,22,511-check witness, CTest1,869 pass/4 skip/0 fail, V89/V90 and accepted run/trace/analysis hashes are recorded in docs/evidence/M8-001-dynamic-delta-windows.md. Next: count-only normal-draw/transfer-draw/resolve-clear call-site partition. No speedup, synchronization-removal or Deck-promotion claim. Latest allowance41%, owner stop30%; FrameView UAC and Deck fresh-prefix space blockers persist. Task/milestone counts and release gates unchanged; handoff: docs/current-state.md.
+
+- 2026-09-13 - M8 V92 entry-family census checkpoint. Offline/runtime integrity PASS, about39.0 physics publications/s and six paired reports through6,000 frames. Normal/transfer/resolve-clear entries explain only0.83045% of global pending-barrier closes; the audited forced remainder is99.16955%. Transfer+clear comprise2.20% of entries and60.21% of attributed family actual closes, not the global bottleneck; all2,956 compatible-key closes are normal draw and do not prove redundancy. Source/package/run/trace/analysis/CSV identities and exact counts: docs/evidence/M8-001-dynamic-delta-windows.md. Next exactly one final eight-family forced-call census over24 sites; stop attribution if no dominant family emerges. No speedup, synchronization-removal or Deck-promotion claim. Latest allowance37%, stop30%; FrameView UAC and Deck fresh-prefix space blockers persist. Milestone/task counts and release gates unchanged; active handoff: docs/current-state.md.
+
+- 2026-09-13 - M8 V94 final forced-caller census and rollback checkpoint. Integrity PASS for one normal run at about44.9 physics publications/s and six triples through6,000 frames. Shared-memory upload dominates:6,259,280 forced calls and4,037,261 pending closes,91.67251% of forced pending closures and90.91337% globally. Counts do not prove redundant barriers or saved time. Dependency review rejects cross-draw upload deferral/barrier removal; next narrow candidate is consecutive same-draw vertex RequestRanges batching, adjacent memexport only after partial-failure/visibility proof. Compute-write usage-mask concern remains a separate audit. All census diagnostics were removed, five SDK sources restored, RD/Release GPUs rebuilt; CTest1,869 pass/4 skip/0 fail in61.93s. Private evidence preserved; no matching processes, FvSvc Running/Manual. Latest allowance34%, stop30%; FrameView UAC and Deck fresh-prefix blockers persist. Exact V93/V94/run/analysis/CSV/rollback hashes: docs/evidence/M8-001-dynamic-delta-windows.md; handoff: docs/current-state.md. No product/Deck promotion, version bump or milestone closure.
+
+- 2026-09-13 - M8 compute-write correctness handoff. One access-mask line adds SHADER_WRITE to kComputeWrite; nine unchanged SPIR-V arrays expose15 statically reachable destination stores/0 loads. Independent source GO,19,167 witness checks and both GPU builds pass; CTest1,869 pass/4 skip/0 fail in62.81s. Offline PASS/runtime pending, no performance claim. Exact source/witness/build/result hashes: docs/evidence/M8-001-dynamic-delta-windows.md. Usage31% remaining, stop30%; no runtime now. After reset, isolated synchronization-validation/output capture precedes reconsidering performance. V94 conclusions, batching NO-GO and FrameView/Deck blockers remain; no promotion or release action.
+
+- 2026-09-20 - M8 stock-timing/Deck performance closeout. Stock-TU5 D3D12/VSync30/720p remains the owner-observed correct manual control; B256/V96 stays rejected. Owner-drive26.21/s, wait82411F30 attribution, sleep/WaitOnAddress-game NO-GOs, inconclusive backend tests,15W hardware/540p results and useful-work LZX/audio ceilings remain in evidence. A persistent same-connection GPU-clock roundtrip now proves exact auto restoration, but cold/warm1200MHz A/B/A are inconclusive and not promoted. Reviewed app-only stationary host6F55 completes same-process auto A/A/A attempt2 normally; drift bounds3.72% cadence/10.00% total CPU-output/7.39% worker fail the3% stability gate. Calibration helper attempts failed before samples: no app/Linux clock-domain bridge is claimed. Final auto/OD200–1600/15W, no survivors, about31.666GB free; FvSvc Running/Manual, FrameView UAC blocker unchanged. Usage38% remaining/stop30. After reset: reviewed persistent auto->1200->auto in the same stationary process using controller-relative windows and exact restore, judged against intrinsic drift; otherwise improve scene control. No promotion/release action. Exact identities: docs/evidence/M8-001-dynamic-delta-windows.md; active handoff/manual package: docs/current-state.md.
+
+- 2026-09-28 - M8 Deck scene, direct-cost and copy-attribution checkpoint. A stationary-only title-readiness gate and strict parked/pause visual checks produced the first fully accepted automated stock-TU5 parked gameplay census: three finalized windows at22.98/22.71/23.45 guest publications/s, with CPU/output stability still above the3% drift gate. In1,200 READY/END swap exits,10,800/11,376 bool/loop clean-to-dirty writes were bit-equal. A private fused-copy candidate passed161,082 offline checks but its A1/B/A2 comparison stopped at B due to a post-hold idle-camera scene; no causal performance result. A separate accepted55-second baseline run measured all direct bool pool-request/copy plus root-CBV recording at10.22us per successful refresh, excluding deferred driver replay and far below the1.85ms/publication needed for the predeclared5% whole-GPU-thread gain. About21% of stock GPU Commands user samples map to the CRT copy body, with caller unknown. A reviewed55-second count-only diagnostic then measured1,722,110 shared-upload memcpy calls/21.61GB and70,904 resolve-readback memcpy calls/37.24GB over1,200 successful refreshes; these are summed call lengths, not CPU time or redundant-work proof. Deferred-command resize had zero capacity-growth events. Next: separately time the two real memcpy sites with baseline-only instrumentation. All accepted runs preserved saves, packages and auto/15W/all8; no version bump, commit, push or product promotion. Exact receipts and limits: docs/evidence/M8-001-deck-gameplay-census-and-cost-20260928.md and docs/current-state.md.
+- 2026-09-28 - M8 follow-up copy-cost and elision checkpoint. Accepted two-site timing measures raw2.794ms/refresh for shared upload memcpy and4.129ms/refresh for resolve readback memcpy over1,200 successful refreshes; instrumentation wall time is not proven CPU service or removable work. A real D3D12 READBACK-source copy-kernel test validated8,448 copies and found no robust alternative to the pinned CRT. An accepted equality witness found11,700/11,700 large resolve whole ranges unequal over1,300 refreshes, rejecting a whole-range skip on the observed parked route. Generation metadata, UploadShape1 and UploadShape2 runs failed final pause gates and remain descriptive only. The two UploadShape raw intervals each found zero duplicate emitted pages within an invocation, but neither completed normal closure or observer finalization; no cross-call/coherency inference follows. Both visible pause frames exposed per-glyph rasterization sensitivity. An offline full-word verifier is next, before any prospective run. Deck saves/packages and auto/15W/all8 preserved, no survivors. Live usage43% weekly remaining, owner stop25%. No product optimization, version bump, commit or push. Receipts and limits: docs/evidence/M8-001-deck-gameplay-census-and-cost-20260928.md and docs/current-state.md.
+
+- 2026-09-28 - M8 pause-verifier disposition: offline V10 whole-word soft matching is NO-GO. Among11 true pauses,120 letter permutations,54 retained nonpause negatives, SS/EE substitutions and perturbations, a legitimate1.1x resample lost the bounded geometry proposal and a0.9x positive/EE negative differed by only0.001692. No threshold, stage or Deck run followed. UploadShape1/2 remain FAILED; their descriptive zero-duplicate-invocation counts do not authorize copy elision. Evidence: docs/evidence/M8-001-deck-gameplay-census-and-cost-20260928.md.
+- 2026-09-28 - M8 UploadShape3 diagnostic closeout and next timing candidate. A new terminal collector preserved one genuine pause frame, closed the Deck title normally and finalized all three observers; primary and independent visual/integrity reviews admitted the **shape census only**, leaving the original result `VISUAL_REVIEW_PENDING`. Over1,200 successful refreshes,1,778,212 invocations each held exactly one range with zero duplicate/adjacent/overlapping pages within an invocation;7,566/1,785,778 chunks were pool-boundary splits. Simple within-invocation coalescing is NO-GO, with cross-call reuse unmeasured. Guest publications were23.916–23.995/s on the parked route; CPU/output drift4.599% fails performance stability. A separate stock-TU5 interval2→1 presentation candidate changes only TU27's PPC immediate (`39600002`→`39600001`) and passed36 source checks/independent review for private build only. No timing correctness or45/60 claim, product promotion, version bump, commit or push. Live weekly allowance35% remains above owner25% stop. Evidence: docs/evidence/M8-001-deck-gameplay-census-and-cost-20260928.md and docs/current-state.md.
+
+- 2026-09-28 - M8 stock-timer interval1 private build checkpoint. The stock-TU5/H100/U8 interval2 baseline was reproduced from72 retained objects: TU27 differs from the historical object only by its COFF timestamp; the linked EXE differs from ABF only by its PE timestamp. An interval2→1 TU27 candidate changes only the selector2 immediate. Clang shared an existing `mov eax,1` branch, so the strict one-byte object gate stopped before link; independent COFF/disassembly review plus201 mixed semantic, link and ownership checks admitted that exact optimizer rewrite. One owned private candidate link then produced EXE `48E8F4F6...`; independent whole-PE review finds only160 selector-tail code bytes, three PE timestamp bytes and one pdata end byte changed, with all other code/imports/TLS/unwind unchanged. **No candidate game run, normal-speed proof or45/60 FPS claim.** Windows gross-acceleration rejection and timer-instance correctness gates are next; Deck transfer/product promotion/version bump/commit/push remain absent. Exact source/build identities and failed controls: docs/evidence/M8-001-stock-interval1-20260928.md; current action: docs/current-state.md.
+
+- 2026-09-28 - M8 Windows timing-test preparation checkpoint. The statically reviewed interval1 candidate remains unrun. An isolated A1/B/A2 gross-acceleration rejection harness core now pins exact baseline/candidate and four-file save lineage, with61 fake-backend/contract tests and independent OFFLINE review PASS. It cannot launch a title: Live is hard-disabled and the native process/window/capture/PresentMon backend plus cycle-feature extraction are missing. A >25% B speed bound against two stable controls would reject gross acceleration; visually normal cycles would not prove timer or physics correctness. No Windows/Deck candidate runtime, product promotion, version bump, commit or push. Live weekly allowance27% approaches owner25% stop. Evidence: docs/evidence/M8-001-stock-interval1-20260928.md and docs/current-state.md.
+
+- 2026-09-28 - M8 allowance-stop handoff. The Windows interval1 candidate `48E8F4F6...` is statically reviewed but has **never run**; no correct-speed or FPS claim. The A1/B/A2 rejection harness remains Live-disabled. Source-only schema hardening has172 checks, isolated owner/seed staging has28 mocks, and passive capture contract has70 mocks; real Win32 capture/input/collector and cycle-feature extraction are absent. The Deck UploadShape3 diagnostic was accepted for shape counts only; no within-invocation merging opportunity appeared, and its performance stability gate failed. Owner weekly allowance reached **25% remaining**, so active work stops here. No normal bundle/Deck candidate promotion, version bump, commit or push. Handoff: docs/current-state.md; evidence: docs/evidence/M8-001-stock-interval1-20260928.md and docs/evidence/M8-001-deck-gameplay-census-and-cost-20260928.md.
 
 ## 17. Milestone M9 — Release hardening, packaging, and public distribution
+
+This is draft future release planning, not a current distribution/support claim.
+Launcher/capability requirements remain subject to the post-M7/M8 scope review.
 
 **Goal:** produce a reproducible, legally clean, supportable public release that requires users to supply their own supported game dump.
 
@@ -1425,12 +1746,12 @@ Enhancements enter M9 packaging only after their individual compatibility gates 
 - [ ] **M9-002** Review all code, scripts, dependencies, licenses, and generated artifacts.
 - [ ] **M9-003** Run `ast-grep scan`, `ast-grep test`, compiler warnings, sanitizers where supported, unit tests, integration tests, and campaign regression tests.
 - [ ] **M9-004** Run secret, proprietary-file, large-file, and license scans over the full Git history and release staging directory.
-- [ ] **M9-005** Build an asset-free launcher/installer or portable package that validates the user's dump, performs contained local extraction plus codegen/compilation, atomically publishes a content/toolchain-fingerprinted prepared-game directory, and reuses it on later launches without bundling game assets or generated proprietary guest code.
+- [ ] **M9-005** Build an asset-free launcher/installer or portable package that validates the user's dump, performs contained local extraction plus codegen/compilation, atomically publishes a content/toolchain-fingerprinted prepared-game directory, and reuses it on later launches without bundling game assets or generated proprietary guest code. Add a settings UI that atomically edits and previews effective validated configuration: resolution/window/fullscreen/monitor, supported FPS mode and target, VSync, named wheel/pedal mapping profiles with axes/buttons/inversion/force-feedback gains, a validated local offline display name, opening the exact save directory, and explicit backup/restore. Keep the user-data root and save lineage stable; never derive a filesystem path from the display name or fabricate Xbox Live identity. Show unavailable blur, AA, shadow and later enhancement controls as disabled with an explanation until the M8 capability contract marks them verified. Preserve command-line and headless verification paths.
 - [ ] **M9-006** Ensure extraction/import never overwrites the source ISO and never targets broad or unresolved paths.
-- [ ] **M9-007** Test install, first launch, data import, update, repair, uninstall, and rollback on clean Windows machines.
+- [ ] **M9-007** Test install, first launch, data import, update, repair, uninstall, and rollback on clean Windows machines, including settings persistence/restart, missing or changed wheel devices, malformed settings, synchronized-folder conflicts, and interrupted backup restore.
 - [ ] **M9-008** Verify uninstall never removes user game dumps, saves, unrelated directories, or shared dependencies.
 - [ ] **M9-009** Document minimum/recommended hardware, supported OS/GPU APIs, data hash, known issues, logs, and support bundle creation.
-- [ ] **M9-010** Define save/config compatibility policy and migration behavior.
+- [ ] **M9-010** Define save/config compatibility and migration behavior, including a versioned mutable launcher-settings layer with explicit CLI/environment/config precedence, separation from the immutable package manifest, atomic writes, rollback, and local-profile-name/save-path migration.
 - [ ] **M9-011** Create deterministic release archives and checksums.
 - [ ] **M9-012** Bump the four-part version only after review and tests pass.
 - [ ] **M9-013** Update README-AI, README, changelog, compatibility matrix, build guide, and troubleshooting guide.
@@ -1446,6 +1767,7 @@ Enhancements enter M9 packaging only after their individual compatibility gates 
 - reproducible checksums
 - clean-machine installation evidence
 - complete user and developer documentation
+- launcher settings, controller-profile and save backup/restore UI backed by validated capability metadata
 - exact release SHA/tag parity record
 
 ### Verification evidence
@@ -1455,6 +1777,7 @@ Enhancements enter M9 packaging only after their individual compatibility gates 
 - uninstall preserves source data and saves according to policy
 - Git history and release archive contain no prohibited game data or secrets
 - packaged runtime passes the same smoke and representative gameplay tests as the development build
+- launcher settings round-trip without corrupting config, changing save roots, inventing unsupported modes, or overwriting backups; open-folder actions resolve only the exact owned save directory
 
 ### Exit criteria
 
@@ -1617,7 +1940,7 @@ The criterion below is additional to the task wording and universal Definition o
 | M7-016 | Relocated Windows folder launches without developer tools; named GPU/settings and input/audio/window/F10 plus progressed successor reload have physical evidence. Native-fixture interrupted-session/recovery gates validate mutable roots and provenance; gameplay recovery is separately bound in M7-008. Deck is deferred to M8 / manifest, relocation/session/save tests and Windows physical report |
 | M7-001 | Reviewed category inventory maps every identified offline event type and representative content/lifecycle mechanism to concrete routes, provenance and explicit PASS/FAIL/unknown; exhaustive node graph not required / reviewed matrix |
 | M7-002 | Isolated clean startup/tutorial/profile-name/rename/restart and representative unlock/progression transitions pass; full story/end-game remains unverified / bounded route and restart log |
-| M7-003 | Every currently available identified offline event category has applicable completion/win/fail/retry/restart/persistence evidence or reviewed inapplicability; currently unavailable content is explicitly deferred without PASS by Oct10 owner decision; KI-026 transition and KI-016 HUD triage have linked regression or honest open disposition / matrix |
+| M7-003 | Representative available identified offline event mechanisms have concrete route/outcome evidence; separately bounded recovery and save tests do not imply every per-event win/fail/retry/restart/persistence combination. Unobserved outcomes remain unknown, and unavailable content is deferred without PASS by Oct10 owner decision. KI-026 transition and KI-016 HUD retain linked regression or honest open disposition / matrix |
 | M7-004 | Representative distinct vehicle classes, customization categories and upgrades exercised; KI-013/019/020 have controlled evidence and separate fix/regression or explicit open dispositions / coverage sheet |
 | M7-005 | Representative currently available South Central expansion access/event/content lifecycle and persistence pass; unavailable content is explicitly deferred without PASS by Oct10 owner decision, with no all-expansion claim / coverage and availability disposition |
 | M7-006 | Scripted media/subtitles pass representative/blocker cases; KI-017 music continuity has class-specific evidence or an explicit unresolved limitation / media matrix |
@@ -1626,10 +1949,10 @@ The criterion below is additional to the task wording and universal Definition o
 | M7-009 | Save recovery preserves valid prior state across progression/interrupted writes; the early portable subset validates complete returned profiles, preserves conflicting branches, rejects ambiguity/incomplete state, and reloads progressed saves in successor bundles / recovery and cross-build lineage report |
 | M7-010 | Every claimed language boots and reaches gameplay / locale matrix |
 | M7-011 | First bounded category/critical-lifecycle set passes with exact build/save provenance and defects logged; no full playthrough / route records |
-| M7-012 | Each progression blocker has regression evidence after fix / defect links |
+| M7-012 | Every blocker on a claimed route has regression evidence after fix; unseen routes remain unknown / defect links |
 | M7-013 | Release-like targeted regression of representative coverage/save/fixes passes; no second full playthrough / regression record |
 | M7-014 | Reached stubs are state-correct or documented unavailable / final import audit |
-| M7-015 | Compatibility docs match both full-run evidence sets / documentation review |
+| M7-015 | Compatibility docs match bounded coverage and release-like regression sets, clearly limit full-story/content/platform claims / documentation review |
 
 ### M8 criteria
 
@@ -1637,10 +1960,10 @@ The criterion below is additional to the task wording and universal Definition o
 |---|---|
 | M8-001 | 60 FPS/delta-time patch is byte-guarded, optional, disabled by default, and independent of host VSync/cap selection / patch and presentation-policy tests |
 | M8-002 | Timing-sensitive systems pass stock 30, sustained 40–59 dips, fixed 60/90/120, fluctuating/VRR-like, and VSync-off uncapped comparisons without simulation slowdown / timing and campaign matrix |
-| M8-003 | UI exposes only validated stock, fixed-cap, dynamic-range, or uncapped modes and falls back safely after missed targets / config/UI/frame-pacing tests |
-| M8-004 | Claimed aspect ratios render HUD/world correctly / capture matrix |
+| M8-003 | Capability metadata and UI expose only validated stock, fixed-cap, dynamic-range, or uncapped modes and fall back safely after missed targets / capability-schema, config/UI, and frame-pacing tests |
+| M8-004 | Every resolution/window/monitor/aspect mode exposed by the launcher renders HUD/world correctly and survives restart / capability and capture matrix |
 | M8-005 | Ultrawide gameplay and cutscene policy are documented and tested / report |
-| M8-006 | Each graphics option independently toggles and restores stock behavior / option tests |
+| M8-006 | Each graphics option independently toggles and restores stock behavior, and remains absent or disabled in the launcher until verified / option and capability-gating tests |
 | M8-007 | Compatibility, accessibility, and cheat categories are visibly separated / UI review |
 | M8-008 | Cache design passes legal/content audit and invalidation tests / audit |
 | M8-009 | Linux prototype builds without weakening Windows correctness / build evidence |
@@ -1658,12 +1981,12 @@ The criterion below is additional to the task wording and universal Definition o
 | M9-002 | Review has no unresolved release-blocking finding / signed review summary |
 | M9-003 | Entire required analysis/test suite passes on RC / consolidated test report |
 | M9-004 | Git history and staging scans find no secret/proprietary violation / scan reports |
-| M9-005 | Asset-free package validates the supported dump, locally prepares an atomic fingerprinted game directory, reuses it without reimport on ordinary launches, and contains no game/generated proprietary content / clean-machine prepare-reuse and content audit |
+| M9-005 | Asset-free package validates and reuses the prepared game without prohibited content; its launcher round-trips only validated display/FPS/VSync/wheel/profile settings, preserves user-root/save identity, opens only the owned save folder, and creates/restores explicit verified backups without silent overwrite / clean-machine prepare-reuse, settings-capability, profile, path-safety, backup/restore, and content audits |
 | M9-006 | Import rejects broad/unresolved targets and preserves source ISO / safety tests |
-| M9-007 | Install/update/repair/uninstall/rollback matrix passes clean machines / matrix |
+| M9-007 | Install/update/repair/uninstall/rollback plus settings, device-change, corruption, sync-conflict and interrupted-restore cases pass on clean machines / lifecycle and fault-injection matrix |
 | M9-008 | Uninstall preservation tests prove user data safety / filesystem diff |
 | M9-009 | User documentation covers all claimed requirements and diagnostics / doc review |
-| M9-010 | Save/config compatibility and migration are tested and documented / migration report |
+| M9-010 | Versioned mutable settings and save/profile migrations preserve immutable package verification, explicit precedence and rollback / compatibility and migration report |
 | M9-011 | Two clean builds produce matching intended artifacts/checksums / reproducibility report |
 | M9-012 | Version bump follows highest-impact included change after tests / version review |
 | M9-013 | All named docs match RC behavior / documentation diff review |
@@ -1691,7 +2014,7 @@ The criterion below is additional to the task wording and universal Definition o
 | R-012 | External patches do not match the local XEX | High | Verify module hash and bytes before applying | M2/M8 |
 | R-013 | Variable or uncapped FPS leaves hidden fixed-step physics, scripting, streaming, input, audio, or cutscene assumptions | High | Preserve stock 30; separate delta-time from presentation pacing; test sustained dips, transitions, high caps, and campaign-critical sequences before exposing each mode | M8 |
 | R-014 | ReXGlue or the Xenos Vulkan backend depends on Windows/Linux behavior or Vulkan features unavailable through MoltenVK/Metal | High | Dedicated Darwin/ARM64 feasibility branch; capability inventory and shader/render-path probes before promising or packaging macOS support | M8 |
-| R-015 | The current Windows D3D12 bundle may fail under Proton because of vkd3d-proton, helper-process/SEH IPC, Steam Input/SDL identity, case-sensitive host paths, or writable-storage differences | High | Pin and record Proton, package exact runtime dependencies, resolve roots from the launcher, run clean-copy Windows and physical Deck matrices, fail closed on unsupported behavior, and retain native Linux as separate M8 work | M7 |
+| R-015 | The Windows D3D12 bundle may fail under Proton because of vkd3d-proton, helper-process/SEH IPC, Steam Input/SDL identity, case-sensitive paths or writable-storage differences | High | Deferred Deck/M8 platform work: preserve exact prior no-gos; pin Proton/dependencies and require physical matrix before any support claim. Windows M7 cannot establish Proton compatibility | M8 (deferred; scope review pending) |
 
 ## 20. Decision log
 
@@ -1704,7 +2027,8 @@ Record architecture decisions here or link to ADR files.
 | 2026-08-10 | Preserve stock 30 FPS until gameplay correctness | Known 60 FPS mode requires delta-time changes and broader validation | Accepted |
 | 2026-08-29 | Treat variable/unlocked FPS as a separate validated timing mode, not merely a disabled present cap | The known Complete Edition patch enables delta-time, but missed targets and 40–120+ FPS transitions can still expose fixed-step game systems | Planned for M8 |
 | 2026-08-29 | Gate native macOS ARM64 behind ReXGlue Darwin/ARM64 and MoltenVK/Metal feasibility | Generated code and Vulkan are ARM64-capable in principle, while the current SDK explicitly supports only Windows/Linux and may require unavailable portability features | Planned for M8 |
-| 2026-09-04 | Make the owner-private relocatable Windows x64 bundle and pinned-Proton Steam Deck disposition the first M7 execution task; use one Syncthing folder as the complete runtime and evidence boundary, and do not call it native Linux or a public package | Local Deck testing removes Parsec latency from the campaign evidence that follows. Keeping prepared game data, user state, cache, logs, F10/crash packages, save snapshots, and results under one launcher-relative root lets returned evidence be discovered automatically without repository or host-specific paths. Deck graphics, input, storage, fullscreen, synchronization safety, and helper behavior still require physical proof | Planned for M7 |
+| 2026-09-04 | Make the owner-private relocatable Windows x64 bundle and pinned-Proton Steam Deck disposition the first M7 execution task; use one Syncthing folder as the complete runtime and evidence boundary, and do not call it native Linux or a public package | Local Deck testing removes Parsec latency from the campaign evidence that follows. Keeping prepared game data, user state, cache, logs, F10/crash packages, save snapshots, and results under one launcher-relative root lets returned evidence be discovered automatically without repository or host-specific paths. Deck graphics, input, storage, fullscreen, synchronization safety, and helper behavior still require physical proof | Historical; superseded by 2026-10-03 scope |
+| 2026-10-03 | Scope M7 to representative Windows local RTX 5060 compatibility; defer Deck to M8 and replace full campaigns with category/lifecycle coverage plus release-like targeted regression | Owner now tests locally without remote-display latency and does not want obligatory exhaustive playthroughs. Start bounded Spark routine-worker integration, finish M8-001 harness, close revised M7, then fully review M8. Save/timing/critical-blocker gates remain | Active; no task closed by rescope |
 | 2026-08-10 | Keep game assets and generated proprietary output private | Legal and repository hygiene requirement | Accepted |
 | 2026-08-10 | Use `https://github.com/2FED/RE-MCLA.git` as the project remote | Repository supplied by project owner | Accepted |
 | 2026-08-10 | Commit after every closed task; closure commit and push after every closed milestone | Preserve auditable task boundaries and milestone gates | Accepted |
@@ -1759,16 +2083,19 @@ Execute in this order unless a new blocker changes the plan:
 29. [x] Complete M5 first-playable-race validation and close it at `0.5.0.0`.
 30. [x] Complete all 16 M6 stable-alpha tasks and close the aggregate gate at
     `0.8.2.2` with the split long-session limitations preserved.
-31. [-] Complete M7-016: the private relocatable Windows campaign-test folder,
-    clean-path proof and fullscreen shortcuts exist. Prioritize KI-027 actual
-    cadence/audio and KI-028 cross-build progression preservation, then finish
-    the physical pinned-Proton platform matrix before broad campaign coverage.
-    The early M7-009 save subset and M7-001 matrix preparation can proceed
-    alongside the caller-guided disarm-fragmentation control on isolated SDK0.19.0.0.
-    Preserve completed0.16.0.1 CPU profiles; CPU-scaling/matched-Xenia research follows;
-    M8-011 later reuses the benchmark method for optional enhancements.
+31. [x] Integrate bounded advisory Spark work with short aliases and independent
+    verification. Exact M8-001 temporal timing is deferred by owner, without PASS.
+32. [x] Accept the representative M7 event/lifecycle matrix, isolated clean profile,
+    local rename and progressed successor, with linked blocker regressions.
+33. [-] M7-011/M7-013/M7-016 evidence is accepted. Finalize M7-015, independently
+    review the aggregate gate and publish reviewed SDK and parent commits.
+34. [ ] After M7 closes, review/rethink M8 scope, priorities and measurable timing/
+    performance/platform criteria, including the deferred Deck frame-time budget.
 
-Do not skip directly to enhancement patches, 60 FPS, or public packaging.
+Owner decision 2026-10-03 supersedes the old Deck-first/two-full-campaign order.
+Historical experiments remain in the M7/M8 checkpoint logs and linked evidence.
+Do not promote B256, bypass save/timing gates, repeat unchanged rejected controls
+or skip straight to public packaging.
 
 ## 22. README-AI maintenance checklist
 

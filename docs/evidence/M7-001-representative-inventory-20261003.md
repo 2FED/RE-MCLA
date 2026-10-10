@@ -80,9 +80,9 @@ spans to separate descriptor fields, rather than an inferred seven-type catalog:
 | `SubType`, `+0x04` | `0x8238E748`, 14 pointers at `0x827E930C` | Ordered=1, Circuit=2, Unordered=3 |
 | `DevOnly`, byte `+0x60` | Parser `0x82388F64..0x82388FA8` | If field is present, stores 1 exactly when parsed low32-bit value equals1; otherwise0. Missing-field default is not established here. |
 
-Current pinned [TU21 parser](C:/BDU/MCLA-Recomp/generated/default/mcla_recomp.21.cpp:41915)
+The privately retained TU21 parser (`generated/default/mcla_recomp.21.cpp`, line41915)
 constructs the exact field-label pointers, calls each converter and stores its
-result at the corresponding offset. [Converter bodies](C:/BDU/MCLA-Recomp/generated/default/mcla_recomp.21.cpp:55236)
+result at the corresponding offset. Converter bodies in that private file (line55236)
 return the matched table index, or -1 on exhaustion. TU21 SHA256
 `5F27BF0AD3D69ECA9ED7675512BC5661986BAA5553F9E828053C0E8FE69B7887`.
 Historical `parser-strings.txt` lines1..8 bind DevOnly/RaceType/SubType labels;

@@ -6,29 +6,34 @@ The project aims to translate the original PowerPC executable ahead of time and 
 
 ## Status
 
-Version **0.14.0.0** adds targeted command/memory cost diagnostics on SDK v0.15.0.0
-after the returned 0.13.0.0 Deck run confirmed corrected overlay FPS but unchanged gameplay speed. Current work
-prioritizes stock-mode Steam Deck cadence/audio and cross-build save
-continuity before broad campaign testing. See [M7 priorities](docs/M7-priorities.md)
-and the [short current-state handoff](docs/current-state.md). Returned profiles
-and evidence are now archived before replacement/pruning, with ambiguous
-ancestry rejected. Automated fixtures pass; physical successor-save reload
-remains unverified. See [save-lineage evidence](docs/evidence/M7-009-portable-save-lineage.md).
+MCLA-R has representative offline single-player coverage on a local Windows
+RTX 5060 laptop using Direct3D 12 and stock game timing. Accepted routes include
+delivery, Red Light, Time Trial, Series, Tournament, Pinkslip, Wager loss,
+Freeway, Goal Attack and Arcade Landmark, with the outcome and persistence
+limits recorded in the [coverage matrix](docs/campaign-coverage-matrix.md).
+This is not a full-campaign or every-event claim.
 
-MCLA-R has completed bounded M6 stable-gameplay validation and is working on M7 campaign compatibility. The experimental Windows runtime includes progressed-profile preservation, non-black Photo Mode captures, the reached delivery-transition fix, local F10 snapshots and out-of-process native crash packages. Accepted long-session evidence combines a 7,202-second frontend stage with a separately pinned 3,600-second mixed-gameplay process; it is not a same-artifact three-hour or full-campaign claim.
+Clean startup, local display-name changes, progressed save reload, motorcycle/
+tuning recovery, representative media/subtitles and window-only F10 capture have
+bounded acceptance on separately identified test packages. The active owner
+branch is the unchanged private p1 candidate; new source builds do not inherit
+its gameplay acceptance. See [Windows acceptance](docs/evidence/M7-016-windows-acceptance-20261010.md)
+and the [compatibility summary](docs/alpha-compatibility.md).
 
-The private Windows/Proton bundle reaches gameplay and the garage on Steam Deck, supports fullscreen and Steam Input, and returns F10/session/save evidence through Syncthing. **Deck performance remains unusable:** the latest pair produced 6.91 new outputs/s. Idle-overlay repaints are corrected and the owner's FPS overlay now agrees with perceived motion; actual throughput and audio are not fixed. Version 0.14.0.0 separates command preparation, native fence waits and physical memory-watch/fault costs without changing coherency or guest timing. See [measurements and decision rules](docs/evidence/M7-016-deck-command-memory-cost.md). Native Windows defaults to D3D12; Proton defaults to Vulkan, with an explicit D3D12 fallback.
+M7 is at final review and publication integration, not declared closed or pushed
+by this page. [README-AI](README-AI) owns the live milestone ledger;
+[M7 priorities](docs/M7-priorities.md) records the execution order.
+Payback, unconfirmed South Central event access and Unordered remain deferred
+without PASS. Steam Deck/Proton, exact high-FPS timing and full campaign/end-game
+coverage are outside this M7 acceptance.
 
-Race Back camera restoration, intermittent wheel centering, rendering/music defects, full campaign correctness and secondary-platform support remain open. F10 displays non-interactive RECORDING/READY status and keeps private diagnostics local. This is a developer test artifact, not a public game release.
+Rendering shimmer/lighting defects, busy-area slowdowns, music continuity,
+intermittent Race Back and wheel-centering issues remain documented in
+[known issues](docs/known-issues.md). Stock timing is a correctness baseline,
+not a measured stable-30-FPS guarantee. Linux, native macOS ARM64, high/variable
+frame rates and ultrawide remain later gated goals.
 
-The initial target is:
-
-- Windows 10/11 x86-64
-- Direct3D 12
-- offline single-player
-- original 30 FPS behavior until compatibility is established
-
-Linux, native macOS ARM64, higher or variable frame rates, ultrawide support, and other enhancements are later gated goals and are not currently supported.
+This is an experimental developer project, not a public turnkey game release.
 
 ## Game data is not included
 
@@ -46,9 +51,18 @@ Support for any other region, revision, title update, or executable must be impl
 
 ## Not a turnkey converter
 
-Static recompilation does not automatically make an Xbox 360 game portable. MCLA-R requires game-specific work for PowerPC control flow, Xbox kernel and XAM behavior, graphics, audio, input, storage, timing, retired online-service paths, and progression compatibility.
+Static recompilation still requires game-specific work for PowerPC control flow,
+Xbox kernel/XAM behavior, graphics, audio, input, storage, timing and progression.
+The source pins the MCLA-R ReXGlue v0.20.0.0 fork at an exact reviewed commit;
+Xenia Canary remains an independent behavioral reference.
+[SDK provenance](docs/rexglue-sdk.md) and [build instructions](docs/build.md)
+separate the current source integration from tested older binaries.
 
-The project uses an exact MCLA-R ReXGlue v0.15.0.0 fork as its recompilation/runtime base and uses Xenia Canary as a behavioral reference. Both upstream projects remain independent from MCLA-R; the fork is pinned for tested vector-codegen validation, Windows Unicode paths, corrected window/input destruction ordering, fail-closed game-data VFS behavior, deterministic offline-service states, Xenia-compatible guest-thread startup ordering, privacy-safe guest crash reports, guest-backed D3D12 presentation/capture telemetry, selectable D3D12/Vulkan runtime backends, bounded runtime auditing, stable latest-active controller routing across Steam Input mirrors, model-agnostic SDL wheel input, the title's 64-slot force-feedback surface, runtime fullscreen shortcuts, correct mounted-root VFS resolution for saved profiles, nonvirtual guest-output/vblank timing diagnostics, lightweight Vulkan stage counters for explicit snapshots, and privacy-safe audio/performance telemetry including an application-triggered 300-frame audit. General forced guest-thread teardown can still poison a guest-heap lock; the synthetic diagnostic route is contained and normal external-close cycles are independently verified, but this SDK limitation is not claimed as fixed. Project diagnostics use nine independently filterable categories: app, PPC, kernel, XAM, VFS, GPU, audio, input, and patches.
+Fresh SDK20 Release builds pass compilation with WGC enabled (82/82 actions)
+and with its default OFF setting (77/77). These are engineering results, not
+gameplay acceptance or promoted replacements for p1. General guest/diagnostic
+teardown limitations remain; exit code zero does not prove graceful shutdown
+of every worker.
 
 ## Planned user-supplied dump workflow
 
@@ -58,17 +72,37 @@ The current repository already implements the underlying developer pipeline—ex
 
 ## Private portable campaign-test bundle
 
-M7 development uses an owner-private, toolchain-free Windows x64 folder below ignored `private/bundles/M7-016`. This is an internal test artifact containing the locally prepared game and selected save; it is not redistributable and is not a substitute for the future asset-free consumer workflow.
+The current owner entry, `Run M7 Profile Candidate.cmd`, targets `private/p1`.
+That independently copied, owner-private Windows package includes prepared game
+data and its own selected save; it is not redistributable. Its accepted hybrid
+identities begin host `82A69B5E`, runtime `542DD347`, launcher `67B8F527`
+and GPU `E2EA29B7`; full hashes are in the
+[profile report](docs/evidence/M7-profile-rename-20261010.md).
+It uses named RTX 5060 selection, stock timing, 2x target, VSync and fullscreen.
+Do not merge the separate Clean, Sandbox or subtitle-test branches into it.
 
-The stable Syncthing root is `private/bundles/M7-016`. `current.txt` names the latest fingerprinted child. After synchronization is completely idle, launch that child's `Launch-MCLA.exe`; the launcher resolves everything from its own directory, validates all immutable file hashes, and refuses incomplete/conflicted copies, reparse points, or a second concurrent writer. The bundle is locked to fullscreen startup and supports runtime windowed/fullscreen switching through both Alt+Enter and LMB double-click. Under Proton/Wine the application selects native Vulkan; native Windows retains its D3D12 default. `Launch-MCLA.exe --gpu-backend=d3d12` is the explicit compatibility fallback if Vulkan initialization fails. Do not run the same writable bundle on two hosts at once.
+The launcher resolves paths from its own folder, verifies immutable hashes,
+rejects conflicting/incomplete copies and prevents a second local writer.
+Mutable saves, caches, logs, diagnostics and session records stay beside it.
+Stop writers and complete synchronization before any archive or publication;
+ambiguous progression requires review rather than choosing the newest file.
 
-Each run keeps its mutable state in sibling `user`, `cache`, `logs`, `diagnostics`, `results`, `update`, and `metadata` directories. Session and save-snapshot publications are atomic and retain at most 32 completed entries. Consequently a returned Syncthing copy contains the progressed profile, ordinary logs, F10/native-crash packages, and machine-readable session results without depending on repository paths or developer tools. Windows relocation is verified. The first Steam Deck/Proton return is a partial pass rather than a support claim: it reached gameplay and the garage with a complete F10 package, but performance and the remaining physical matrix are still open.
-
-For KI-027 performance capture, record the exact Proton version, reach saved gameplay, press F10 and wait for `F10: READY`, drive actively for 30–45 seconds, then press F10 and wait for `READY` again. After the folder returns through Syncthing, `scripts/analyze-portable-deck-performance.ps1` hash-verifies the same-process pair and separates guest-output cadence from vblank plus renderer submission spans and subsystem timing. MangoHUD's displayed number is not treated as unique game FPS.
+The unchanged normal `private/bundles/M7-016/current.txt` branch and historical
+Deck packages are separate from p1. The new source launcher rejects a 33rd
+combined session/rename record instead of pruning away lineage; synthetic native
+tests pass, but that guard is not present in p1's accepted launcher.
+Preserve/archive the complete branch before capacity requires a successor.
+[Save acceptance and limits](docs/evidence/M7-009-save-acceptance-20261010.md).
 
 ## Diagnostics and crash reports
 
-Press `F10` while the game is running to collect a local diagnostic package at the moment of a visual, input, audio, or transition softlock. The input callback only queues the background work, which records bounded process/window/runtime state, a screenshot of the already-presented window, a bounded log tail, a normal minidump, and a stable private save snapshot. A top-right `F10: RECORDING...` overlay remains visible during capture; `F10: READY` appears for about one second only after the package and latest pointer are atomically published. `BUSY` reports a repeated request during capture and `FAILED` reports an unsuccessful publication. The status overlay accepts no input and no longer relies on a platform sound.
+Press `F10` while the game is running to collect a local diagnostic package at the moment of a visual, input, audio, or transition softlock. The input callback only queues background work: bounded process/window/runtime state, an optional image, log tail, normal minidump and private save snapshot. The overlay shows `F10: RECORDING...`, then `F10: PACKAGE READY (IMAGE UNVERIFIED)` after publication. `BUSY` reports a repeated request and `FAILED` an unsuccessful publication. The overlay accepts no input. Package completion does not verify the image or guarantee a coherent snapshot of arbitrary concurrent save writes.
+
+Window-only WGC images are accepted on the explicitly enabled p1 candidate.
+WGC is OFF by default in source builds. A still image and completed audit do
+not establish exact frame/sample alignment, capture cadence or measured FPS.
+Never assume an image from an older or different package is valid merely because
+its F10 package completed.
 
 Unhandled native crashes are captured automatically by the separate `mcla_crash_handler.exe`. After the dump is safe, the failed title is allowed to exit while the helper finishes the local package and shows its exact folder path. Nothing is uploaded automatically. Dumps, logs, screenshots, and save snapshots can contain private paths, profile/gameplay data, or memory fragments, so send the folder path first and inspect individual files before publishing them.
 
@@ -102,13 +136,13 @@ The plan progresses through:
 4. native boot and frontend
 5. first playable race
 6. stable gameplay systems
-7. full Complete Edition campaign compatibility
+7. representative Windows Complete Edition compatibility, with explicit deferred content
 8. optional modern enhancements
 9. release hardening and asset-free distribution
 
 ## Contributing
 
-The project is not yet ready for general contributions. During native boot work, coordinate before implementing broad runtime or enhancement changes.
+The project is not yet ready for general contributions. Coordinate before implementing broad runtime or enhancement changes.
 
 Never open an issue or pull request containing copyrighted game files, memory dumps, private logs, credentials, tokens, or links to unauthorized game downloads.
 

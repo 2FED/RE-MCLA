@@ -11,9 +11,9 @@ These repository-specific rules supplement the global Codex working rules.
 
 ## Milestone persistence
 
-- Continue working autonomously on the active milestone until one of these terminal conditions is reached: the milestone is fully reviewed, closed, committed, and pushed; further progress genuinely requires user input or authorization; or the observable remaining weekly usage allowance reaches 20%.
+- Continue working autonomously on the active milestone until one of these terminal conditions is reached: the milestone is fully reviewed, closed, committed, and pushed; further progress genuinely requires user input or authorization; or the observable remaining weekly usage allowance reaches 30%.
 - Do not stop merely because an individual task is complete while safe, in-scope milestone work remains.
-- After every closed task, read the live ChatGPT Settings -> Usage value (or the interactive Codex `/status` fallback) before starting the next task. Continue only while the observable weekly allowance remains above 20%.
+- After every closed task, read the live ChatGPT Settings -> Usage value (or the interactive Codex `/status` fallback) before starting the next task. Continue only while the observable weekly allowance remains above 30%.
 - When the environment does not expose weekly usage, do not guess or fabricate it. Continue until milestone closure or a genuine user blocker, and let the user stop the run if their external usage display approaches the threshold.
 - This persistence rule does not broaden authorization: preserve the repository's safety, review, testing, commit-per-task, and milestone-push gates.
 
@@ -27,3 +27,17 @@ These repository-specific rules supplement the global Codex working rules.
 - Subagents must not commit, push, open upstream issues, or change milestone/task status unless the primary agent explicitly delegates that exact action. Upstream issue research remains read-only until duplicate searches are complete and the primary agent has reviewed the proposed report.
 - Before accepting delegated work, the primary agent reviews the returned findings and any diff, reconciles them with the repository rules and current milestone criteria, and runs the relevant project gates. Delegation does not replace the required periodic milestone review and re-evaluation.
 - Every subagent handoff reports its result status, files inspected or changed, commands and tests run, unresolved risks, and any remaining user action or authorization. Subagent completion does not close a task or trigger the usage-limit check; only the primary agent can do that after acceptance and commit.
+
+
+## Standing owner authorization for non-destructive tests
+
+On 2026-09-08 the owner explicitly authorized ALL such non-destructive tests in
+this MCLA optimization task: "якщо тест не деструктивний – МОЖНА, РОЗРІШАЮ".
+This standing authorization includes preparing and transferring experimental
+binaries, helpers and diagnostic proofs between this workspace and the owner's
+paired Steam Deck, running isolated controlled comparisons, and collecting their
+results. It includes the prepared U package and future non-destructive experiments
+of the same kind; do not ask for package-by-package confirmation again.
+Preserve the normal bundle and save lineage, review/test gates, bounded owned
+process cleanup and the owner's 30% remaining weekly usage stop threshold. This
+permission does not authorize destructive actions or unrelated external sharing.

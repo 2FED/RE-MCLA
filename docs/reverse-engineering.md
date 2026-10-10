@@ -184,6 +184,22 @@ owner-confirmed active delivery gameplay and remained playable for 300 seconds
 before a controlled external exit, closing the exact callable-boundary defect.
 This does not claim machine-observed mission state or full delivery completion.
 
+## Pinkslip tutorial callable boundary
+
+Oct10 owner championship/Pinkslip tutorial crash reaches missing callback
+`0x822B88B8`. Original-XEX instruction audits establish the independent wrapper
+`[0x822B88B8,0x822B88C8)` and its explicit callback registration at
+`0x822B8F7C/84/8C`. The wrapper preserves the incoming r3 as r4, materializes
+r3=`0x822B7888`, and tails to `0x822C97B0`; it is not the neighboring A8 wrapper.
+The exact crashing PE omits B8, and the real SDK lookup regression fails at
+that same target. The narrow explicit function entry is added; non-force
+0.19.0.0 codegen changes only its body/declaration/two registrations.
+Owner subsequently confirms the tutorial repeated after garage to free roam
+without crashing on the repaired DCDE2F12 host, then a Pinkslip win. The specific
+physical crash regression and subsequent owner-confirmed Pinkslip reward/reload
+pass for that exact repaired route; unseen callbacks remain unverified. See
+[crash evidence](evidence/M7-pinkslip-crash-20261010.md).
+
 ## Import map handoff
 
 M2-013 maps all 503 XEX import records to 257 known exports: 95 `xam.xex` functions and 162 `xboxkrnl.exe` symbols (151 functions, 11 variables). ReXGlue's accepted generated dispatcher contains all 246 callable thunk addresses. Static generated-code scanning finds 1,517 direct call sites across 240 functions; `__C_specific_handler`, `StfsControlDevice`, `StfsCreateDevice`, `IoInvalidDeviceRequest`, `NtQueryDirectoryFile`, and `NtReadFileScatter` are retained as indirect-only rather than mislabeled unreachable. Variable imports have no callable thunk by design. M2-014 must narrow this complete static inventory to entry-point startup reachability; see `docs/evidence/M2-013-import-coverage.md`.

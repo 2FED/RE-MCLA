@@ -949,8 +949,9 @@ Public engineering components, not a live game adapter admission:
   no-game colored-window gate with exact palette oracle, changing pixels, source
   pins, isolated child `-I -S -B`, environment allowlist and bounded cleanup.
   Fixture safety timer exit3 cannot become parent normal-close exit0 evidence.
-  [Owner-assisted launcher](../../scripts/Invoke-MclaNativeFixture.ps1) and
-  [CMD](<../../Run Native Harness Test.cmd>) give a10s click/readiness window.
+  The locally retained owner-assisted `scripts/Invoke-MclaNativeFixture.ps1` and
+  `Run Native Harness Test.cmd` gave a10s click/readiness window. These consumed
+  experimental entries are not a public runnable deliverable or retry instruction.
 
 Independent reviews covered ownership/rollback/privacy, transport/source semantics,
 cycle non-claims and no-game probe safety. Main integrated and reran gates.
