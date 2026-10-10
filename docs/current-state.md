@@ -6,10 +6,10 @@ Updated October 10, 2026. README-AI owns the milestone ledger and dated history.
 
 Finish M7 representative local Windows compatibility, then stop at the owner's
 requested milestone boundary. No full campaign, Deck target or unlock grind.
-14 tasks are committed complete; M7-015 documentation is reviewed and staged for
-its task commit, then aggregate closure/push remain. M7-005 is deferred without PASS.
-Pre-documentation HEAD b0872c5, source VERSION0.18.15.0.
-No milestone closure/push yet. Weekly usage22% used/78% remaining;
+All15 mandatory tasks are committed complete; M7-005 is deferred without PASS.
+M7-015 commit3a16edd and independent aggregate review GO; closure commit/push
+are being finalized at source VERSION0.19.0.0. No parent push claimed yet.
+Weekly usage22% used/78% remaining;
 check after each closed task, stop at30% remaining. Never infer physical PASS.
 
 Recent commits: e0ee93f events,8da30b0 profile/source integration,39c294e save
@@ -54,10 +54,11 @@ Exit0/automatic unexpected-guest-exit-after-close is not graceful teardown PASS.
 ## Integrated source and tests
 
 SDK branch mcla/mcla-r-hotfixes HEAD5dd58f894bf34b9ea85e59d3903c7f0e8044d853,
-local tagv0.20.0.0, not pushed. Exactly7profile/API files committed; unrelated
+tagv0.20.0.0 and branch pushed; both remote refs and fresh public fetch/fsck verified.
+Exactly7profile/API files in the latest SDK commit; unrelated
 graphics and tests/unit/CMakeLists WIP remain untouched/excluded. Parent pins0.20.
-At milestone publication push SDK dependency/tag first, verify public fetch,
-then parent; never stage all SDK files.
+Dependency-first publication is complete; parent closure/push is next.
+Never stage all SDK files. [Aggregate review](evidence/M7-closure-20261010.md).
 
 Isolated private/sdk20s with25pinned dependency clones;15libmspack120000links
 materialized only there after Windows denied native symlinks. Expected dirty
