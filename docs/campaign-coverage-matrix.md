@@ -1,12 +1,124 @@
-# M7-001 campaign evidence seed
+# M7-001 representative coverage and historical evidence seed
 
-Reviewed: 2026-09-05. **Preparation only; M7-001 remains in progress.**
-The mandatory retail node catalog, dependency graph and two clean-campaign
-passes are not complete. Eleven rows below are historical test scenarios,
-not eleven distinct campaign nodes or a completion percentage.
+Historical seed reviewed: 2026-09-05. Inventory reconciled: 2026-10-10.
+The M7-001 inventory maps each identified offline family and critical lifecycle
+dimension to observed routes, historical evidence, or an explicit unresolved or
+deferred disposition. This completes the inventory deliverable, not M7-003 event
+coverage or the milestone gate; README-AI owns task closure. Representative Windows
+coverage does not mean two full campaigns or a complete retail dependency graph.
+The eleven seed rows remain historical scenarios, not current-build category PASS
+or a completion percentage.
 
 Machine-readable inventory: [campaign-coverage-seed.json](../config/campaign-coverage-seed.json).
 Task criterion: README-AI, M7-001. Execution order: [M7 priorities](M7-priorities.md).
+
+## Current M7 acceptance matrix policy
+
+Before M7 closure, review an inventory of identified offline event types against
+source/observed evidence; choose a concrete representative route for each. Add
+critical startup, expansion access, garage/shop/streaming, media, AI and save
+lifecycle coverage. Record applicable entry, objective/result, win/fail/retry/
+restart/abandon, reward/unlock, recovery and fresh-process persisted reload.
+Inapplicable observations require a reason, not a fabricated PASS.
+
+Every current route needs exact artifact/config/GPU identity, source-backed type,
+save provenance, evidence links and PASS/FAIL/untested/unavailable disposition.
+When available, record `RaceType` and `SubType` separately; equal numeric values
+across them are not equal semantics. `DevOnly` is an availability-investigation
+lead, not an automatic reason to count or exclude a retail event.
+Different retail instances may share a category only after review of their mechanism.
+Historical source records may guide route choice but cannot silently become current
+physical evidence. M7-011 collects the first bounded set; M7-013 checks its
+release-like regression. Owner progress stays separate from isolated clean startup.
+
+The reconciled inventory retains Ian series, head-to-head, Red Light/Race Back,
+delivery, ordered Arcade and owner-attested freeway/pink-slip leads alongside newer
+observations. It is a bounded identified-family inventory, not an exhaustive retail
+taxonomy. Unknown distinctions stay explicit; aggregate race counts and seed flags
+cannot establish gameplay completion.
+
+Oct3 [bounded category/route inventory review](evidence/M7-001-representative-inventory-20261003.md)
+adds explicit Circuit/Unordered, Tournament, Time Trial, Payback, Beat Me There and
+Goal Attack discovery leads. Mechanism/container/wager/UI axes overlap;7/14 enum
+lookup spans are not mission counts. The October 10 reconciliation assigns each
+lead a disposition; missing displayed identities remain unknown. Historical rows
+and source-only leads receive no current-artifact PASS.
+
+Full story/end-game and exhaustive retail-node/content compatibility are outside
+the revised M7 gate and must remain explicitly unverified. Steam Deck is deferred
+to M8. Existing seed schema/validators keep their original fail-closed no-campaign-
+credit semantics; a future current-route matrix needs its own reviewed evidence.
+
+Oct10 owner exception: currently unavailable content can remain deferred without
+PASS until natural unlock/M8; do not grind Payback/SC access. Owner reports a
+purchasable motorcycle and Hollywood Central/Doc's garages, not a confirmed SC
+event. [Accepted isolated tests and engineering gates](evidence/M7-closure-readiness-20261010.md).
+
+## Reconciled family inventory
+
+Source anchors and descriptor limits are preserved in the
+[inventory evidence](evidence/M7-001-representative-inventory-20261003.md).
+The detailed current-route table below binds accepted observations to their build
+and save cohort. Unknown is not unavailable, inapplicable or PASS.
+
+| Identified family or axis | Representative binding and disposition |
+|---|---|
+| Ordered mechanism, including Arcade | Kenneth Hahn Series includes three owner-described Sprints; participation is accepted within that Series. Explicit Ordered Arcade route Sunset and Vine remains historical environment-only coverage, without completion. No native RaceType binding or standalone Arcade completion is inferred from the Sprint label. |
+| Circuit mechanism | One owner-described Circuit inside Kenneth Hahn Series is accepted participation; individual placement and standalone Circuit completion are unrecorded. |
+| Unordered mechanism | Distinct source descriptor slot is established, but current player-facing route, availability and relation to observed routes remain unknown. Not merged into Circuit or deferred as unavailable. |
+| Head-to-head participant route | Historical Martin two-car event remains the explicit lead. Current Red Light/Pinkslip observations do not establish Martin identity or a native participant-count binding. |
+| Series container | Kenneth Hahn State Park, one Circuit and three Sprints: overall win and progress persistence accepted. Historical Ian Series stays a separate cohort. |
+| Tournament container | Owner identifies the completed championship as the game's Tournament category; persisted victory and repaired follow-up tutorial accepted. Course/native ID unknown. |
+| Red Light and Race Back | Ian Red Light completion/save accepted. Loss-to-Race Back remains historical healthy retries plus open KI-026, not a current fix or fresh-process replay claim. |
+| Delivery objective | Hollywood Auto delivery completion/progress/money reload accepted; first identified vehicle was Pontiac Solstice MIDSUMR. Final counter/payout not decoded. |
+| Freeway driver | Two owner-attested August 27 events remain historical-only. Current opponent/route/availability unknown; no new-build coverage credit. |
+| Pinkslip condition | October 10 win and same-entry win/reward reload accepted; exact awarded vehicle/course unknown. |
+| Wager condition | October 10 loss accepted. Win, exact stake deduction and mode-specific retry/persistence are unreported, not inferred PASS or a requirement to force a winning replay. |
+| Time Trial objective | First in-game Time Trial win and subsequent progress persistence accepted; exact course/title and target time unknown. |
+| Payback objective | Availability unconfirmed in the owner's current save; explicitly deferred without PASS under the October 10 no-grind decision, until natural unlock/M8. |
+| Beat Me There | Source lead unresolved: current route, availability and distinctness from other head-to-head mechanisms unknown. No alias or unavailable classification invented. |
+| Goal Attack UI mode | Entry/completion and damage-goal mark surviving restart accepted. Other goals and all-goals credit unverified. |
+| missionRace, localRace, wagerHangout | Source labels retained as unresolved player-facing/offline distinctions, not invented as three extra required retail event families. |
+| Multiplayer/battle/editor/online tournament | Outside offline M7 support. Presence of strings does not establish a supported offline event. |
+
+## Critical lifecycle inventory
+
+| Dimension | Bound coverage and remaining scope |
+|---|---|
+| Clean startup, profile and progression | Isolated Clean new save/restart accepted; Tournament-to-Pinkslip tutorial/unlock observed. Successor p1 name/progress/restart accepted below. Multiple accounts, full REP chain and end-game untested. |
+| Vehicle, customization and recovery | Sandbox motorcycle/tuning/purchases reload, Restart/Abandon and police bust/fine/release accepted. Exact item/model and every cosmetic/performance class unreported. |
+| Garage, shop, map and city streaming | Current garage/free-roam transitions and gameplay observed; historical garage transactions and eight project-defined areas retain their earlier scope. Not every interior or current-build city tour. |
+| Phone, scripted media and audio | Repaired Pinkslip tutorial and owner sound/music observations accepted. Bink fidelity, subtitle/skip cases and KI-017 continuity remain limitations. |
+| South Central expansion | Current event access unconfirmed; owner-approved deferral without PASS until natural unlock/M8. Doc's Garage location alone proves no expansion event completion. |
+| Save, successor and window lifecycle | Full-profile archives/isolated branches, successor load, renamed-profile reload, pause/audio and Alt+Enter have bounded evidence. Latest p1 F10 was not pressed and remains pending; historical two-scene WGC acceptance is separate. |
+| Language and offline services | Language claims require configuration/gameplay binding under M7-010; historical locale-title evidence is not localized gameplay. Reached-import dispositions and INFO observability limitations remain M7-014, not inventory PASS. |
+
+M7-001 can be reviewed independently of remaining M7-003/006/010/014/016
+acceptance work: recording a gap completes its inventory entry, not its test.
+
+## Current-artifact owner observations
+
+These are separate from the historical seed below; seed JSON flags are unchanged.
+
+Oct5 stock3380E9E8 independently copied progressed-profile successor loads and
+same-candidate restart preserves progress per owner. Primary-reviewed road/garage
+F10 images correspond to the two scenes, with two completed audits in one process.
+Returned profile2BC2F4A8... is archived; no new race/category win is inferred.
+[F10 and reload evidence](evidence/M7-f10-wgc-owner-return-20261005.md).
+
+| Route | Bound configuration and save | Accepted observation | Remaining scope |
+|---|---|---|---|
+| Empty-profile opening and first save | DCDE2F12/D4894275, local state1, RTX5060 stock2x/VSync; empty seed to profile5D073219... | Owner reports all requested Clean checks PASS, including new save and fresh-process continuation; two sessions and full return independently verified. [Evidence](evidence/M7-closure-readiness-20261010.md) | Rename separately accepted on p1 below, not on this Clean artifact; no multiple-account or full-story claim. |
+| Renamed main-profile successor in private/p1 | Host82A69B5E/runtime542DD347/launcher67B8F527, RTX5060 stock2x/VSync; explicit main seed693B31EB to returnEFF52498/saveEE824CF5 | Owner confirms visible OrangeNoob, name/progress persistence after restart, pause/audio and Alt+Enter. Independently rehashed return180entries/38375514B and archive; two gameplay sessions exit0, three/two snapshots, zero watcher errors; first final save equals second launcher-start. [Implementation and return](evidence/M7-profile-rename-20261010.md) | Owner corrects that F10 was NOT pressed; final integration remains pending. No graceful diagnostics teardown, every-event replay or Sandbox merge inferred. |
+| Isolated motorcycle, tuning and recovery | Same DCDE2F12; independent main693B31EB copy to Sandbox5D6CB88B... | Owner reports motorcycle, tuning purchase, Restart/Abandon, arrest/release after fine, driving/pause restored, purchases retained after restart. [Evidence](evidence/M7-closure-readiness-20261010.md) | Model/items unreported; not every cosmetic/performance category, police escape or damage reset. Sandbox is not main campaign. |
+| Tournament (owner explicitly confirms the game's category), followed by Pinkslip tutorial call | Crashed3380E9E8 return4B670975... / profile1ED67607... copied into repairedDCDE2F12; full returns archived | Owner confirms Tournament victory survived loading the repaired candidate; tutorial repeated after garage→free roam and completed without crash. Exact KI-031 physical regression accepted. [Evidence](evidence/M7-pinkslip-crash-20261010.md) | Displayed route name/native ID and reward unrecorded. No need to repeat accepted reload/tutorial. |
+| Wager (Oct10 owner report) | DCDE2F12 candidate, RTX5060; combined return profile693B31EB... / save49DE59C7... archived; two new sessions corroborated, not per-event decoded telemetry | Owner reports losing the Wager race. This covers an observed loss, not a win. | Stake deduction, return/retry and persistence not explicitly reported. No forced winning replay. |
+| Goal Attack (Oct10 owner report) | Same combined DCDE2F12 return693B31EB... / save49DE59C7...; [return and scope](evidence/M7-closure-readiness-20261010.md) | Owner found the mode, launched and completed a race, received the damage-goal mark, then confirms that mark remains in the event list after the requested restart. | Course and other goals/all-goals credit unreported. Damage-goal award and persistence are owner-confirmed; no repeat required. |
+| Pinkslip race (course/opponent/native ID unknown) | Oct10 DCDE2F12, RTX5060 D3D12 stock2x/VSync; win returnD3FDCEF9... / E2A7822E..., subsequent reload returnC963D60B... / 10D80A04... separately archived | Owner reports entered/won Pinkslip after the repaired tutorial, then confirms requested same-CMD restart preserved the win/reward; a second logged process corroborates reload. [Evidence](evidence/M7-pinkslip-crash-20261010.md) | Exact reward/vehicle identity and fail/retry/abandon not reported. No repeat of accepted win/reload required. |
+| First Time Trial in the game (exact displayed title unknown) | Same stock2D7A949F..., RTX5060; return saveDB0B5BCE..., profile3763C20A... | Owner reports win and subsequently confirms persisted progress; changed disk profile archived. Controls, sound and music reported okay. [Bound report](evidence/M7-time-trial-series-owner-return-20261004.md) | Target/time/payout/exact title unrecorded; fail/retry untested. |
+| Kenneth Hahn State Park Series: one Circuit + three Sprints (owner-described) | Same stock2D7A949F..., RTX5060; same combined returnDB0B5BCE... | Owner reports overall Series win, four-event composition and persisted progress; covers Circuit/Sprint participation inside Series, not four individual wins. [Bound report](evidence/M7-time-trial-series-owner-return-20261004.md) | Constituent course names and individual places/payout unverified; not standalone Circuit/Sprint or historical Ian Series acceptance. |
+| Ian Red Light Race (owner-named opponent/type; course/native ID unknown) | Same stock2D7A949F..., RTX5060; prior delivery saveCF9D8160... and current returnDEACA9DD... separately preserved | Owner reports normal completion and saved result; changed disk profile corroborates a write. [Bound report](evidence/M7-ian-red-light-owner-return-20261004.md) | Exact payout/place unrecorded; fresh-process reload for this event, loss/Race Back/retry unverified. Not Ian Series coverage or KI-026 closure. |
+| Hollywood Auto Delivery; 2006 Pontiac Solstice MIDSUMR identified in the first return, 4/5 objective reported before follow-up | Oct4 local stock EXE2D7A949F..., RTX5060 D3D12, configured2x/VSync; seed58B3385C... → first return3B6488E2... → follow-upCF9D8160... (observed returns, not a native portable-session ancestry graph) | Owner reports delivery completion and confirms progress/money survive complete quit and same-CMD restart; disk save changed before logged second launch. [Bound report](evidence/M7-delivery-owner-return-20261004.md) | Exact final counter/payout and follow-up car identity not captured; fail/retry/abandon, car rotation and distinct-successor reload unverified. No full M7-003/009 closure. |
 
 ## Reusable evidence and its limits
 
@@ -50,7 +162,7 @@ A mirrored manual is not treated as a verified official-host catalog. These
 sources do not justify guessing chapter order, REP thresholds, opponent chains,
 the South Central entry gate or the campaign end condition.
 
-## Completing the actual matrix
+## Optional exhaustive catalog research (not an M7 closure gate)
 
 Each future retail node needs the following fields, with unknowns explicitly
 null rather than inferred from a familiar opponent or geographic label:
@@ -71,7 +183,7 @@ edges. Aggregate races/wins cannot identify which missions were completed.
 Do not turn the current eight test zones into eight official campaign chapters.
 Do not turn access to a location into proof of story unlock progression.
 
-Next source work: inspect available on-disc/script metadata tooling and verify
+Optional future catalog work: inspect available on-disc/script metadata tooling and verify
 its native identities, then reconcile with Mission Log/save observations as
 normal play reaches them. No guessed mandatory-node count is a substitute for
 that source work. A future complete catalog needs a separately reviewed schema;
