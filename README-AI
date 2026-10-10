@@ -1378,9 +1378,9 @@ These are representative subsets, not full task closure or historical seed promo
 ### Current execution priority (2026-10-10)
 
 Detailed scope and gates: [docs/M7-priorities.md](docs/M7-priorities.md).
-Current status is **15 completed + 1 deferred / 16**: all mandatory tasks complete; M7-005 is explicitly deferred without PASS. Earlier counts are historical. Aggregate review is GO; parent closure publication remains pending. [Closure review](docs/evidence/M7-closure-20261010.md).
+Current status is **M7 CLOSED, 15 completed + 1 deferred / 16**, source0.19.0.0: all mandatory tasks complete; M7-005 is explicitly deferred without PASS. Aggregate review GO, closure commit d6ca114 and dependency-first publication verified. Earlier counts are historical. [Closure receipt](docs/evidence/M7-closure-20261010.md).
 
-Finish compatibility documentation, aggregate review and SDK/parent publication.
+Stop at the requested M7 boundary; review M8 scope with the owner next.
 No current owner replay is required. The dated investigation notes below preserve
 past gates and failures; their pending actions are not current instructions.
 
@@ -1522,9 +1522,9 @@ review, not complete-campaign evidence. M8 enhancement and M9 distribution claim
 still require their own individual gates; M7 closure alone is not public readiness.
 
 October10 aggregate decision: **GO M8 REVIEW**, primary and independent acceptance
-review complete. Source0.19.0.0; SDK5dd58f8/v0.20.0.0 already pushed and verified
-by fresh public fetch. Parent closure commit/push remains the final administrative
-gate. [Full review and publication receipt](docs/evidence/M7-closure-20261010.md).
+review complete. Source0.19.0.0; SDK5dd58f8/v0.20.0.0 pushed and verified by fresh
+public fetch. Parent closure d6ca114 pushed, remote main verified equal: M7 CLOSED.
+[Full review and publication receipt](docs/evidence/M7-closure-20261010.md).
 
 ### Checkpoint log
 
@@ -2092,8 +2092,8 @@ Execute in this order unless a new blocker changes the plan:
     verification. Exact M8-001 temporal timing is deferred by owner, without PASS.
 32. [x] Accept the representative M7 event/lifecycle matrix, isolated clean profile,
     local rename and progressed successor, with linked blocker regressions.
-33. [-] M7-011/M7-013/M7-016 evidence is accepted. Finalize M7-015, independently
-    review the aggregate gate and publish reviewed SDK and parent commits.
+33. [x] Close M7 at0.19.0.0 after M7-015, independent aggregate GO and verified
+    SDK-first/parent publication. Closure commit d6ca114; preserved p1 unchanged.
 34. [ ] After M7 closes, review/rethink M8 scope, priorities and measurable timing/
     performance/platform criteria, including the deferred Deck frame-time budget.
 

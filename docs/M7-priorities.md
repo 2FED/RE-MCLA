@@ -1,8 +1,8 @@
 # M7 current scope and execution order
 
 Updated 2026-10-10. [README-AI](../README-AI) owns task status and the milestone
-ledger. M7 is in final review/commit/publication integration; this document does
-not declare the milestone closed or pushed.
+ledger. M7 is closed at source0.19.0.0: closure commit d6ca114 and dependency-first
+publication are verified. [Receipt](evidence/M7-closure-20261010.md).
 
 ## Decision
 
@@ -28,8 +28,8 @@ do not upgrade historical physical results.
 | Order | Agent-owned work | Required boundary |
 |---|---|---|
 | Complete | Targeted regression and relocated Windows reviews are committed as3a351ef andb0872c5. | [M7-013](evidence/M7-013-targeted-regression-20261010.md) and [M7-016](evidence/M7-016-windows-acceptance-20261010.md) keep accepted p1 separate from unrun source builds. No new owner replay for bookkeeping. |
-| 2 | Complete M7-015 compatibility-document review and the aggregate milestone review. | Claims match the event, profile/save, media, vehicle, transition and import reports; deferred content never becomes PASS. |
-| 3 | Complete reviewed task/milestone commits and dependency/parent push gates. | Check exact source pins, required tests, private-data exclusion and publication results. A successful local build is not a completed push. |
+| Complete | M7-015 documentation commit3a16edd and aggregate review GO. | Claims match bounded evidence; deferred content never becomes PASS. |
+| Complete | Closure commit d6ca114 and dependency/parent pushes verified. | SDK tag/branch5dd58f8 fetched publicly; parent main was verified equal at closure publication. |
 | After M7 closure | Hand off the final state and review M8 priorities with the owner. | Re-rank deferred timing, graphics/performance/platform and launcher work before starting a new experimental campaign. |
 
 Continue until M7 is reviewed, closed, committed and pushed, genuine owner input

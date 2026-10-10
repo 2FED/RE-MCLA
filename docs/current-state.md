@@ -4,11 +4,13 @@ Updated October 10, 2026. README-AI owns the milestone ledger and dated history.
 
 ## Active outcome
 
-Finish M7 representative local Windows compatibility, then stop at the owner's
-requested milestone boundary. No full campaign, Deck target or unlock grind.
+M7 representative local Windows compatibility is CLOSED at the owner's
+requested milestone boundary. Stop here; next is owner review of M8 scope.
+No full campaign, Deck target or unlock grind.
 All15 mandatory tasks are committed complete; M7-005 is deferred without PASS.
-M7-015 commit3a16edd and independent aggregate review GO; closure commit/push
-are being finalized at source VERSION0.19.0.0. No parent push claimed yet.
+M7-015 commit3a16edd and independent aggregate review GO; source VERSION0.19.0.0.
+Closure commit d6ca114823dd3af0c3db2fe9b18522a0e8e9f15f was pushed and remote main
+verified equal. This follow-up handoff records that completed publication.
 Weekly usage22% used/78% remaining;
 check after each closed task, stop at30% remaining. Never infer physical PASS.
 
@@ -57,7 +59,7 @@ SDK branch mcla/mcla-r-hotfixes HEAD5dd58f894bf34b9ea85e59d3903c7f0e8044d853,
 tagv0.20.0.0 and branch pushed; both remote refs and fresh public fetch/fsck verified.
 Exactly7profile/API files in the latest SDK commit; unrelated
 graphics and tests/unit/CMakeLists WIP remain untouched/excluded. Parent pins0.20.
-Dependency-first publication is complete; parent closure/push is next.
+Dependency-first publication and parent closure/push are complete.
 Never stage all SDK files. [Aggregate review](evidence/M7-closure-20261010.md).
 
 Isolated private/sdk20s with25pinned dependency clones;15libmspack120000links
@@ -84,16 +86,16 @@ diagnostics9/76/177,analysis1/16,soak1/44/106,generated1/5,buildmatrixPASS.
 Alpha2/40 keeps historical27M6tuples separate from current31issues.
 [Full integration](evidence/M7-002-sdk-profile-integration-20261010.md).
 
-## Pending final work and safety
+## Next boundary and safety
 
 Primary owns README-AI/current-state/task status/commits. Independent acceptance
-and publication reviews returned GO conditional on final docs and publication.
-M7-013/016 and009 independently GO. Corrected stale per-event outcome/SC claims
-and historical execution order. Stage sanitized historical link dependencies
-without their experimental code. No git add -A. Untracked proprietary ISO, private,
+and publication reviews returned GO; final docs and dependency/parent push passed.
+M8 scope/priority review is next, not automatic implementation. Sanitized historical
+link dependencies are committed without their experimental code.
+No git add -A. Untracked proprietary ISO, private,
 generated,out and unrelated M8 scripts/SDK graphics must remain local.
 
-Final aggregate review must preserve source-vs-physical distinction, unavailable
+The accepted aggregate review preserves source-vs-physical distinction, unavailable
 Payback/SC/observed-menu Unordered deferrals, English-only language claim,
 open visual/audio/busy-area limitations and exact temporal harness NO-GO.
 Don't rerun consumed native WGC fixture/burst gates or launch interval1.

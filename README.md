@@ -20,9 +20,9 @@ branch is the unchanged private p1 candidate; new source builds do not inherit
 its gameplay acceptance. See [Windows acceptance](docs/evidence/M7-016-windows-acceptance-20261010.md)
 and the [compatibility summary](docs/alpha-compatibility.md).
 
-M7 is at final review and publication integration, not declared closed or pushed
-by this page. [README-AI](README-AI) owns the live milestone ledger;
-[M7 priorities](docs/M7-priorities.md) records the execution order.
+M7 is closed at source version0.19.0.0 after independent review and verified
+dependency-first publication. [Closure receipt](docs/evidence/M7-closure-20261010.md).
+[README-AI](README-AI) owns the ledger; the next step is owner review of M8 scope.
 Payback, unconfirmed South Central event access and Unordered remain deferred
 without PASS. Steam Deck/Proton, exact high-FPS timing and full campaign/end-game
 coverage are outside this M7 acceptance.
