@@ -27,6 +27,7 @@ $expected = [ordered]@{
     '823F3C68' = @{ end='823F3C80'; parent=''; name='sub_823F3C68' }
     '823F6EF8' = @{ end='823F6F1C'; parent=''; name='sub_823F6EF8' }
     '823FD718' = @{ end='823FD720'; parent=''; name='sub_823FD718' }
+    '822B88B8' = @{ end='822B88C8'; parent=''; name='sub_822B88B8' }
     '822B88C8' = @{ end='822B88DC'; parent=''; name='sub_822B88C8' }
     '824B0DE8' = @{ end='824B0DF8'; parent='824B0CC0'; name='sub_824B0DE8' }
     '8249CBF0' = @{ end='8249CC00'; parent=''; name='sub_8249CBF0' }
@@ -47,7 +48,19 @@ $expected = [ordered]@{
 }
 $seen = @{}
 $inFunctions = $false
-foreach ($raw in Get-Content -LiteralPath $resolved) {
+$lines = @([IO.File]::ReadAllLines($resolved) | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
+$firstHook = [Array]::IndexOf($lines, '[[midasm_hook]]')
+if ($firstHook -lt 1) { throw 'Reviewed Race Back observation hooks are missing.' }
+$expectedHooks = @('822A5990','822AD698','822B1258','822B1464','822B3460','822B359C')
+$hookLines = @($lines[$firstHook..($lines.Count-1)])
+$canonicalHooks = @($expectedHooks | ForEach-Object {
+    '[[midasm_hook]]'
+    "address = 0x$_"
+    "name = `"MclaRaceBackCameraApply$_`""
+    'registers = ["r3", "r4", "f1"]'
+})
+if (($hookLines -join "`n") -cne ($canonicalHooks -join "`n")) { throw 'Reviewed Race Back observation hooks changed.' }
+foreach ($raw in $lines[0..($firstHook-1)]) {
     $line = $raw.Trim()
     if (-not $line -or $line.StartsWith('#')) { continue }
     if ($line -ceq '[functions]') {
@@ -71,4 +84,4 @@ $text=Get-Content -LiteralPath $resolved -Raw
 if ($text -match '(?m)^\s*(\[\[?(switch_tables|invalid_instructions|analysis)|setjmp_address|longjmp_address)') {
     throw 'No switch table, invalid region, analysis hint, or jump override is justified.'
 }
-[pscustomobject]@{ Validated=$true; Functions=$seen.Count; Chunks=1; SwitchTables=0; InvalidRegions=0; ExceptionHints=0; JumpOverrides=0; Sha256=(Get-FileHash $resolved -Algorithm SHA256).Hash }
+[pscustomobject]@{ Validated=$true; Functions=$seen.Count; Chunks=1; ObservationHooks=$expectedHooks.Count; SwitchTables=0; InvalidRegions=0; ExceptionHints=0; JumpOverrides=0; Sha256=(Get-FileHash $resolved -Algorithm SHA256).Hash }

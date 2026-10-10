@@ -15,9 +15,17 @@ try {
     Assert-Rejected 'missing-constructor-registry-function' ($content -replace '(?m)^"0x8220DA40".*\r?\n','')
     Assert-Rejected 'missing-runtime-function' ($content -replace '(?m)^"0x827B4B78".*\r?\n','')
     Assert-Rejected 'missing-race-runtime-function' ($content -replace '(?m)^"0x82262320".*\r?\n','')
+    Assert-Rejected 'missing-pinkslip-callback' ($content -replace '(?m)^"0x822B88B8".*\r?\n','')
+    Assert-Rejected 'pinkslip-overlap' ($content -replace '"0x822B88B8" = \{ end = 0x822B88C8', '"0x822B88B8" = { end = 0x822B88CC')
+    Assert-Rejected 'pinkslip-truncated-tail' ($content -replace '"0x822B88B8" = \{ end = 0x822B88C8', '"0x822B88B8" = { end = 0x822B88C4')
     Assert-Rejected 'wrong-runtime-discovered-boundary' ($content -replace '"0x82554080" = \{ end = 0x8255409C', '"0x82554080" = { end = 0x825540A0')
     Assert-Rejected 'wrong-race-series-boundary' ($content -replace '"0x8220B810" = \{ end = 0x8220B834', '"0x8220B810" = { end = 0x8220B838')
     Assert-Rejected 'wrong-parent' ($content -replace 'parent = 0x824B0CC0','parent = 0x824B0CC4')
     Assert-Rejected 'unreviewed-section' ($content+"`n[[switch_tables]]`naddress=1`n")
-    [pscustomobject]@{Passed=$true;PositiveCases=1;NegativeCases=8}
+    Assert-Rejected 'missing-hooks' (($content -split '\[\[midasm_hook\]\]')[0])
+    Assert-Rejected 'wrong-hook-address' ($content -replace 'address = 0x822A5990','address = 0x822A5994')
+    Assert-Rejected 'wrong-hook-name' ($content -replace 'MclaRaceBackCameraApply822A5990','WrongHook')
+    Assert-Rejected 'wrong-hook-register' ($content -replace '"r3", "r4", "f1"','"r3", "r5", "f1"')
+    Assert-Rejected 'extra-hook' ($content+"`n[[midasm_hook]]`naddress = 0x822A5990`n")
+    [pscustomobject]@{Passed=$true;PositiveCases=1;NegativeCases=16}
 } finally {[System.IO.Directory]::Delete($testRoot,$true)}

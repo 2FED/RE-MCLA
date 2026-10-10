@@ -19,6 +19,9 @@
 "0x823F3C68" = { end = 0x823F3C80, name = "sub_823F3C68" }
 "0x823F6EF8" = { end = 0x823F6F1C, name = "sub_823F6EF8" }
 "0x823FD718" = { end = 0x823FD720, name = "sub_823FD718" }
+# M7-012: original-XEX callback at 822B8F84/8C; independent 16-byte
+# wrapper ending in a tail branch at C4. See docs/evidence/M7-pinkslip-crash-20261010.md.
+"0x822B88B8" = { end = 0x822B88C8, name = "sub_822B88B8" }
 "0x822B88C8" = { end = 0x822B88DC, name = "sub_822B88C8" }
 "0x824B0DE8" = { parent = 0x824B0CC0, end = 0x824B0DF8, name = "sub_824B0DE8" }
 "0x8249CBF0" = { end = 0x8249CC00, name = "sub_8249CBF0" }
