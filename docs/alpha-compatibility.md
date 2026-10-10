@@ -6,6 +6,13 @@ Windows system, controller, wheel, race, or campaign path works.
 
 ## Tested build and host
 
+M7 language claim: English UI/gameplay only, on the separately identified
+October10 RTX5060 profile candidate82A69B5E. Its gameplay image and owner
+boot/play/reload observation are accepted in the
+[language report](evidence/M7-010-language-acceptance-20261010.md).
+Other disc languages remain untested for M7 gameplay; historical FR/RU title
+tests do not expand this claim. The historical M6 table below is not relabelled.
+
 | Component | Tested value |
 |---|---|
 | MCLA-R | `0.7.0.0`, commit `6c167fae0805d8f1417e8e0484c8614fef27f77a`, clean Windows AMD64 `Release` |
