@@ -6,12 +6,16 @@ maps every source lead below to an observed route, historical-only evidence,
 explicit unknown distinction or owner-authorized deferral. README-AI owns task
 closure. Inventory completion is not M7-003 coverage PASS or milestone closure.
 
-Unordered and Beat Me There retain unknown route/availability/distinctness;
-Freeway remains historical-only; Payback and unconfirmed South Central access
-are deferred without PASS by the owner's October 10 no-grind decision. Series
+Later October10 follow-ups supersede the early pending summary: Unordered is
+unavailable in the observed Arcade menu and deferred without PASS; race-to-start
+works, without exact static Beat Me There label binding. Freeway5+ and targeted
+Arcade Landmark are owner-confirmed. Payback and unconfirmed South Central access
+are deferred without PASS by the owner's October10 no-grind decision. Series
 Circuit/Sprint participation is not standalone completion or a native enum binding.
 The p1 successor accepts owner-visible OrangeNoob and name/progress restart,
-pause/audio/Alt+Enter. Owner corrected that F10 was not pressed, so it stays pending.
+pause/audio/Alt+Enter. The owner corrected an initially missed F10, then completed
+a genuine capture that passed independent visual/integrity review. See the
+[latest event acceptance](M7-003-event-acceptance-20261010.md) and profile report.
 
 The October 3 source investigation and its then-open discovery leads are preserved
 below as historical evidence. It ran no game, archive extractor, Ghidra, generated
