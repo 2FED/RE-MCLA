@@ -105,3 +105,47 @@ manifest SHA-256 remains
 `2F0F0D970DE19D153AC107E33507DD2A88E8206202344E2E4A82E14F6651A086`.
 After its short performance return, a later explicitly published successor
 must load the actual progressed profile before cross-build continuity can close.
+
+## Oct4 local-pilot archive admission (pending physical successor)
+
+The current RTX5060 pilot is not a native portable child, so it cannot honestly
+be imported by inventing launcher sessions or labelling it the legacy seed.
+New `-SaveArchive <absolute content-addressed archive directory>` selects an
+existing verified M7-009 archive and labels the result `archive:<full hash>`.
+It starts a new provenance root with empty ancestry, including when bytes equal
+an already known graph vertex. Default branch resolution is unchanged.
+
+All existing legacy/native candidates must still validate and be preserved;
+explicit selection does not bypass cycles, invalid returns, locks, publication
+or retention. The selected full profile and exact `profile.json` hash are
+rechecked after admission, around copy, after build/proof and before pointer
+publication/pruning. This is a serialized trusted-owner workflow, not an
+adversarial concurrent writer guarantee. No real archive import/publication or
+pruning was performed to test this change.
+
+Primary review and independent save-safety source review: bounded GO. Primary
+strengthened absolute-path admission to reject drive/root-relative spellings
+and added explicit-selection cycle tests after review. Observed tests:
+
+- `test-portable-save-lineage.ps1`: 76 checks PASS on PowerShell7.6.5 and5.1.
+- `test-portable-campaign-bundle.ps1`: 3 positive,34 fail-closed negative,
+  45 source checks PASS (PowerShell7).
+- `test-portable-campaign-session.ps1`: 1 positive,10 negative PASS (PowerShell7).
+- Scoped `git diff --check`: PASS.
+
+Only uniquely named synthetic fixture trees were written and removed by these
+suites. Owner profile/archive/current pointer are unchanged. Pin mutation tests
+exercise the actual revalidation function; builder phase ordering is source-
+reviewed, not a fault injected into a real publication. Full M7-009 remains open.
+
+## Oct5 local successor reload evidence
+
+Owner confirms progressed-profile persistence after restarting the separate
+stock3380E9E8 WGC candidate, which began from archive3763C20A copied independently
+from the prior2D7A949F stock branch. Actual road/garage gameplay and a second
+launch are bound in the [Oct5 return](M7-f10-wgc-owner-return-20261005.md).
+Returned full profile2BC2F4A8... / main saveE1F0FC2A... is archived and verified.
+Accept this local distinct-host loading/restart observation; no repeat is needed.
+This is not a native portable session graph, normal-bundle replacement or full
+M7-009 closure. Keep the evolved WGC branch and old pilots separately; do not
+silently copy older progress over the new return.
