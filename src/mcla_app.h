@@ -29,6 +29,8 @@ public:
 protected:
   MclaApp(rex::ui::WindowedAppContext &ctx, rex::PPCImageInfo image_info);
 
+  bool SetupEnvironment() override;
+  void OnConfigurePaths(rex::PathConfig &paths) override;
   void OnPostInitLogging() override;
   void OnCreateDialogs(rex::ui::ImGuiDrawer *drawer) override;
   void OnPreSetup(rex::RuntimeConfig &config) override;
@@ -65,4 +67,8 @@ private:
   std::unique_ptr<rex::ui::ImGuiDialog> diagnostic_status_dialog_;
   bool diagnostic_keybind_registered_ = false;
   mcla::diagnostics::DiagnosticHotkey diagnostic_hotkey_;
+  // A managed session's comment-only config remains read-locked until this
+  // host is destroyed. It is never the launcher's persistent settings store.
+  std::shared_ptr<void> managed_config_read_handle_;
+  rex::PathConfig managed_paths_;
 };

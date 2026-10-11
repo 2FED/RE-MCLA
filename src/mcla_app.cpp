@@ -1,6 +1,9 @@
 // mcla - project-owned ReXApp lifecycle
 
 #include "mcla_app.h"
+#if defined(MCLA_TEST_BUILD_EXPIRY)
+#include "mcla_build_lease_runtime_win.h"
+#endif
 
 #include <rex/audio/audio_route_audit.h>
 #include <rex/audio/audio_system.h>
@@ -46,6 +49,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <limits>
 #include <thread>
@@ -55,8 +59,16 @@
 #include "generated/default/mcla_init.h"
 #include "mcla_diagnostics.h"
 #include "mcla_logging.h"
+#include "mcla_managed_config_policy.h"
 #include "mcla_native_crash.h"
 #include "mcla_readback_cost_sample.h"
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
 
 namespace {
 
@@ -850,6 +862,12 @@ REXCVAR_DEFINE_STRING(
     "Override diagnostics package path (empty = <user-data>/diagnostics)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_STRING(
+    mcla_managed_launch_config, "", "MCLA Launcher",
+    "Internal managed launcher sentinel config; settings arrive on CLI and "
+    "F4/console editing is disabled (empty preserves legacy startup)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_BOOL(
     mcla_crash_reporter_dialog, true, "MCLA Diagnostics",
     "Show the local crash-package path after an automatic native crash")
@@ -1016,6 +1034,82 @@ MclaApp::Create(rex::ui::WindowedAppContext &ctx) {
   return std::unique_ptr<MclaApp>(new MclaApp(ctx, PPCImageConfig));
 }
 
+bool MclaApp::SetupEnvironment() {
+  const auto selector = REXCVAR_GET(mcla_managed_launch_config);
+#if defined(MCLA_TEST_BUILD_EXPIRY)
+  // Admission runs before SDK setup creates profile/cache/log outputs, including
+  // direct EXE startup. No runtime timer exists: an admitted game is never killed.
+  const bool admission_probe=REXCVAR_GET(mcla_lifecycle_probe);
+  auto lease=mcla::lease::CheckCurrentHostLease(!selector.empty(),admission_probe);
+  if(!lease) {
+    std::fwprintf(stderr,L"MCLA test-build admission: %ls\n",lease.error().c_str());
+    if(!admission_probe)
+      MessageBoxW(nullptr,lease.error().c_str(),L"MCLA-R test build",MB_OK|MB_ICONWARNING);
+    return false;
+  }
+#endif
+  if (selector.empty()) return ReXApp::SetupEnvironment();
+  const auto fail = [](const char *reason) {
+    // Logging is deliberately not initialized until all managed checks pass.
+    std::fprintf(stderr, "MCLA managed launch rejected: %s\n", reason);
+    return false;
+  };
+#if defined(_WIN32)
+  try {
+    const auto config = rex::to_path(selector);
+    const mcla::managed_config::RequiredPaths required{
+        rex::to_path(REXCVAR_GET(game_data_root)).u16string(),
+        rex::to_path(REXCVAR_GET(user_data_root)).u16string(),
+        rex::to_path(REXCVAR_GET(cache_root)).u16string(),
+        rex::to_path(REXCVAR_GET(update_data_root)).u16string(),
+        rex::to_path(REXCVAR_GET(metadata_root)).u16string(),
+        rex::to_path(REXCVAR_GET(log_file)).u16string(),
+        rex::to_path(REXCVAR_GET(mcla_diagnostics_root)).u16string()};
+    if (mcla::managed_config::Validate(config.u16string(), required))
+      return fail("explicit safe absolute routing paths are required");
+
+    const HANDLE opened = CreateFileW(config.c_str(), GENERIC_READ,
+        FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT,
+        nullptr);
+    if (opened == INVALID_HANDLE_VALUE)
+      return fail("cannot read-lock the managed session config");
+    std::shared_ptr<void> held(opened, [](void *handle) { CloseHandle(handle); });
+    BY_HANDLE_FILE_INFORMATION info{};
+    LARGE_INTEGER size{};
+    if (GetFileType(opened) != FILE_TYPE_DISK ||
+        !GetFileInformationByHandle(opened, &info) ||
+        (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
+        info.nNumberOfLinks != 1 || !GetFileSizeEx(opened, &size) ||
+        size.QuadPart != static_cast<LONGLONG>(mcla::managed_config::kSentinel.size()))
+      return fail("managed session config must be a regular single-link sentinel file");
+    std::array<char, mcla::managed_config::kSentinel.size()> bytes{};
+    DWORD read = 0;
+    if (!ReadFile(opened, bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr) ||
+        read != bytes.size() || !mcla::managed_config::IsSentinel(
+            std::string_view(bytes.data(), bytes.size())))
+      return fail("managed session config is not the exact comment-only sentinel");
+
+    managed_paths_ = {rex::to_path(REXCVAR_GET(game_data_root)),
+        rex::to_path(REXCVAR_GET(user_data_root)),
+        rex::to_path(REXCVAR_GET(update_data_root)),
+        rex::to_path(REXCVAR_GET(cache_root)),
+        rex::to_path(REXCVAR_GET(metadata_root)), config};
+    managed_config_read_handle_ = std::move(held);
+    // The launcher separately owns canonical root handles and writer locks.
+    // This bounded host check does not grant admission to arbitrary directories.
+    return ReXApp::SetupEnvironment();
+  } catch (const std::exception &) {
+    return fail("managed configuration validation failed");
+  }
+#else
+  return fail("managed launcher mode requires Windows");
+#endif
+}
+
+void MclaApp::OnConfigurePaths(rex::PathConfig &paths) {
+  if (managed_config_read_handle_) paths = managed_paths_;
+}
+
 void MclaApp::OnPostInitLogging() {
   const std::array overrides = {
       std::pair{mcla::logging::App(), REXCVAR_GET(mcla_log_app)},
@@ -1080,6 +1174,12 @@ void MclaApp::OnPostInitLogging() {
 }
 
 void MclaApp::OnCreateDialogs(rex::ui::ImGuiDrawer *drawer) {
+  if (managed_config_read_handle_) {
+    // SDK SaveConfig is non-atomic and serializes all modified CVars. Managed
+    // preferences belong exclusively to the launcher's validated settings UI.
+    rex::ui::UnregisterBind("bind_settings");
+    rex::ui::UnregisterBind("bind_console");
+  }
   if (diagnostics_) {
     diagnostic_status_dialog_ =
         std::make_unique<DiagnosticStatusDialog>(drawer, diagnostics_.get());

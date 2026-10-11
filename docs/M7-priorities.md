@@ -117,9 +117,8 @@ verify source facts/numbers; returned suggestions cannot execute tools or confer
 physical PASS. Existing useful quote/extraction results and rejected jobs retain
 their individual dispositions. [Worker contract](dgx-spark-worker.md).
 
-After reviewed M7 closure and push, stop at the milestone handoff and agree the
-M8 plan with the owner. Review correct fixed/dynamic/uncapped timing, measured Windows
-performance, Deck frame-time attribution, graphics modes, Linux/macOS/ultrawide/
-cache/launcher scope and measurable acceptance. Deck's requested one-third
-frame-time reduction is a target, not a measured removable budget. Do not add
-overlapping timer costs or revive old experiments without a matched baseline.
+M7 closure is complete. The owner approved the [revised M8 plan](M8-priorities.md)
+on October10: launcher and named external personal profiles first, baseline
+Windows bugs and stock/max60. HigherFPS, platforms and release packaging are later.
+Deck's one-third frame-time reduction remains a target, not a measured removable
+budget. Do not add overlapping costs or revive old experiments without a baseline.

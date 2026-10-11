@@ -1631,76 +1631,110 @@ Current checkpoint (2026-09-05, primary Codex + independent ABI/count and diagno
 
 - 2026-09-09 — M7 paused-route disposition / owner-readiness checkpoint, primary plus independent protocol and full-return audits. **0/16; YELLOW — U4 NOT PROMOTED, MANUAL H100/U8 DRIVE ACTIVE**. Existing paused-only route gives twoU8 references21.65/21.70 withsamecategoricalcamera and1.798%draw variation;171files/94deltas/8views verify. NewpausedU8/U4/U8 gives21.65/21.75/21.40, work+0.052/−0.332% andmatchingcategorical12views. U4+0.462/+1.636% versus−1.155%control drift is insufficientforrepeatablematerialgain; keepH100/U8.218files/141deltas/6x13B+6x120B/72maps/fullprofiles/normalclosures/Mango restore verify. ThreeclosedregenerableU4prefixes removedwith229evidencefiles rehashed unchanged. Ownerconfirmedmanualdrive availability; exactH100/U8 isnowfocusedviaexistingmanualSDKentry, allautoprobesoff/HUDoff/noautoexit. Separatefullprofile mayevolve; physical driving/audio feedback andsafeprofile return are next. Live80%weeklyremaining, owner3%stop. No normalpromotion/version/taskclosure/commit/push. Evidence: docs/evidence/M7-016-paused-reference.md, M7-016-paused-u4-control.md, M7-016-manual-h100.md and docs/current-state.md.
 
-## 16. Milestone M8 — Modern enhancements and secondary platforms
+## 16. Milestone M8 — Windows launcher and baseline quality
 
-The roadmap below is draft planning for the owner's post-M7 review. M7 closure
-does not approve a new experiment, promote prior candidates or validate any M8
-capability. Re-rank scope and measurable gates with the owner before execution.
+Owner decision October10, 2026: implement the working internal launcher first,
+with a named library of selectable personal save directories independent of
+builds. Then fix baseline Windows problems, including those on the RTX5060.
+Stock and a validated 60 FPS mode are in scope; all modes above60, dynamic/VRR
+and uncapped capability expansion are later milestones. This supersedes the
+earlier broad enhancement/platform roadmap without promoting old experiments.
+[Scope, execution order and data boundaries](docs/M8-priorities.md).
 
-Historical owner bridge decision 2026-10-03 proposed finishing M8-001 before M7;
-the October4 owner decision superseded that order and deferred exact timing.
-Deferred Deck cadence/
-audio/platform work belongs here (performance method under M8-011), but is not
-currently active. After M7 closes, perform a full scope/priority/acceptance review
-of M8; the tasks below are a provisional backlog, not renewed delivery promises.
-M8-012 uses the revised representative M7 matrix, not two full campaigns. No M8
-task is closed or hardware performance guaranteed by this planning change.
+**Goal:** a practical Windows testing build with isolated personal data, honest
+settings, baseline bug fixes and correct optional60 behavior. No full campaign,
+unlock grind, release-ready installer or secondary-platform promise.
 
-**Goal:** add optional improvements without changing stock behavior by default or regressing campaign compatibility.
-
-**Estimate:** 2–10 weeks per major enhancement group.
+**Estimate:** re-estimate after external-root/launcher foundation and measured
+baseline triage; no inherited 2–10-week platform estimate or FPS guarantee.
 
 ### Prerequisites
 
-- M6 closed for experimentation
-- M7 closed before enhancement features are enabled in a public stable release
-- Stock compatibility test matrix available
+- M7 closed; accepted p1 and its profile lineage remain preserved.
+- Existing WGC temporal NO-GO stays failed/disabled until a reviewed new method.
+- Personal data, mutable settings and diagnostics must not ship with builds.
+- Spark remains advisory; primary owns tests and acceptance.
 
 ### Tasks
 
-- [ ] **M8-001** Port the known Complete Edition 60 FPS/delta-time patch behind an explicit option, separating the guest timing fix from host presentation rate and VSync policy.
-- [ ] **M8-002** Implement and audit a variable-frame-rate route that keeps simulation time correct through sustained 40–59 FPS dips, fixed 60/90/120 FPS targets, VRR-like fluctuation, and VSync-off uncapped presentation. Validate physics, traffic, AI, animation, UI, audio, timers, streaming, input, race logic, cutscenes, and mission scripting rather than inferring correctness from average FPS.
-- [ ] **M8-003** Define supported frame-rate modes and their fallback policy: stock 30, validated fixed higher caps, validated dynamic/VRR range, and uncapped only if its full timing matrix passes. A missed target must reduce smoothness rather than slow simulation. Publish a machine-readable capability contract for the launcher/settings UI; UI and config must not expose unverified modes.
-- [ ] **M8-004** Add resolution, window/fullscreen, monitor and aspect-ratio controls with correct HUD, culling, projection, and presentation behavior; expose only validated modes through the launcher capability contract.
-- [ ] **M8-005** Validate ultrawide modes and cutscene handling.
-- [ ] **M8-006** Add optional motion-blur, MSAA, and imposter-shadow controls using verified addresses or native runtime settings, and register each control for the launcher only after its individual compatibility gate passes.
-- [ ] **M8-007** Separate compatibility fixes from gameplay cheats and accessibility options in UI/config.
-- [ ] **M8-008** Evaluate shader precompilation/cache distribution without shipping proprietary shader data improperly.
-- [ ] **M8-009** Prototype Linux x86-64/Vulkan only after Windows D3D12 correctness is stable.
-- [ ] **M8-010** Create platform-specific build, input, audio, filesystem-case, and package tests for Linux.
-- [ ] **M8-011** Benchmark enhancements against the stock mode and document hardware requirements.
-- [ ] **M8-012** Run the M7 campaign regression matrix with every enhancement combination intended for release.
-- [ ] **M8-013** Run a native macOS ARM64 feasibility gate after the Windows port is stable and the Vulkan backend is validated on Linux. Remove the current ReXGlue `APPLE` hard rejection only on a dedicated branch; inventory Darwin/ARM64 compiler, generated-code model, executable-memory, windowing, input, wheel/FFB, audio, filesystem, crash-reporting, threading, timing, and packaging gaps; probe the Xenos Vulkan backend against MoltenVK portability features and fail closed on any required unsupported behavior.
-- [ ] **M8-014** If M8-013 passes, implement and validate a native Apple-silicon build using Vulkan over MoltenVK/Metal or a justified native Metal backend. Require clean-machine boot, frontend, saved gameplay, representative race/city/garage routes, save persistence, controller/audio/window lifecycle, resource telemetry, artifact signing/notarization strategy, and an asset-free package; do not substitute Rosetta-only execution or a window-only boot for native gameplay compatibility.
+- [ ] **M8-001** Validate the byte-guarded, opt-in Complete Edition60/delta-time route separately from host presentation/VSync. Preserve stock; old candidates remain unpromoted.
+- [ ] **M8-002** Audit correct simulation at stock, target60 and below-target dips: physics, traffic/AI, animation, UI/audio, timers, streaming, input and mission/cutscene logic. Higher caps, VRR and uncapped are deferred.
+- [ ] **M8-003** Define machine-readable stock/validated60 capabilities and safe unsupported-mode rejection. UI shows effective supported settings; no unverified60 or above60 option.
+- [ ] **M8-004** Validate ordinary Windows resolution/render-scale/window/fullscreen/monitor controls and settings persistence; owner requests explicit render targets720p/1080p/1440p/2160p rather than only1x/2x. Verify actual dimensions/capabilities separately from window size; no ultrawide claim.
+- [~] **M8-005** Ultrawide and its cutscene policy deferred to a later display-enhancement milestone, without PASS.
+- [ ] **M8-006** Register only individually verified graphics controls needed by the working launcher; fix baseline rendering before expanding optional blur/MSAA/shadow feature scope. Unsupported controls stay unavailable.
+- [ ] **M8-007** Keep compatibility fixes, accessibility and cheats distinct in configuration/UI; no cheat implementation or altered canonical progression is required.
+- [~] **M8-008** Shader-cache distribution/precompilation expansion deferred to later optimization/distribution work. Local shader-stall diagnosis remains M8-011/017.
+- [~] **M8-009** Linux/Vulkan platform prototype deferred to a later platform milestone, without PASS.
+- [~] **M8-010** Linux platform/package tests deferred with M8-009.
+- [ ] **M8-011** Establish reproducible Windows quiet/busy/race baselines and identify measured bottlenecks; compare accepted fixes and stock/60 behavior. Do not infer FPS from F10 or transplant Deck attribution.
+- [ ] **M8-012** Run bounded M7-derived regression on intended stock/60 settings presets, including save/profile switching, media, transitions and lifecycle. No exhaustive second campaign or unbounded option cross-product.
+- [~] **M8-013** Native macOS ARM64 feasibility deferred to a later platform milestone, without PASS.
+- [~] **M8-014** Native macOS implementation deferred behind that future feasibility gate, without PASS.
+- [x] **M8-015** Internal Windows launcher UI/headless core accepted on l2: exact build/game/profile routing, named RTX5060, stock/VSync-on/1x-2x capabilities and local name/folder actions. Owner controls/audio/AltEnter/F10/reload/UI-close behavior PASS; primary image/integrity and independent reviews agree. Required profile/lease implementation is included in this commit; M8-016 receives its separate acceptance commit. Source0.20.0.0, accepted l2 stays0.19.0.0. [Owner evidence](docs/evidence/M8-launcher-owner-acceptance-20261011.md).
+- [-] **M8-016** Separate immutable build/game roots from personal managed profiles, settings/cache/diagnostics/history; cross-build profile locking, explicit legacy full-profile import, atomic preferences, backup/recovery and compatible history capacity. Preserve p1; never silently merge/reseed or adopt its user folder under incompatible locks.
+  M8-015/016 October10 checkpoint: native GUI399/controller56/production-import29 and foundation suites pass; private l1 staged, exact guest-free host14 PASS. Owner gameplay/reload/F10/UI-close acceptance is pending, not inherited from p1. [Engineering evidence](docs/evidence/M8-launcher-foundation-20261010.md), [first-run test](docs/internal-launcher-owner-test.md). No task closure/commit or external distribution yet.
+  October11 final owner return: startup/name/save, controls/audio/AltEnter,
+  actual F10, reload and UI-close survival accepted. Exact three sessions and
+  snapshots verified; controller69 includes two different builds/one locked
+  profile and simultaneous independent profiles. M8-016 ledger closure follows
+  separately; SDK hard-exit/reporting remains M8-017, not graceful teardown PASS.
+- [ ] **M8-017** Triage and fix reproduced baseline graphics/audio/performance/lifecycle problems, prioritizing owner-visible paint/shimmer and busy areas. Track each defect with bounded repro, independent review and regression; unresolved cases need an explicit reviewed disposition, not invented fixes.
+- [-] **M8-018** Prepare the internal volunteer workflow: allowlisted eligible build staging, independent tester profiles, content/privacy audit, explicit diagnostic export and exact-build bug reports. Owner-approved signed14-day test-build expiry with bounded online extensions is implemented in private l2; signed allowlist publication and live native extension/cache pass. Real-title/tester acceptance and export remain pending. No recursive ZIP of a private seeded bundle, automatic uploads or transfer before content gates. [Expiry evidence](docs/evidence/M8-build-expiry-20261011.md), [operator procedure](docs/test-build-expiry.md).
 
 ### Deliverables
 
-- optional, configuration-controlled enhancements
-- preserved stock mode
-- documented performance and compatibility impact
-- Linux build only if it meets its own closure requirements
-- native macOS ARM64 build only if its platform/GPU feasibility and clean-machine gameplay gates pass
+- usable internal launcher and local named-profile library;
+- independently located saves/settings/diagnostics and safe cross-build use;
+- measured baseline bug fixes and one correctly validated optional60 mode;
+- tested stock/60 presets, explicit residual limits and a bounded tester workflow.
 
 ### Verification evidence
 
-- stock mode remains binary/config behaviorally unchanged where intended
-- fixed 60 FPS and every claimed dynamic/uncapped range pass timing-sensitive campaign scenarios, target misses, and frame-pacing transitions without simulation slowdown
-- supported resolution/aspect combinations pass screenshot and input tests
-- enhancement combinations pass the defined regression subset
-- Linux claims are backed by clean-machine test evidence
-- macOS ARM64 claims are backed by a native executable, MoltenVK/Metal capability evidence, and clean Apple-silicon gameplay/package results
+- one profile cannot have concurrent writers from two builds; independent
+  profiles do not exchange data, and missing roots never become blank saves;
+- settings agree with effective runtime values without editing immutable files;
+- complete-profile imports/backups preserve lineage and reject ambiguity;
+- real successor startup/save reload/F10/lifecycle follow native fixture gates;
+- claimed bug fixes and60 behavior have exact artifact/config/route evidence;
+- tester staging excludes personal/private/proprietary content under project policy.
 
 ### Exit criteria
 
-- Enhancements are opt-in unless proven universally safe.
-- No enhancement introduces a campaign blocker or save incompatibility.
-- Unsupported combinations are rejected or clearly labeled.
+- Required launcher/data-root and representative regression gates pass.
+- No new progression blocker or save incompatibility on supported routes.
+- Unresolved baseline defects have honest owner-reviewed dispositions.
+- Deferred platforms/features/content remain explicitly unverified.
 
 ### Gate
 
-Enhancements enter M9 packaging only after their individual compatibility gates pass.
+GO M9 REVIEW only after the bounded Windows working product passes its individual
+gates. Public installation/distribution remains M9; higherFPS/platform work needs
+a separate future scope decision. No content is sent to volunteers by this plan.
 
 ### Checkpoint log
+
+- 2026-10-10 — Owner scope review: M8 launcher/profile foundation starts first;
+  higher than60 FPS and secondary platforms move to later milestones. **0 complete,
+  6 deferred, 18 tasks total; YELLOW — implementation pending**. M8-015/016 are
+  active; independent read-only architecture/privacy review confirms the existing
+  bundle-local lock and seeded publisher cannot be reused as arbitrary external
+  save selection or volunteer distribution. Additive policy/fixture work precedes
+  real saves; p1 remains unchanged. [Plan and acceptance](docs/M8-priorities.md).
+  Re-estimate after data-root/UI foundation; next M8-016 core then M8-015 UI.
+  No gameplay PASS, content transfer or old temporal gate retry follows this rescope.
+
+- 2026-10-11 — M8-018 signed test-build expiry checkpoint: policy1417,
+  transport26, runtime37, signer66 and staging63 checks pass; actual host rejects
+  missing/forged/expired tickets before SDK setup. Private l2 exact staged
+  guest-free host14 PASS, not gameplay. Independent review GO for the private
+  candidate. Public DebugBundle manifest not deployed; explicit early-push
+  authorization and morning owner UI/gameplay/reload/F10/lifecycle check remain.
+  M8-015/016/018 open, no task commit/version bump or milestone closure.
+  Follow-up owner permission authorized only the signed allowlist: parentless
+  DebugBundle commit7878d4877fcae1a9d2baf73414c2fe58aa09b3eb pushed with one
+  active-builds.txt. Public exact bytes, native extended=1 and cache persistence
+  PASS; main/source WIP and gameplay gates remain unchanged.
 
 - 2026-09-13 — Private M8-001/M8-002 diagnostic checkpoint while M7 public gating remains open. Health: `YELLOW — DELTA ARITHMETIC PASSES; WINDOWS 60 AND DECK 45/60 PERFORMANCE TARGETS OPEN`. The isolated TU5 `0x821BDB08` branch selects the common delta path with the separate present-interval patch absent; ten-second Windows samples preserve approximately one second of simulated time per wall second above 30 guest publications/s. Worker profiling narrows `82305E38 -> 82131008 -> 82304398 -> 821775D8 -> 8217B7B0 -> 82419E98 -> 82411E98`; V40 measures 6.7116643/6.7117704 seconds and 13,479,689 polls inside the internal completion scope, with the worker at 97.30% of one core. Yield-before-every-256th-poll is NO-GO: Windows A/B/A 51.098/50.096/48.600 publications/s does not reduce worker CPU; a qualified official-SDK Deck gameplay run gives 21.400/s and is far below the owner target of stable45, ideally60 with70–90 headroom. The Deck harness correctly preserves all data but forced cleanup after an overly strict immediate-mode gate; Gamescope mailbox mode1 is non-FIFO and passes corrected offline replay. Full evidence and next GPU-producer counters: `docs/evidence/M8-001-dynamic-delta-windows.md`. CppStudio and xbox360-decomp were adopted only as reference guidance: `docs/evidence/M8-001-cppstudio-reference-trial.md`. No product option, stable-FPS claim, version bump, commit, push or public promotion.
 - 2026-09-13 - M8 GPU-producer and native-backend checkpoint. Completed task count remains 0/16; health: YELLOW - NATIVE D3D12 AVERAGES ABOVE 60, HOST STABILITY AND DECK 45/60 OPEN. Accepted Tracy localizes the Vulkan GPU Commands core: IssueDraw 17.78%, deferred replay 15.94%, SharedMemory::RequestRanges 14.79%, IssueCopy 12.21%, UpdateBindings 8.81%, indirect buffers 8.04% and swap 7.50%; per-opcode replay is dominated by BindDescriptorSets, PipelineBarrier, BeginRendering, BindPipeline and CopyBuffer driver recording rather than the 0.568-ms/swap outer decode loop. Descriptor-prefix retention, index-repeat caching, legacy render passes, non-sparse 512-MiB shared memory, submit-at-frame-boundary and single-range stack normalization are reviewed NO-GO or no-promotion results; the last candidate passed focused826/826 and isolated CTest413/413 before its exact source/build rollback. On the same Release package and dynamic-delta route, native D3D12 produces66.496 and79.200 guest outputs/s. Its closest draw-density comparison handles2.06% more draws/output than Vulkan while cadence is42.97% higher, GPU Commands CPU/draw5.55% lower and primary elapsed/draw31.51% lower. Independent review verifies four results,36 package files,374 loaded modules,12 frames and eight saves. This supports D3D12 as a provisional native-Windows preference, not stable host-present60,1% lows, other-hardware or Proton proof. FvSvc remains running; direct PresentMon needs elevation and the latest UAC attempt was canceled. Steam Deck remains Vulkan and blocked from a fresh prefix by787,738,624 free bytes below the1-GiB gate. Evidence: docs/evidence/M8-001-dynamic-delta-windows.md and docs/current-state.md. No version bump, commit, push or product promotion.
@@ -1751,12 +1785,12 @@ Launcher/capability requirements remain subject to the post-M7/M8 scope review.
 - [ ] **M9-002** Review all code, scripts, dependencies, licenses, and generated artifacts.
 - [ ] **M9-003** Run `ast-grep scan`, `ast-grep test`, compiler warnings, sanitizers where supported, unit tests, integration tests, and campaign regression tests.
 - [ ] **M9-004** Run secret, proprietary-file, large-file, and license scans over the full Git history and release staging directory.
-- [ ] **M9-005** Build an asset-free launcher/installer or portable package that validates the user's dump, performs contained local extraction plus codegen/compilation, atomically publishes a content/toolchain-fingerprinted prepared-game directory, and reuses it on later launches without bundling game assets or generated proprietary guest code. Add a settings UI that atomically edits and previews effective validated configuration: resolution/window/fullscreen/monitor, supported FPS mode and target, VSync, named wheel/pedal mapping profiles with axes/buttons/inversion/force-feedback gains, a validated local offline display name, opening the exact save directory, and explicit backup/restore. Keep the user-data root and save lineage stable; never derive a filesystem path from the display name or fabricate Xbox Live identity. Show unavailable blur, AA, shadow and later enhancement controls as disabled with an explanation until the M8 capability contract marks them verified. Preserve command-line and headless verification paths.
+- [ ] **M9-005** Harden/package the M8 internal launcher for release: asset-free dump validation, contained local extraction/codegen/compilation, atomic prepared-game reuse, clean-machine installation and updates. Reuse M8-015/016 settings/profile isolation rather than defer that working functionality to M9. Keep unsupported options disabled; no game assets or prohibited generated content in distribution.
 - [ ] **M9-006** Ensure extraction/import never overwrites the source ISO and never targets broad or unresolved paths.
 - [ ] **M9-007** Test install, first launch, data import, update, repair, uninstall, and rollback on clean Windows machines, including settings persistence/restart, missing or changed wheel devices, malformed settings, synchronized-folder conflicts, and interrupted backup restore.
 - [ ] **M9-008** Verify uninstall never removes user game dumps, saves, unrelated directories, or shared dependencies.
 - [ ] **M9-009** Document minimum/recommended hardware, supported OS/GPU APIs, data hash, known issues, logs, and support bundle creation.
-- [ ] **M9-010** Define save/config compatibility and migration behavior, including a versioned mutable launcher-settings layer with explicit CLI/environment/config precedence, separation from the immutable package manifest, atomic writes, rollback, and local-profile-name/save-path migration.
+- [ ] **M9-010** Harden the M8-016 versioned personal-data/settings contract for released-version upgrades, rollback, interrupted restore and clean-machine migration. Core profile selection, stable roots and atomic preferences are M8 prerequisites, not delayed release features.
 - [ ] **M9-011** Create deterministic release archives and checksums.
 - [ ] **M9-012** Bump the four-part version only after review and tests pass.
 - [ ] **M9-013** Update README-AI, README, changelog, compatibility matrix, build guide, and troubleshooting guide.
@@ -1964,19 +1998,23 @@ The criterion below is additional to the task wording and universal Definition o
 | ID | Individual acceptance criterion / minimum evidence |
 |---|---|
 | M8-001 | 60 FPS/delta-time patch is byte-guarded, optional, disabled by default, and independent of host VSync/cap selection / patch and presentation-policy tests |
-| M8-002 | Timing-sensitive systems pass stock 30, sustained 40–59 dips, fixed 60/90/120, fluctuating/VRR-like, and VSync-off uncapped comparisons without simulation slowdown / timing and campaign matrix |
-| M8-003 | Capability metadata and UI expose only validated stock, fixed-cap, dynamic-range, or uncapped modes and fall back safely after missed targets / capability-schema, config/UI, and frame-pacing tests |
+| M8-002 | Timing-sensitive systems preserve correct simulation at stock, target60 and below-target dips; no above60/VRR/uncapped claim / bounded timing and route matrix |
+| M8-003 | Capability metadata/UI expose only verified stock or60, reject unsupported modes and show effective settings; no unverified60 / config and presentation tests |
 | M8-004 | Every resolution/window/monitor/aspect mode exposed by the launcher renders HUD/world correctly and survives restart / capability and capture matrix |
-| M8-005 | Ultrawide gameplay and cutscene policy are documented and tested / report |
+| M8-005 | Deferred to later display-enhancement milestone without PASS; future ultrawide gate requires gameplay/cutscene evidence |
 | M8-006 | Each graphics option independently toggles and restores stock behavior, and remains absent or disabled in the launcher until verified / option and capability-gating tests |
 | M8-007 | Compatibility, accessibility, and cheat categories are visibly separated / UI review |
-| M8-008 | Cache design passes legal/content audit and invalidation tests / audit |
-| M8-009 | Linux prototype builds without weakening Windows correctness / build evidence |
-| M8-010 | Linux-specific filesystem/input/audio/package matrix passes / results |
+| M8-008 | Deferred cache distribution/precompilation expansion; future gate requires content/legal and invalidation review, local stall triage remains M8-011/017 |
+| M8-009 | Deferred Linux platform milestone; no native Linux support claim |
+| M8-010 | Deferred with Linux platform; future filesystem/input/audio/package physical matrix required |
 | M8-011 | Benchmarks are reproducible with hardware/build/config recorded / benchmark report |
-| M8-012 | Intended option combinations pass campaign regression scope / regression report |
-| M8-013 | ReXGlue Darwin/ARM64 and MoltenVK/Metal feasibility inventory closes every required CPU, OS, GPU, input/audio/storage, and packaging dependency as supported or an explicit blocker / feasibility report and compile/capability probes |
-| M8-014 | Native Apple-silicon package reaches representative gameplay and persistence on a clean Mac without Rosetta or proprietary bundled data / native artifact, route matrix, and package audit |
+| M8-012 | Intended stock/60 settings presets pass bounded representative M7-derived and profile-switch regression / exact artifact route records |
+| M8-013 | Deferred later macOS feasibility milestone; no ARM64/MoltenVK support claim |
+| M8-014 | Deferred behind future macOS feasibility; native gameplay/persistence/package gate still required |
+| M8-015 | Usable internal launcher selects exact build/game/profile and validated GPU/display modes, with headless verification and effective settings; no silent fallback / UI, fixture and exact-candidate owner smoke |
+| M8-016 | Named profile selection changes only a pointer; cross-build canonical-profile lock, complete explicit legacy import, atomic settings, archive-backed recovery and bounded history preserve data / two-build one-profile and separate-profile fixture matrix plus physical successor reload |
+| M8-017 | Prioritized baseline defects have reproducible evidence, reviewed fixes and targeted regression, or explicit owner-reviewed residual dispositions / bug ledger and before/after records |
+| M8-018 | Allowlisted eligible volunteer build excludes personal/game/private payloads; independent tester setup and explicit diagnostic export work without touching owner roots / sentinel staging/privacy audit and tester smoke |
 
 ### M9 criteria
 
@@ -1986,12 +2024,12 @@ The criterion below is additional to the task wording and universal Definition o
 | M9-002 | Review has no unresolved release-blocking finding / signed review summary |
 | M9-003 | Entire required analysis/test suite passes on RC / consolidated test report |
 | M9-004 | Git history and staging scans find no secret/proprietary violation / scan reports |
-| M9-005 | Asset-free package validates and reuses the prepared game without prohibited content; its launcher round-trips only validated display/FPS/VSync/wheel/profile settings, preserves user-root/save identity, opens only the owned save folder, and creates/restores explicit verified backups without silent overwrite / clean-machine prepare-reuse, settings-capability, profile, path-safety, backup/restore, and content audits |
+| M9-005 | Release package adds audited asset-free prepare/reuse/install/update around accepted M8 launcher/data isolation; immutable contents and personal roots stay separate / clean-machine and content audits |
 | M9-006 | Import rejects broad/unresolved targets and preserves source ISO / safety tests |
 | M9-007 | Install/update/repair/uninstall/rollback plus settings, device-change, corruption, sync-conflict and interrupted-restore cases pass on clean machines / lifecycle and fault-injection matrix |
 | M9-008 | Uninstall preservation tests prove user data safety / filesystem diff |
 | M9-009 | User documentation covers all claimed requirements and diagnostics / doc review |
-| M9-010 | Versioned mutable settings and save/profile migrations preserve immutable package verification, explicit precedence and rollback / compatibility and migration report |
+| M9-010 | Released-version migration/rollback preserves the M8 personal-root and mutable-settings contract under interruption / compatibility and migration report |
 | M9-011 | Two clean builds produce matching intended artifacts/checksums / reproducibility report |
 | M9-012 | Version bump follows highest-impact included change after tests / version review |
 | M9-013 | All named docs match RC behavior / documentation diff review |
@@ -2094,8 +2132,10 @@ Execute in this order unless a new blocker changes the plan:
     local rename and progressed successor, with linked blocker regressions.
 33. [x] Close M7 at0.19.0.0 after M7-015, independent aggregate GO and verified
     SDK-first/parent publication. Closure commit d6ca114; preserved p1 unchanged.
-34. [ ] After M7 closes, review/rethink M8 scope, priorities and measurable timing/
-    performance/platform criteria, including the deferred Deck frame-time budget.
+34. [x] Owner reviewed M8 on October10: internal launcher and named external save
+    library first, baseline Windows bug fixes, stock/max60; higherFPS/platforms later.
+35. [-] Implement M8-015/016 safe launcher/profile foundation, preserving p1 and
+    separating volunteer build contents from all personal/game data.
 
 Owner decision 2026-10-03 supersedes the old Deck-first/two-full-campaign order.
 Historical experiments remain in the M7/M8 checkpoint logs and linked evidence.

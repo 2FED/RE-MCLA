@@ -22,7 +22,9 @@ and the [compatibility summary](docs/alpha-compatibility.md).
 
 M7 is closed at source version0.19.0.0 after independent review and verified
 dependency-first publication. [Closure receipt](docs/evidence/M7-closure-20261010.md).
-[README-AI](README-AI) owns the ledger; the next step is owner review of M8 scope.
+[README-AI](README-AI) owns the ledger. The owner-approved [M8 plan](docs/M8-priorities.md)
+starts with an internal launcher and independent named save profiles, then baseline
+Windows bug fixes and validated stock/60 modes; higher FPS and platforms are later.
 Payback, unconfirmed South Central event access and Unordered remain deferred
 without PASS. Steam Deck/Proton, exact high-FPS timing and full campaign/end-game
 coverage are outside this M7 acceptance.
@@ -70,9 +72,19 @@ The intended public experience is the same broad model used by asset-free recomp
 
 The current repository already implements the underlying developer pipeline—exact ISO validation, contained extraction, local code generation, native compilation, runtime launch, and data-integrity checks—but not the consumer launcher or clean-machine packaging UX. The source dump must never be uploaded, modified, bundled, or deleted; after successful preparation it need not be reread on every launch, but it remains user-owned and available for repair/rebuild. Generated proprietary guest code and game assets remain local and untracked.
 
-## Private portable campaign-test bundle
+## Internal launcher and personal saves
 
-The current owner entry, `Run M7 Profile Candidate.cmd`, targets `private/p1`.
+The internal Windows launcher is owner-accepted on the immutable private l2
+candidate: stock timing, named GPU,1x/2x render scale, separate selectable save
+profiles, actual F10, reload and launcher-close survival. The current owner MAIN
+is under `C:\BDU\MCLA-Saves`, independent of builds. Existing p1 is retained as
+an archive; do not progress both branches. [Acceptance and limits](docs/evidence/M8-launcher-owner-acceptance-20261011.md).
+Explicit render-resolution targets, validated60FPS and volunteer export remain
+open. This is not a public distribution artifact or a graceful SDK teardown fix.
+
+## Retained private portable campaign-test bundle
+
+The historical owner entry, `Run M7 Profile Candidate.cmd`, targets `private/p1`.
 That independently copied, owner-private Windows package includes prepared game
 data and its own selected save; it is not redistributable. Its accepted hybrid
 identities begin host `82A69B5E`, runtime `542DD347`, launcher `67B8F527`

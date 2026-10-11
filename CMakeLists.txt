@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(MCLA_BUILD_DIAGNOSTIC_TESTS "Expose nonshipping pure diagnostic tests" OFF)
 option(MCLA_BUILD_IMAGE_CAPTURE_TESTS "Expose experimental nonshipping image helper/client" OFF)
 option(MCLA_EXPERIMENTAL_F10_WGC "Private Windows F10 image-only WGC candidate (unaccepted)" OFF)
+option(MCLA_TEST_BUILD_EXPIRY "Require signed 14-day test ticket before Windows host startup" OFF)
 if(MCLA_EXPERIMENTAL_F10_WGC AND NOT WIN32)
     message(FATAL_ERROR "Experimental F10 WGC is Windows-only")
 endif()
@@ -59,6 +60,14 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_portable_path_policy_test.cpp)
     target_include_directories(mcla_portable_path_policy_test PRIVATE src)
     target_compile_features(mcla_portable_path_policy_test PRIVATE cxx_std_23)
+    add_executable(mcla_launcher_profile_policy_test EXCLUDE_FROM_ALL
+        tests/mcla_launcher_profile_policy_test.cpp)
+    target_include_directories(mcla_launcher_profile_policy_test PRIVATE src)
+    target_compile_features(mcla_launcher_profile_policy_test PRIVATE cxx_std_23)
+    foreach(policy_test IN ITEMS launcher_library_codec launcher_preferences managed_config_policy)
+        add_executable(mcla_${policy_test}_test EXCLUDE_FROM_ALL tests/mcla_${policy_test}_test.cpp)
+        target_include_directories(mcla_${policy_test}_test PRIVATE src)
+    endforeach()
     add_executable(mcla_portable_adapter_policy_test EXCLUDE_FROM_ALL
         tests/mcla_portable_adapter_policy_test.cpp)
     target_include_directories(mcla_portable_adapter_policy_test PRIVATE src)
@@ -193,6 +202,15 @@ endif()
 
 if(WIN32)
     target_link_libraries(mcla PRIVATE psapi bcrypt gdi32 user32)
+    add_library(mcla_build_lease STATIC
+        src/mcla_build_lease_policy.cpp src/mcla_build_lease_network_win.cpp
+        src/mcla_build_lease_runtime_win.cpp src/mcla_launcher_fs_win.cpp)
+    target_include_directories(mcla_build_lease PUBLIC src)
+    target_link_libraries(mcla_build_lease PUBLIC bcrypt winhttp shell32 ole32 uuid)
+    if(MCLA_TEST_BUILD_EXPIRY)
+        target_compile_definitions(mcla PRIVATE MCLA_TEST_BUILD_EXPIRY=1)
+        target_link_libraries(mcla PRIVATE mcla_build_lease)
+    endif()
     add_executable(mcla_crash_handler WIN32
         src/mcla_crash_handler_win.cpp
     )
@@ -208,6 +226,90 @@ if(WIN32)
     target_compile_features(mcla_portable_launcher PRIVATE cxx_std_23)
     target_link_libraries(mcla_portable_launcher PRIVATE bcrypt user32 dxgi d3d12)
     add_dependencies(mcla mcla_portable_launcher)
+
+    set(MCLA_LAUNCHER_SOURCES
+        src/mcla_launcher_controller_win.cpp src/mcla_launcher_ui_win.cpp
+        src/mcla_launcher_store_win.cpp src/mcla_launcher_fs_win.cpp
+        src/mcla_launcher_writable_root_win.cpp src/mcla_launcher_process_win.cpp
+        src/mcla_launcher_snapshot_win.cpp src/mcla_launcher_build_win.cpp
+        src/mcla_launcher_game_win.cpp)
+    add_executable(mcla_internal_launcher WIN32 src/mcla_launcher_main_win.cpp ${MCLA_LAUNCHER_SOURCES})
+    set_target_properties(mcla_internal_launcher PROPERTIES OUTPUT_NAME "MCLA-Launcher")
+    target_include_directories(mcla_internal_launcher PRIVATE src
+        third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+    target_link_libraries(mcla_internal_launcher PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
+    target_link_libraries(mcla_internal_launcher PRIVATE mcla_build_lease)
+
+    if(MCLA_BUILD_DIAGNOSTIC_TESTS)
+        add_executable(mcla_build_lease_policy_test EXCLUDE_FROM_ALL tests/mcla_build_lease_policy_test.cpp)
+        target_link_libraries(mcla_build_lease_policy_test PRIVATE mcla_build_lease)
+        add_executable(mcla_build_lease_network_win_test EXCLUDE_FROM_ALL tests/mcla_build_lease_network_win_test.cpp)
+        target_link_libraries(mcla_build_lease_network_win_test PRIVATE mcla_build_lease)
+        add_executable(mcla_build_lease_runtime_win_test EXCLUDE_FROM_ALL
+            tests/mcla_build_lease_runtime_win_test.cpp src/mcla_build_lease_runtime_win.cpp)
+        target_compile_definitions(mcla_build_lease_runtime_win_test PRIVATE MCLA_BUILD_LEASE_RUNTIME_TESTING)
+        target_link_libraries(mcla_build_lease_runtime_win_test PRIVATE mcla_build_lease)
+        add_executable(mcla_build_lease_probe_win EXCLUDE_FROM_ALL tests/mcla_build_lease_probe_win.cpp)
+        target_link_libraries(mcla_build_lease_probe_win PRIVATE mcla_build_lease)
+        add_executable(mcla_launcher_fs_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_fs_win_test.cpp src/mcla_launcher_fs_win.cpp)
+        target_include_directories(mcla_launcher_fs_win_test PRIVATE src)
+        target_link_libraries(mcla_launcher_fs_win_test PRIVATE bcrypt)
+        add_executable(mcla_launcher_ui_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_ui_win_test.cpp src/mcla_launcher_ui_win.cpp)
+        target_include_directories(mcla_launcher_ui_win_test PRIVATE src)
+        target_link_libraries(mcla_launcher_ui_win_test PRIVATE user32 gdi32 ole32 uuid)
+        add_executable(mcla_launcher_process_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_process_win_test.cpp src/mcla_launcher_process_win.cpp)
+        target_include_directories(mcla_launcher_process_win_test PRIVATE src)
+        target_compile_definitions(mcla_launcher_process_win_test PRIVATE MCLA_LAUNCHER_PROCESS_TEST_SEAM)
+        add_executable(mcla_launcher_store_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_store_win_test.cpp src/mcla_launcher_store_win.cpp src/mcla_launcher_fs_win.cpp src/mcla_launcher_writable_root_win.cpp)
+        target_include_directories(mcla_launcher_store_win_test PRIVATE src)
+        target_link_libraries(mcla_launcher_store_win_test PRIVATE bcrypt shell32 ole32 uuid)
+        add_executable(mcla_launcher_build_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_build_win_test.cpp src/mcla_launcher_build_win.cpp src/mcla_launcher_fs_win.cpp)
+        target_include_directories(mcla_launcher_build_win_test PRIVATE src)
+        target_link_libraries(mcla_launcher_build_win_test PRIVATE bcrypt)
+        add_executable(mcla_launcher_snapshot_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_snapshot_win_test.cpp src/mcla_launcher_snapshot_win.cpp src/mcla_launcher_fs_win.cpp)
+        target_include_directories(mcla_launcher_snapshot_win_test PRIVATE src)
+        target_compile_definitions(mcla_launcher_snapshot_win_test PRIVATE MCLA_LAUNCHER_SNAPSHOT_TEST_SEAM)
+        target_link_libraries(mcla_launcher_snapshot_win_test PRIVATE bcrypt)
+        add_executable(mcla_launcher_game_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_game_win_test.cpp src/mcla_launcher_game_win.cpp src/mcla_launcher_fs_win.cpp)
+        target_include_directories(mcla_launcher_game_win_test PRIVATE src)
+        target_compile_definitions(mcla_launcher_game_win_test PRIVATE MCLA_LAUNCHER_GAME_TESTING)
+        target_link_libraries(mcla_launcher_game_win_test PRIVATE bcrypt)
+        add_executable(mcla_launcher_import_policy_test EXCLUDE_FROM_ALL tests/mcla_launcher_import_policy_test.cpp)
+        target_include_directories(mcla_launcher_import_policy_test PRIVATE src
+            third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        add_executable(mcla_launcher_controller_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_controller_win_test.cpp ${MCLA_LAUNCHER_SOURCES})
+        target_include_directories(mcla_launcher_controller_win_test PRIVATE src
+            third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        target_compile_definitions(mcla_launcher_controller_win_test PRIVATE
+            MCLA_LAUNCHER_CONTROLLER_TESTING MCLA_LAUNCHER_GAME_TESTING)
+        target_link_libraries(mcla_launcher_controller_win_test PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
+        target_link_libraries(mcla_launcher_controller_win_test PRIVATE mcla_build_lease)
+        add_executable(mcla_launcher_host_probe_win EXCLUDE_FROM_ALL
+            tests/mcla_launcher_host_probe_win.cpp ${MCLA_LAUNCHER_SOURCES})
+        target_include_directories(mcla_launcher_host_probe_win PRIVATE src
+            third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        target_compile_definitions(mcla_launcher_host_probe_win PRIVATE MCLA_LAUNCHER_HOST_LIFECYCLE_TEST)
+        target_link_libraries(mcla_launcher_host_probe_win PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
+        target_link_libraries(mcla_launcher_host_probe_win PRIVATE mcla_build_lease)
+        add_executable(mcla_launcher_import_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_import_win_test.cpp ${MCLA_LAUNCHER_SOURCES})
+        target_include_directories(mcla_launcher_import_win_test PRIVATE src
+            third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        target_link_libraries(mcla_launcher_import_win_test PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
+        target_link_libraries(mcla_launcher_import_win_test PRIVATE mcla_build_lease)
+        add_executable(mcla_launcher_ui_render_win EXCLUDE_FROM_ALL
+            tests/mcla_launcher_ui_render_win.cpp src/mcla_launcher_ui_win.cpp)
+        target_include_directories(mcla_launcher_ui_render_win PRIVATE src)
+        target_link_libraries(mcla_launcher_ui_render_win PRIVATE user32 gdi32 ole32 uuid gdiplus)
+    endif()
 endif()
 
 # Ship a discoverable host-configuration template without overwriting the

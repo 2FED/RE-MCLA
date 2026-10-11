@@ -1,17 +1,83 @@
 # Current state and handoff
 
-Updated October 10, 2026. README-AI owns the milestone ledger and dated history.
+Updated October 11, 2026 Kyiv. README-AI owns the milestone ledger and dated history.
 
 ## Active outcome
 
-M7 representative local Windows compatibility is CLOSED at the owner's
-requested milestone boundary. Stop here; next is owner review of M8 scope.
-No full campaign, Deck target or unlock grind.
+M7 is CLOSED. Owner approved revised M8 on October10: internal launcher first,
+named selectable personal save folders outside builds, baseline Windows/RTX5060
+bug fixes and stock/max60. HigherFPS/platforms/release-ready packaging are later.
+[Active scope and safety gates](M8-priorities.md). M8-015 accepted and ready for
+its implementation commit; M8-016 separate acceptance commit follows. M8-018
+remains open for volunteer/export gates. Source VERSION0.20.0.0; accepted l2
+remains its original0.19.0.0 and has not been rebuilt/replaced.
+Owner confirms all requested controls/audio/AltEnter/F10/reload/name/save and
+launcher-close/game-survival tests. Exact sessions, snapshots and image agree.
+Native launcher source now includes named profiles, guarded canonical roots,
+cross-build writer locks, atomic local settings, immutable build/game admission,
+owned child jobs, stock-only GPU/scale/fullscreen controls and complete snapshots.
+New managed host mode uses a read-pinned comment-only session config plus sanitized
+CLI settings; it neither loads nor saves the build's mcla.toml. VSync Off is
+rejected: current SDK changes guest vblank to1000Hz when disabled, so it is not
+a validated stock capability. Rename/import/duplicate/restore remain explicit;
+restoration creates a NEW independent profile, never overwrites the original.
+Rename/recovery/import integration passed native fixtures and scoped review.
+Latest native PASS counts: policy117, codec315, preferences138, managed-config50,
+filesystem72, UI399, process41, store107, build109, game70, snapshot21,
+import-policy72, production-import29, controller69. New controller matrix proves
+two valid different builds contend for one profile and independent profiles run
+simultaneously without mixing saves/cache/diagnostics. Six native symlink cases
+SKIP with Windows1314; no invented PASS.
+Current staging63 PASS; exact15 embedded game metadata rows match retained manifest.
+New candidate private/l2: launcherBE79E0C3..., host9195117A...,
+build manifest9C6BEA71.../game95DA2709... . Exact staged guest-free host14 PASS:
+TEMP/mcla-host-probe-527025b9147efbd4dd7c7ef7cc299a0b, empty temporary profile,
+explicit roots, lifecycle log markers, immutable sentinel and final snapshots.
+The guest-free probe alone is not gameplay evidence; actual owner return below
+now supplies gameplay/F10 acceptance. No automatic profile import occurred.
+Read-only Verify build/game button reports exact identity without saving/launching.
+Hidden UI layout render did not render edit/combo text; native value assertions
+pass, and owner successfully completed visible setup and the full requested test.
+Spark qwen3.8-27b routine test inventory completed; all7 exact source cases checked.
+Private receipt: private/evidence/M8-launcher-spark-20261010-1.
+Implementation/docs await the M8-015 commit, with M8-016 acceptance separately.
+Three sessions complete/exit0; six snapshots and F10 artifacts hash-verified.
+Successful frame48B04081... shows actual nighttime road/Mazda at1600x900.
+The155-sample audit is incomplete, not performance PASS. Separate automatic
+unexpected-guest-exit .partial and no-frame package are not failed F10. SDK
+hard-exit/report classification remains M8-017; launcher finalization passed.
+[Exact owner return and review](evidence/M8-launcher-owner-acceptance-20261011.md).
+[First-run instructions](internal-launcher-owner-test.md) use explicit full p1/user
+import into the owner's chosen permanent parent. Never progress both branches.
+[Exact evidence and limits](evidence/M8-launcher-foundation-20261010.md).
+Owner approved test-build expiry overnight: l2 launcher and host enforce a signed
+14-day allowance; cacheable signed GitHub grants can extend it. Host compiled
+MCLA_TEST_BUILD_EXPIRY=ON, ticket created1791667418/expires1792877018 (Oct25
+00:23:38 Kyiv). Policy1417/HTTP26/runtime37/signing66 checks pass; actual copied
+host rejects missing/forged/expired tickets before SDK setup. Stricter lifecycle
+negative probes use no cache/network/game assets. No ongoing-game expiry timer.
+Owner explicitly approved publishing only the signed allowlist on October11.
+DebugBundle root commit7878d4877fcae1a9d2baf73414c2fe58aa09b3eb is pushed and
+remote-verified; its entire tree is one active-builds.txt (634bytes), no ancestors.
+Public HTTPS200 bytes match F8252FEF91FF13C0118681F173AD5B5234065FF06D18D2915BB9EBB7FC7F9872.
+Native production admission now returns extended=1/expires1794086618
+(Nov7 21:23:38 UTC), and exact signed bytes are in the local lease cache.
+No build, game, source, save or diagnostic payload was uploaded. Main/index and
+staged l2 artifacts are unchanged. This is live signed-extension PASS, not gameplay.
+Nonexportable current-user CNG key MCLA-R-TestBuild-Leases-v1 was created once;
+public key embedded in src/mcla_build_lease_public_key.h. Never recreate it during
+ordinary builds or assume repository backup contains the private key.
+[Expiry evidence](evidence/M8-build-expiry-20261011.md),
+[signing/operator policy](test-build-expiry.md). Original l1 remains untouched.
+Explicit720p/1080p/1440p/2160p render targets requested for M8-004; l2 still has
+1x/2x. Do not present that follow-up as implemented.
+Original p1 is unchanged. Owner explicitly imported MAIN and tested it; no
+candidate or personal data was sent to volunteers.
 All15 mandatory tasks are committed complete; M7-005 is deferred without PASS.
-M7-015 commit3a16edd and independent aggregate review GO; source VERSION0.19.0.0.
+M7-015 commit3a16edd and independent aggregate review GO; M7 closure source0.19.0.0.
 Closure commit d6ca114823dd3af0c3db2fe9b18522a0e8e9f15f was pushed and remote main
 verified equal. This follow-up handoff records that completed publication.
-Weekly usage22% used/78% remaining;
+Weekly usage0% used/100% remaining at the live post-publication check;
 check after each closed task, stop at30% remaining. Never infer physical PASS.
 
 Recent commits: e0ee93f events,8da30b0 profile/source integration,39c294e save
@@ -22,7 +88,15 @@ identified. [Matrix](campaign-coverage-matrix.md), [regression](evidence/M7-013-
 
 ## Accepted gameplay package and saves
 
-Owner entry remains Run M7 Profile Candidate.cmd -> private/p1, stock timing,
+Active owner entry is private/l2/MCLA-Launcher.exe, selecting MAIN at
+C:\BDU\MCLA-Saves\MCLA-f5d835a679843f1e95de84646d2a8646. Import from p1/user;
+profile snapshot164A8DC4..., main save439E2A84..., display-name257870D8... .
+All six imported files match both live MAIN and original p1 after acceptance;
+no new progression bytes claimed. Keep playing MAIN, never merge/reimport p1.
+Owner reports launcher-close survival; logs prove window-close/final snapshots,
+not fully graceful SDK worker teardown. No physical replay needed.
+
+Historical Run M7 Profile Candidate.cmd -> private/p1, stock timing,
 2x target,VSync/fullscreen,named RTX5060. Do not replace binaries or merge saves.
 Host82A69B5E922DE80726F76B2345C9FFE1FE143FFB485E4269FB1586DE9230509A;
 launcher67B8F5272016D686EDF2E8B5FBAE43945B8E00E19917637AC8DF29C1DEB5F927;
@@ -86,12 +160,20 @@ diagnostics9/76/177,analysis1/16,soak1/44/106,generated1/5,buildmatrixPASS.
 Alpha2/40 keeps historical27M6tuples separate from current31issues.
 [Full integration](evidence/M7-002-sdk-profile-integration-20261010.md).
 
-## Next boundary and safety
+## Next work and safety
 
 Primary owns README-AI/current-state/task status/commits. Independent acceptance
 and publication reviews returned GO; final docs and dependency/parent push passed.
-M8 scope/priority review is next, not automatic implementation. Sanitized historical
-link dependencies are committed without their experimental code.
+Scope/native safety and owner return reviews pass. Finish separate M8-015 and
+M8-016 commits, checking live usage after each, then the mandatory two-task M8
+checkpoint. Next work is explicit render targets/baseline bugs; no closure of
+60FPS, performance or volunteer distribution follows from launcher acceptance.
+Use l2 with the existing MAIN; never import p1 again or overwrite the live profile.
+Independent architecture/privacy audits found current launcher bundle-root locks
+cannot safely protect one external profile across builds. Existing publisher
+includes game+seed; never ZIP p1 for volunteers. Legacy profile import must be
+explicit, complete and archive-backed, never an implicit folder-switch action.
+Sanitized historical link dependencies are committed without experimental code.
 No git add -A. Untracked proprietary ISO, private,
 generated,out and unrelated M8 scripts/SDK graphics must remain local.
 
