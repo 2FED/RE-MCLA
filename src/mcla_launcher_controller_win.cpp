@@ -1,5 +1,6 @@
 #include "mcla_launcher_controller_win.h"
 #include "mcla_launcher_build_win.h"
+#include "mcla_launcher_capabilities.h"
 #include "mcla_launcher_game_win.h"
 #include "mcla_launcher_process_win.h"
 #include "mcla_launcher_snapshot_win.h"
@@ -98,6 +99,16 @@ std::expected<unsigned,std::wstring> AdapterIndex(std::wstring_view name) {
 const ProfileEntry *Selected(const Preferences &p) {
   for(const auto &e:p.library.entries) if(e.id==p.library.selected_id) return &e;
   return nullptr;
+}
+std::expected<CapabilityPlan,std::wstring> AdmitCapabilities(
+    const Preferences &preferences,const VerifiedBuild &build,const VerifiedGame &game) {
+  auto plan=ResolveCapabilities({build.fingerprint(),game.fingerprint(),TimingMode::Stock,
+                                preferences.render_target,preferences.vsync});
+  if(!plan) {
+    const auto error=CapabilityErrorDescription(plan.error());
+    return std::unexpected(std::wstring(error.begin(),error.end()));
+  }
+  return std::move(*plan);
 }
 std::expected<std::wstring,std::wstring> ReadDisplayName(const fs::DirectoryGuard &profile) {
   auto user=fs::OpenDirectory(profile.path()+L"\\user"); if(!user) return std::unexpected(user.error());
@@ -215,10 +226,10 @@ struct LauncherController::State {
           r.selected_profile_id!=p.library.selected_id)
         return std::unexpected(L"Select an acknowledged managed profile before checking launch");
       p.build_root=U16(r.build_root); p.game_root=U16(r.game_root); p.gpu_name=U16(r.gpu_name);
-      p.resolution_scale=r.resolution_scale; p.vsync=r.vsync; p.fullscreen=r.fullscreen;
+      p.render_target=r.render_target; p.vsync=r.vsync; p.fullscreen=r.fullscreen;
       if(!p.vsync) return std::unexpected(L"Stock launch requires VSync On");
       if(!ValidPreferences(p) || !MakeLaunchPlan(p.library,{p.build_root,p.game_root,TimingMode::Stock}))
-        return std::unexpected(L"Launch settings need valid separate build/game roots and a supported scale");
+        return std::unexpected(L"Launch settings need valid separate build/game roots and a supported render target");
       auto gpu=AdapterIndex(r.gpu_name); if(!gpu) return std::unexpected(gpu.error());
       auto profile=fs::OpenDirectory(Wide(entry->root)); if(!profile) return std::unexpected(profile.error());
       auto safe=ValidateWritableRoot(*profile); if(!safe) return std::unexpected(safe.error());
@@ -270,6 +281,8 @@ struct LauncherController::State {
       auto existing_cache=InspectExistingCache(children[1],build->fingerprint());
       if(!existing_cache) return std::unexpected(existing_cache.error());
       auto verified_game=VerifySelectedGame(*game); if(!verified_game) return std::unexpected(verified_game.error());
+      auto capability=AdmitCapabilities(p,*build,*verified_game);
+      if(!capability) return std::unexpected(capability.error());
       uint64_t expires=0;
 #ifndef MCLA_LAUNCHER_CONTROLLER_TESTING
       // Synthetic controller builds use their existing fake-host exemption.
@@ -301,9 +314,9 @@ struct LauncherController::State {
   std::expected<void,std::wstring> Settings(const UiRequest &r) {
     auto p=store.preferences();
     p.build_root=U16(r.build_root); p.game_root=U16(r.game_root); p.gpu_name=U16(r.gpu_name);
-    p.resolution_scale=r.resolution_scale; p.vsync=r.vsync; p.fullscreen=r.fullscreen;
+    p.render_target=r.render_target; p.vsync=r.vsync; p.fullscreen=r.fullscreen;
     if(!p.vsync) return std::unexpected(L"VSync Off changes guest vblank timing in this SDK and is not validated. Enable VSync for the stock preset.");
-    if(!ValidPreferences(p)) return std::unexpected(L"Settings contain an invalid path, GPU name or scale");
+    if(!ValidPreferences(p)) return std::unexpected(L"Settings contain an invalid path, GPU name or render target");
     // Revalidate all physical roots even if a save is not selected yet.
     std::vector<fs::DirectoryGuard> roots;
     for(const auto &path:{p.build_root,p.game_root}) if(!path.empty()) {
@@ -495,7 +508,7 @@ struct LauncherController::State {
     UiState ui;
     ui.collection_parent=CollectionParentHint();
     ui.library=p.library; ui.build_root=Wide(p.build_root); ui.game_root=Wide(p.game_root);
-    ui.gpu_name=Wide(p.gpu_name); ui.resolution_scale=static_cast<int>(p.resolution_scale);
+    ui.gpu_name=Wide(p.gpu_name); ui.render_target=p.render_target;
     ui.vsync=p.vsync; ui.fullscreen=p.fullscreen; ui.running=session.has_value(); ui.status=status;
     if(session) {
       ui.readiness=LaunchReadiness::Running;
@@ -547,6 +560,11 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
 #endif
   auto verified_game=VerifySelectedGame(*game);
   if(!verified_game) return std::unexpected(verified_game.error());
+  auto capability=AdmitCapabilities(p,*build,*verified_game);
+  if(!capability) return std::unexpected(capability.error());
+  const auto &target=capability->target;
+  auto capability_record=SerializeCapabilities(*capability);
+  if(!capability_record) return std::unexpected(L"Cannot encode the admitted capability plan");
   auto gpu=AdapterIndex(Wide(p.gpu_name)); if(!gpu) return std::unexpected(gpu.error());
   auto user=fs::OpenDirectory(profile->path()+L"\\user"); if(!user) return std::unexpected(user.error());
   std::vector<fs::DirectoryGuard> children;
@@ -587,6 +605,7 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   auto before=NewDirectory(*directory,L"before-user"); if(!before) return std::unexpected(before.error());
   auto snapshot=CopySaveTree(*user,*before); if(!snapshot) return std::unexpected(snapshot.error());
   auto receipt=Text(*directory,L"before-snapshot.txt",*snapshot); if(!receipt) return receipt;
+  receipt=Text(*directory,L"capabilities.txt",*capability_record); if(!receipt) return receipt;
   auto config=Text(*directory,L"managed.toml",mcla::managed_config::kSentinel); if(!config) return config;
   auto diagnostics=NewDirectory(children[2],*id); if(!diagnostics) return std::unexpected(diagnostics.error());
   auto cache_path=children[0].path()+L"\\"+std::wstring(build->fingerprint().begin(),build->fingerprint().end());
@@ -601,9 +620,14 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
     flag(L"update_data_root",children[6].path()),flag(L"log_file",directory->path()+L"\\mcla.log"),
     flag(L"mcla_diagnostics_root",diagnostics->path()),flag(L"mcla_managed_launch_config",directory->path()+L"\\managed.toml"),
     flag(L"local_user_display_name",display_name),flag(L"d3d12_adapter",std::to_wstring(*gpu)),
-    flag(L"resolution_scale",std::to_wstring(p.resolution_scale)),boolean(L"vsync",p.vsync),boolean(L"fullscreen",p.fullscreen),
+    flag(L"resolution_scale",std::to_wstring(target.scale)),
+    flag(L"draw_resolution_scale_x",std::to_wstring(target.scale)),
+    flag(L"draw_resolution_scale_y",std::to_wstring(target.scale)),
+    boolean(L"vsync",capability->vsync),boolean(L"fullscreen",p.fullscreen),
     L"--gpu_backend=d3d12",L"--xam_user_signin_state=1",L"--input_backend=sdl",L"--mnk_mode=false",
-    L"--video_mode_width=1280",L"--video_mode_height=720",L"--video_mode_refresh_rate=60",
+    flag(L"video_mode_width",std::to_wstring(target.guest_width)),
+    flag(L"video_mode_height",std::to_wstring(target.guest_height)),
+    flag(L"video_mode_refresh_rate",std::to_wstring(capability->guest_refresh_hz)),
     L"--mcla_diagnostics_enabled=true",L"--mcla_crash_reporter_dialog=true"};
 #ifdef MCLA_LAUNCHER_CONTROLLER_TESTING
   args.push_back(L"--mcla_launcher_fixture=true");
@@ -615,8 +639,11 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   const auto build_hash=build->fingerprint();
   auto provenance=Text(*directory,L"launch-receipt.txt","MCLA-MANAGED-SESSION-V1\nprofile "+entry->id+
       "\nbuild "+build_hash+"\ngame "+verified_game->fingerprint()+"\ntiming stock\ngpu "+Utf8(Wide(p.gpu_name))+
-      "\nadapter "+std::to_string(*gpu)+"\nscale "+std::to_string(p.resolution_scale)+
-      "\nvsync "+std::to_string(p.vsync)+"\nfullscreen "+std::to_string(p.fullscreen)+"\n");
+      "\nadapter "+std::to_string(*gpu)+"\nscale "+std::to_string(target.scale)+
+      "\nrender_target "+std::to_string(target.width)+"x"+std::to_string(target.height)+
+      "\nguest_mode "+std::to_string(target.guest_width)+"x"+std::to_string(target.guest_height)+
+      "\nvsync "+std::to_string(capability->vsync)+"\nfullscreen "+std::to_string(p.fullscreen)+
+      "\ncapability_policy "+std::to_string(kCapabilityPolicyVersion)+"\ncapability_record capabilities.txt\n");
   if(!provenance) return provenance;
   children.push_back(std::move(*before)); children.push_back(std::move(*diagnostics)); children.push_back(std::move(*cache));
   state=Text(*directory,L"state.txt","launching\n"); if(!state) return state;
@@ -669,7 +696,8 @@ UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
       if(!checked) result=std::unexpected(checked.error());
       else {
         checked_expiry=*checked;
-        s.status=L"Read-only launch check passed for these settings. Start Game rechecks; successful writes and startup are not guaranteed.";
+        const auto description=CheckedStockSettingsDescription(request.render_target);
+        s.status=std::wstring(description.begin(),description.end());
       }
       break;
     }
@@ -744,7 +772,7 @@ UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
     view.verification_failed=!result;
     // Read-only verification must not erase unsaved form edits or persist them.
     view.build_root=request.build_root; view.game_root=request.game_root;
-    view.gpu_name=request.gpu_name; view.resolution_scale=request.resolution_scale;
+    view.gpu_name=request.gpu_name; view.render_target=request.render_target;
     view.vsync=request.vsync; view.fullscreen=request.fullscreen;
     view.in_game_name=request.in_game_name;
   }

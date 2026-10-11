@@ -1,8 +1,9 @@
 // Synthetic owned-window visual QA only; not a desktop/window-capture tool.
-// Usage: renderer --output C:\explicit\new.png [--page play|profiles|setup]
+// Usage: renderer --output C:\explicit\new.png [--page play|profiles|setup|checked]
 //        renderer --output C:\explicit\new.png --operation rename|create|register|import|copy|restore
 // Link UI source with user32 gdi32 ole32 uuid gdiplus. No game backend.
 #include "mcla_launcher_ui_win.h"
+#include "mcla_launcher_capabilities.h"
 
 #include <objidl.h>
 #include <gdiplus.h>
@@ -44,7 +45,7 @@ struct OutputFile {
   ~OutputFile() { if (value != INVALID_HANDLE_VALUE) CloseHandle(value); }
 };
 
-UiState SyntheticState() {
+UiState SyntheticState(bool checked_status = false) {
   UiState state;
   state.library = {1, {
       {"1234567890abcdef1234567890abcdef", u"MAIN - synthetic campaign",
@@ -56,11 +57,15 @@ UiState SyntheticState() {
   state.game_root = L"E:/SyntheticGameData/MCLA";
   state.gpu_names = {L"Synthetic integrated GPU", L"Synthetic discrete GPU"};
   state.gpu_name = state.gpu_names[1];
-  state.resolution_scale = 2;
+  state.render_target = checked_status ? 2160 : 1440;
   state.vsync = true;
   state.fullscreen = true;
   state.in_game_name = L"RoadDriver";
   state.status = L"SYNTHETIC VISUAL FIXTURE ONLY. No files verified, profile saved or game launched.";
+  if (checked_status) {
+    const auto description = CheckedStockSettingsDescription(2160);
+    state.status.assign(description.begin(), description.end());
+  }
   return state;
 }
 
@@ -190,14 +195,16 @@ HWND OwnedOperation(HWND owner) {
 int wmain(int argc, wchar_t **argv) {
   try {
     Require((argc == 3 || argc == 5) && std::wstring_view(argv[1]) == L"--output" && ExplicitOutputPath(argv[2]),
-            "Usage: renderer --output <new absolute local .png/.bmp> [--page play|profiles|setup]");
+            "Usage: renderer --output <new absolute local .png/.bmp> [--page play|profiles|setup|checked]");
     int page = UiPagePlay;
     int operation = 0;
+    bool checked_status = false;
     if (argc == 5) {
       const std::wstring_view option(argv[3]);
       const std::wstring_view value(argv[4]);
       if (option == L"--page") {
-        Require(value == L"play" || value == L"profiles" || value == L"setup", "Unknown page.");
+        Require(value == L"play" || value == L"profiles" || value == L"setup" || value == L"checked", "Unknown page.");
+        checked_status = value == L"checked";
         page = value == L"profiles" ? UiPageProfiles : value == L"setup" ? UiPageSetup : UiPagePlay;
       } else {
         Require(option == L"--operation", "Expected --page or --operation.");
@@ -217,7 +224,7 @@ int wmain(int argc, wchar_t **argv) {
     window.value = CreateLauncherUiForTest([&](UiAction action, const UiRequest &) {
       if (action == UiAction::Refresh) ++refreshes;
       else unexpected_callback = true;
-      return SyntheticState();
+      return SyntheticState(checked_status);
     });
     Require(window.value && !IsWindowVisible(window.value), "Fixture was not created hidden.");
     Require(refreshes == 1 && !unexpected_callback, "Unexpected fixture backend action.");

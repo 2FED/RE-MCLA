@@ -1,4 +1,6 @@
 #include "mcla_launcher_ui_win.h"
+#include "mcla_render_target_policy.h"
+#include "mcla_launcher_capabilities.h"
 
 #include <shobjidl.h>
 #include <wrl/client.h>
@@ -258,17 +260,23 @@ void Controls(HWND window, WindowState &state) {
       WS_VSCROLL | WS_GROUP, UiGpu, 180, 317, 696, 200);
   label(L"Render target", 24, 365, 145);
   HWND scale = Add(window, state, L"COMBOBOX", L"", WS_TABSTOP |
-      CBS_DROPDOWNLIST, UiScale, 180, 361, 155, 100);
-  SendMessageW(scale, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"1280 x 720"));
-  SendMessageW(scale, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"2560 x 1440"));
+      CBS_DROPDOWNLIST, UiScale, 180, 361, 155, 160);
+  for (const auto &target : kRenderTargets) {
+    const auto text = std::to_wstring(target.width) + L" x " + std::to_wstring(target.height);
+    const auto index = SendMessageW(scale, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text.c_str()));
+    if (index >= 0) SendMessageW(scale, CB_SETITEMDATA, static_cast<WPARAM>(index), target.id);
+  }
   Add(window, state, L"BUTTON", L"VSync (stock: ON)", WS_TABSTOP | BS_AUTOCHECKBOX | BS_NOTIFY,
       UiVsync, 360, 361, 205, 28);
   Add(window, state, L"BUTTON", L"Fullscreen", WS_TABSTOP | BS_AUTOCHECKBOX | BS_NOTIFY,
       UiFullscreen, 570, 361, 160, 28);
   label(L"Frame timing", 24, 409, 145);
-  Add(window, state, L"STATIC", L"Stock only. 60 FPS unavailable: not yet validated.",
+  const auto timing=StockTimingDescription();
+  const std::wstring timing_label(timing.begin(),timing.end());
+  Add(window, state, L"STATIC", timing_label.c_str(),
       0, UiTiming, 180, 405, 696, 28);
-  label(L"1920 x 1080 and 3840 x 2160 are not available in this build.", 180, 434, 696);
+  Add(window, state, L"STATIC", L"1080p: experimental 960 x 540 guest mode + 2x rendering. Build support is checked.",
+      0, UiRenderTargetNote, 180, 434, 696, 24);
   button(UiOpenSave, L"Open save folder", 180, 460, 205);
   button(UiOpenDiagnostics, L"Open diagnostics", 400, 460, 205);
 
@@ -313,7 +321,7 @@ void Controls(HWND window, WindowState &state) {
   label(L"Status", 24, 614, 105);
   Add(window, state, L"EDIT", L"", WS_TABSTOP | ES_READONLY |
       ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL, UiStatus,
-      140, 610, 736, 45);
+      140, 610, 736, 50);
   label(L"Closing this launcher does not stop a running game.", 24, 664, 852);
   ShowPage(window, state, 0, false);
 }
@@ -323,8 +331,14 @@ UiRequest Request(HWND window, const WindowState &state) {
   request.build_root = Text(window, UiBuildRoot);
   request.game_root = Text(window, UiGameRoot);
   request.gpu_name = Text(window, UiGpu);
-  request.resolution_scale = SendDlgItemMessageW(window, UiScale,
-      CB_GETCURSEL, 0, 0) == 1 ? 2 : 1;
+  const auto target_index = SendDlgItemMessageW(window, UiScale, CB_GETCURSEL, 0, 0);
+  request.render_target = 0; // Missing/invalid selection must never silently become720p.
+  if (target_index >= 0 && static_cast<size_t>(target_index) < kRenderTargets.size()) {
+    const auto target_id = SendDlgItemMessageW(window, UiScale, CB_GETITEMDATA,
+        static_cast<WPARAM>(target_index), 0);
+    if (target_id == kRenderTargets[static_cast<size_t>(target_index)].id)
+      request.render_target = static_cast<uint32_t>(target_id);
+  }
   request.vsync = SendDlgItemMessageW(window, UiVsync, BM_GETCHECK, 0, 0) == BST_CHECKED;
   request.fullscreen = SendDlgItemMessageW(window, UiFullscreen, BM_GETCHECK, 0, 0) == BST_CHECKED;
   const auto selected = SendDlgItemMessageW(window, UiProfiles, CB_GETCURSEL, 0, 0);
@@ -346,7 +360,7 @@ std::pair<uint64_t, uint64_t> Clock(const WindowState &state) {
 
 bool SameSetup(const UiRequest &a, const UiRequest &b) {
   return a.build_root == b.build_root && a.game_root == b.game_root &&
-      a.gpu_name == b.gpu_name && a.resolution_scale == b.resolution_scale &&
+      a.gpu_name == b.gpu_name && a.render_target == b.render_target &&
       a.vsync == b.vsync && a.fullscreen == b.fullscreen &&
       a.selected_profile_id == b.selected_profile_id;
 }
@@ -472,7 +486,7 @@ void Render(HWND window, WindowState &state, const UiRequest &draft) {
   const auto &build = state.initialized ? draft.build_root : state.model.build_root;
   const auto &game = state.initialized ? draft.game_root : state.model.game_root;
   const auto &gpu_name = state.initialized ? draft.gpu_name : state.model.gpu_name;
-  const int scale = state.initialized ? draft.resolution_scale : state.model.resolution_scale;
+  const auto render_target = state.initialized ? draft.render_target : state.model.render_target;
   const bool vsync = state.initialized ? draft.vsync : state.model.vsync;
   const bool fullscreen = state.initialized ? draft.fullscreen : state.model.fullscreen;
   SetText(window, UiBuildRoot, build);
@@ -508,8 +522,10 @@ void Render(HWND window, WindowState &state, const UiRequest &draft) {
     if (name == gpu_name)
       SendMessageW(gpu, CB_SETCURSEL, static_cast<WPARAM>(i), 0);
   }
-  SendDlgItemMessageW(window, UiScale, CB_SETCURSEL,
-                     scale == 2 ? 1 : 0, 0);
+  int target_index = -1;
+  for (size_t i = 0; i < kRenderTargets.size(); ++i)
+    if (kRenderTargets[i].id == render_target) target_index = static_cast<int>(i);
+  SendDlgItemMessageW(window, UiScale, CB_SETCURSEL, target_index, 0);
   SendDlgItemMessageW(window, UiVsync, BM_SETCHECK, vsync ? BST_CHECKED : BST_UNCHECKED, 0);
   SendDlgItemMessageW(window, UiFullscreen, BM_SETCHECK, fullscreen ? BST_CHECKED : BST_UNCHECKED, 0);
   for (int id = UiBuildRoot; id <= UiPlay; ++id)
@@ -543,6 +559,7 @@ void AcceptCheck(WindowState &state, const UiRequest &request) {
                                   request.gpu_name) != state.model.gpu_names.end();
   state.dirty_setup = false;
   if (state.model.readiness == LaunchReadiness::Ready && !state.model.running && !root.empty() && exact_gpu &&
+      FindRenderTarget(request.render_target) &&
       state.model.eligibility_expires_utc > utc) {
     state.readiness = LaunchReadiness::Ready;
     state.readiness_reason = L"Ready. This exact setup passed its check; launch validates again.";
@@ -675,7 +692,7 @@ void Dispatch(HWND window, WindowState &state, UiAction action, const UiRequest 
       InvalidateReadiness(state, L"Game session ended. CHECK SETUP before the next launch.");
     if (action == UiAction::SaveSettings &&
         (state.model.build_root != request.build_root || state.model.game_root != request.game_root ||
-         state.model.gpu_name != request.gpu_name || state.model.resolution_scale != request.resolution_scale ||
+         state.model.gpu_name != request.gpu_name || state.model.render_target != request.render_target ||
          state.model.vsync != request.vsync || state.model.fullscreen != request.fullscreen))
       InvalidateReadiness(state, L"Settings were not confirmed as saved. Check the status below.");
     if (action == UiAction::VerifyRoots && state.model.verification_failed) {

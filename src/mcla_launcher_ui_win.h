@@ -28,7 +28,7 @@ struct UiState {
   std::wstring game_root;
   std::vector<std::wstring> gpu_names;
   std::wstring gpu_name;
-  int resolution_scale = 1;
+  uint32_t render_target = 720;
   bool vsync = true;
   bool fullscreen = false;
   bool running = false;
@@ -47,7 +47,7 @@ struct UiRequest {
   std::wstring build_root;
   std::wstring game_root;
   std::wstring gpu_name;
-  int resolution_scale = 1;
+  uint32_t render_target = 720;
   bool vsync = true;
   bool fullscreen = false;
   std::string selected_profile_id;
@@ -72,7 +72,7 @@ enum UiControlId : int {
   UiPagePlay, UiPageProfiles, UiPageSetup,
   UiCurrentName,
   UiSelectedProfileName, UiOperationConfirm, UiOperationCancel,
-  UiCheckLaunch, UiReadiness,
+  UiCheckLaunch, UiReadiness, UiRenderTargetNote,
 };
 
 // Callbacks are serialized. Only the read-only CheckLaunch may run on a worker;

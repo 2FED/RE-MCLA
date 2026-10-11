@@ -80,7 +80,7 @@ void TestStore(const std::wstring &root) {
   const auto store_path = Directory(root, L"store");
   Preferences first;
   first.gpu_name = u"Synthetic GPU";
-  first.resolution_scale = 2;
+  first.render_target = 1440;
   first.fullscreen = true;
   {
     auto store = OpenPreferenceStore(store_path);
@@ -94,12 +94,12 @@ void TestStore(const std::wstring &root) {
     Check(first_decoded && *first_decoded == first, "first persisted preferences decode exactly");
     auto changed = first;
     changed.vsync = false;
-    changed.resolution_scale = 1;
+    changed.render_target = 720;
     Check(store->Save(changed).has_value(), "second atomic save");
     const auto backup = DecodePreferences(Read(store->directory(), L"preferences.previous.dat"));
     Check(backup && *backup == first, "previous-valid backup precedes second publication");
     auto invalid = changed;
-    invalid.resolution_scale = 3;
+    invalid.render_target = 1081;
     const auto before = Read(store->directory(), L"preferences.dat");
     Check(!store->Save(invalid), "invalid save rejected");
     Check(store->preferences() == changed && Read(store->directory(), L"preferences.dat") == before,
@@ -107,7 +107,7 @@ void TestStore(const std::wstring &root) {
   }
   {
     auto store = OpenPreferenceStore(store_path);
-    Check(store && !store->preferences().vsync && store->preferences().resolution_scale == 1,
+    Check(store && !store->preferences().vsync && store->preferences().render_target == 720,
           "store reopens exact last choices");
     if (!store) return;
     const auto accepted = store->preferences();
@@ -140,6 +140,77 @@ void TestStore(const std::wstring &root) {
   Check(GetFileAttributesW((nonempty + L"\\.mcla-writer.lock").c_str()) == INVALID_FILE_ATTRIBUTES,
         "wrong nonempty store rejected without lock-file mutation");
   Check(!OpenPreferenceStore(root + L"\\does-not-exist"), "store never creates arbitrary root");
+}
+
+void TestRenderTargetMigration(const std::wstring &root) {
+  const auto store_path = Directory(root, L"render-target-migration");
+  Preferences legacy;
+  legacy.gpu_name = u"Migration fixture GPU";
+  legacy.render_target = 1440;
+  legacy.fullscreen = true;
+  const auto legacy_bytes = EncodePreferences(legacy);
+  Check(legacy_bytes && (*legacy_bytes)[7] == '1', "1440p remains legacy V1 scale2 bytes");
+  if (!legacy_bytes) return;
+  FixtureWrite(store_path + L"\\preferences.dat", *legacy_bytes);
+  // Preexisting persistent lock makes read-only opening observable without
+  // confusing a newly created empty coordination file with migration writes.
+  FixtureText(store_path + L"\\.mcla-writer.lock", "");
+  const auto original_count = ChildCount(store_path);
+  {
+    auto store = OpenPreferenceStore(store_path);
+    Check(store && store->preferences() == legacy, "V1 scale2 opens as 1440p without changing other settings");
+    if (!store) return;
+    Check(Read(store->directory(), L"preferences.dat") == *legacy_bytes && ChildCount(store_path) == original_count,
+          "V1 load does not rewrite bytes or create a migration backup");
+    auto next = legacy;
+    next.render_target = 1080;
+    Check(store->Save(next).has_value(), "explicit 1080p save upgrades preferences to V2");
+    const auto upgraded = Read(store->directory(), L"preferences.dat");
+    Check(upgraded[7] == '2', "1080p is never published as a misleading V1 scale");
+    Check(Read(store->directory(), L"preferences.previous.dat") == *legacy_bytes,
+          "V2 publication retains exact previous V1 bytes");
+    Check(store->preferences() == next, "explicit upgrade preserves all non-target settings");
+  }
+  {
+    auto store = OpenPreferenceStore(store_path);
+    auto expected = legacy; expected.render_target = 1080;
+    Check(store && store->preferences() == expected, "V2 1080p reopens exactly");
+    if (!store) return;
+    const auto before = Read(store->directory(), L"preferences.dat");
+    const auto backup = Read(store->directory(), L"preferences.previous.dat");
+    auto invalid = expected; invalid.render_target = 1081;
+    Check(!store->Save(invalid), "unknown explicit target is rejected before save");
+    Check(store->preferences() == expected && Read(store->directory(), L"preferences.dat") == before &&
+              Read(store->directory(), L"preferences.previous.dat") == backup,
+          "invalid target preserves memory, V2 primary and V1 backup");
+    expected.render_target = 2160;
+    Check(store->Save(expected).has_value(), "2160p publishes a supported V2 target");
+    const auto second = Read(store->directory(), L"preferences.dat");
+    const auto decoded = DecodePreferences(second);
+    Check(second[7] == '2' && decoded && *decoded == expected,
+          "2160p persisted bytes retain the exact explicit target");
+    Check(Read(store->directory(), L"preferences.previous.dat") == before,
+          "2160p save retains exact previous 1080p V2 backup");
+    Check(store->Save(legacy).has_value(), "return to an old target explicitly writes old-compatible V1");
+    Check(Read(store->directory(), L"preferences.dat") == *legacy_bytes &&
+              Read(store->directory(), L"preferences.previous.dat") == second,
+          "return to 1440p restores exact V1 encoding while preserving V2 backup");
+  }
+  {
+    auto store = OpenPreferenceStore(store_path);
+    Check(store && store->preferences() == legacy, "V1 rollback target survives restart with unchanged settings");
+  }
+  const auto invalid_path = Directory(root, L"invalid-v1-scale");
+  auto invalid_bytes = *legacy_bytes;
+  // The final three LE u32 fields are scale/target, vsync, fullscreen.
+  const auto offset = invalid_bytes.size() - 12;
+  invalid_bytes[offset] = 3;
+  invalid_bytes[offset+1] = invalid_bytes[offset+2] = invalid_bytes[offset+3] = 0;
+  FixtureWrite(invalid_path + L"\\preferences.dat", invalid_bytes);
+  Check(!OpenPreferenceStore(invalid_path), "legacy scale3 remains invalid, never silently migrates to 2160p");
+  auto invalid_guard = fs::OpenDirectory(invalid_path);
+  Check(invalid_guard && Read(*invalid_guard, L"preferences.dat") == invalid_bytes && ChildCount(invalid_path) == 1,
+        "invalid V1 admission leaves bytes and inventory unchanged without a lock");
 }
 
 void TestProfiles(const std::wstring &root) {
@@ -295,6 +366,7 @@ int main() {
     const auto root = NewFixture();
     std::wcout << L"Preserved isolated fixture: " << root << L'\n';
     TestStore(root);
+    TestRenderTargetMigration(root);
     TestProfiles(root);
     TestWritablePolicy(root);
   } catch (const std::exception &error) {

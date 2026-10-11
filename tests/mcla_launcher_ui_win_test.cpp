@@ -1,4 +1,5 @@
 #include "mcla_launcher_ui_win.h"
+#include "mcla_launcher_capabilities.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -157,7 +158,7 @@ void SetRequestFields(HWND window) {
   Edit(window, UiGameRoot, L"F:/SelectedGame");
   Edit(window, UiInGameName, L"RoadDriver");
   SendDlgItemMessageW(window, UiGpu, CB_SETCURSEL, 0, 0);
-  SendDlgItemMessageW(window, UiScale, CB_SETCURSEL, 1, 0);
+  SendDlgItemMessageW(window, UiScale, CB_SETCURSEL, 2, 0);
   SendDlgItemMessageW(window, UiVsync, BM_SETCHECK, BST_UNCHECKED, 0);
   SendDlgItemMessageW(window, UiFullscreen, BM_SETCHECK, BST_CHECKED, 0);
 }
@@ -166,7 +167,7 @@ void CheckRequest(const UiRequest &request, UiAction action) {
   Check(request.build_root == L"C:/SelectedBuild", "exact requested build");
   Check(request.game_root == L"F:/SelectedGame", "exact requested game");
   Check(request.gpu_name == L"Synthetic integrated GPU", "explicit named GPU collected");
-  Check(request.resolution_scale == 2, "2x selection collected");
+  Check(request.render_target == 1440, "explicit1440p target collected");
   Check(!request.vsync, "VSync false collected");
   Check(request.fullscreen, "fullscreen true collected");
   Check(request.selected_profile_id == kCleanId, "explicit selected opaque profile ID");
@@ -226,11 +227,16 @@ void TestInitialAndRequests() {
   Check(!GetDlgItem(window, UiProfileLabel) && !GetDlgItem(window, UiProfileRoot) &&
         !GetDlgItem(window, UiLegacySource), "operation fields are absent from permanent view");
   Check(Text(window, UiGpu) == L"Synthetic discrete GPU", "exact persisted named GPU selected");
-  Check(SendDlgItemMessageW(window, UiScale, CB_GETCOUNT, 0, 0) == 2, "scale has only 1x and 2x");
-  Check(SendDlgItemMessageW(window, UiScale, CB_GETCURSEL, 0, 0) == 0, "default scale 1x");
+  Check(SendDlgItemMessageW(window, UiScale, CB_GETCOUNT, 0, 0) == 4, "four explicit render targets offered");
+  Check(SendDlgItemMessageW(window, UiScale, CB_GETCURSEL, 0, 0) == 0, "default target720p");
+  Check(Text(window, UiRenderTargetNote).find(L"experimental 960 x 540 guest mode + 2x") != std::wstring::npos,
+        "1080p experimental guest-mode route is disclosed");
   Check(SendDlgItemMessageW(window, UiVsync, BM_GETCHECK, 0, 0) == BST_CHECKED, "default VSync checked");
   Check(SendDlgItemMessageW(window, UiFullscreen, BM_GETCHECK, 0, 0) == BST_UNCHECKED, "default fullscreen unchecked");
   Check(Class(window, UiTiming) == L"Static", "timing is text, not selectable control");
+  const auto timing_policy=StockTimingDescription();
+  Check(Text(window,UiTiming)==std::wstring(timing_policy.begin(),timing_policy.end()),
+        "visible timing description derives from the admission policy");
   Check(Text(window, UiTiming).find(L"Stock only") != std::wstring::npos &&
         Text(window, UiTiming).find(L"60 FPS unavailable") != std::wstring::npos,
         "stock only and unavailable 60 explicit");
@@ -603,8 +609,8 @@ void CheckSetupDraft(HWND window) {
   Check(Text(window, UiBuildRoot) == L"C:/SelectedBuild" &&
         Text(window, UiGameRoot) == L"F:/SelectedGame", "both draft roots survive callback");
   Check(Text(window, UiGpu) == L"Synthetic integrated GPU", "exact draft GPU survives callback");
-  Check(SendDlgItemMessageW(window, UiScale, CB_GETCURSEL, 0, 0) == 1,
-        "draft scale survives callback");
+  Check(SendDlgItemMessageW(window, UiScale, CB_GETCURSEL, 0, 0) == 2,
+        "draft1440p target survives callback");
   Check(SendDlgItemMessageW(window, UiVsync, BM_GETCHECK, 0, 0) == BST_CHECKED &&
         !IsWindowEnabled(GetDlgItem(window, UiVsync)), "repaired stock VSync On survives old Off preferences");
   Check(SendDlgItemMessageW(window, UiFullscreen, BM_GETCHECK, 0, 0) == BST_CHECKED,
@@ -1188,6 +1194,76 @@ void TestCreateParentSuggestion() {
   Check(recorder.calls.size() == before, "suggestion and cancellation perform no filesystem/backend action");
 }
 
+void TestRenderTargets() {
+  const uint32_t ids[] = {720, 1080, 1440, 2160};
+  const wchar_t *labels[] = {L"1280 x 720", L"1920 x 1080", L"2560 x 1440", L"3840 x 2160"};
+  Recorder recorder;
+  recorder.model.readiness = LaunchReadiness::Ready;
+  recorder.model.eligibility_expires_utc = 1800100000;
+  InvisibleWindow window(recorder);
+  if (!window) return;
+  SetLauncherClockForTest(window, 1000, 1800000000);
+  for (size_t i = 0; i < 4; ++i) {
+    SendDlgItemMessageW(window, UiScale, CB_SETCURSEL, i, 0);
+    SendMessageW(window, WM_COMMAND, MAKEWPARAM(UiScale, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(GetDlgItem(window, UiScale)));
+    Check(!Text(window, UiReadiness).starts_with(L"Ready."),
+          "each render-target selection invalidates prior readiness");
+    Check(Text(window, UiScale) == labels[i] &&
+          SendDlgItemMessageW(window, UiScale, CB_GETITEMDATA, i, 0) == ids[i],
+          "each resolution label maps to its explicit stable target ID");
+    recorder.model.render_target = ids[i];
+    Click(window, UiCheckLaunch);
+    Check(recorder.calls.back().request.render_target == ids[i] &&
+          Text(window, UiReadiness).starts_with(L"Ready."),
+          "readiness check receives exact target and can approve each supported target");
+    const auto before_cancel = recorder.calls.size();
+    Click(window, UiCreate);
+    HWND dialog = Operation(window);
+    Check(dialog != nullptr, "target test opens create dialog");
+    if (dialog) Click(dialog, UiOperationCancel);
+    Check(recorder.calls.size() == before_cancel && Text(window, UiScale) == labels[i] &&
+          Text(window, UiReadiness).starts_with(L"Ready."),
+          "operation Cancel preserves each render target and exact readiness");
+    Click(window, UiSaveSettings);
+    Check(recorder.calls.back().request.render_target == ids[i] &&
+          Text(window, UiReadiness).starts_with(L"Ready."),
+          "unchanged Save marshals target ID and retains exact readiness");
+    Click(window, UiPageSetup);
+    Click(window, UiPagePlay);
+    Check(Text(window, UiScale) == labels[i], "section navigation preserves target selection");
+  }
+  // Win32 rejects an out-of-range index by removing selection, never selecting720p.
+  for (int index : {-1, 4, 100}) {
+    SendDlgItemMessageW(window, UiScale, CB_SETCURSEL, index, 0);
+    Click(window, UiSaveSettings);
+    Check(recorder.calls.back().request.render_target == 0 &&
+          SendDlgItemMessageW(window, UiScale, CB_GETCURSEL, 0, 0) == CB_ERR,
+          "missing or out-of-range target remains invalid across backend rendering");
+    Click(window, UiCheckLaunch);
+    Check(!Text(window, UiReadiness).starts_with(L"Ready.") &&
+          !IsWindowEnabled(GetDlgItem(window, UiPlay)),
+          "invalid target cannot become ready even from a synthetic ready response");
+  }
+  SendDlgItemMessageW(window, UiScale, CB_SETITEMDATA, 1, 1440);
+  SendDlgItemMessageW(window, UiScale, CB_SETCURSEL, 1, 0);
+  Click(window, UiSaveSettings);
+  Check(recorder.calls.back().request.render_target == 0,
+        "mismatched combo item data cannot silently select a different target");
+  for (size_t i = 0; i < 4; ++i) {
+    Recorder saved;
+    saved.model.render_target = ids[i];
+    InvisibleWindow restored(saved);
+    Check(restored && SendDlgItemMessageW(restored, UiScale, CB_GETCURSEL, 0, 0) == static_cast<LRESULT>(i) &&
+          Text(restored, UiScale) == labels[i], "each persisted target restores its correct explicit option");
+  }
+  Recorder invalid;
+  invalid.model.render_target = 999;
+  InvisibleWindow restored_invalid(invalid);
+  Check(restored_invalid && SendDlgItemMessageW(restored_invalid, UiScale, CB_GETCURSEL, 0, 0) == CB_ERR,
+        "unknown persisted target never falls back to720p");
+}
+
 void TestLaunchReadiness() {
   Recorder recorder;
   InvisibleWindow window(recorder);
@@ -1271,6 +1347,33 @@ void TestLaunchReadiness() {
 } // namespace
 
 int main() {
+  for(const auto id : {720u,1080u,1440u,2160u}) {
+    Recorder recorder;
+    const auto description=CheckedStockSettingsDescription(id);
+    recorder.model.status=std::wstring(description.begin(),description.end());
+    InvisibleWindow window(recorder);
+    if(!window) continue;
+    const auto status=GetDlgItem(window,UiStatus);
+    RECT format{};
+    SendMessageW(status,EM_GETRECT,0,reinterpret_cast<LPARAM>(&format));
+    const auto dc=GetDC(status);
+    Check(dc!=nullptr,"status geometry obtains only its own control DC");
+    if(!dc) continue;
+    const auto font=reinterpret_cast<HFONT>(SendMessageW(status,WM_GETFONT,0,0));
+    const auto previous=SelectObject(dc,font);
+    TEXTMETRICW metric{};
+    Check(GetTextMetricsW(dc,&metric)!=0,"status uses actual native control font metrics");
+    const auto lines=SendMessageW(status,EM_GETLINECOUNT,0,0);
+    if(lines!=2 || metric.tmHeight*lines>format.bottom-format.top)
+      std::cerr << "Status layout target=" << id << " lines=" << lines << " line_height=" << metric.tmHeight
+                << " format=" << format.right-format.left << "x" << format.bottom-format.top << '\n';
+    Check(lines==2 && metric.tmHeight*lines<=format.bottom-format.top,
+          "all target checked-status lines and caveat fit without vertical scrolling");
+    Check(Text(window,UiStatus)==recorder.model.status,
+          "checked-status control preserves exact policy text");
+    SelectObject(dc,previous); ReleaseDC(status,dc);
+  }
+  Check(CheckedStockSettingsDescription(999).empty(),"unsupported target has no success description");
   TestInitialAndRequests();
   TestRunning();
   TestMissingSelectionAndGpu();
@@ -1284,6 +1387,7 @@ int main() {
   TestNavigationKeys();
   TestDraftCallbackMatrix();
   TestOperationDialogs();
+  TestRenderTargets();
   TestLaunchReadiness();
   TestAutomaticChecks();
   TestAsyncStaleAndSerialization();

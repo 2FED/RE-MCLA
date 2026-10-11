@@ -1,5 +1,6 @@
 #include "mcla_launcher_controller_win.h"
 #include "mcla_launcher_build_win.h"
+#include "mcla_launcher_capabilities.h"
 #include "mcla_managed_config_policy.h"
 
 #ifndef NOMINMAX
@@ -42,6 +43,18 @@ bool NewFile(const std::filesystem::path &path, std::string_view contents) {
 std::string Read(const std::filesystem::path &path) {
   std::ifstream file(path, std::ios::binary);
   return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+std::map<std::string,std::string> RecordFields(std::string_view text,std::string_view magic) {
+  if(!text.starts_with(magic) || text.empty() || text.back()!='\n') return {};
+  text.remove_prefix(magic.size());
+  std::map<std::string,std::string> result;
+  while(!text.empty()) {
+    const auto end=text.find('\n'), space=text.find(' ');
+    if(end==text.npos || space==text.npos || space==0 || space>=end ||
+        !result.emplace(text.substr(0,space),text.substr(space+1,end-space-1)).second) return {};
+    text.remove_prefix(end+1);
+  }
+  return result;
 }
 std::expected<std::string, std::wstring> HashFile(const std::filesystem::path &path) {
   BCRYPT_ALG_HANDLE algorithm = nullptr;
@@ -125,8 +138,22 @@ int FakeChild(int argc, wchar_t **argv) {
   FreeEnvironmentStringsW(environment);
   if (!safe) return finish(88);
   if (args[L"d3d12_adapter"] != L"0" || args[L"resolution_scale"] != L"2" ||
+      args[L"draw_resolution_scale_x"] != L"2" || args[L"draw_resolution_scale_y"] != L"2" ||
+      args[L"video_mode_width"] != L"1280" || args[L"video_mode_height"] != L"720" ||
       args[L"vsync"] != L"true" || args[L"fullscreen"] != L"false" ||
       args[L"gpu_backend"] != L"d3d12") return finish(89);
+  const auto caps=RecordFields(Read(cwd/L"capabilities.txt"),"MCLA-LAUNCHER-CAPABILITIES-V1\n");
+  const auto receipt=RecordFields(Read(cwd/L"launch-receipt.txt"),"MCLA-MANAGED-SESSION-V1\n");
+  const auto field=[&](std::string key,std::string value) {
+    const auto found=caps.find(key); return found!=caps.end() && found->second==value;
+  };
+  if(caps.size()!=17 || !field("timing","stock") || !field("vsync","on") ||
+      !field("guest_refresh_hz","60") || args[L"video_mode_refresh_rate"]!=L"60" ||
+      !field("render_target","2560x1440") || !field("guest_mode","1280x720") ||
+      !field("draw_scale","2x2") || !field("host_state_observed","false") ||
+      !field("fps_measured","false") || !field("settings_scope","resolved-launch-arguments") ||
+      !receipt.contains("build") || !receipt.contains("game") ||
+      !field("build",receipt.at("build")) || !field("game",receipt.at("game"))) return finish(94);
   if (!NewFile(path(L"user_data_root") / L"fixture-save.bin", "FIXTURE_SAVE_ONLY\n") ||
       !NewFile(cwd / L"fixture-ready.txt", "ROOTS_ENV_SETTINGS_SENTINEL_PASS\n")) return finish(90);
   const auto started = GetTickCount64();
@@ -141,7 +168,7 @@ UiRequest Settings(const Preferences &p) {
   UiRequest r;
   r.build_root = std::filesystem::path(p.build_root).wstring();
   r.game_root = std::filesystem::path(p.game_root).wstring();
-  r.gpu_name = L"Fixture"; r.resolution_scale = 2; r.vsync = true; r.fullscreen = false;
+  r.gpu_name = L"Fixture"; r.render_target = 1440; r.vsync = true; r.fullscreen = false;
   r.selected_profile_id = p.library.selected_id;
   return r;
 }
@@ -188,7 +215,7 @@ bool CrossBuildMatrix(const std::filesystem::path &root,
   if (!store_a || !store_b) return false;
   Preferences p;
   p.build_root = U16(build_a); p.game_root = U16(game); p.gpu_name = u"Fixture";
-  p.resolution_scale = 2;
+  p.render_target = 1440;
   auto profile_a = CreateManagedProfile(p, (root / L"matrix-profiles").wstring(), u"Matrix A", store_a->directory());
   if (!profile_a) return false;
   p.library.entries.push_back(*profile_a); p.library.selected_id = profile_a->id;
@@ -306,7 +333,7 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
     if(!CreateDirectoryW(path.c_str(),nullptr)) return false;
   if(!NewFile(matrix/L"bad-game/default.xex","wrong")) return false;
   auto store=OpenPreferenceStore((matrix/L"store").wstring()); if(!store) return false;
-  Preferences p; p.build_root=U16(build); p.game_root=U16(game); p.gpu_name=u"Fixture"; p.resolution_scale=2;
+  Preferences p; p.build_root=U16(build); p.game_root=U16(game); p.gpu_name=u"Fixture"; p.render_target=1440;
   auto profile=CreateManagedProfile(p,(matrix/L"profiles").wstring(),u"Preflight",store->directory());
   if(!profile) return false;
   p.library.entries.push_back(*profile); p.library.selected_id=profile->id;
@@ -328,6 +355,9 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
   Check(controller.Dispatch(UiAction::Refresh,{}).readiness==LaunchReadiness::Unchecked,
         "ordinary refresh does not invent readiness");
   const auto ready=run_check(request,LaunchReadiness::Ready,"valid exact-profile preflight is Ready without a child");
+  Check(ready.status.find(L"Stock timing | VSync On | render 2560 x 1440 | guest refresh 60 Hz.")!=ready.status.npos &&
+      ready.status.find(L"not measured FPS")!=ready.status.npos,
+      "checked UI status names resolved settings without an observed FPS claim");
   Check(!ready.fullscreen && request.fullscreen && std::filesystem::is_empty(profile_root/L"sessions"),
         "read-only preflight uses drafts without persisting them or creating a session");
   Check(controller.Dispatch(UiAction::Refresh,{}).readiness==LaunchReadiness::Unchecked,
@@ -340,8 +370,21 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
   run_check(invalid,LaunchReadiness::Blocked,"unavailable exact GPU is Blocked");
   invalid=request; invalid.vsync=false;
   run_check(invalid,LaunchReadiness::Blocked,"unsupported stock VSync Off is Blocked");
-  invalid=request; invalid.resolution_scale=3;
-  run_check(invalid,LaunchReadiness::Blocked,"unsupported render scale is Blocked");
+  invalid=request; invalid.render_target=999;
+  run_check(invalid,LaunchReadiness::Blocked,"unknown render target is Blocked");
+  for(const auto id:{1080u,2160u}) {
+    invalid=request; invalid.render_target=id;
+    const auto rejected=run_check(invalid,LaunchReadiness::Blocked,"valid but unproven build cannot admit new targets");
+    Check(rejected.readiness_reason.find(L"render-target-tested build")!=std::wstring::npos,
+          "new target rejection identifies exact-build capability gate");
+    const auto before=FixtureInventory(profile_root);
+    const auto stopped=controller.Dispatch(UiAction::Play,invalid);
+    const auto after=FixtureInventory(profile_root);
+    Check(!stopped.running && before && after && *before==*after &&
+          stopped.status.find(L"render-target-tested build")!=std::wstring::npos,
+          "Play independently rejects unproven target before profile or session writes");
+  }
+  controller.Dispatch(UiAction::SaveSettings,Settings(p));
   invalid=request; invalid.build_root=bad_build.wstring();
   run_check(invalid,LaunchReadiness::Blocked,"malformed build inventory is Blocked");
   invalid=request; invalid.game_root=(matrix/L"bad-game").wstring();
@@ -541,7 +584,7 @@ int wmain(int argc, wchar_t **argv) {
   if (!store_a || !store_b || !store_c) return 2;
   Preferences p;
   p.build_root = U16(build); p.game_root = U16(game); p.gpu_name = u"Fixture";
-  p.resolution_scale = 2;
+  p.render_target = 1440;
   auto main_profile = CreateManagedProfile(p, (root / L"profiles").wstring(), u"Main fixture", store_a->directory());
   if (!main_profile) { std::wcerr << main_profile.error() << L'\n'; return 2; }
   p.library.entries.push_back(*main_profile);
@@ -593,9 +636,9 @@ int wmain(int argc, wchar_t **argv) {
   const auto blocked = contender.Dispatch(UiAction::Play, request);
   Check(!blocked.running && !contender.running(), "second controller cannot write same profile");
   Check(OnlySession(main_root) == session, "lock rejection does not create another session");
-  auto changed = request; changed.resolution_scale = 1; changed.vsync = false;
+  auto changed = request; changed.render_target = 720; changed.vsync = false;
   const auto settings_blocked = first.Dispatch(UiAction::SaveSettings, changed);
-  Check(settings_blocked.running && settings_blocked.resolution_scale == 2 && settings_blocked.vsync,
+  Check(settings_blocked.running && settings_blocked.render_target == 1440 && settings_blocked.vsync,
         "settings cannot change during owned session");
   UiRequest change_profile; change_profile.selected_profile_id = other_profile->id;
   const auto selection_blocked = first.Dispatch(UiAction::SelectProfile, change_profile);
@@ -640,6 +683,12 @@ int wmain(int argc, wchar_t **argv) {
   Check(provenance.find("profile " + main_profile->id + "\n") != provenance.npos &&
       provenance.find("\ngame ") != provenance.npos && provenance.find("\nscale 2\n") != provenance.npos &&
       provenance.find("\nvsync 1\n") != provenance.npos, "receipt binds profile game and effective settings");
+  Check(provenance.find("\ncapability_policy 1\ncapability_record capabilities.txt\n")!=provenance.npos,
+        "session explicitly references the versioned capability contract");
+  const auto capability_fields=RecordFields(Read(session/L"capabilities.txt"),"MCLA-LAUNCHER-CAPABILITIES-V1\n");
+  Check(capability_fields.size()==17 && capability_fields.at("fixed60_available")=="false" &&
+      capability_fields.at("world_validation")=="not-certified-by-policy",
+      "capability receipt makes no unsupported timing or world certification claim");
   Check(Read(build / L"mcla-build.manifest") == manifest && Read(game / L"default.xex") == "abc" &&
       HashFile(build / L"mcla.exe") == hash, "immutable synthetic build/game unchanged");
   Check(!std::filesystem::exists(build / L"mcla.toml") && !std::filesystem::exists(build / L"logs"),

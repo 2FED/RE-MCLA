@@ -111,7 +111,7 @@ int Probe(int argc, wchar_t **argv) {
   p.build_root = std::filesystem::path(build->path()).u16string();
   p.game_root = std::filesystem::path(game->path()).u16string();
   p.gpu_name = std::u16string(options.at(L"gpu").begin(), options.at(L"gpu").end());
-  p.resolution_scale = 1; p.vsync = true; p.fullscreen = false;
+  p.render_target = 720; p.vsync = true; p.fullscreen = false;
   auto profile = CreateManagedProfile(p, (root / L"profiles").wstring(), u"Guest-free host probe", store->directory());
   if (!profile) { std::wcerr << profile.error() << L'\n'; return 1; }
   p.library.entries.push_back(*profile); p.library.selected_id = profile->id;
@@ -123,7 +123,7 @@ int Probe(int argc, wchar_t **argv) {
   LauncherController controller(std::move(*store));
   UiRequest request;
   request.build_root = build->path(); request.game_root = game->path();
-  request.gpu_name = options.at(L"gpu"); request.resolution_scale = 1;
+  request.gpu_name = options.at(L"gpu"); request.render_target = 720;
   request.vsync = true; request.fullscreen = false;
   request.selected_profile_id = profile->id;
   if (preflight_only) {
@@ -144,15 +144,20 @@ int Probe(int argc, wchar_t **argv) {
     const auto before = inventory();
     // Match the launcher's worker-thread check while keeping every controller
     // callback serialized and the controller alive until completion.
-    const auto checked = std::async(std::launch::async, [&controller, request] {
-      return controller.Dispatch(UiAction::CheckLaunch, request);
-    }).get();
-    Check(checked.readiness == LaunchReadiness::Ready && checked.eligibility_expires_utc > 0,
-          "production preflight verifies exact build game GPU profile and signed eligibility");
-    if (checked.readiness != LaunchReadiness::Ready) std::wcerr << checked.readiness_reason << L'\n';
-    Check(!checked.running && !controller.running() && Empty(personal / L"sessions"),
-          "preflight launches no host or session");
-    Check(before == inventory(), "production preflight preserves fixture inventory and bytes");
+    for(const auto id:{720u,1080u,1440u,2160u,999u}) {
+      request.render_target=id;
+      const auto checked = std::async(std::launch::async, [&controller, request] {
+        return controller.Dispatch(UiAction::CheckLaunch, request);
+      }).get();
+      const bool supported=id!=999u;
+      Check(checked.readiness == (supported?LaunchReadiness::Ready:LaunchReadiness::Blocked) &&
+            (supported?checked.eligibility_expires_utc>0:checked.eligibility_expires_utc==0),
+            "production target preflight verifies exact build game GPU profile and signed eligibility");
+      if (supported && checked.readiness != LaunchReadiness::Ready) std::wcerr << checked.readiness_reason << L'\n';
+      Check(!checked.running && !controller.running() && Empty(personal / L"sessions"),
+            "preflight launches no host or session");
+      Check(before == inventory(), "production preflight preserves fixture inventory and bytes");
+    }
     std::cout << "Production read-only preflight: " << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
   }

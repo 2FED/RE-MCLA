@@ -1660,8 +1660,8 @@ baseline triage; no inherited 2–10-week platform estimate or FPS guarantee.
 
 - [ ] **M8-001** Validate the byte-guarded, opt-in Complete Edition60/delta-time route separately from host presentation/VSync. Preserve stock; old candidates remain unpromoted.
 - [ ] **M8-002** Audit correct simulation at stock, target60 and below-target dips: physics, traffic/AI, animation, UI/audio, timers, streaming, input and mission/cutscene logic. Higher caps, VRR and uncapped are deferred.
-- [ ] **M8-003** Define machine-readable stock/validated60 capabilities and safe unsupported-mode rejection. UI shows effective supported settings; no unverified60 or above60 option.
-- [ ] **M8-004** Validate ordinary Windows resolution/render-scale/window/fullscreen/monitor controls and settings persistence; owner requests explicit render targets720p/1080p/1440p/2160p rather than only1x/2x. Verify actual dimensions/capabilities separately from window size; no ultrawide claim.
+- [x] **M8-003** Stock-only capability contract and per-session resolved-argument record accepted. Check/Start bind verified build/game identities, reject unsupported timing/VSync/targets, and expose honest settings without measured-FPS claims. Capability112, controller164, UI924, production preflight16, broad native regressions and independent GO pass; status clipping test went RED then GREEN. Source0.20.3.0 includes the shared target-policy/preferences/UI prerequisite; M8-004 stays open for its separate KI-032 world gate. Owner l7 is unchanged;60 remains unavailable. [Evidence](docs/evidence/M8-capabilities-20261011.md).
+- [ ] **M8-004** Windows render-target controls are functionally accepted on l7: owner reports all four targets, unclipped HUD, Alt+Enter and persisted selection/save. One1080p and three2160p F10 frames, four complete/exit0 sessions and eight full snapshots verify. Full closure remains blocked by KI-032: two2160p images show corrupted building signs, so world-rendering correctness is not PASS. Keep existing native gates and exact-build admission; no successful owner test needs replay. KI-033 separately tracks coarse vehicle vinyl outside editor. [Implementation](docs/evidence/M8-render-targets-20261011.md), [owner return and bugs](docs/evidence/M8-l7-owner-return-20261011.md). No ultrawide or untested-monitor claim.
 - [~] **M8-005** Ultrawide and its cutscene policy deferred to a later display-enhancement milestone, without PASS.
 - [ ] **M8-006** Register only individually verified graphics controls needed by the working launcher; fix baseline rendering before expanding optional blur/MSAA/shadow feature scope. Unsupported controls stay unavailable.
 - [ ] **M8-007** Keep compatibility fixes, accessibility and cheats distinct in configuration/UI; no cheat implementation or altered canonical progression is required.
@@ -1680,7 +1680,7 @@ baseline triage; no inherited 2–10-week platform estimate or FPS guarantee.
   snapshots verified; controller69 includes two different builds/one locked
   profile and simultaneous independent profiles. M8-016 closes separately from
   b67e1be; SDK hard-exit/reporting remains M8-017, not graceful teardown PASS.
-- [ ] **M8-017** Triage and fix reproduced baseline graphics/audio/performance/lifecycle problems, prioritizing owner-visible paint/shimmer and busy areas. Track each defect with bounded repro, independent review and regression; unresolved cases need an explicit reviewed disposition, not invented fixes.
+- [-] **M8-017** Triage and fix reproduced baseline graphics/audio/performance/lifecycle problems, prioritizing owner-visible paint/shimmer and busy areas. KI-033 editor/outside transitions now reproduce on isolated2160p and720p seed copies; only the copied save buys normal editor access. Exact-symptom automated oracle and cause remain open. [Repro](docs/evidence/M8-seeded-render-inspection-20261011.md). Track each defect with bounded repro, independent review and regression; unresolved cases need an explicit reviewed disposition, not invented fixes.
 - [-] **M8-018** Prepare the internal volunteer workflow: allowlisted eligible build staging, independent tester profiles, content/privacy audit, explicit diagnostic export and exact-build bug reports. Owner-approved signed14-day test-build expiry with bounded online extensions is implemented in private l2; signed allowlist publication and live native extension/cache pass. Real-title/tester acceptance and export remain pending. No recursive ZIP of a private seeded bundle, automatic uploads or transfer before content gates. [Expiry evidence](docs/evidence/M8-build-expiry-20261011.md), [operator procedure](docs/test-build-expiry.md).
 - [x] **M8-019** Internal launcher usability accepted: l3 tabs/Ctrl+Tab/path preservation; l5 automatic startup/green readiness, parent prefill, Cancel and fullscreen edit/recheck; l6 fixed geometry without unwanted scrollbars or clipping. UI855/0 twice, controller153/0, import31/0, staging63/0, production worker preflight4/0 and independent GO. Accepted l6 launcher A665EB7D and host9195117A remain unchanged; source0.20.2.0 records closure. Supported720p/1440p targets are named; genuine1080p/2160p remains M8-004. Previous candidates and live saves preserved. [Evidence](docs/evidence/M8-launcher-ui-20261011.md), [accepted check](docs/internal-launcher-ui-check.md). No framework rewrite or final release design.
 
@@ -1715,6 +1715,24 @@ gates. Public installation/distribution remains M9; higherFPS/platform work need
 a separate future scope decision. No content is sent to volunteers by this plan.
 
 ### Checkpoint log
+
+- 2026-10-11 — Mandatory review after M8-019/M8-003, primary plus independent
+  integration/visual/safety reviews: **4 complete,6 deferred,19 total; YELLOW**.
+  M8-019 owner acceptance and M8-003 stock capability/record/UI gates pass;
+  final native UI924/controller164/capability112, production preflight16,
+  staging63 and broad launcher regressions have zero failures, six explicit
+  Windows1314 skips. Shared render-target source is included in M8-003, not a
+  closure of M8-004. Two owner2160p sign frames keep KI-032/world acceptance
+  open; KI-033 reproduces through isolated editor transitions but has no
+  automated symptom oracle or causal fix. No repeated owner functionality test,
+  SDK change,60 promotion or delivery. Estimate remains evidence-driven with no
+  milestone date: graphics fixes and exact timing are unresolved, while safe
+  metadata/export work can proceed. Next two tracks: M8-017 reproducible baseline
+  defects, then M8-018 explicit metadata-only diagnostic export. Existing staged
+  hosts are not externally eligible merely because game assets are excluded;
+  source-data policy/legal gate stays intact. Scope and acceptance unchanged.
+  [Capability closure](docs/evidence/M8-capabilities-20261011.md),
+  [isolated graphics evidence](docs/evidence/M8-seeded-render-inspection-20261011.md).
 
 - 2026-10-11 — M8-019 accepted: **3 complete,6 deferred,19 total; YELLOW**.
   Owner l6 geometry/Cancel PASS completes l3/l5 functional acceptance. Native

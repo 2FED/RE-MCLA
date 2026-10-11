@@ -39,7 +39,13 @@ never terminating a running session. [Policy](test-build-expiry.md).
 Display controls should select explicit render targets such as1280x720,
 1920x1080,2560x1440 and3840x2160, independently of window size. M8-004 must verify
 the SDK's actual supported dimensions and reject unsupported targets; relabeling
-1x/2x alone is not acceptance. The current l2 UI still uses1x/2x.
+1x/2x alone is not acceptance. l7 exposes all four explicit targets with startup
+dimension evidence. Owner accepts target selection, HUD, Alt+Enter and restart;
+KI-032 building-sign corruption at2160p prevents full world-rendering acceptance.
+KI-033 separately tracks degraded vinyl outside its editor. Both need M8-017
+diagnosis, not repetition of accepted launcher tests.
+The1080p route currently uses960x540 guest mode plus2x draw scaling, not a proven
+native1920x1080 guest-mode path. [Evidence](evidence/M8-render-targets-20261011.md).
 
 ## Named personal profiles
 
