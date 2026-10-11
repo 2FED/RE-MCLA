@@ -1,5 +1,6 @@
 // Synthetic owned-window visual QA only; not a desktop/window-capture tool.
-// Usage: mcla_launcher_ui_render_win.exe --output C:\explicit\new-fixture.png
+// Usage: renderer --output C:\explicit\new.png [--page play|profiles|setup]
+//        renderer --output C:\explicit\new.png --operation rename|create|register|import|copy|restore
 // Link UI source with user32 gdi32 ole32 uuid gdiplus. No game backend.
 #include "mcla_launcher_ui_win.h"
 
@@ -67,7 +68,8 @@ struct ContentBounds { HWND parent; LONG right = 0; LONG bottom = 0; };
 BOOL CALLBACK MeasureChild(HWND child, LPARAM parameter) {
   auto &bounds = *reinterpret_cast<ContentBounds *>(parameter);
   // Combo-box internal children are not independent launcher controls.
-  if (GetParent(child) != bounds.parent) return TRUE;
+  if (GetParent(child) != bounds.parent ||
+      !(GetWindowLongPtrW(child, GWL_STYLE) & WS_VISIBLE)) return TRUE;
   RECT rect{};
   if (!GetWindowRect(child, &rect)) return TRUE;
   MapWindowPoints(nullptr, bounds.parent, reinterpret_cast<POINT *>(&rect), 2);
@@ -84,7 +86,8 @@ struct RenderChildren {
 };
 BOOL CALLBACK PrintChild(HWND child, LPARAM parameter) {
   auto &render = *reinterpret_cast<RenderChildren *>(parameter);
-  if (GetParent(child) != render.parent) return TRUE;
+  if (GetParent(child) != render.parent ||
+      !(GetWindowLongPtrW(child, GWL_STYLE) & WS_VISIBLE)) return TRUE;
   RECT bounds{};
   if (!GetWindowRect(child, &bounds)) { render.valid = false; return FALSE; }
   MapWindowPoints(nullptr, render.parent, reinterpret_cast<POINT *>(&bounds), 2);
@@ -167,12 +170,44 @@ bool ExplicitOutputPath(std::wstring_view path) {
       path.find(L':', 2) == std::wstring_view::npos &&
       (path.substr(path.size() - 4) == L".bmp" || path.substr(path.size() - 4) == L".png");
 }
+
+HWND OwnedOperation(HWND owner) {
+  struct Search { HWND owner; HWND result = nullptr; } search{owner};
+  EnumThreadWindows(GetCurrentThreadId(), [](HWND item, LPARAM value) -> BOOL {
+    auto &search = *reinterpret_cast<Search *>(value);
+    wchar_t name[64]{};
+    GetClassNameW(item, name, 64);
+    if (GetWindow(item, GW_OWNER) == search.owner &&
+        std::wstring_view(name) == L"MclaLauncherProfileOperationV1") {
+      search.result = item; return FALSE;
+    }
+    return TRUE;
+  }, reinterpret_cast<LPARAM>(&search));
+  return search.result;
+}
 } // namespace
 
 int wmain(int argc, wchar_t **argv) {
   try {
-    Require(argc == 3 && std::wstring_view(argv[1]) == L"--output" && ExplicitOutputPath(argv[2]),
-            "Usage: renderer --output <explicit new absolute local .png or .bmp path>");
+    Require((argc == 3 || argc == 5) && std::wstring_view(argv[1]) == L"--output" && ExplicitOutputPath(argv[2]),
+            "Usage: renderer --output <new absolute local .png/.bmp> [--page play|profiles|setup]");
+    int page = UiPagePlay;
+    int operation = 0;
+    if (argc == 5) {
+      const std::wstring_view option(argv[3]);
+      const std::wstring_view value(argv[4]);
+      if (option == L"--page") {
+        Require(value == L"play" || value == L"profiles" || value == L"setup", "Unknown page.");
+        page = value == L"profiles" ? UiPageProfiles : value == L"setup" ? UiPageSetup : UiPagePlay;
+      } else {
+        Require(option == L"--operation", "Expected --page or --operation.");
+        operation = value == L"rename" ? UiRenameLabel : value == L"create" ? UiCreate :
+            value == L"register" ? UiRegister : value == L"import" ? UiImport :
+            value == L"copy" ? UiDuplicateProfile : value == L"restore" ? UiRestoreSnapshot : 0;
+        Require(operation != 0, "Unknown operation.");
+        page = UiPageProfiles;
+      }
+    }
     Require(SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE) != nullptr,
             "Cannot set deterministic system-aware DPI context.");
     const UINT dpi = GetDpiForSystem();
@@ -186,37 +221,59 @@ int wmain(int argc, wchar_t **argv) {
     });
     Require(window.value && !IsWindowVisible(window.value), "Fixture was not created hidden.");
     Require(refreshes == 1 && !unexpected_callback, "Unexpected fixture backend action.");
-    SetWindowTextW(GetDlgItem(window.value, UiProfileLabel), L"Copy for testing");
-    SetWindowTextW(GetDlgItem(window.value, UiProfileRoot), L"D:/SyntheticProfiles/NewProfiles");
-    SetWindowTextW(GetDlgItem(window.value, UiLegacySource),
-                   L"D:/SyntheticProfiles/MAIN/backups/synthetic-snapshot");
+    SendMessageW(window.value, WM_COMMAND, MAKEWPARAM(page, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(GetDlgItem(window.value, page)));
+    Require(refreshes == 1 && !unexpected_callback, "Page selection submitted a backend action.");
+    HWND target = window.value;
+    if (operation) {
+      SendMessageW(window.value, WM_COMMAND, MAKEWPARAM(operation, BN_CLICKED),
+                   reinterpret_cast<LPARAM>(GetDlgItem(window.value, operation)));
+      target = OwnedOperation(window.value);
+      Require(target && !IsWindowVisible(target) && !IsWindowEnabled(window.value),
+              "Operation did not create only its owned hidden modal.");
+      SetWindowTextW(GetDlgItem(target, UiProfileLabel), L"Copy for testing");
+      if (GetDlgItem(target, UiProfileRoot))
+        SetWindowTextW(GetDlgItem(target, UiProfileRoot), L"D:/SyntheticProfiles/NewProfiles");
+      if (GetDlgItem(target, UiLegacySource))
+        SetWindowTextW(GetDlgItem(target, UiLegacySource),
+                       L"D:/SyntheticProfiles/MAIN/backups/synthetic-snapshot");
+      Require(refreshes == 1 && !unexpected_callback, "Opening an operation submitted a backend action.");
+    }
 
-    SendMessageW(window.value, WM_VSCROLL, SB_TOP, 0);
-    SendMessageW(window.value, WM_HSCROLL, SB_TOP, 0);
-    ContentBounds content{window.value};
-    EnumChildWindows(window.value, MeasureChild, reinterpret_cast<LPARAM>(&content));
+    SendMessageW(target, WM_VSCROLL, SB_TOP, 0);
+    SendMessageW(target, WM_HSCROLL, SB_TOP, 0);
+    ContentBounds content{target};
+    EnumChildWindows(target, MeasureChild, reinterpret_cast<LPARAM>(&content));
     Require(content.right > 0 && content.bottom > 0, "Could not measure own fixture controls.");
     const int margin = MulDiv(12, static_cast<int>(dpi), 96);
-    RECT outer{0, 0, content.right + margin, content.bottom + margin};
-    const auto style = static_cast<DWORD>(GetWindowLongPtrW(window.value, GWL_STYLE));
-    const auto ex_style = static_cast<DWORD>(GetWindowLongPtrW(window.value, GWL_EXSTYLE));
+    SCROLLINFO horizontal{sizeof(horizontal), SIF_RANGE};
+    SCROLLINFO vertical{sizeof(vertical), SIF_RANGE};
+    Require(GetScrollInfo(target, SB_HORZ, &horizontal) &&
+            GetScrollInfo(target, SB_VERT, &vertical), "Cannot read fixture content extents.");
+    RECT outer{0, 0, (std::max<LONG>)(content.right + margin, horizontal.nMax + 1),
+                    (std::max<LONG>)(content.bottom + margin, vertical.nMax + 1)};
+    const auto style = static_cast<DWORD>(GetWindowLongPtrW(target, GWL_STYLE)) &
+        ~(WS_HSCROLL | WS_VSCROLL);
+    const auto ex_style = static_cast<DWORD>(GetWindowLongPtrW(target, GWL_EXSTYLE));
     Require(AdjustWindowRectExForDpi(&outer, style, FALSE, ex_style, dpi) != FALSE,
             "Cannot calculate fixture-only full-content size.");
-    const int width = outer.right - outer.left + GetSystemMetricsForDpi(SM_CXVSCROLL, dpi);
-    const int height = outer.bottom - outer.top + GetSystemMetricsForDpi(SM_CYHSCROLL, dpi);
-    Require(SetWindowPos(window.value, nullptr, 0, 0, width, height,
+    const int width = outer.right - outer.left;
+    const int height = outer.bottom - outer.top;
+    Require(SetWindowPos(target, nullptr, 0, 0, width, height,
                         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
             "Cannot size own hidden fixture.");
-    SendMessageW(window.value, WM_VSCROLL, SB_TOP, 0);
-    SendMessageW(window.value, WM_HSCROLL, SB_TOP, 0);
+    SendMessageW(target, WM_VSCROLL, SB_TOP, 0);
+    SendMessageW(target, WM_HSCROLL, SB_TOP, 0);
     // Resize/scroll handlers may reposition children. The final client bounds,
     // not pre-resize measurements or window-frame coordinates, own the proof.
-    content = ContentBounds{window.value};
-    EnumChildWindows(window.value, MeasureChild, reinterpret_cast<LPARAM>(&content));
+    content = ContentBounds{target};
+    EnumChildWindows(target, MeasureChild, reinterpret_cast<LPARAM>(&content));
     RECT client{};
-    Require(GetClientRect(window.value, &client) != FALSE &&
+    Require(GetClientRect(target, &client) != FALSE &&
             client.right >= content.right && client.bottom >= content.bottom,
             "Full fixture content does not fit the owned render surface.");
+    Require((GetWindowLongPtrW(target, GWL_STYLE) & (WS_HSCROLL | WS_VSCROLL)) == 0,
+            "Full-content fixture unexpectedly has scrollbars.");
     const auto pixel_bytes = static_cast<uint64_t>(client.right) * client.bottom * 4;
     Require(pixel_bytes && pixel_bytes <= 128 * 1024 * 1024,
             "Fixture render surface exceeds bounded memory limit.");
@@ -243,11 +300,11 @@ int wmain(int argc, wchar_t **argv) {
     // Omit top-level WM_PRINT: DefWindowProc can offset children by the frame
     // even without PRF_NONCLIENT. Render each direct owned child at its actual
     // mapped client location. No BitBlt/GetDC(0), ShowWindow or external HWND.
-    RenderChildren rendered{window.value, surface.dc};
-    EnumChildWindows(window.value, PrintChild, reinterpret_cast<LPARAM>(&rendered));
+    RenderChildren rendered{target, surface.dc};
+    EnumChildWindows(target, PrintChild, reinterpret_cast<LPARAM>(&rendered));
     Require(rendered.valid && rendered.controls > 0, "Owned control rendering failed.");
     GdiFlush();
-    Require(!IsWindowVisible(window.value) && refreshes == 1 && !unexpected_callback,
+    Require(!IsWindowVisible(window.value) && !IsWindowVisible(target) && refreshes == 1 && !unexpected_callback,
             "Fixture unexpectedly became visible or dispatched an action.");
 
     BITMAPFILEHEADER header{};

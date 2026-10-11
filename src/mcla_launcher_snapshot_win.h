@@ -3,6 +3,13 @@
 #include <string>
 
 namespace mcla::launcher {
+// No-write point-in-time snapshot source inspection. Destination is an explicit
+// hypothetical path used only for path-length validation; it is never opened or
+// created. Caller holds the source's cooperative writer lock. Launch/copy still
+// repeat their checks; this cannot guarantee future disk space or writes.
+std::expected<void, std::wstring> ValidateSaveTreeForSnapshot(
+    const fs::DirectoryGuard &source, std::wstring_view destination);
+
 // Copy a complete bounded tree to an already-created EMPTY destination.
 // Caller holds the source writer lock. Every source file is held read-only
 // throughout the copy; every directory ancestor is held against replacement.

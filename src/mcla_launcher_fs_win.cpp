@@ -188,11 +188,12 @@ std::expected<void, std::wstring> CompareDisjoint(const DirectoryGuard &a, const
   return {};
 }
 
-std::expected<WriterLock, std::wstring> AcquireWriterLock(const DirectoryGuard &directory) {
+std::expected<WriterLock, std::wstring> AcquireWriterLock(const DirectoryGuard &directory, bool existing_only) {
   if (directory.path().empty()) return std::unexpected(L"directory guard is empty");
   const auto path = directory.path() + L"\\" + std::wstring(kLockName);
   Handle handle(CreateFileW(NativePath(path).c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-      OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_WRITE_THROUGH, nullptr));
+      existing_only ? OPEN_EXISTING : OPEN_ALWAYS,
+      FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_WRITE_THROUGH, nullptr));
   if (!handle) return std::unexpected(Error(L"profile writer lock unavailable"));
   const auto info = RegularFileInfo(handle.value, 0);
   if (!info) return std::unexpected(info.error());

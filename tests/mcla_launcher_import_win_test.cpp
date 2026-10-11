@@ -152,8 +152,15 @@ int main() {
     const auto original = Contents(old / L"user");
     const auto old_manifest = Read(old / L"bundle-manifest.json"), old_id = Read(old / L"bundle-id.txt");
     const auto before = Children(root / L"destinations");
+    const auto hint = root / L"store/collection-parent.dat";
+    if (!MoveFileExW(Native(hint).c_str(), Native(root / L"preserved-create-hint.dat").c_str(), MOVEFILE_WRITE_THROUGH)) return 2;
     state = controller.Dispatch(UiAction::ImportLegacy, Request(old, root / L"destinations"));
     Check(state.library.entries.size() == 2, "production ImportLegacy registers complete new profile");
+    const auto encoded_parent = (root / L"destinations").u8string();
+    const auto imported_hint = Read(hint);
+    Check(state.collection_parent == (root / L"destinations").wstring() &&
+        imported_hint == "MCLA-COLLECTION-PARENT-V1\n" + std::string(encoded_parent.begin(), encoded_parent.end()),
+        "successful production import persists canonical collection parent in optional versioned sidecar");
     Check(state.library.selected_id == selected_id && !controller.running(), "import preserves selection and never launches a child");
     if (state.library.entries.size() != 2) { std::wcerr << state.status << L'\n'; return 1; }
     const auto &imported = state.library.entries.back();
@@ -223,6 +230,7 @@ int main() {
     Check(Contents(unsafe / L"user") == unsafe_original && Read(unsafe / L"owned-link-target.bin") == "SYNTHETIC_EXTRA\n",
         "failed copy preserves all original source bytes and hardlink target");
     Check(!controller.running() && !state.running, "all integration actions finish without game or helper process launch");
+    Check(Read(hint) == imported_hint, "failed production imports and registration never replace collection hint");
     std::cout << "Launcher production legacy import: " << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
   } catch (const std::exception &error) {

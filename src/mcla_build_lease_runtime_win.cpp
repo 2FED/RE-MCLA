@@ -16,21 +16,21 @@ uint64_t Now() {
   const uint64_t ticks=(uint64_t{ft.dwHighDateTime}<<32)|ft.dwLowDateTime;
   return ticks/10000000-11644473600ULL;
 }
-std::expected<fs::DirectoryGuard,std::wstring> CacheDirectory() {
+std::expected<fs::DirectoryGuard,std::wstring> CacheDirectory(bool read_only=false) {
   PWSTR raw=nullptr;
   if(FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData,KF_FLAG_DEFAULT,nullptr,&raw)))
     return std::unexpected(L"Cannot locate local lease cache");
   const std::wstring base(raw); CoTaskMemFree(raw);
   auto parent=fs::OpenDirectory(base); if(!parent) return std::unexpected(parent.error());
   const auto child=parent->path()+L"\\MCLA-R-TestLeaseCache-v1";
-  if(!CreateDirectoryW((L"\\\\?\\"+child).c_str(),nullptr) && GetLastError()!=ERROR_ALREADY_EXISTS)
+  if(!read_only && !CreateDirectoryW((L"\\\\?\\"+child).c_str(),nullptr) && GetLastError()!=ERROR_ALREADY_EXISTS)
     return std::unexpected(L"Cannot create local lease cache");
   return fs::OpenDirectory(child);
 }
 using Fetch=std::function<std::expected<std::string,std::wstring>()>;
 std::expected<Admission,std::wstring> Check(std::string_view envelope,std::string_view hash,
     std::span<const uint8_t> key,uint64_t now,const fs::DirectoryGuard *cache,const Fetch &fetch,
-    bool prefer_cached=false,const std::function<uint64_t()> &after_clock={}) {
+    bool prefer_cached=false,const std::function<uint64_t()> &after_clock={},bool read_only=false) {
   auto ticket=ParseTicket(envelope,key); if(!ticket) return std::unexpected(ticket.error());
   auto base=Evaluate(*ticket,hash,now,std::nullopt);
   // Only expiration can be remedied by a lease. Do not contact the server on
@@ -42,12 +42,12 @@ std::expected<Admission,std::wstring> Check(std::string_view envelope,std::strin
   const std::wstring filename=std::wstring(hash.begin(),hash.end())+L".lease";
   std::wstring note;
   std::optional<fs::WriterLock> lock;
-  if(cache) {
+  if(cache && !read_only) {
     auto held=fs::AcquireWriterLock(*cache);
     if(held) lock.emplace(std::move(*held));
     else note=L"Lease cache busy/unavailable; online proof can still authorize this launch. ";
   }
-  if(lock) {
+  if(cache && (lock || read_only)) {
     auto bytes=fs::ReadFile(*cache,filename,65536);
     if(bytes) {
       const std::string cached(bytes->begin(),bytes->end());
@@ -72,7 +72,8 @@ std::expected<Admission,std::wstring> Check(std::string_view envelope,std::strin
         const std::span<const uint8_t> bytes(reinterpret_cast<const uint8_t*>(downloaded->data()),downloaded->size());
         auto saved=fs::AtomicWrite(*cache,filename,bytes);
         if(!saved) note+=L"Signed extension valid for this launch; offline cache write failed. ";
-      } else note+=L"Signed extension valid for this launch; offline cache unavailable. ";
+      } else note+=read_only ? L"Signed extension valid for this check; not cached. " :
+          L"Signed extension valid for this launch; offline cache unavailable. ";
     } else if(!leases) note+=L"Untrusted online response ignored. ";
   } else note+=L"Online extension unavailable; checking local allowance. ";
   const auto completed=after_clock?after_clock():now;
@@ -82,7 +83,7 @@ std::expected<Admission,std::wstring> Check(std::string_view envelope,std::strin
   return Admission{best,best>built_in,std::move(note)};
 }
 }
-std::expected<Admission,std::wstring> CheckBuildLease(const launcher::fs::DirectoryGuard &build,std::string_view pinned_host_hash,bool prefer_cached,bool ticket_only) {
+std::expected<Admission,std::wstring> CheckBuildLease(const launcher::fs::DirectoryGuard &build,std::string_view pinned_host_hash,bool prefer_cached,bool ticket_only,bool read_only) {
   auto ticket=launcher::fs::ReadFile(build,kTicketFile,65536);
   if(!ticket) return std::unexpected(L"Test-build ticket missing or unsafe. Obtain a complete current test build; saves are unchanged.");
   const std::string envelope(ticket->begin(),ticket->end());
@@ -101,8 +102,8 @@ std::expected<Admission,std::wstring> CheckBuildLease(const launcher::fs::Direct
   if(ticket_only) return Check(envelope,hash,kPublicKey,now,nullptr,[] {
     return std::expected<std::string,std::wstring>(std::unexpected(L"Lifecycle probe: extensions disabled"));
   },true,Now);
-  auto cache=CacheDirectory();
-  return Check(envelope,hash,kPublicKey,now,cache?&*cache:nullptr,FetchPublicLeases,prefer_cached,Now);
+  auto cache=CacheDirectory(read_only);
+  return Check(envelope,hash,kPublicKey,now,cache?&*cache:nullptr,FetchPublicLeases,prefer_cached,Now,read_only);
 }
 std::expected<Admission,std::wstring> CheckCurrentHostLease(bool prefer_cached,bool ticket_only) {
   std::array<wchar_t,32768> name{};
@@ -118,8 +119,8 @@ std::expected<Admission,std::wstring> CheckCurrentHostLease(bool prefer_cached,b
 #ifdef MCLA_BUILD_LEASE_RUNTIME_TESTING
 std::expected<Admission,std::wstring> CheckLeaseForTest(std::string_view ticket,std::string_view hash,
     std::span<const uint8_t> key,uint64_t now,const launcher::fs::DirectoryGuard *cache,const Fetch &fetch,
-    bool prefer_cached,const std::function<uint64_t()> &after_clock) {
-  return Check(ticket,hash,key,now,cache,fetch,prefer_cached,after_clock);
+    bool prefer_cached,const std::function<uint64_t()> &after_clock,bool read_only) {
+  return Check(ticket,hash,key,now,cache,fetch,prefer_cached,after_clock,read_only);
 }
 #endif
 }

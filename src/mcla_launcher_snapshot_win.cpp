@@ -164,6 +164,48 @@ std::expected<std::string, std::wstring> ReadbackHash(HANDLE file, uint64_t expe
   return hash.Finish();
 }
 }
+std::expected<void, std::wstring> ValidateSaveTreeForSnapshot(
+    const fs::DirectoryGuard &source, std::wstring_view destination) {
+  try {
+    const std::filesystem::path src(source.path()), dst(destination);
+    if (!NormalizeRoot(dst.u16string())) return std::unexpected(L"Invalid snapshot destination path");
+    const auto before = Inventory(src);
+    if (!before) return std::unexpected(before.error());
+    std::vector<fs::DirectoryGuard> directories;
+    std::vector<File> files;
+    for (const auto &record : *before) {
+      auto relative = std::filesystem::path(record.name);
+      relative.make_preferred(); // Inventory names are portable '/'-separated UTF-16.
+      if (!NormalizeRoot(ChildPath(dst, relative).u16string()))
+        return std::unexpected(L"Destination snapshot path violates component or length policy");
+      const auto path = ChildPath(src, relative);
+      if (record.directory) {
+        auto held = fs::OpenDirectory(path.wstring());
+        if (!held) return std::unexpected(held.error());
+        directories.push_back(std::move(*held));
+        continue;
+      }
+      File file(CreateFileW(Native(path).c_str(), GENERIC_READ, FILE_SHARE_READ,
+          nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+      BY_HANDLE_FILE_INFORMATION info{};
+      if (file.h == INVALID_HANDLE_VALUE || GetFileType(file.h) != FILE_TYPE_DISK ||
+          !GetFileInformationByHandle(file.h, &info) || info.nNumberOfLinks != 1 ||
+          (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
+          info.dwVolumeSerialNumber != record.volume || info.nFileIndexHigh != record.index_high ||
+          info.nFileIndexLow != record.index_low)
+        return std::unexpected(L"Snapshot source is unreadable, linked or changed during inspection");
+      auto readable = ReadbackHash(file.h, record.size);
+      if (!readable) return std::unexpected(readable.error());
+      files.push_back(std::move(file));
+    }
+    const auto after = Inventory(src);
+    if (!after || *after != *before) return std::unexpected(L"Save tree changed during read-only inspection");
+    return {};
+  } catch (const std::exception &) {
+    return std::unexpected(L"Read-only save tree inspection failed");
+  }
+}
+
 static std::expected<std::string, std::wstring> CopySaveTreeImpl(
     const fs::DirectoryGuard &source, const fs::DirectoryGuard &destination
 #if defined(MCLA_LAUNCHER_SNAPSHOT_TEST_SEAM)

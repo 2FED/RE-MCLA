@@ -244,6 +244,41 @@ int main() {
     result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, grace_end, nullptr,
         online, false, [] { return grace_end - 1; });
     Check(!result, "clock rollback during fetch rejects admission despite otherwise valid proof");
+    auto read_only = NewCache(root, L"read-only");
+    result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, grace_end,
+        &read_only, online, false, {}, true);
+    Check(result && result->expires_utc == extension_end, "read-only online signed extension admitted");
+    Check(Children(read_only).empty(), "read-only online check creates neither lease nor lock file");
+    result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, grace_end,
+        &read_only, offline, false, {}, true);
+    Check(!result && Children(read_only).empty(), "read-only expired empty cache remains unchanged");
+    Write(read_only, proof); // Fixture setup only, not admission.
+    const auto ro_identity = CacheIdentity(read_only);
+    const auto ro_children = Children(read_only);
+    result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, grace_end,
+        &read_only, offline, false, {}, true);
+    Check(result && result->expires_utc == extension_end, "read-only consumes authenticated existing cache without creating lock");
+    const auto longer_ro = signer.Lease(extension_end + 7200);
+    result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, grace_end,
+        &read_only, [&]() -> Response { return longer_ro; }, false, {}, true);
+    Check(result && result->expires_utc == extension_end + 7200, "read-only newer online extension can authorize without persistence");
+    Check(Read(read_only) == proof && CacheIdentity(read_only) == ro_identity &&
+        Children(read_only) == ro_children, "read-only does not replace cached bytes identity or inventory");
+    result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, extension_end,
+        &read_only, offline, false, {}, true);
+    Check(!result && result.error().starts_with(L"BUILD EXPIRED"), "read-only proof expires at exact boundary");
+    result = CheckLeaseForTest(ticket, hash_b, signer.public_blob, grace_end,
+        &read_only, online, false, {}, true);
+    Check(!result && Read(read_only) == proof && Children(read_only) == ro_children,
+          "read-only rejects mismatched host and preserves cache");
+    result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, extension_end,
+        &read_only, [&]() -> Response { return untrusted.Lease(extension_end + 1000); }, false, {}, true);
+    Check(!result && Read(read_only) == proof && Children(read_only) == ro_children,
+          "read-only untrusted online signer cannot extend expired proof");
+    result = CheckLeaseForTest(ticket, hash_a, signer.public_blob, grace_end,
+        &read_only, online, false, [] { return extension_end; }, true);
+    Check(!result && Read(read_only) == proof && Children(read_only) == ro_children,
+          "read-only rechecks signed expiry after fetch without mutation");
     std::cout << "Build lease runtime: " << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
   } catch (const std::exception &error) {

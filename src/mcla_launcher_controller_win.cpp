@@ -15,6 +15,7 @@
 #include <wrl/client.h>
 #include <bcrypt.h>
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <optional>
 
@@ -30,6 +31,13 @@ std::string Utf8(std::wstring_view s) {
   return out;
 }
 std::wstring Native(std::wstring_view s) { return L"\\\\?\\" + std::wstring(s); }
+constexpr std::wstring_view kCollectionParentFile=L"collection-parent.dat";
+constexpr std::string_view kCollectionParentPrefix="MCLA-COLLECTION-PARENT-V1\n";
+bool StrictAncestor(std::wstring_view parent,std::wstring_view child) {
+  return parent.size()<child.size() && child[parent.size()]==L'\\' &&
+      CompareStringOrdinal(parent.data(),static_cast<int>(parent.size()),
+          child.data(),static_cast<int>(parent.size()),TRUE)==CSTR_EQUAL;
+}
 std::expected<void,std::wstring> Text(const fs::DirectoryGuard &dir, std::wstring_view name, std::string_view value) {
   return fs::AtomicWrite(dir,name,{reinterpret_cast<const uint8_t *>(value.data()),value.size()});
 }
@@ -47,6 +55,16 @@ std::expected<fs::DirectoryGuard,std::wstring> NewDirectory(const fs::DirectoryG
     return std::unexpected(L"New directory path is invalid");
   if (!CreateDirectoryW(Native(path).c_str(),nullptr)) return std::unexpected(L"Cannot create exclusive new directory: "+path);
   return fs::OpenDirectory(path);
+}
+std::expected<std::optional<fs::DirectoryGuard>,std::wstring> InspectExistingCache(
+    const fs::DirectoryGuard &parent,std::string_view fingerprint) {
+  const auto path=parent.path()+L"\\"+std::wstring(fingerprint.begin(),fingerprint.end());
+  if(GetFileAttributesW(Native(path).c_str())==INVALID_FILE_ATTRIBUTES) {
+    if(GetLastError()==ERROR_FILE_NOT_FOUND) return std::optional<fs::DirectoryGuard>{};
+    return std::unexpected(L"Cannot inspect build-specific cache");
+  }
+  auto cache=fs::OpenDirectory(path); if(!cache) return std::unexpected(cache.error());
+  return std::optional<fs::DirectoryGuard>{std::move(*cache)};
 }
 struct Adapter { std::wstring name; unsigned index; };
 std::vector<Adapter> Adapters() {
@@ -126,6 +144,147 @@ struct LauncherController::State {
   };
   std::optional<Session> session;
   bool completion_failed=false;
+
+  std::expected<fs::DirectoryGuard,std::wstring> CollectionParent(std::wstring_view path) const {
+    auto parent=fs::OpenDirectory(path); if(!parent) return std::unexpected(parent.error());
+    auto safe=ValidateWritableRoot(*parent); if(!safe) return std::unexpected(safe.error());
+    // A collection may contain sibling profiles, but cannot itself be a
+    // protected root or sit within one. Creation revalidates the exact child.
+    const auto separate=[&](const fs::DirectoryGuard &root) {
+      return fs::CompareDisjoint(*parent,root).has_value() || StrictAncestor(parent->path(),root.path());
+    };
+    if(!separate(store.directory())) return std::unexpected(L"Collection parent overlaps local settings");
+    const auto &p=store.preferences();
+    std::vector<std::wstring> roots;
+    for(const auto &entry:p.library.entries) roots.push_back(Wide(entry.root));
+    for(const auto &root:{p.build_root,p.game_root}) if(!root.empty()) roots.push_back(Wide(root));
+    for(const auto &root_path:roots) {
+      auto root=fs::OpenDirectory(root_path); if(!root) return std::unexpected(root.error());
+      if(!separate(*root)) return std::unexpected(L"Collection parent overlaps a profile/build/game root");
+    }
+    if(!NormalizeRoot(U16(parent->path()+L"\\MCLA-11111111111111111111111111111111")))
+      return std::unexpected(L"Collection parent leaves no valid new profile path");
+    return std::move(*parent);
+  }
+  std::wstring CollectionParentHint() const {
+    // Optional hint only: invalid/unavailable bytes are ignored, never repaired.
+    try {
+      auto bytes=fs::ReadFile(store.directory(),kCollectionParentFile,65536);
+      if(bytes) {
+        const std::string_view value(reinterpret_cast<const char*>(bytes->data()),bytes->size());
+        if(value.starts_with(kCollectionParentPrefix)) {
+          const auto encoded=value.substr(kCollectionParentPrefix.size());
+          const int count=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,encoded.data(),static_cast<int>(encoded.size()),nullptr,0);
+          if(count>0) {
+            std::wstring path(count,L'\0');
+            if(MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,encoded.data(),static_cast<int>(encoded.size()),path.data(),count)==count) {
+              auto parent=CollectionParent(path); if(parent) return parent->path();
+            }
+          }
+        }
+      }
+      const auto &p=store.preferences();
+      const auto *selected=Selected(p);
+      if(!selected || selected->layout!=Layout::ManagedExternalV1) return {};
+      auto others=p;
+      std::erase_if(others.library.entries,[&](const auto &entry) { return entry.id==selected->id; });
+      auto admitted=RegisterManagedProfile(others,Wide(selected->root),selected->label,store.directory());
+      if(!admitted || admitted->library.entries.back().id!=selected->id) return {};
+      auto parent=CollectionParent(std::filesystem::path(selected->root).parent_path().wstring());
+      return parent?parent->path():std::wstring{};
+    } catch(const std::exception &) { return {}; }
+  }
+  std::expected<void,std::wstring> RememberCollectionParent() {
+    const auto &entries=store.preferences().library.entries;
+    if(entries.empty()) return std::unexpected(L"No newly registered profile to remember");
+    auto parent=CollectionParent(std::filesystem::path(entries.back().root).parent_path().wstring());
+    if(!parent) return std::unexpected(parent.error());
+    const auto encoded=Utf8(parent->path());
+    if(encoded.empty() || kCollectionParentPrefix.size()+encoded.size()>65536)
+      return std::unexpected(L"Collection parent cannot be encoded within the hint bound");
+    return Text(store.directory(),kCollectionParentFile,std::string(kCollectionParentPrefix)+encoded);
+  }
+
+  std::expected<uint64_t,std::wstring> CheckLaunch(const UiRequest &r) {
+    // This is a point-in-time, no-write inspection, not launch authorization.
+    // Never call Settings, create a writer lock, snapshot a save or start a child.
+    try {
+      auto p=store.preferences();
+      const auto *entry=Selected(p);
+      if(!entry || entry->layout!=Layout::ManagedExternalV1 ||
+          r.selected_profile_id!=p.library.selected_id)
+        return std::unexpected(L"Select an acknowledged managed profile before checking launch");
+      p.build_root=U16(r.build_root); p.game_root=U16(r.game_root); p.gpu_name=U16(r.gpu_name);
+      p.resolution_scale=r.resolution_scale; p.vsync=r.vsync; p.fullscreen=r.fullscreen;
+      if(!p.vsync) return std::unexpected(L"Stock launch requires VSync On");
+      if(!ValidPreferences(p) || !MakeLaunchPlan(p.library,{p.build_root,p.game_root,TimingMode::Stock}))
+        return std::unexpected(L"Launch settings need valid separate build/game roots and a supported scale");
+      auto gpu=AdapterIndex(r.gpu_name); if(!gpu) return std::unexpected(gpu.error());
+      auto profile=fs::OpenDirectory(Wide(entry->root)); if(!profile) return std::unexpected(profile.error());
+      auto safe=ValidateWritableRoot(*profile); if(!safe) return std::unexpected(safe.error());
+      // OPEN_EXISTING only: a missing/unsafe lock must not be repaired by Check.
+      auto writer=fs::AcquireWriterLock(*profile,true); if(!writer) return std::unexpected(writer.error());
+      const auto pending=Native(profile->path()+L"\\pending-operation.dat");
+      if(GetFileAttributesW(pending.c_str())!=INVALID_FILE_ATTRIBUTES || GetLastError()!=ERROR_FILE_NOT_FOUND)
+        return std::unexpected(L"An unfinished profile operation needs review before launch");
+      auto others=p;
+      std::erase_if(others.library.entries,[&](const auto &e) { return e.id==entry->id; });
+      auto admission=RegisterManagedProfile(others,profile->path(),entry->label,store.directory());
+      if(!admission) return std::unexpected(admission.error());
+      if(admission->library.entries.back().id!=entry->id)
+        return std::unexpected(L"Selected profile marker identity changed");
+      auto build_root=fs::OpenDirectory(r.build_root); if(!build_root) return std::unexpected(build_root.error());
+      auto game=fs::OpenDirectory(r.game_root); if(!game) return std::unexpected(game.error());
+      for(const auto *root:{&*profile,&*build_root,&*game}) {
+        auto distinct=fs::CompareDisjoint(*root,store.directory());
+        if(!distinct) return std::unexpected(distinct.error());
+      }
+      auto distinct=fs::CompareDisjoint(*build_root,*game); if(!distinct) return std::unexpected(distinct.error());
+      // Match Settings' all-library overlap admission using the draft roots.
+      std::vector<fs::DirectoryGuard> library_roots;
+      for(const auto &registered:p.library.entries) {
+        auto root=fs::OpenDirectory(Wide(registered.root)); if(!root) return std::unexpected(root.error());
+        for(const auto *immutable:{&*build_root,&*game}) {
+          auto separate=fs::CompareDisjoint(*root,*immutable); if(!separate) return std::unexpected(separate.error());
+        }
+        library_roots.push_back(std::move(*root));
+      }
+      std::vector<fs::DirectoryGuard> children;
+      for(const auto *name:{L"user",L"cache",L"logs",L"diagnostics",L"sessions",L"backups",L"metadata",L"metadata\\update"}) {
+        auto child=fs::OpenDirectory(profile->path()+L"\\"+name); if(!child) return std::unexpected(child.error());
+        children.push_back(std::move(*child));
+      }
+      size_t history=0;
+      for(const auto &item:std::filesystem::directory_iterator(children[4].path())) {
+        if(++history>=1024) return std::unexpected(L"Session history capacity reached; preserve/archive before launch");
+        auto previous=fs::OpenDirectory(item.path().wstring()); if(!previous) return std::unexpected(previous.error());
+        auto state=fs::ReadFile(*previous,L"state.txt",256);
+        if(!state || !std::string_view(reinterpret_cast<const char*>(state->data()),state->size()).starts_with("complete\n"))
+          return std::unexpected(L"An unfinished session needs review before launch");
+      }
+      auto name=ReadDisplayName(*profile); if(!name) return std::unexpected(name.error());
+      auto source=ValidateSaveTreeForSnapshot(children[0],
+          children[4].path()+L"\\11111111111111111111111111111111\\before-user");
+      if(!source) return std::unexpected(source.error());
+      auto build=VerifyBuild(*build_root); if(!build) return std::unexpected(build.error());
+      auto existing_cache=InspectExistingCache(children[1],build->fingerprint());
+      if(!existing_cache) return std::unexpected(existing_cache.error());
+      auto verified_game=VerifySelectedGame(*game); if(!verified_game) return std::unexpected(verified_game.error());
+      uint64_t expires=0;
+#ifndef MCLA_LAUNCHER_CONTROLLER_TESTING
+      // Synthetic controller builds use their existing fake-host exemption.
+      // Production eligibility verifies signatures without cache publication.
+      const auto host=std::find_if(build->files().begin(),build->files().end(),[](const auto &file) { return file.name==L"mcla.exe"; });
+      if(host==build->files().end()) return std::unexpected(L"Verified build has no host");
+      auto lease=mcla::lease::CheckBuildLease(*build_root,host->sha256,false,false,true);
+      if(!lease) return std::unexpected(lease.error());
+      expires=lease->expires_utc;
+#endif
+      return expires;
+    } catch(const std::exception &) {
+      return std::unexpected(L"Read-only launch inspection failed; no launch or repair was attempted");
+    }
+  }
 
   std::expected<void,std::wstring> VerifyRoots(const UiRequest &r) {
     auto build_root=fs::OpenDirectory(r.build_root); if(!build_root) return std::unexpected(build_root.error());
@@ -334,9 +493,14 @@ struct LauncherController::State {
   UiState View() const {
     const auto &p=store.preferences();
     UiState ui;
+    ui.collection_parent=CollectionParentHint();
     ui.library=p.library; ui.build_root=Wide(p.build_root); ui.game_root=Wide(p.game_root);
     ui.gpu_name=Wide(p.gpu_name); ui.resolution_scale=static_cast<int>(p.resolution_scale);
     ui.vsync=p.vsync; ui.fullscreen=p.fullscreen; ui.running=session.has_value(); ui.status=status;
+    if(session) {
+      ui.readiness=LaunchReadiness::Running;
+      ui.readiness_reason=L"Game session owns this profile";
+    }
     if(const auto *entry=Selected(p)) {
       auto profile=fs::OpenDirectory(Wide(entry->root));
       if(profile) { auto name=ReadDisplayName(*profile); if(name) ui.in_game_name=*name; }
@@ -412,6 +576,12 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   } else if(GetLastError()!=ERROR_FILE_NOT_FOUND && GetLastError()!=ERROR_PATH_NOT_FOUND)
     return std::unexpected(L"Cannot inspect in-game profile name");
   auto id=UniqueId(); if(!id) return std::unexpected(id.error());
+  // Reject known snapshot/cache obstructions before leaving a prepared session.
+  // Actual copy and cache acquisition below still revalidate their own inputs.
+  auto source=ValidateSaveTreeForSnapshot(*user,sessions.path()+L"\\"+*id+L"\\before-user");
+  if(!source) return source;
+  auto existing_cache=InspectExistingCache(children[0],build->fingerprint());
+  if(!existing_cache) return std::unexpected(existing_cache.error());
   auto directory=NewDirectory(sessions,*id); if(!directory) return std::unexpected(directory.error());
   auto state=Text(*directory,L"state.txt","prepared\n"); if(!state) return state;
   auto before=NewDirectory(*directory,L"before-user"); if(!before) return std::unexpected(before.error());
@@ -488,11 +658,21 @@ bool LauncherController::completion_failed() const { return state_->completion_f
 UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
   auto &s=*state_;
   std::expected<void,std::wstring> result;
+  uint64_t checked_expiry=0;
   if(s.session && action!=UiAction::Refresh && action!=UiAction::OpenSave && action!=UiAction::OpenDiagnostics) {
     s.status=L"Game session still owns this profile. Settings and profile changes are blocked."; return s.View();
   }
   switch(action) {
     case UiAction::Refresh: result=s.Poll(); break;
+    case UiAction::CheckLaunch: {
+      auto checked=s.CheckLaunch(request);
+      if(!checked) result=std::unexpected(checked.error());
+      else {
+        checked_expiry=*checked;
+        s.status=L"Read-only launch check passed for these settings. Start Game rechecks; successful writes and startup are not guaranteed.";
+      }
+      break;
+    }
     case UiAction::VerifyRoots: result=s.VerifyRoots(request); break;
     case UiAction::SaveSettings: result=s.Settings(request); if(result) s.status=L"Local settings saved outside the build."; break;
     case UiAction::SelectProfile: {
@@ -544,9 +724,24 @@ UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
       break;
     }
   }
+  if(result && (action==UiAction::CreateProfile || action==UiAction::ImportLegacy ||
+      action==UiAction::DuplicateProfile || action==UiAction::RestoreSnapshot)) {
+    try {
+      auto remembered=s.RememberCollectionParent();
+      if(!remembered) s.status+=L" Warning: profile operation succeeded, but the collection-folder hint was not saved. "+remembered.error();
+    } catch(const std::exception &) {
+      s.status+=L" Warning: profile operation succeeded, but the collection-folder hint could not be saved.";
+    }
+  }
   if(!result) s.status=result.error();
   auto view=s.View();
+  if(action==UiAction::CheckLaunch && !s.session) {
+    view.readiness=result?LaunchReadiness::Ready:LaunchReadiness::Blocked;
+    view.readiness_reason=s.status;
+    view.eligibility_expires_utc=result?checked_expiry:0;
+  }
   if(action==UiAction::VerifyRoots) {
+    view.verification_failed=!result;
     // Read-only verification must not erase unsaved form edits or persist them.
     view.build_root=request.build_root; view.game_root=request.game_root;
     view.gpu_name=request.gpu_name; view.resolution_scale=request.resolution_scale;

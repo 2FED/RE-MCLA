@@ -82,6 +82,15 @@ int main() {
   const auto unicode = std::filesystem::path(L"a/\u0421\u0435\u0439\u0432 \u0437 \u043f\u0440\u043e\u0431\u0456\u043b\u043e\u043c.bin");
   if (!NewFile(source / L"hello.txt", "hello") || !NewFile(source / unicode, std::string("a\0b", 3)) ||
       !NewFile(source / L"a/nested/zero.bin", "")) return 2;
+  const auto inspect = [&](const std::filesystem::path &tree) {
+    auto guard = fs::OpenDirectory(tree.wstring());
+    if (!guard) return false;
+    const auto result = mcla::launcher::ValidateSaveTreeForSnapshot(*guard, (root / L"never-created").wstring());
+    if (!result && tree == source) std::wcerr << result.error() << L'\n';
+    return result.has_value();
+  };
+  Check(inspect(source), "read-only snapshot preflight accepts complete nested Unicode source");
+  Check(!std::filesystem::exists(root / L"never-created"), "snapshot preflight never creates destination");
   const auto copied = Copy(source, first);
   Check(copied.has_value(), "complete nested/empty/Unicode tree copied");
   if (!copied) std::wcerr << copied.error() << L'\n';
@@ -114,6 +123,7 @@ int main() {
   if (!Directory(hard) || !Directory(hard_dest) || !NewFile(root / L"hard-outside.bin", "preserve")) return 2;
   if (CreateHardLinkW((hard / L"linked.bin").c_str(), (root / L"hard-outside.bin").c_str(), nullptr)) {
     Check(!Copy(hard, hard_dest), "hardlinked source rejected");
+    Check(!inspect(hard), "read-only snapshot preflight rejects hardlinks");
     Check(Read(root / L"hard-outside.bin") == "preserve" && std::filesystem::is_empty(hard_dest),
           "hardlink outside target preserved and destination untouched");
   } else { Check(false, "hardlink fixture must be supported on admitted filesystem"); }
@@ -123,6 +133,7 @@ int main() {
   Check(NewFile(streams / L"data.bin:extra", "must-not-be-omitted"), "named-stream fixture created");
   Check(!Copy(streams, stream_dest) && Read(streams / L"data.bin:extra") == "must-not-be-omitted",
         "named stream rejected without source mutation");
+  Check(!inspect(streams), "read-only snapshot preflight rejects named streams");
 
   const auto redirected = root / L"redirected", redirect_dest = root / L"redirect-dest";
   if (!Directory(redirected) || !Directory(redirect_dest)) return 2;
@@ -135,6 +146,7 @@ int main() {
   const auto trailing = std::filesystem::path(L"\\\\?\\" + (malformed / L"trailing.").wstring());
   if (NewFile(trailing, "unsafe")) {
     Check(!Copy(malformed, malformed_dest), "extended-path trailing-dot component rejected");
+    Check(!inspect(malformed), "read-only snapshot preflight rejects unsafe components");
     Check(Read(trailing) == "unsafe", "unsafe source name remains untouched");
   } else { std::cout << "SKIP trailing-dot fixture unavailable; Win32 " << GetLastError() << '\n'; }
 

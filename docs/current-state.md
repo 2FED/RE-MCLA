@@ -8,10 +8,52 @@ M7 is CLOSED. Owner approved revised M8 on October10: internal launcher first,
 named selectable personal save folders outside builds, baseline Windows/RTX5060
 bug fixes and stock/max60. HigherFPS/platforms/release-ready packaging are later.
 [Active scope and safety gates](M8-priorities.md). M8-015 committed b67e1be;
-M8-016 accepted in its separate ledger commit. M8-018 remains open for
+M8-016 accepted in separate ledger commit c0a6225. M8-018 remains open for
 volunteer/export gates. Owner added M8-019 humane launcher UI/UX refinement;
-separate native Play/Profiles/Setup sections, no controller/save-model changes.
-Source VERSION0.20.1.0; accepted l2
+separate native Play/Profiles/Setup sections and explicit profile operations.
+Owner accepted l3 tabs/Ctrl+Tab/path preservation, then requested M8-019 follow-up:
+clear START GAME color+text, read-only readiness check and operation-specific
+profile dialogs instead of permanent label/destination/source fields. Work active.
+Owner accepted l5 automatic startup/green readiness, collection-parent prefill,
+Cancel preservation and fullscreen edit/recheck. Then requested fixed window
+geometry and removal of unnecessary scrollbars. New private/l6/MCLA-Launcher.exe
+SHA256 A665EB7D... is accepted: owner confirms no scrollbars, clipping or Cancel
+regression. M8-019 is complete; next is M8-004 actual render targets. Main and all six operation dialogs have no resize
+frame/maximize. Overflow-only scrolling remains for constrained work areas, with
+coupled axes and offset reset covered by native tests. l5 remains unchanged.
+The accepted l5 behavior adds
+available collection-parent prefill for Create Empty Profile, automatic background
+startup readiness and renewal of unchanged expired checks. Relevant edits require
+highlighted CHECK SETUP; navigation, modal Cancel and successful unchanged
+Save/Verify do not invalidate. Failed Verify explicitly blocks previous approval.
+All backend callbacks are serialized; worker results bind draft generation,
+profile root and GPU inventory. Close hides/drains a pending checker before the
+controller is destroyed. No detached callbacks or retry loop after failure.
+Optional collection-parent.dat remembers successful create/import/copy/restore
+parents; old preferences stay v1-compatible. Without a valid hint, the selected
+acknowledged managed profile's parent is suggested. No implicit creation/migration.
+Primary final fresh l6 build: UI855/0 twice, controller153/0, import31/0,
+staging63/0 and production worker-thread preflight4/0. AST scan/3rules and diff
+check pass. All17 receipt files verify. Host9195117A, manifest9C6BEA71 and
+ticket6C2FA6EA stay identical; l2/l3/l4/l5 launcher hashes unchanged. Nine120DPI
+hidden renders inspected; native hidden edit/combo text is not a visible-render proof.
+No actual game launch or personal prefs/save writes. Production preflight used
+a fresh synthetic TEMP profile, preserved its bytes/inventory and created no
+session. Earlier l4 helper gates remain linked evidence, not new gameplay claims.
+Existing MAIN and l2/build preferences should stay unchanged; no reimport.
+Render-target inspection confirms current integer1/2 paths720p/1440p;1080p needs
+separate renderer/guest-mode proof,2160p needs scale3 admission/runtime validation.
+Do not represent a1920x1080 window as a1920x1080 render target.
+Earlier l3 import-clears-drafts regression was reproduced and fixed; owner now
+accepts tabs/Ctrl+Tab/path preservation. l3 launcher138E1CB9 remains unchanged.
+Its historical test counts and signed admission are retained in UI evidence.
+Existing preferences still point to l2/build and MAIN; keep those, no reimport.
+No actual prefs/saves/l2/l3/l4/l5 modifications. Source0.20.2.0 records M8-019
+acceptance; accepted l6 binaries are not rebuilt for the source version bump.
+[UI evidence](evidence/M8-launcher-ui-20261011.md),
+[owner check](internal-launcher-ui-check.md). Hidden renders fit but do not draw
+edit/combo text, so no full visible UI/physical keyboard PASS is inferred.
+Source VERSION0.20.2.0; accepted l2
 remains its original0.19.0.0 and has not been rebuilt/replaced.
 Owner confirms all requested controls/audio/AltEnter/F10/reload/name/save and
 launcher-close/game-survival tests. Exact sessions, snapshots and image agree.
@@ -71,15 +113,15 @@ public key embedded in src/mcla_build_lease_public_key.h. Never recreate it duri
 ordinary builds or assume repository backup contains the private key.
 [Expiry evidence](evidence/M8-build-expiry-20261011.md),
 [signing/operator policy](test-build-expiry.md). Original l1 remains untouched.
-Explicit720p/1080p/1440p/2160p render targets requested for M8-004; l2 still has
-1x/2x. Do not present that follow-up as implemented.
+Explicit720p/1080p/1440p/2160p render targets requested for M8-004. l5 names the
+existing720p/1440p choices;1080p/2160p remain unavailable, not implemented.
 Original p1 is unchanged. Owner explicitly imported MAIN and tested it; no
 candidate or personal data was sent to volunteers.
 All15 mandatory tasks are committed complete; M7-005 is deferred without PASS.
 M7-015 commit3a16edd and independent aggregate review GO; M7 closure source0.19.0.0.
 Closure commit d6ca114823dd3af0c3db2fe9b18522a0e8e9f15f was pushed and remote main
 verified equal. This follow-up handoff records that completed publication.
-Weekly usage3% used/97% remaining after M8-015 commit;
+Weekly usage3% used/97% remaining after M8-016 commit;
 check after each closed task, stop at30% remaining. Never infer physical PASS.
 
 Recent commits: e0ee93f events,8da30b0 profile/source integration,39c294e save
@@ -168,8 +210,9 @@ Primary owns README-AI/current-state/task status/commits. Independent acceptance
 and publication reviews returned GO; final docs and dependency/parent push passed.
 Scope/native safety and owner return reviews pass. The two-task M8 checkpoint
 is GO for UI/UX refinement, not milestone closure. Primary owns final tests,
-new-candidate staging and review; UI subagent owns only UI cpp/header/tests.
-Keep l2 unchanged. Next M8-019, then render targets/baseline bugs;60FPS,
+new-candidate staging and review; all delegated code writers are frozen.
+Keep l2/l3/l4/l5/l6 unchanged. M8-019 final owner acceptance and review are complete;
+next actual render targets in M8-004 after the task commit and live usage check, then baseline bugs;60FPS,
 performance and volunteer distribution remain open.
 Use l2 with the existing MAIN; never import p1 again or overwrite the live profile.
 Independent architecture/privacy audits found current launcher bundle-root locks

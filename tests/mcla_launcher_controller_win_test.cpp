@@ -14,6 +14,7 @@
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <optional>
 #include <set>
 
 #if !defined(MCLA_LAUNCHER_CONTROLLER_TESTING)
@@ -141,6 +142,7 @@ UiRequest Settings(const Preferences &p) {
   r.build_root = std::filesystem::path(p.build_root).wstring();
   r.game_root = std::filesystem::path(p.game_root).wstring();
   r.gpu_name = L"Fixture"; r.resolution_scale = 2; r.vsync = true; r.fullscreen = false;
+  r.selected_profile_id = p.library.selected_id;
   return r;
 }
 std::filesystem::path OnlySession(const std::filesystem::path &profile) {
@@ -270,6 +272,240 @@ bool CrossBuildMatrix(const std::filesystem::path &root,
         "independent final snapshots preserve the correct profile lineage");
   return true;
 }
+
+std::optional<std::map<std::filesystem::path,std::string>> FixtureInventory(
+    const std::filesystem::path &root) {
+  std::map<std::filesystem::path,std::string> result;
+  size_t count=0;
+  for(const auto &entry:std::filesystem::recursive_directory_iterator(root)) {
+    if(++count>4096 || entry.is_symlink()) return std::nullopt;
+    const auto relative=entry.path().lexically_relative(root);
+    if(entry.is_directory()) result.emplace(relative,"directory");
+    else if(entry.is_regular_file()) {
+      // Persistent lock handles are deliberately exclusive. Their pathname and
+      // size still detect creation/removal without bypassing the held lock.
+      if(entry.path().filename()==L".mcla-writer.lock")
+        result.emplace(relative,"lock:"+std::to_string(entry.file_size()));
+      else {
+        auto hash=HashFile(entry.path()); if(!hash) return std::nullopt;
+        result.emplace(relative,*hash);
+      }
+    } else return std::nullopt;
+  }
+  return result;
+}
+
+bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
+                           const std::filesystem::path &build,
+                           const std::filesystem::path &game,
+                           const std::filesystem::path &bad_build) {
+  const auto matrix=root/L"preflight";
+  const auto build_before=FixtureInventory(build), game_before=FixtureInventory(game);
+  if(!build_before || !game_before) return false;
+  for(const auto &path:{matrix,matrix/L"store",matrix/L"profiles",matrix/L"bad-game"})
+    if(!CreateDirectoryW(path.c_str(),nullptr)) return false;
+  if(!NewFile(matrix/L"bad-game/default.xex","wrong")) return false;
+  auto store=OpenPreferenceStore((matrix/L"store").wstring()); if(!store) return false;
+  Preferences p; p.build_root=U16(build); p.game_root=U16(game); p.gpu_name=u"Fixture"; p.resolution_scale=2;
+  auto profile=CreateManagedProfile(p,(matrix/L"profiles").wstring(),u"Preflight",store->directory());
+  if(!profile) return false;
+  p.library.entries.push_back(*profile); p.library.selected_id=profile->id;
+  if(!store->Save(p)) return false;
+  const std::filesystem::path profile_root(profile->root);
+  if(!NewFile(profile_root/L"user/preserved.bin","PREFLIGHT_ORIGINAL\n")) return false;
+  LauncherController controller(std::move(*store));
+  auto request=Settings(p); request.fullscreen=true; // Unsaved draft must stay unsaved.
+  const auto run_check=[&](const UiRequest &r,LaunchReadiness expected,const char *label) {
+    auto before=FixtureInventory(matrix);
+    const auto view=controller.Dispatch(UiAction::CheckLaunch,r);
+    auto after=FixtureInventory(matrix);
+    Check(view.readiness==expected && !view.readiness_reason.empty() &&
+          !view.running && !controller.running(),label);
+    Check(before && after && *before==*after,
+          "preflight preserves every fixture file directory preference and save without new output");
+    return view;
+  };
+  Check(controller.Dispatch(UiAction::Refresh,{}).readiness==LaunchReadiness::Unchecked,
+        "ordinary refresh does not invent readiness");
+  const auto ready=run_check(request,LaunchReadiness::Ready,"valid exact-profile preflight is Ready without a child");
+  Check(!ready.fullscreen && request.fullscreen && std::filesystem::is_empty(profile_root/L"sessions"),
+        "read-only preflight uses drafts without persisting them or creating a session");
+  Check(controller.Dispatch(UiAction::Refresh,{}).readiness==LaunchReadiness::Unchecked,
+        "readiness is not persisted across unrelated controller responses");
+  auto invalid=request; invalid.selected_profile_id.clear();
+  run_check(invalid,LaunchReadiness::Blocked,"missing acknowledged request profile is Blocked");
+  invalid=request; invalid.selected_profile_id="11111111111111111111111111111111";
+  run_check(invalid,LaunchReadiness::Blocked,"different request profile cannot borrow selected profile readiness");
+  invalid=request; invalid.gpu_name=L"Unavailable fixture GPU";
+  run_check(invalid,LaunchReadiness::Blocked,"unavailable exact GPU is Blocked");
+  invalid=request; invalid.vsync=false;
+  run_check(invalid,LaunchReadiness::Blocked,"unsupported stock VSync Off is Blocked");
+  invalid=request; invalid.resolution_scale=3;
+  run_check(invalid,LaunchReadiness::Blocked,"unsupported render scale is Blocked");
+  invalid=request; invalid.build_root=bad_build.wstring();
+  run_check(invalid,LaunchReadiness::Blocked,"malformed build inventory is Blocked");
+  invalid=request; invalid.game_root=(matrix/L"bad-game").wstring();
+  run_check(invalid,LaunchReadiness::Blocked,"wrong game inventory is Blocked");
+  {
+    auto guard=fs::OpenDirectory(profile_root.wstring()); if(!guard) return false;
+    auto writer=fs::AcquireWriterLock(*guard); if(!writer) return false;
+    const auto busy=run_check(request,LaunchReadiness::Blocked,"busy profile is Blocked without snapshot or session");
+    Check(busy.readiness_reason.find(L"writer lock")!=std::wstring::npos,
+          "busy profile failure identifies exclusive writer admission");
+  }
+  run_check(request,LaunchReadiness::Ready,"released profile lock permits a fresh Ready check");
+  if(!MoveFileExW((profile_root/L".mcla-writer.lock").c_str(),(matrix/L"preserved-lock").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  run_check(request,LaunchReadiness::Blocked,"missing profile lock is Blocked and never recreated by Check");
+  if(!MoveFileExW((matrix/L"preserved-lock").c_str(),(profile_root/L".mcla-writer.lock").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  if(!MoveFileExW((profile_root/L"logs").c_str(),(matrix/L"preserved-logs").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  run_check(request,LaunchReadiness::Blocked,"missing required profile child is Blocked without repair");
+  if(!MoveFileExW((matrix/L"preserved-logs").c_str(),(profile_root/L"logs").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  if(!NewFile(profile_root/L"pending-operation.dat","fixture pending\n")) return false;
+  run_check(request,LaunchReadiness::Blocked,"pending profile operation is Blocked without clearing marker");
+  if(!MoveFileExW((profile_root/L"pending-operation.dat").c_str(),(matrix/L"preserved-pending.dat").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  const auto unfinished=profile_root/L"sessions/11111111111111111111111111111111";
+  if(!CreateDirectoryW(unfinished.c_str(),nullptr) || !NewFile(unfinished/L"state.txt","running\n")) return false;
+  run_check(request,LaunchReadiness::Blocked,"unfinished session is Blocked and retained");
+  if(!MoveFileExW(unfinished.c_str(),(matrix/L"preserved-unfinished").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  const auto marker=profile_root/L"managed-profile.dat";
+  if(!MoveFileExW(marker.c_str(),(matrix/L"preserved-marker.dat").c_str(),MOVEFILE_WRITE_THROUGH) ||
+      !NewFile(marker,"MCLA managed profile v1\n11111111111111111111111111111111\n")) return false;
+  run_check(request,LaunchReadiness::Blocked,"changed managed profile identity is Blocked without adoption");
+  if(!MoveFileExW(marker.c_str(),(matrix/L"rejected-marker.dat").c_str(),MOVEFILE_WRITE_THROUGH) ||
+      !MoveFileExW((matrix/L"preserved-marker.dat").c_str(),marker.c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  const auto name_root=profile_root/L"user/B13EBABEBABEBABE";
+  if(!CreateDirectoryW(name_root.c_str(),nullptr) ||
+      !NewFile(name_root/L"local-display-name.txt","INVALID\nNAME")) return false;
+  run_check(request,LaunchReadiness::Blocked,"invalid persisted in-game name is Blocked without rewriting");
+  if(!MoveFileExW((name_root/L"local-display-name.txt").c_str(),
+      (matrix/L"rejected-name.txt").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  const auto reject_start=[&](const char *label) {
+    const auto before=FixtureInventory(profile_root/L"user");
+    // Play may save settings, unlike Check. Use the original persisted settings;
+    // this assertion covers no session preparation or save mutation on failure.
+    const auto view=controller.Dispatch(UiAction::Play,Settings(p));
+    const auto after=FixtureInventory(profile_root/L"user");
+    Check(!view.running && !controller.running() &&
+          std::filesystem::is_empty(profile_root/L"sessions") &&
+          before && after && *before==*after,label);
+  };
+  const auto linked_source=matrix/L"hardlink-source.bin";
+  const auto linked_user=profile_root/L"user/hardlink-fixture.bin";
+  if(!NewFile(linked_source,"HARDLINK_FIXTURE\n") ||
+      !CreateHardLinkW(linked_user.c_str(),linked_source.c_str(),nullptr)) return false;
+  run_check(request,LaunchReadiness::Blocked,"hardlinked save is Blocked before claiming snapshot eligibility");
+  reject_start("hardlinked save rejects actual Play before session preparation without changing saves");
+  if(!MoveFileExW(linked_user.c_str(),(matrix/L"rejected-hardlink.bin").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+
+  const auto ads_user=profile_root/L"user/ads-fixture.bin";
+  const std::filesystem::path ads_stream(ads_user.wstring()+L":fixture");
+  if(!NewFile(ads_user,"ADS_DEFAULT_FIXTURE\n") || !NewFile(ads_stream,"ADS_PRIVATE_FIXTURE\n")) return false;
+  run_check(request,LaunchReadiness::Blocked,"alternate-stream save is Blocked before claiming snapshot eligibility");
+  reject_start("alternate-stream save rejects actual Play before session preparation without changing saves");
+  Check(Read(ads_stream)=="ADS_PRIVATE_FIXTURE\n","rejected save alternate stream remains byte-identical");
+  if(!MoveFileExW(ads_user.c_str(),(matrix/L"rejected-ads.bin").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+
+  const auto fingerprint=HashFile(build/L"mcla-build.manifest"); if(!fingerprint) return false;
+  const auto obstructed_cache=profile_root/L"cache"/std::wstring(fingerprint->begin(),fingerprint->end());
+  if(!NewFile(obstructed_cache,"NOT_A_CACHE_DIRECTORY\n")) return false;
+  run_check(request,LaunchReadiness::Blocked,"regular file at build-specific cache is Blocked without replacement");
+  reject_start("cache obstruction rejects actual Play before session preparation without changing saves");
+  if(!MoveFileExW(obstructed_cache.c_str(),(matrix/L"rejected-cache-file.bin").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  run_check(request,LaunchReadiness::Ready,"fresh check after explicit fixture recovery is Ready");
+  const auto build_after=FixtureInventory(build), game_after=FixtureInventory(game);
+  Check(build_after && game_after && *build_before==*build_after && *game_before==*game_after,
+        "all read-only checks preserve immutable build and game inventories");
+  return true;
+}
+bool CollectionParentMatrix(const std::filesystem::path &root,
+                            const std::filesystem::path &build,
+                            const std::filesystem::path &game) {
+  const auto matrix=root/L"collection-hint", local=matrix/L"store";
+  const auto a=matrix/L"collection-a", b=matrix/L"collection-b", c=matrix/L"collection-c";
+  for(const auto &path:{matrix,local,a,b,c}) if(!CreateDirectoryW(path.c_str(),nullptr)) return false;
+  auto store=OpenPreferenceStore(local.wstring()); if(!store) return false;
+  Preferences p; p.build_root=U16(build); p.game_root=U16(game); p.gpu_name=u"Fixture";
+  auto original=CreateManagedProfile(p,a.wstring(),u"Original",store->directory()); if(!original) return false;
+  p.library.entries.push_back(*original); p.library.selected_id=original->id;
+  auto external=CreateManagedProfile(p,c.wstring(),u"Register later",store->directory()); if(!external) return false;
+  if(!store->Save(p)) return false;
+  const std::filesystem::path original_root(original->root);
+  const auto hint=local/L"collection-parent.dat";
+  auto controller=std::make_unique<LauncherController>(std::move(*store));
+  const auto readonly_hint=[&](const std::wstring &expected,const char *label) {
+    const auto before=FixtureInventory(matrix);
+    const auto view=controller->Dispatch(UiAction::Refresh,{});
+    controller->Dispatch(UiAction::CheckLaunch,Settings(p));
+    const auto after=FixtureInventory(matrix);
+    Check(view.collection_parent==expected,label);
+    Check(before && after && *before==*after,"collection hint Refresh and Check never create repair or save files");
+  };
+  readonly_hint(a.wstring(),"old preferences without optional hint infer acknowledged profile collection not user folder");
+  Check(!std::filesystem::exists(hint),"fallback does not migrate old preferences or auto-save a hint");
+  UiRequest create; create.profile_root=b.wstring(); create.profile_label=L"Created in B";
+  const auto created=controller->Dispatch(UiAction::CreateProfile,create);
+  Check(created.library.entries.size()==2 && created.library.selected_id==original->id &&
+      created.collection_parent==b.wstring() && std::filesystem::exists(hint),
+      "explicit create remembers canonical collection without changing selected profile");
+  if(created.library.entries.size()!=2 || !std::filesystem::exists(hint)) return false;
+  const auto saved_hint=Read(hint), saved_preferences=Read(local/L"preferences.dat");
+  controller.reset();
+  auto reopened=OpenPreferenceStore(local.wstring()); if(!reopened) return false;
+  Check(reopened->preferences().library.entries.size()==2 &&
+      reopened->preferences().library.selected_id==original->id && Read(local/L"preferences.dat")==saved_preferences,
+      "hint sidecar survives ordinary version-one preference reload without schema or byte changes");
+  controller=std::make_unique<LauncherController>(std::move(*reopened));
+  readonly_hint(b.wstring(),"remembered collection wins over selected profile fallback after reopen");
+  UiRequest failed=create; failed.profile_root=c.wstring(); failed.profile_label=L"";
+  controller->Dispatch(UiAction::CreateProfile,failed);
+  controller->Dispatch(UiAction::DuplicateProfile,failed);
+  failed.profile_label=L"Failed import"; failed.legacy_source_root=(matrix/L"missing/user").wstring();
+  controller->Dispatch(UiAction::ImportLegacy,failed);
+  failed.legacy_source_root=(matrix/L"missing-snapshot").wstring();
+  controller->Dispatch(UiAction::RestoreSnapshot,failed);
+  Check(Read(hint)==saved_hint,"failed create duplicate import and restore never remember requested parent");
+  UiRequest registration; registration.profile_root=std::filesystem::path(external->root).wstring();
+  registration.profile_label=L"External existing";
+  const auto registered=controller->Dispatch(UiAction::RegisterManaged,registration);
+  Check(registered.library.entries.size()==3 && registered.collection_parent==b.wstring() && Read(hint)==saved_hint,
+      "registering arbitrary existing root does not change collection hint");
+  if(!MoveFileExW(hint.c_str(),(matrix/L"preserved-valid-hint.dat").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  const auto utf8=[](const std::filesystem::path &path) {
+    const auto encoded=path.u8string(); return std::string(encoded.begin(),encoded.end());
+  };
+  const std::string prefix="MCLA-COLLECTION-PARENT-V1\n";
+  const std::vector<std::string> invalid_hints{
+      "unknown version",prefix+std::string(1,static_cast<char>(0xff)),
+      prefix+utf8(matrix/L"missing"),prefix+utf8(original_root/L"user"),
+      prefix+utf8(build),prefix+utf8(local),prefix+"C:\\"};
+  unsigned index=0;
+  for(const auto &bytes:invalid_hints) {
+    if(!NewFile(hint,bytes)) return false;
+    readonly_hint(a.wstring(),"malformed unavailable nested or protected hint is ignored in favor of valid fallback");
+    if(!MoveFileExW(hint.c_str(),(matrix/(L"rejected-hint-"+std::to_wstring(index++)+L".dat")).c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  }
+  const auto linked=matrix/L"linked-hint-source.dat";
+  if(!NewFile(linked,saved_hint) || !CreateHardLinkW(hint.c_str(),linked.c_str(),nullptr)) return false;
+  readonly_hint(a.wstring(),"unsafe hardlinked hint is ignored without modification");
+  if(!MoveFileExW(hint.c_str(),(matrix/L"rejected-linked-hint.dat").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  const auto marker=original_root/L"managed-profile.dat";
+  if(!MoveFileExW(marker.c_str(),(matrix/L"preserved-managed-marker.dat").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  readonly_hint(L"","missing managed marker prevents fallback from unacknowledged selected root");
+  if(!MoveFileExW((matrix/L"preserved-managed-marker.dat").c_str(),marker.c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  // A failed optional hint write must not misreport completed profile creation.
+  if(!CreateDirectoryW(hint.c_str(),nullptr)) return false;
+  const auto warned=controller->Dispatch(UiAction::CreateProfile,create);
+  Check(warned.library.entries.size()==4 && warned.status.find(L"profile operation succeeded")!=std::wstring::npos &&
+      std::filesystem::is_directory(hint) && warned.library.selected_id==original->id,
+      "hint publication failure preserves successful creation and reports explicit warning");
+  if(!MoveFileExW(hint.c_str(),(matrix/L"rejected-hint-directory").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  UiRequest copy; copy.profile_root=c.wstring(); copy.profile_label=L"Copy to C";
+  const auto copied=controller->Dispatch(UiAction::DuplicateProfile,copy);
+  Check(copied.library.entries.size()==5 && copied.collection_parent==c.wstring() &&
+      copied.library.selected_id==original->id && std::filesystem::exists(hint),
+      "successful duplicate remembers new collection while preserving selected source");
+  return true;
+}
 } // namespace
 
 int wmain(int argc, wchar_t **argv) {
@@ -324,6 +560,7 @@ int wmain(int argc, wchar_t **argv) {
   const auto prefs_before_verify = Read(root / L"store-a/preferences.dat");
   auto verify_request=request; verify_request.fullscreen=!request.fullscreen;
   const auto verified=first.Dispatch(UiAction::VerifyRoots,verify_request);
+  Check(!verified.verification_failed,"successful explicit verification reports structured success");
   const auto manifest_hash=HashFile(build / L"mcla-build.manifest");
   Check(manifest_hash && verified.status.find(std::wstring(manifest_hash->begin(),manifest_hash->end()))!=std::wstring::npos &&
       !first.running() && std::filesystem::is_empty(main_root / L"sessions"), "read-only verify exposes exact build identity without child or session");
@@ -331,10 +568,14 @@ int wmain(int argc, wchar_t **argv) {
       "verify retains unsaved form settings without persisting them");
   auto bad_verify=request; bad_verify.build_root=bad_build.wstring();
   const auto verify_failed=first.Dispatch(UiAction::VerifyRoots,bad_verify);
+  Check(verify_failed.verification_failed,"failed explicit verification invalidates previous UI readiness");
   Check(verify_failed.status.find(L"Integrity verified")==std::wstring::npos && !first.running() &&
       Read(root / L"store-a/preferences.dat")==prefs_before_verify, "rejected verify does not claim integrity or mutate preferences");
   const auto initial = first.Dispatch(UiAction::Play, request);
   Check(initial.running && first.running(), "real controller starts only the synthetic self-child");
+  Check(initial.readiness==LaunchReadiness::Running &&
+        first.Dispatch(UiAction::CheckLaunch,request).readiness==LaunchReadiness::Running,
+        "owned running session overrides readiness and refuses another preflight");
   if (!first.running()) { std::wcerr << initial.status << L'\n'; return 1; }
   const auto session = OnlySession(main_root);
   Check(!session.empty(), "one exact session created");
@@ -482,6 +723,9 @@ int wmain(int argc, wchar_t **argv) {
   branch.profile_label = L"Empty snapshot restore";
   branch.legacy_source_root = (session / L"before-user").wstring();
   const auto restored = first.Dispatch(UiAction::RestoreSnapshot, branch);
+  Check(restored.collection_parent==(root/L"profiles").wstring() &&
+      std::filesystem::exists(root/L"store-a/collection-parent.dat"),
+      "successful snapshot restore remembers its destination collection");
   Check(restored.library.entries.size() == 4 && restored.library.selected_id == main_profile->id,
         "restore registers an independent branch while keeping original selected");
   if (restored.library.entries.size() != 4) { std::wcerr << restored.status << L'\n'; return 1; }
@@ -558,6 +802,8 @@ int wmain(int argc, wchar_t **argv) {
       Read(main_root / L"user/B13EBABEBABEBABE/local-display-name.txt") == "FixtureName" &&
       OnlySession(main_root) == session, "recovery never clears original blocker overwrites source or starts a child");
   Check(CrossBuildMatrix(root, build, game), "cross-build matrix completed without fixture setup failure");
+  Check(ReadOnlyPreflightMatrix(root, build, game, bad_build), "read-only launch preflight matrix completed");
+  Check(CollectionParentMatrix(root,build,game),"optional collection parent hint matrix completed");
   std::cout << "Launcher controller: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

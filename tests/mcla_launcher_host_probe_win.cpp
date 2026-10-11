@@ -12,6 +12,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <map>
 
@@ -60,20 +61,21 @@ std::expected<std::filesystem::path, std::wstring> SoleSession(const std::filesy
 }
 int Probe(int argc, wchar_t **argv) {
   std::map<std::wstring, std::wstring> options;
-  bool verify_only = false;
+  bool verify_only = false, preflight_only = false;
   for (int i = 1; i < argc; ++i) {
     const std::wstring_view arg(argv[i]);
     if (arg == L"--verify-only" && !verify_only) { verify_only = true; continue; }
+    if (arg == L"--preflight-only" && !preflight_only) { preflight_only = true; continue; }
     const auto equal = arg.find(L'=');
     if (!arg.starts_with(L"--") || equal == arg.npos || equal + 1 == arg.size()) return 2;
     const auto key = arg.substr(2, equal - 2);
     if ((key != L"build" && key != L"game" && key != L"gpu") ||
         !options.emplace(key, arg.substr(equal + 1)).second) return 2;
   }
-  if (!options.contains(L"build") || !options.contains(L"game") ||
+  if ((verify_only && preflight_only) || !options.contains(L"build") || !options.contains(L"game") ||
       (!verify_only && !options.contains(L"gpu"))) {
     std::cerr << "Required: --build=<exact staged root> --game=<exact supported root> "
-                 "[--verify-only | --gpu=<exact adapter name>]\n";
+                 "[--verify-only | [--preflight-only] --gpu=<exact adapter name>]\n";
     return 2;
   }
   auto build_root = fs::OpenDirectory(options.at(L"build"));
@@ -123,6 +125,37 @@ int Probe(int argc, wchar_t **argv) {
   request.build_root = build->path(); request.game_root = game->path();
   request.gpu_name = options.at(L"gpu"); request.resolution_scale = 1;
   request.vsync = true; request.fullscreen = false;
+  request.selected_profile_id = profile->id;
+  if (preflight_only) {
+    const auto inventory = [&]() {
+      std::map<std::filesystem::path,std::string> result;
+      for (const auto &item : std::filesystem::recursive_directory_iterator(root)) {
+        if (item.is_directory()) result[item.path()] = "directory";
+        else if (item.path().filename() == L".mcla-writer.lock")
+          result[item.path()] = "lock:" + std::to_string(item.file_size());
+        else {
+          auto bytes = Read(item.path());
+          if (!bytes) throw std::runtime_error("cannot inventory preflight fixture");
+          result[item.path()] = *bytes;
+        }
+      }
+      return result;
+    };
+    const auto before = inventory();
+    // Match the launcher's worker-thread check while keeping every controller
+    // callback serialized and the controller alive until completion.
+    const auto checked = std::async(std::launch::async, [&controller, request] {
+      return controller.Dispatch(UiAction::CheckLaunch, request);
+    }).get();
+    Check(checked.readiness == LaunchReadiness::Ready && checked.eligibility_expires_utc > 0,
+          "production preflight verifies exact build game GPU profile and signed eligibility");
+    if (checked.readiness != LaunchReadiness::Ready) std::wcerr << checked.readiness_reason << L'\n';
+    Check(!checked.running && !controller.running() && Empty(personal / L"sessions"),
+          "preflight launches no host or session");
+    Check(before == inventory(), "production preflight preserves fixture inventory and bytes");
+    std::cout << "Production read-only preflight: " << checks << " checks, " << failures << " failures\n";
+    return failures ? 1 : 0;
+  }
   const auto start = controller.Dispatch(UiAction::Play, request);
   Check(start.running && controller.running(), "production controller admits guest-free real host");
   if (!controller.running()) { std::wcerr << start.status << L'\n'; return 1; }

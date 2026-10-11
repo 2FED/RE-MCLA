@@ -111,10 +111,14 @@ int wmain(int argc, wchar_t **argv) {
 
   const std::vector<uint8_t> first{1, 2, 0, 4, 255};
   const std::vector<uint8_t> second{9, 8, 7};
+  Check(!fs::AcquireWriterLock(*a, true), "read-only lock probe rejects missing lock");
+  Check(GetFileAttributesW((a_path + L"\\.mcla-writer.lock").c_str()) == INVALID_FILE_ATTRIBUTES,
+        "read-only lock probe does not create a file");
   {
     auto lock = fs::AcquireWriterLock(*a);
     Check(lock.has_value(), "acquire root writer lock");
     Check(!fs::AcquireWriterLock(*a), "same process second lock rejected");
+    Check(!fs::AcquireWriterLock(*a, true), "read-only probe rejects busy writer");
     Check(ProbeChild(a_path) == 3, "second process same root rejected");
     Check(ProbeChild(b_path) == 0, "second process different root independent");
     auto b_lock = fs::AcquireWriterLock(*b);
@@ -160,6 +164,7 @@ int wmain(int argc, wchar_t **argv) {
     }
   }
   Check(ProbeChild(a_path) == 0, "lock released by close despite persistent file");
+  Check(fs::AcquireWriterLock(*a, true).has_value(), "read-only probe accepts released existing lock");
   Check(GetFileAttributesW((a_path + L"\\.mcla-writer.lock").c_str()) != INVALID_FILE_ATTRIBUTES, "lock file not deleted");
 
   const auto bad_path = root + L"\\bad-lock";

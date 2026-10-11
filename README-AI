@@ -1681,7 +1681,7 @@ baseline triage; no inherited 2–10-week platform estimate or FPS guarantee.
   b67e1be; SDK hard-exit/reporting remains M8-017, not graceful teardown PASS.
 - [ ] **M8-017** Triage and fix reproduced baseline graphics/audio/performance/lifecycle problems, prioritizing owner-visible paint/shimmer and busy areas. Track each defect with bounded repro, independent review and regression; unresolved cases need an explicit reviewed disposition, not invented fixes.
 - [-] **M8-018** Prepare the internal volunteer workflow: allowlisted eligible build staging, independent tester profiles, content/privacy audit, explicit diagnostic export and exact-build bug reports. Owner-approved signed14-day test-build expiry with bounded online extensions is implemented in private l2; signed allowlist publication and live native extension/cache pass. Real-title/tester acceptance and export remain pending. No recursive ZIP of a private seeded bundle, automatic uploads or transfer before content gates. [Expiry evidence](docs/evidence/M8-build-expiry-20261011.md), [operator procedure](docs/test-build-expiry.md).
-- [-] **M8-019** Owner-requested internal launcher usability pass before volunteers: a clear Play view with profile/settings, separate Profiles and Setup views for rare technical actions, preserved keyboard/DPI access and draft settings. Keep existing controller/save semantics and l2 intact; native navigation tests plus new-candidate visible acceptance required. No framework rewrite or final release design.
+- [x] **M8-019** Internal launcher usability accepted: l3 tabs/Ctrl+Tab/path preservation; l5 automatic startup/green readiness, parent prefill, Cancel and fullscreen edit/recheck; l6 fixed geometry without unwanted scrollbars or clipping. UI855/0 twice, controller153/0, import31/0, staging63/0, production worker preflight4/0 and independent GO. Accepted l6 launcher A665EB7D and host9195117A remain unchanged; source0.20.2.0 records closure. Supported720p/1440p targets are named; genuine1080p/2160p remains M8-004. Previous candidates and live saves preserved. [Evidence](docs/evidence/M8-launcher-ui-20261011.md), [accepted check](docs/internal-launcher-ui-check.md). No framework rewrite or final release design.
 
 ### Deliverables
 
@@ -1714,6 +1714,35 @@ gates. Public installation/distribution remains M9; higherFPS/platform work need
 a separate future scope decision. No content is sent to volunteers by this plan.
 
 ### Checkpoint log
+
+- 2026-10-11 — M8-019 accepted: **3 complete,6 deferred,19 total; YELLOW**.
+  Owner l6 geometry/Cancel PASS completes l3/l5 functional acceptance. Native
+  UI855/controller153/import31, no-write helper regressions and independent
+  review pass. Source0.20.2.0; accepted binaries unchanged. One task completed
+  since the M8-015/016 mandatory review. Next M8-004 genuine render targets;
+  integer GPU scaling makes1080p a renderer feasibility gate, not a UI rename.
+  M8 remains open; no push or volunteer delivery.
+
+- 2026-10-11 — M8-019 follow-up approved after l4 delivery: **2 complete,
+  6 deferred,19 total; YELLOW**. Add available collection-parent prefill and
+  background startup/unchanged-expiry checks; dirty settings alone require an
+  explicit highlighted recheck. This adds worker lifetime, serialized callbacks
+  and stale-result rejection gates, plus compatible optional folder-hint storage.
+  No personal-save or host changes. Estimate one further implementation/review
+  cycle and a short visible successor check; next M8-019 acceptance then M8-004.
+  The l4 results remain valid for l4, not automatic successor acceptance.
+
+- 2026-10-11 — M8-019 scope checkpoint after owner l3 feedback: **2 complete,
+  6 deferred,19 total; YELLOW**. Owner confirms tabs,Ctrl+Tab and path preservation.
+  Usability acceptance now also needs operation-specific dialogs and truthful
+  launch readiness, not only section layout. Primary/independent preflight review
+  separates read-only checks from settings/cache/lock creation; signed eligibility,
+  stale-draft invalidation and modal cancellation are new mandatory tests. This
+  expands the UI task by more than25%; estimate now one implementation/review
+  cycle plus a new visible check, no milestone closure estimate. GPU internals
+  support integer scale only: named720p/1440p can be shown,1080p and physically
+  validated2160p stay M8-004. Next M8-019 acceptance, then M8-004. No changes to
+  save identity, host timing or external distribution authority.
 
 - 2026-10-11 — Mandatory review after M8-015/016: **2 complete,6 deferred,
   19 tasks total; YELLOW — launcher/data foundation accepted, M8 open**. Primary
@@ -2028,7 +2057,7 @@ The criterion below is additional to the task wording and universal Definition o
 | M8-016 | Named profile selection changes only a pointer; cross-build canonical-profile lock, complete explicit legacy import, atomic settings, archive-backed recovery and bounded history preserve data / two-build one-profile and separate-profile fixture matrix plus physical successor reload |
 | M8-017 | Prioritized baseline defects have reproducible evidence, reviewed fixes and targeted regression, or explicit owner-reviewed residual dispositions / bug ledger and before/after records |
 | M8-018 | Allowlisted eligible volunteer build excludes personal/game/private payloads; independent tester setup and explicit diagnostic export work without touching owner roots / sentinel staging/privacy audit and tester smoke |
-| M8-019 | Main Play flow is readable, technical setup/profile maintenance separated, navigation preserves drafts and never invokes save/launch implicitly / native page/keyboard/DPI tests and visible candidate acceptance |
+| M8-019 | Readable Play and START GAME color+text reflect no-write, draft-bound readiness checked in background at startup and renewed when unchanged; relevant edits require explicit recheck, stale results cannot approve changed state; scoped profile dialogs preserve drafts/Cancel and suggest an available collection parent without creating anything; fixed main/modal geometry shows scrollbars only on overflow / native UI/modal/worker-lifetime/readiness/folder-hint/overflow tests, production preflight, independent review and visible successor acceptance |
 
 ### M9 criteria
 

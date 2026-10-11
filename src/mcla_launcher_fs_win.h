@@ -40,14 +40,16 @@ class WriterLock {
  private:
   explicit WriterLock(std::unique_ptr<State> state);
   std::unique_ptr<State> state_;
-  friend std::expected<WriterLock, std::wstring> AcquireWriterLock(const DirectoryGuard &);
+  friend std::expected<WriterLock, std::wstring> AcquireWriterLock(const DirectoryGuard &, bool);
 };
 
 std::expected<DirectoryGuard, std::wstring> OpenDirectory(std::wstring_view path);
 std::expected<void, std::wstring> CompareDisjoint(const DirectoryGuard &a, const DirectoryGuard &b);
 // Persistent zero-byte lock file: closing the exclusive handle releases the
 // lock. Never delete a lock to infer that an owner is stale.
-std::expected<WriterLock, std::wstring> AcquireWriterLock(const DirectoryGuard &directory);
+// existing_only probes availability without creating a missing lock file.
+std::expected<WriterLock, std::wstring> AcquireWriterLock(const DirectoryGuard &directory,
+                                                        bool existing_only = false);
 std::expected<std::vector<uint8_t>, std::wstring> ReadFile(
     const DirectoryGuard &directory, std::wstring_view simple_name, size_t maximum_bytes);
 // Requires a caller-held WriterLock for application-level writer coordination.

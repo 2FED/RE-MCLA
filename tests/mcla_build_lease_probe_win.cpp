@@ -28,10 +28,11 @@ int wmain(int argc,wchar_t **argv) {
     else std::cout<<"bytes="<<result->size()<<" (transport only, not authenticated)\n";
     return result?0:1;
   }
-  if(argc!=2) return 2;
-  auto root=mcla::launcher::fs::OpenDirectory(argv[1]);
+  const bool read_only=argc==3 && std::wstring_view(argv[1])==L"--read-only";
+  if(argc!=2 && !read_only) return 2;
+  auto root=mcla::launcher::fs::OpenDirectory(argv[read_only?2:1]);
   if(!root) { std::wcerr<<root.error()<<L"\n"; return 2; }
-  auto result=mcla::lease::CheckBuildLease(*root);
+  auto result=mcla::lease::CheckBuildLease(*root,{},false,false,read_only);
   if(!result) { std::wcerr<<result.error()<<L"\n"; return 1; }
   std::cout<<"SIGNED_BUILD_ADMITTED expires_utc="<<result->expires_utc<<" extended="<<result->extended<<"\n";
   return 0;
