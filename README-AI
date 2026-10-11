@@ -352,6 +352,7 @@ Project delivery cadence:
 
 - Subagents may own bounded, explicitly scoped work or provide independent read-only research and review under the repository-local `AGENTS.md`. Because all agents share one worktree, edit ownership and GUI/runtime operations are serialized; the primary agent retains integration, acceptance testing, task status, commits, usage checks, milestone closure, and pushes.
 - Continue autonomously until the active milestone is reviewed, closed, committed, and pushed; user input/authorization is genuinely required; or observable weekly allowance reaches **30% remaining**, per current repository-local `AGENTS.md`. Older dated 25% overrides are historical, not current policy. After each closed task, read live usage before starting another task. If usage is not exposed, never invent a value—continue to milestone closure or a real blocker and rely on the user to signal an external quota threshold.
+- Active owner exception from2026-10-11 until explicitly cancelled: the30% quota stop is suspended; available allowance may be used down to zero. No automatic expiry. The rule in `AGENTS.md` overrides only this quota condition, not other gates or spending authority.
 - Close one task per commit. A task commit may be created only after that task's acceptance criterion, review, and relevant tests pass.
 - Do not combine unrelated completed task IDs in one commit. If two tasks are inseparable, revise the ledger and dependency rationale before implementation.
 - Recommended task commit subject: `task(Mx-nnn): concise outcome`.

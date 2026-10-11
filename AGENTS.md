@@ -11,6 +11,19 @@ These repository-specific rules supplement the global Codex working rules.
 
 ## Milestone persistence
 
+### Temporary owner usage override
+
+- Owner instruction received 2026-10-11, subsequently clarified to have no time
+  limit: the 30% remaining weekly-allowance stop is suspended. Work may
+  consume the available allowance down to zero; do not stop solely at 30%.
+- This override remains active until the owner explicitly cancels it. There is
+  no automatic expiry; the ordinary 30% rule resumes only after cancellation.
+- Continue observing/reporting actual usage. This changes only the quota stop,
+  not safety, review/testing/commit/push gates, user-only blockers or permission
+  boundaries. It does not authorize buying credits or redeeming usage resets.
+
+### Ordinary policy
+
 - Continue working autonomously on the active milestone until one of these terminal conditions is reached: the milestone is fully reviewed, closed, committed, and pushed; further progress genuinely requires user input or authorization; or the observable remaining weekly usage allowance reaches 30%.
 - Do not stop merely because an individual task is complete while safe, in-scope milestone work remains.
 - After every closed task, read the live ChatGPT Settings -> Usage value (or the interactive Codex `/status` fallback) before starting the next task. Continue only while the observable weekly allowance remains above 30%.

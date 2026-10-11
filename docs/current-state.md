@@ -4,6 +4,11 @@ Updated October 11, 2026 Kyiv. README-AI owns the milestone ledger and dated his
 
 ## Active outcome
 
+Active owner quota override until explicitly cancelled: available usage
+may reach zero, with no30% stop or automatic expiry. AGENTS.md records unchanged safety
+gates. Latest observed weekly remaining allowance81%; no credit/reset purchase.
+M8-019 closed in3fcb2eb. Active implementation: M8-004 actual render targets.
+
 M7 is CLOSED. Owner approved revised M8 on October10: internal launcher first,
 named selectable personal save folders outside builds, baseline Windows/RTX5060
 bug fixes and stock/max60. HigherFPS/platforms/release-ready packaging are later.
