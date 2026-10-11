@@ -91,11 +91,22 @@ store107, process41, build109, game70, snapshots21, import-policy72,
 production-import29, UI399; expiry policy1417/transport26/runtime37. Six native
 symlink cases remain SKIP with Windows1314, never promoted to PASS.
 
-The implementation commit closes M8-015 and includes required M8-016 profile
+Implementation commit b67e1be closes M8-015 and includes required M8-016 profile
 infrastructure plus the already-tested lease dependency. A separate M8-016
-acceptance commit closes its isolation/lineage matrix. This preserves one closed
+acceptance commit at source0.20.1.0 closes its isolation/lineage matrix. This preserves one closed
 task per commit; it does not retrospectively claim an agreed combined task.
 M8-018 remains open for explicit diagnostic export, volunteer acceptance and
 distribution-content gates. Explicit render targets, validated60 and baseline
 bugs are not closed by this launcher acceptance. No source push is authorized
 mid-milestone; the separately approved public allowlist is the only early push.
+
+Final staging63, structural scan and all3 structural-rule tests passed again.
+Explicit73-file staged inventory and dependency/privacy review returned GO;
+no private/generated/game/runtime binaries or SDK WIP entered the implementation
+commit. A transient Git index lock from background status scans cleared without
+deleting any lock or terminating another process; the subsequent commit succeeded.
+
+At the two-task checkpoint the owner separately requested UI/UX refinement.
+M8-019 tracks that next change; functional M8-015 acceptance is not a claim that
+the initial dense UI is tester-ready or visually final. Existing l2 remains the
+accepted gameplay artifact while the new interface is developed independently.

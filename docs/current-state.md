@@ -7,9 +7,11 @@ Updated October 11, 2026 Kyiv. README-AI owns the milestone ledger and dated his
 M7 is CLOSED. Owner approved revised M8 on October10: internal launcher first,
 named selectable personal save folders outside builds, baseline Windows/RTX5060
 bug fixes and stock/max60. HigherFPS/platforms/release-ready packaging are later.
-[Active scope and safety gates](M8-priorities.md). M8-015 accepted and ready for
-its implementation commit; M8-016 separate acceptance commit follows. M8-018
-remains open for volunteer/export gates. Source VERSION0.20.0.0; accepted l2
+[Active scope and safety gates](M8-priorities.md). M8-015 committed b67e1be;
+M8-016 accepted in its separate ledger commit. M8-018 remains open for
+volunteer/export gates. Owner added M8-019 humane launcher UI/UX refinement;
+separate native Play/Profiles/Setup sections, no controller/save-model changes.
+Source VERSION0.20.1.0; accepted l2
 remains its original0.19.0.0 and has not been rebuilt/replaced.
 Owner confirms all requested controls/audio/AltEnter/F10/reload/name/save and
 launcher-close/game-survival tests. Exact sessions, snapshots and image agree.
@@ -40,7 +42,7 @@ Hidden UI layout render did not render edit/combo text; native value assertions
 pass, and owner successfully completed visible setup and the full requested test.
 Spark qwen3.8-27b routine test inventory completed; all7 exact source cases checked.
 Private receipt: private/evidence/M8-launcher-spark-20261010-1.
-Implementation/docs await the M8-015 commit, with M8-016 acceptance separately.
+Implementation committed b67e1be; M8-016 acceptance is recorded separately.
 Three sessions complete/exit0; six snapshots and F10 artifacts hash-verified.
 Successful frame48B04081... shows actual nighttime road/Mazda at1600x900.
 The155-sample audit is incomplete, not performance PASS. Separate automatic
@@ -77,7 +79,7 @@ All15 mandatory tasks are committed complete; M7-005 is deferred without PASS.
 M7-015 commit3a16edd and independent aggregate review GO; M7 closure source0.19.0.0.
 Closure commit d6ca114823dd3af0c3db2fe9b18522a0e8e9f15f was pushed and remote main
 verified equal. This follow-up handoff records that completed publication.
-Weekly usage0% used/100% remaining at the live post-publication check;
+Weekly usage3% used/97% remaining after M8-015 commit;
 check after each closed task, stop at30% remaining. Never infer physical PASS.
 
 Recent commits: e0ee93f events,8da30b0 profile/source integration,39c294e save
@@ -164,10 +166,11 @@ Alpha2/40 keeps historical27M6tuples separate from current31issues.
 
 Primary owns README-AI/current-state/task status/commits. Independent acceptance
 and publication reviews returned GO; final docs and dependency/parent push passed.
-Scope/native safety and owner return reviews pass. Finish separate M8-015 and
-M8-016 commits, checking live usage after each, then the mandatory two-task M8
-checkpoint. Next work is explicit render targets/baseline bugs; no closure of
-60FPS, performance or volunteer distribution follows from launcher acceptance.
+Scope/native safety and owner return reviews pass. The two-task M8 checkpoint
+is GO for UI/UX refinement, not milestone closure. Primary owns final tests,
+new-candidate staging and review; UI subagent owns only UI cpp/header/tests.
+Keep l2 unchanged. Next M8-019, then render targets/baseline bugs;60FPS,
+performance and volunteer distribution remain open.
 Use l2 with the existing MAIN; never import p1 again or overwrite the live profile.
 Independent architecture/privacy audits found current launcher bundle-root locks
 cannot safely protect one external profile across builds. Existing publisher

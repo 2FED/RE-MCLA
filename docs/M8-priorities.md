@@ -17,6 +17,9 @@ work, not mandatory M8 deliverables. M7 remains closed with its existing limits.
 3. Prepare a reviewed successor to p1, preserving the original and an archived
    complete profile. Prove startup, actual F10, save/reload and window/audio
    lifecycle on that exact successor. Source-build PASS is not gameplay PASS.
+   Owner accepted this on l2. Before handing it to volunteers, M8-019 separates
+   the normal Play screen from infrequent Profiles/Setup controls, preserving
+   controller actions, draft settings and keyboard/DPI support. Keep l2 intact.
 4. Measure quiet/busy/race routes, including the reported intersection slowdown,
    and fix baseline Windows bottlenecks and reproducible graphics/audio/lifecycle
    defects. New progression blockers or save hazards interrupt this order.
@@ -139,8 +142,8 @@ guest-free host14 PASS. Owner subsequently approved the one-file DebugBundle
 publication; exact public bytes and native signed extension/cache now PASS.
 The owner subsequently completed l2 controls/audio/AltEnter/F10/reload and
 launcher-close survival. Three exact sessions/snapshots and the real F10 frame
-pass review; controller69 adds literal cross-build isolation. M8-015 closes in
-the implementation commit; M8-016 acceptance is recorded separately. Shutdown
+pass review; controller69 adds literal cross-build isolation. M8-015 is committed
+as b67e1be; M8-016 acceptance closes separately at source0.20.1.0. Shutdown
 reporting, render targets,60 and volunteer export remain open.
 [Owner acceptance](evidence/M8-launcher-owner-acceptance-20261011.md),
 [expiry evidence](evidence/M8-build-expiry-20261011.md).

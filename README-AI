@@ -1672,15 +1672,16 @@ baseline triage; no inherited 2–10-week platform estimate or FPS guarantee.
 - [~] **M8-013** Native macOS ARM64 feasibility deferred to a later platform milestone, without PASS.
 - [~] **M8-014** Native macOS implementation deferred behind that future feasibility gate, without PASS.
 - [x] **M8-015** Internal Windows launcher UI/headless core accepted on l2: exact build/game/profile routing, named RTX5060, stock/VSync-on/1x-2x capabilities and local name/folder actions. Owner controls/audio/AltEnter/F10/reload/UI-close behavior PASS; primary image/integrity and independent reviews agree. Required profile/lease implementation is included in this commit; M8-016 receives its separate acceptance commit. Source0.20.0.0, accepted l2 stays0.19.0.0. [Owner evidence](docs/evidence/M8-launcher-owner-acceptance-20261011.md).
-- [-] **M8-016** Separate immutable build/game roots from personal managed profiles, settings/cache/diagnostics/history; cross-build profile locking, explicit legacy full-profile import, atomic preferences, backup/recovery and compatible history capacity. Preserve p1; never silently merge/reseed or adopt its user folder under incompatible locks.
+- [x] **M8-016** External managed profile isolation accepted: immutable build/game roots, explicit full p1 import, stable profile/name/save reload, before/after archives and cross-build writer exclusion. Controller69 includes two valid different builds/one profile rejection and independent parallel profiles; three owner sessions/six full snapshots verify unchanged lineage. Source0.20.1.0 acceptance commit follows implementation b67e1be; original p1 preserved. [Acceptance matrix](docs/evidence/M8-launcher-owner-acceptance-20261011.md).
   M8-015/016 October10 checkpoint: native GUI399/controller56/production-import29 and foundation suites pass; private l1 staged, exact guest-free host14 PASS. Owner gameplay/reload/F10/UI-close acceptance is pending, not inherited from p1. [Engineering evidence](docs/evidence/M8-launcher-foundation-20261010.md), [first-run test](docs/internal-launcher-owner-test.md). No task closure/commit or external distribution yet.
   October11 final owner return: startup/name/save, controls/audio/AltEnter,
   actual F10, reload and UI-close survival accepted. Exact three sessions and
   snapshots verified; controller69 includes two different builds/one locked
-  profile and simultaneous independent profiles. M8-016 ledger closure follows
-  separately; SDK hard-exit/reporting remains M8-017, not graceful teardown PASS.
+  profile and simultaneous independent profiles. M8-016 closes separately from
+  b67e1be; SDK hard-exit/reporting remains M8-017, not graceful teardown PASS.
 - [ ] **M8-017** Triage and fix reproduced baseline graphics/audio/performance/lifecycle problems, prioritizing owner-visible paint/shimmer and busy areas. Track each defect with bounded repro, independent review and regression; unresolved cases need an explicit reviewed disposition, not invented fixes.
 - [-] **M8-018** Prepare the internal volunteer workflow: allowlisted eligible build staging, independent tester profiles, content/privacy audit, explicit diagnostic export and exact-build bug reports. Owner-approved signed14-day test-build expiry with bounded online extensions is implemented in private l2; signed allowlist publication and live native extension/cache pass. Real-title/tester acceptance and export remain pending. No recursive ZIP of a private seeded bundle, automatic uploads or transfer before content gates. [Expiry evidence](docs/evidence/M8-build-expiry-20261011.md), [operator procedure](docs/test-build-expiry.md).
+- [-] **M8-019** Owner-requested internal launcher usability pass before volunteers: a clear Play view with profile/settings, separate Profiles and Setup views for rare technical actions, preserved keyboard/DPI access and draft settings. Keep existing controller/save semantics and l2 intact; native navigation tests plus new-candidate visible acceptance required. No framework rewrite or final release design.
 
 ### Deliverables
 
@@ -1713,6 +1714,18 @@ gates. Public installation/distribution remains M9; higherFPS/platform work need
 a separate future scope decision. No content is sent to volunteers by this plan.
 
 ### Checkpoint log
+
+- 2026-10-11 — Mandatory review after M8-015/016: **2 complete,6 deferred,
+  19 tasks total; YELLOW — launcher/data foundation accepted, M8 open**. Primary
+  plus independent code/integrity review GO; actual l2 F10 frame/hash, three
+  exit0 sessions, six snapshots, owner reload/UI-close evidence and controller69
+  cross-build matrix pass. Six symlink cases remain SKIP. Existing hard-exit
+  reporting,155-sample incomplete audit, baseline graphics/performance and60
+  remain unresolved; this does not reopen accepted launcher functionality.
+  Owner added M8-019 UI/UX refinement before testers; bounded native sections
+  precede final styling, with no save-model changes. Next M8-019, then explicit
+  render targets and measured baseline triage. Main commits remain local;
+  no milestone closure, broad distribution or physical replay is requested.
 
 - 2026-10-10 — Owner scope review: M8 launcher/profile foundation starts first;
   higher than60 FPS and secondary platforms move to later milestones. **0 complete,
@@ -2015,6 +2028,7 @@ The criterion below is additional to the task wording and universal Definition o
 | M8-016 | Named profile selection changes only a pointer; cross-build canonical-profile lock, complete explicit legacy import, atomic settings, archive-backed recovery and bounded history preserve data / two-build one-profile and separate-profile fixture matrix plus physical successor reload |
 | M8-017 | Prioritized baseline defects have reproducible evidence, reviewed fixes and targeted regression, or explicit owner-reviewed residual dispositions / bug ledger and before/after records |
 | M8-018 | Allowlisted eligible volunteer build excludes personal/game/private payloads; independent tester setup and explicit diagnostic export work without touching owner roots / sentinel staging/privacy audit and tester smoke |
+| M8-019 | Main Play flow is readable, technical setup/profile maintenance separated, navigation preserves drafts and never invokes save/launch implicitly / native page/keyboard/DPI tests and visible candidate acceptance |
 
 ### M9 criteria
 
