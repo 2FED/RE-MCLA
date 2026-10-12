@@ -40,6 +40,40 @@ int main() {
   using namespace mcla::launcher;
   const std::string game = "95DA270942B4BDDBC8DC5EB45AA742AC6BE191D74E430022070D9B9B5AF25048";
   const std::string other_build(64, 'A');
+  // Exact historical and clean-candidate identities are independent of the
+  // production constant, so replacing the old pin cannot silently drop rollback.
+  constexpr std::array<std::string_view,2> reviewed_builds{{
+      "9C6BEA718046F1B22D7FB9C4BEB8E03CC52DD3F466CCFB926CC585059F580BAA",
+      "FED35A361F4A4A10BB03A6BC45072C82924085A0D3ADB8A3298243066DB4A850"}};
+  for (const auto build : reviewed_builds) for (const auto &target : kRenderTargets) {
+    const CapabilityRequest candidate{build,game,TimingMode::Stock,target.id,true};
+    const auto resolved = ResolveCapabilities(candidate);
+    Check(resolved.has_value(), "both exact historical and clean builds retain all four target admissions");
+    if (resolved) {
+      Check(resolved->build_fingerprint == build && resolved->target.id == target.id &&
+            resolved->target.width == target.width && resolved->target.height == target.height &&
+            resolved->target.guest_width == target.guest_width && resolved->target.guest_height == target.guest_height &&
+            resolved->target.scale == target.scale, "two-build admission preserves exact identity and tuple");
+      const auto serialized = SerializeCapabilities(*resolved);
+      Check(serialized.has_value(), "both builds can serialize historical capability records");
+      if (serialized) {
+        const auto fields = Fields(*serialized);
+        Check(fields.contains("build") && fields.at("build") == build &&
+              fields.contains("render_target_id") && fields.at("render_target_id") == std::to_string(target.id) &&
+              fields.contains("world_validation") && fields.at("world_validation") == "not-certified-by-policy" &&
+              fields.contains("fps_measured") && fields.at("fps_measured") == "false",
+              "identity addition cannot certify world quality or measured FPS");
+      }
+    }
+    auto no_vsync = candidate; no_vsync.vsync = false; Reject(no_vsync,CapabilityError::UnsupportedVsync);
+    auto fixed60 = candidate; fixed60.timing = TimingMode::Fixed60; Reject(fixed60,CapabilityError::UnverifiedTiming);
+  }
+  // One-nibble mutations and an unrelated well-formed hash are not admission.
+  for (const auto build : reviewed_builds) for (const auto id : {1080u,2160u}) {
+    std::string stale(build); stale.back() = stale.back() == '0' ? '1' : '0';
+    Reject({stale,game,TimingMode::Stock,id,true},CapabilityError::UntestedTargetBuild);
+    Reject({other_build,game,TimingMode::Stock,id,true},CapabilityError::UntestedTargetBuild);
+  }
   const CapabilityRequest baseline{kRenderTargetTestedBuild, game, TimingMode::Stock, 720, true};
   Check(kCapabilityPolicyVersion == 1 && kStockGuestRefreshHz == 60, "stable schema and guest refresh policy");
   Check(StockTimingDescription() == "Stock only. 60 FPS unavailable: not yet validated.", "UI description remains honest stock-only policy");

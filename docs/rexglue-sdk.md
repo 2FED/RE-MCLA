@@ -8,8 +8,9 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
-The current source pin is locally tagged v0.20.0.0; the commit/tag are not yet
-pushed or available as a public release. Its isolated build and install at
+The current source pin is tagged v0.20.0.0 and published in the project fork;
+the remote tag resolves to5dd58f894bf34b9ea85e59d3903c7f0e8044d853
+(read-only remote verification October12,2026). Its isolated build and install at
 `private/sdk20install-unpublished` passed. The fresh WGC-enabled host build at
 `out/build/m7-final-sdk20` also passed all 82 build actions; neither compilation
 nor SDK test success promotes new binaries or establishes physical gameplay acceptance.
@@ -25,10 +26,21 @@ artifact identities separate from v0.20.0.0; see [profile rename evidence](evide
 - Upstream repository: `https://github.com/rexglue/rexglue-sdk.git`
 - Upstream base tag: `v0.9.0`
 - Upstream base commit: `3eb9b511b4140d2769e27be63eae57d41bfa2afa`
-- Local project tag, publication pending: `v0.20.0.0`
+- Published project tag: `v0.20.0.0`
 - Immutable project commit: `5dd58f894bf34b9ea85e59d3903c7f0e8044d853`
 - Fork branch: `mcla/mcla-r-hotfixes`
 - Local path: `third_party/rexglue-sdk`
+
+The accepted M8 clean32bpp packing correction is a separate delta on this
+base. Its two-file [patch](../patches/rexglue/resolve-downscale-32bpp.patch) and
+[reconstruction manifest](../patches/rexglue/resolve-downscale-32bpp.json) retain
+the exact tested source/bytecode independently of private build directories.
+Apply only to a separate clean checkout; preserve unrelated graphics work in
+the submodule and the accepted SDK install. Clean SDK tests and four normal-host
+scene pairs pass. Owner garage/driving improvement, F10 and fresh-process
+name/progress reload are accepted on l12; further vinyl sharpness is deferred.
+No submodule pin, default installation or release tag changes follow from this
+patch. [Acceptance and runnable regression](evidence/M8-vinyl-packing-acceptance-20261012.md).
 
 The fork carries the previously reviewed fix groups plus bounded D3D12 guest-presentation and render-path observability. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage. ReXApp converts UTF-8 path CVars and logging filenames to native filesystem paths and safely opens non-ASCII Windows paths. It also destroys Runtime/input drivers before their attached Window, preventing a teardown use-after-free after a loaded-image probe. Read-only host VFS devices reject root traversal, write-intent opens, rename, and writable mappings instead of silently downgrading or reaching the host filesystem. The ten direct XONLINE/social/XHV imports selected by M3-007 return explicit offline states and emit once-only `[OFFLINE]` diagnostics instead of preserving stale caller `r3`. Guest threads retain Xenia's 10-ms compatibility grace period and use regression-tested raw/XAPI start plans, while the 50-MHz guest clock path has direct monotonicity coverage. Generated functions and import hooks maintain metadata-only breadcrumbs, and C++ guest exceptions crossing `XThread` emit bounded host-stack context without guest memory by default. The v0.9.0.9 delta assigns monotonic guest-output sequences, records successful guest-backed DXGI presents and actual success HRESULTs, holds mailbox ownership through capture readback, and accepts capture evidence only at or behind the published successful-present watermark. The v0.9.0.10 delta makes Tracy zones safe before manual profiler startup and adds an init-only privacy-safe Xenos render audit. The v0.9.0.11 delta adds Xenia's cooperative sign-in-state yield, deterministic local-profile tests, and bounded privacy-safe XAM identity/profile telemetry with distinct absent-slot masks. The v0.9.0.12 delta adds deterministic first-controller slot-zero selection and a bounded privacy-safe SDL-to-XAM input audit. The v0.9.0.13 delta adds full controller-matrix auditing, real disconnect/focus/rumble semantics, and an explicit MCLA-only critical-section compatibility option. The v0.9.0.14 delta adds bounded privacy-safe XMA/XAudio/SDL route and buffer-health auditing. The v0.9.0.15 delta makes unsupported XMP title playback fail explicitly while preserving idle state, guards empty playlist navigation/output capture, and adds bounded race-free XMP route evidence. The v0.9.0.16 delta classifies the MCLA XLiveBase message inventory into deterministic local-offline/unavailable results and adds a bounded init-only offline-service/socket audit. The v0.9.0.17 delta returns the configured Xbox language consistently, adds bounded locale telemetry, and makes all host path/log CVar conversions Unicode-safe. The v0.9.0.18 delta resolves mounted VFS roots without stripping the trailing-separator boundary before relative-path extraction and adds direct content-symlink-root coverage. The v0.9.0.19 delta adds nonvirtual, thread-safe presenter diagnostics for the latest active guest-output sequence and the guest-vblank count, without changing the graphics plugin ABI or renderer behavior. See the M2/M3 evidence listed below plus the complete M4 evidence through `docs/evidence/M4-closure-review.md`.
 

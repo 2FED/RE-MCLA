@@ -1,0 +1,4 @@
+# Exact-hashed SDK patch and reconstruction manifest must survive Windows checkout.
+# Embedded compiler output/context has significant hash-preserved trailing spaces.
+/patches/rexglue/resolve-downscale-32bpp.patch text eol=lf whitespace=-blank-at-eol
+/patches/rexglue/resolve-downscale-32bpp.json text eol=lf

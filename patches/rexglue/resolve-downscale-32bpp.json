@@ -1,0 +1,111 @@
+{
+  "schema": "mcla-sdk-source-patch-v1",
+  "status": "accepted-bounded-correction-not-sdk-pin-promotion",
+  "base": {
+    "repository": "https://github.com/2FED/rexglue-sdk.git",
+    "commit": "5dd58f894bf34b9ea85e59d3903c7f0e8044d853",
+    "tag": "v0.20.0.0"
+  },
+  "scope": "32bpp scaled-resolve reader uint4 packing correction only; no observer code, runtime promotion, world-rendering certification or other-format correctness claim",
+  "patch": {
+    "file": "resolve-downscale-32bpp.patch",
+    "sha256": "74538A02F64DB5458C1A5CE63E0F4AC692FA714ABE1DC0C61EC13F53129B5232",
+    "format": "unified-text",
+    "paths": "a/src/... and b/src/...",
+    "encoding": "UTF-8 without BOM; LF"
+  },
+  "files": [
+    {
+      "path": "src/graphics/shaders/resolve_downscale.cs.hlsl",
+      "before_sha256": "7C0BD60D9183968FFD8AB2013801436EAA40B8A40AC898B476712570A6D1538F",
+      "after_sha256": "36179D2AED45FA04804E0E14461C803BD6B06A7E275DB715C5673EAC0A01B84B",
+      "before_newlines": "LF",
+      "patch_output_newlines": "LF",
+      "after_newlines": "LF"
+    },
+    {
+      "path": "src/graphics/shaders/bytecode/d3d12_5_1/resolve_downscale_cs.h",
+      "before_sha256": "E5B944DA4A5FEEFABD908B12E71F848CDDD3599294754CF040F843638F3061A5",
+      "after_sha256": "B0467669E3E76D85AF97240D0BEF399BC4FE5208336B80739735C7E70A1F9198",
+      "before_newlines": "LF",
+      "patch_output_newlines": "LF",
+      "patch_output_sha256": "BFBB7F9B6119FDEB2B27F4493E63CD651DBC32338B73AB340B55FF41488A1BD6",
+      "after_newlines": "CRLF"
+    }
+  ],
+  "reconstruction": [
+    "Use a separate clean checkout at the exact base; do not apply to unrelated dirty third_party graphics work or accepted SDK roots.",
+    "Require both exact before hashes; apply only these two paths with no fuzz.",
+    "The patch stores normalized LF lines. Verify the generated-header LF patch_output_sha256, then convert every LF in that header to CRLF without adding a BOM or changing text. HLSL stays LF.",
+    "Verify both authoritative after_sha256 values. Source acceptance is not build/runtime promotion."
+  ],
+  "compiler": {
+    "historical_identity_verified": "Microsoft FXC 10.0.26100 x64",
+    "historical_full_argv": null,
+    "historical_executable_sha256": null,
+    "historical_command_status": "Full original argv and executable hash were not retained in the cited evidence; do not infer them from the currently installed tool.",
+    "verified_profile": "cs_5_1",
+    "verified_flags": [
+      "/O3",
+      "/Qstrip_reflect",
+      "/Qstrip_debug"
+    ],
+    "evidence": "docs/evidence/M8-vinyl-packing-acceptance-20261012.md",
+    "evidence_locator": "Cause and correction; do not treat this manifest as an exact historical invocation."
+  },
+  "dxbc": {
+    "bytes": 2728,
+    "sha256": "B5AFE5BB4A1030FC695C7A39DF0270B9397B9EF40CDEF5787048A4340FEC5919",
+    "container": "compiled BYTE array in resolve_downscale_cs.h"
+  },
+  "independent_reproduction": {
+    "date": "2026-10-11",
+    "status": "exact-DXBC-match-not-recovered-historical-argv",
+    "compiler_sdk_path": "Windows Kits/10/bin/10.0.26100.0/x64/fxc.exe",
+    "compiler_file_version": "10.0.26100.7705 (WinBuild.160101.0800)",
+    "compiler_sha256": "31FA10504B1551337DE4D06EC2194143885A76A8B5A81177999E2FAA34729183",
+    "argv_template": ["/nologo", "/T", "cs_5_1", "/E", "main", "/O3", "/Qstrip_reflect", "/Qstrip_debug", "/Fo", "<fresh-output>/resolve_downscale_cs.cso", "<candidate-sdk>/src/graphics/shaders/resolve_downscale.cs.hlsl"],
+    "candidate_sdk": "private/sdk-rb32-s",
+    "fresh_output": "private/evidence/M8-renderdoc-vinyl-20261011/shader-reproduction-20261011",
+    "source_sha256": "36179D2AED45FA04804E0E14461C803BD6B06A7E275DB715C5673EAC0A01B84B",
+    "output_sha256": "B5AFE5BB4A1030FC695C7A39DF0270B9397B9EF40CDEF5787048A4340FEC5919"
+  },
+  "provenance": {
+    "candidate_source": "private/sdk-rb32-s",
+    "source_staging_receipt_sha256": "8723F370E1B0255134DBC9C96E98EA9E1184EC71F206502C838B3112BA793B9D",
+    "dependency_metadata_receipt_sha256": "53FB181ED5B51140BAF5C7585B560B750EAD933AD1BA96C84A4503954147B5CC",
+    "source_inventory_scope": "20113 files; two reviewed source deltas; 25 pinned dependencies; 15 separately documented libmspack link materializations"
+  },
+  "tests": {
+    "source": "tests/mcla_resolve_downscale_native_win_test.cpp",
+    "historical_red": {
+      "checks": 77836,
+      "failures": 5632
+    },
+    "historical_green": {
+      "checks": 77836,
+      "failures": 0
+    },
+    "expanded": {
+      "cpu_checks": 3213374,
+      "reader_checks": 4116542,
+      "differential_checks": 3637310,
+      "failures": 0,
+      "reader_dispatches": 294,
+      "differential_pairs": 108
+    },
+    "limitations": "Synthetic actual compiled reader against reviewed writer-layout oracle; 8/16/64bpp differential equivalence is not correctness; no gameplay PASS inferred.",
+    "evidence": [
+      "docs/evidence/M8-vinyl-packing-acceptance-20261012.md",
+      "private/evidence/M8-renderdoc-vinyl-20261011/rd7-shader-regression.json",
+      "private/evidence/M8-renderdoc-vinyl-20261011/rd7-extended-shader-regression.json"
+    ]
+  },
+  "license": {
+    "sdk_license": "BSD-3-Clause; retain the SDK LICENSE at the pinned base",
+    "sdk_copyright": "Copyright (c) 2026, Tom Clay <tomc@tctechstuff.com>; portions derived from Xenia, Copyright (c) 2022, Ben Vanik and Xenia project contributors",
+    "shader_notice": "Copyright 2025 Ben Vanik. All rights reserved. Released under the BSD license - see LICENSE in the root for more details.",
+    "generated_header": "Compiler-generated from the SDK shader; not title-generated/proprietary game content",
+    "preservation": "Existing shader notice is unchanged; source/binary redistribution remains subject to the original SDK LICENSE notice, conditions and disclaimer."
+  }
+}

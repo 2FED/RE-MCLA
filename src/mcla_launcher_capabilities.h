@@ -13,6 +13,8 @@ inline constexpr uint32_t kCapabilityPolicyVersion = 1;
 inline constexpr uint32_t kStockGuestRefreshHz = 60;
 inline constexpr std::string_view kRenderTargetTestedBuild =
     "9C6BEA718046F1B22D7FB9C4BEB8E03CC52DD3F466CCFB926CC585059F580BAA";
+inline constexpr std::string_view kCleanRenderTargetTestedBuild =
+    "FED35A361F4A4A10BB03A6BC45072C82924085A0D3ADB8A3298243066DB4A850";
 inline constexpr std::string_view kStockTimingKey = "stock";
 inline constexpr std::string_view kFixed60UnavailableReason = "not yet validated";
 
@@ -88,10 +90,11 @@ inline std::expected<CapabilityPlan, CapabilityError> ResolveCapabilities(
   if (!request.vsync) return std::unexpected(CapabilityError::UnsupportedVsync);
   const auto *target = FindRenderTarget(request.render_target);
   if (!target) return std::unexpected(CapabilityError::UnknownRenderTarget);
-  // Preserve existing legacy build compatibility; do not promote any new build
-  // for the newer targets merely because it carries a well-formed manifest.
+  // Retain historical records and rollback alongside the reviewed clean SDK
+  // candidate. Exact admission is not a world-quality or gameplay certificate.
   if ((target->id == 1080 || target->id == 2160) &&
-      request.build_fingerprint != kRenderTargetTestedBuild)
+      request.build_fingerprint != kRenderTargetTestedBuild &&
+      request.build_fingerprint != kCleanRenderTargetTestedBuild)
     return std::unexpected(CapabilityError::UntestedTargetBuild);
   return CapabilityPlan{std::string(request.build_fingerprint), std::string(request.game_fingerprint),
                         TimingMode::Stock, *target, kStockGuestRefreshHz, true};
