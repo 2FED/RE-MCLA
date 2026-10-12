@@ -61,21 +61,23 @@ std::expected<std::filesystem::path, std::wstring> SoleSession(const std::filesy
 }
 int Probe(int argc, wchar_t **argv) {
   std::map<std::wstring, std::wstring> options;
-  bool verify_only = false, preflight_only = false;
+  bool verify_only = false, preflight_only = false, missing_support = false;
   for (int i = 1; i < argc; ++i) {
     const std::wstring_view arg(argv[i]);
     if (arg == L"--verify-only" && !verify_only) { verify_only = true; continue; }
     if (arg == L"--preflight-only" && !preflight_only) { preflight_only = true; continue; }
+    if (arg == L"--preflight-missing-support" && !missing_support) { missing_support = true; continue; }
     const auto equal = arg.find(L'=');
     if (!arg.starts_with(L"--") || equal == arg.npos || equal + 1 == arg.size()) return 2;
     const auto key = arg.substr(2, equal - 2);
     if ((key != L"build" && key != L"game" && key != L"gpu") ||
         !options.emplace(key, arg.substr(equal + 1)).second) return 2;
   }
-  if ((verify_only && preflight_only) || !options.contains(L"build") || !options.contains(L"game") ||
+  if ((verify_only && preflight_only) || (missing_support && !preflight_only) ||
+      !options.contains(L"build") || !options.contains(L"game") ||
       (!verify_only && !options.contains(L"gpu"))) {
     std::cerr << "Required: --build=<exact staged root> --game=<exact supported root> "
-                 "[--verify-only | [--preflight-only] --gpu=<exact adapter name>]\n";
+                 "[--verify-only | [--preflight-only [--preflight-missing-support]] --gpu=<exact adapter name>]\n";
     return 2;
   }
   auto build_root = fs::OpenDirectory(options.at(L"build"));
@@ -127,6 +129,13 @@ int Probe(int argc, wchar_t **argv) {
   request.vsync = true; request.fullscreen = false;
   request.selected_profile_id = profile->id;
   if (preflight_only) {
+    if(missing_support) {
+      // Only freshly created empty fixture directories, never an owner root.
+      const auto preserved=root/L"preserved-support";
+      if(!CreateDirectoryW(preserved.c_str(),nullptr)) return 2;
+      for(const auto *name:{L"cache",L"logs",L"diagnostics",L"backups",L"metadata"})
+        if(!MoveFileExW((personal/name).c_str(),(preserved/name).c_str(),MOVEFILE_WRITE_THROUGH)) return 2;
+    }
     const auto inventory = [&]() {
       std::map<std::filesystem::path,std::string> result;
       for (const auto &item : std::filesystem::recursive_directory_iterator(root)) {
@@ -154,6 +163,9 @@ int Probe(int argc, wchar_t **argv) {
             (supported?checked.eligibility_expires_utc>0:checked.eligibility_expires_utc==0),
             "production target preflight verifies exact build game GPU profile and signed eligibility");
       if (supported && checked.readiness != LaunchReadiness::Ready) std::wcerr << checked.readiness_reason << L'\n';
+      if(missing_support && supported)
+        Check(checked.status.find(L"recreated on START GAME")!=std::wstring::npos,
+              "production preflight explains missing support directories without repairing them");
       Check(!checked.running && !controller.running() && Empty(personal / L"sessions"),
             "preflight launches no host or session");
       Check(before == inventory(), "production preflight preserves fixture inventory and bytes");

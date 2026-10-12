@@ -1716,6 +1716,7 @@ a separate future scope decision. No content is sent to volunteers by this plan.
 
 ### Checkpoint log
 
+- 2026-10-12 — KI-034 bounded support-folder repair closed at0.20.3.1 within M8-017. Owner confirms automatic repair, successful l12 startup and fresh-process name/progress persistence; rename/reload continuity and24 snapshot files verify. Isolated repair Release build/controller286/0, production no-game preflight20+16, AST scan/3rules and independent index review GO (one1314 symlink SKIP). Pending export/UI/capability changes are excluded. [Evidence](docs/evidence/M8-profile-support-repair-20261012.md). M8 remains4complete/6deferred/19total, YELLOW; no milestone closure/push. Next: KI-032 reproducible sign-rendering evidence and M8-018 report acceptance. Additional vinyl sharpness explicitly deferred by owner; no editor-parity PASS.
 - 2026-10-11 — Mandatory review after M8-019/M8-003, primary plus independent
   integration/visual/safety reviews: **4 complete,6 deferred,19 total; YELLOW**.
   M8-019 owner acceptance and M8-003 stock capability/record/UI gates pass;

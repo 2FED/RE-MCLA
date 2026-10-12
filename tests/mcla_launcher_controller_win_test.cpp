@@ -305,9 +305,11 @@ std::optional<std::map<std::filesystem::path,std::string>> FixtureInventory(
   std::map<std::filesystem::path,std::string> result;
   size_t count=0;
   for(const auto &entry:std::filesystem::recursive_directory_iterator(root)) {
-    if(++count>4096 || entry.is_symlink()) return std::nullopt;
+    if(++count>4096) return std::nullopt;
     const auto relative=entry.path().lexically_relative(root);
-    if(entry.is_directory()) result.emplace(relative,"directory");
+    // Inventory the fixture link itself without traversing its target.
+    if(entry.is_symlink()) result.emplace(relative,"symlink:"+std::filesystem::read_symlink(entry.path()).generic_string());
+    else if(entry.is_directory()) result.emplace(relative,"directory");
     else if(entry.is_regular_file()) {
       // Persistent lock handles are deliberately exclusive. Their pathname and
       // size still detect creation/removal without bypassing the held lock.
@@ -320,6 +322,154 @@ std::optional<std::map<std::filesystem::path,std::string>> FixtureInventory(
     } else return std::nullopt;
   }
   return result;
+}
+
+bool SupportDirectoryMatrix(const std::filesystem::path &root,
+                            const std::filesystem::path &build,
+                            const std::filesystem::path &game,
+                            const std::filesystem::path &bad_build) {
+  const auto matrix=root/L"support-repair";
+  for(const auto &path:{matrix,matrix/L"store",matrix/L"profiles",matrix/L"preserved"})
+    if(!CreateDirectoryW(path.c_str(),nullptr)) return false;
+  auto store=OpenPreferenceStore((matrix/L"store").wstring()); if(!store) return false;
+  Preferences p; p.build_root=U16(build); p.game_root=U16(game); p.gpu_name=u"Fixture"; p.render_target=1440;
+  auto entry=CreateManagedProfile(p,(matrix/L"profiles").wstring(),u"Repair",store->directory());
+  if(!entry) return false;
+  p.library.entries.push_back(*entry); p.library.selected_id=entry->id;
+  if(!store->Save(p)) return false;
+  const std::filesystem::path profile(entry->root);
+  if(!NewFile(profile/L"user/preserved.bin","UNCHANGED_USER\n")) return false;
+  LauncherController controller(std::move(*store));
+  const auto request=Settings(p);
+  const auto move=[](const auto &a,const auto &b) {
+    return MoveFileExW(a.c_str(),b.c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
+  };
+  const auto check=[&](LaunchReadiness expected,const UiRequest &r) {
+    const auto before=FixtureInventory(matrix);
+    const auto view=controller.Dispatch(UiAction::CheckLaunch,r);
+    const auto after=FixtureInventory(matrix);
+    Check(view.readiness==expected,"support matrix has expected readiness");
+    Check(before && after && *before==*after,"support preflight never repairs or saves anything");
+    return view;
+  };
+  const auto reject=[&](const UiRequest &r) {
+    check(LaunchReadiness::Blocked,r);
+    const auto before=FixtureInventory(profile);
+    const auto view=controller.Dispatch(UiAction::Play,r);
+    const auto after=FixtureInventory(profile);
+    Check(!view.running && !controller.running() && before && after && *before==*after,
+          "blocked Start creates no technical directories session or changed profile data");
+  };
+  unsigned ordinal=0;
+  for(const auto *name:{L"cache",L"logs",L"diagnostics",L"backups",L"metadata\\update",L"metadata"}) {
+    const auto path=profile/name, preserved=matrix/L"preserved"/std::to_wstring(++ordinal);
+    if(!move(path,preserved)) return false;
+    auto ready=check(LaunchReadiness::Ready,request);
+    Check(ready.status.find(L"recreated on START GAME")!=std::wstring::npos,
+          "each missing technical directory is explained rather than blocking launch");
+    if(!NewFile(path,"OBSTRUCTION_RETAINED\n")) return false;
+    reject(request);
+    Check(Read(path)=="OBSTRUCTION_RETAINED\n","support obstruction is never replaced");
+    if(!move(path,matrix/L"preserved"/(std::to_wstring(ordinal)+L"-file")) || !move(preserved,path)) return false;
+  }
+  // Exercise an actual directory reparse if supported by this Windows host.
+  const auto reparse_target=matrix/L"preserved/reparse-target";
+  if(!CreateDirectoryW(reparse_target.c_str(),nullptr) || !NewFile(reparse_target/L"sentinel.txt","DO_NOT_TOUCH\n")) return false;
+  if(!move(profile/L"logs",matrix/L"preserved/reparse-original")) return false;
+  if(CreateSymbolicLinkW((profile/L"logs").c_str(),reparse_target.c_str(),SYMBOLIC_LINK_FLAG_DIRECTORY|2)) {
+    reject(request);
+    Check(Read(reparse_target/L"sentinel.txt")=="DO_NOT_TOUCH\n","reparse target remains untouched");
+    if(!move(profile/L"logs",matrix/L"preserved/rejected-reparse")) return false;
+  } else {
+    const auto error=GetLastError();
+    Check(error==ERROR_PRIVILEGE_NOT_HELD,"reparse fixture unavailable only for known Windows privilege restriction");
+    std::cout << "SKIP support directory symlink fixture: Win32 " << error << '\n';
+  }
+  if(!move(matrix/L"preserved/reparse-original",profile/L"logs")) return false;
+  // All optional roots missing at once; retained originals are outside profile.
+  for(const auto *name:{L"cache",L"logs",L"diagnostics",L"backups",L"metadata"})
+    if(!move(profile/name,matrix/L"preserved"/name)) return false;
+  check(LaunchReadiness::Ready,request);
+  if(!NewFile(profile/L"metadata","LATE_OBSTRUCTION\n")) return false;
+  reject(request);
+  Check(!std::filesystem::exists(profile/L"cache") && !std::filesystem::exists(profile/L"logs"),
+        "late support obstruction prevents creation of earlier missing directories");
+  if(!move(profile/L"metadata",matrix/L"preserved/late-obstruction")) return false;
+  for(const auto *name:{L"user",L"sessions",L"managed-profile.dat",L".mcla-writer.lock"}) {
+    const auto path=profile/name, preserved=matrix/L"preserved"/name;
+    if(!move(path,preserved)) return false;
+    reject(request);
+    Check(!std::filesystem::exists(path),"mandatory missing root or identity is not recreated");
+    if(!move(preserved,path)) return false;
+  }
+  for(const auto *name:{L"pending-operation.dat",L"import-in-progress.dat"}) {
+    if(!NewFile(profile/name,"UNCERTAIN_OPERATION\n")) return false;
+    reject(request);
+    if(!move(profile/name,matrix/L"preserved"/name)) return false;
+  }
+  const auto unfinished=profile/L"sessions/11111111111111111111111111111111";
+  if(!CreateDirectoryW(unfinished.c_str(),nullptr) || !NewFile(unfinished/L"state.txt","running\n")) return false;
+  reject(request);
+  if(!move(unfinished,matrix/L"preserved/unfinished")) return false;
+  const auto marker=profile/L"managed-profile.dat";
+  if(!move(marker,matrix/L"preserved/original-marker") ||
+     !NewFile(marker,"MCLA managed profile v1\n11111111111111111111111111111111\n")) return false;
+  reject(request);
+  if(!move(marker,matrix/L"preserved/rejected-marker") || !move(matrix/L"preserved/original-marker",marker)) return false;
+  const auto name_root=profile/L"user/B13EBABEBABEBABE";
+  if(!CreateDirectoryW(name_root.c_str(),nullptr) || !NewFile(name_root/L"local-display-name.txt","BAD\nNAME")) return false;
+  reject(request);
+  if(!move(name_root/L"local-display-name.txt",matrix/L"preserved/rejected-name")) return false;
+  {
+    auto guard=fs::OpenDirectory(profile.wstring()); if(!guard) return false;
+    auto lock=fs::AcquireWriterLock(*guard,true); if(!lock) return false;
+    reject(request);
+  }
+  auto invalid=request; invalid.build_root=bad_build.wstring(); reject(invalid);
+  invalid=request; invalid.game_root=bad_build.wstring(); reject(invalid);
+  invalid=request; invalid.gpu_name=L"Unavailable"; reject(invalid);
+  invalid=request; invalid.render_target=1080; reject(invalid);
+  invalid=request; invalid.vsync=false; reject(invalid);
+  const auto hardlink=profile/L"user/unsafe-link.bin";
+  if(!CreateHardLinkW(hardlink.c_str(),(profile/L"user/preserved.bin").c_str(),nullptr)) return false;
+  reject(request);
+  // Drop only the fixture-created extra hardlink, not source content.
+  if(!DeleteFileW(hardlink.c_str())) return false;
+  const auto ads=profile/L"user/ads-fixture.bin";
+  if(!NewFile(ads,"BASE\n") || !NewFile(std::filesystem::path(ads.wstring()+L":private"),"PRIVATE\n")) return false;
+  reject(request);
+  if(!move(ads,matrix/L"preserved/rejected-ads")) return false;
+  check(LaunchReadiness::Ready,request);
+  // Changes after Ready must be rechecked by Play, not silently repaired.
+  if(!NewFile(profile/L"logs","AFTER_CHECK_OBSTRUCTION\n")) return false;
+  const auto raced_before=FixtureInventory(profile);
+  const auto raced=controller.Dispatch(UiAction::Play,request);
+  Check(!raced.running && raced_before==FixtureInventory(profile),"Start rechecks changes after prior Ready before any repair");
+  if(!move(profile/L"logs",matrix/L"preserved/after-check-obstruction")) return false;
+  // Reappearing nonempty support folder must be retained; Start rechecks.
+  if(!CreateDirectoryW((profile/L"backups").c_str(),nullptr) ||
+     !NewFile(profile/L"backups/existing.txt","RETAINED_HISTORY\n")) return false;
+  const auto started=controller.Dispatch(UiAction::Play,request);
+  Check(started.running && controller.running(),"Start automatically recreates safe missing support directories");
+  if(!started.running) return true; // Preserve RED evidence; no fake child exists.
+  const auto session=OnlySession(profile);
+  const auto began=GetTickCount64();
+  while(Read(session/L"fixture-ready.txt").empty() && GetTickCount64()-began<5000) Sleep(5);
+  Check(Read(session/L"fixture-ready.txt")=="ROOTS_ENV_SETTINGS_SENTINEL_PASS\n","repaired layout reaches actual bounded fixture child");
+  for(const auto *name:{L"cache",L"logs",L"diagnostics",L"backups",L"metadata",L"metadata\\update"})
+    Check(std::filesystem::is_directory(profile/name),"all repaired technical directories exist");
+  if(!NewFile(session/L"finish.signal","FINISH_FIXTURE\n")) return false;
+  while(controller.running() && GetTickCount64()-began<8000) {
+    Sleep(5); controller.Dispatch(UiAction::Refresh,{});
+  }
+  Check(!controller.running() && !controller.completion_failed(),"repaired profile completes normal fixture session");
+  Check(Read(profile/L"user/preserved.bin")=="UNCHANGED_USER\n" &&
+        Read(profile/L"backups/existing.txt")=="RETAINED_HISTORY\n",
+        "repair preserves original user bytes and nonempty existing technical content");
+  auto ready=check(LaunchReadiness::Ready,request);
+  Check(ready.status.find(L"recreated on START GAME")==std::wstring::npos,
+        "repaired layout is idempotently Ready without stale repair notice");
+  return true;
 }
 
 bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
@@ -401,7 +551,9 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
   run_check(request,LaunchReadiness::Blocked,"missing profile lock is Blocked and never recreated by Check");
   if(!MoveFileExW((matrix/L"preserved-lock").c_str(),(profile_root/L".mcla-writer.lock").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
   if(!MoveFileExW((profile_root/L"logs").c_str(),(matrix/L"preserved-logs").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
-  run_check(request,LaunchReadiness::Blocked,"missing required profile child is Blocked without repair");
+  const auto repairable=run_check(request,LaunchReadiness::Ready,"missing technical child is Ready without preflight repair");
+  Check(repairable.status.find(L"recreated on START GAME")!=std::wstring::npos,
+        "readiness explains deferred support-directory creation");
   if(!MoveFileExW((matrix/L"preserved-logs").c_str(),(profile_root/L"logs").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
   if(!NewFile(profile_root/L"pending-operation.dat","fixture pending\n")) return false;
   run_check(request,LaunchReadiness::Blocked,"pending profile operation is Blocked without clearing marker");
@@ -852,6 +1004,7 @@ int wmain(int argc, wchar_t **argv) {
       OnlySession(main_root) == session, "recovery never clears original blocker overwrites source or starts a child");
   Check(CrossBuildMatrix(root, build, game), "cross-build matrix completed without fixture setup failure");
   Check(ReadOnlyPreflightMatrix(root, build, game, bad_build), "read-only launch preflight matrix completed");
+  Check(SupportDirectoryMatrix(root,build,game,bad_build),"support directory repair matrix completed");
   Check(CollectionParentMatrix(root,build,game),"optional collection parent hint matrix completed");
   std::cout << "Launcher controller: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;

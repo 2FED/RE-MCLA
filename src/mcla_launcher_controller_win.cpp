@@ -67,6 +67,58 @@ std::expected<std::optional<fs::DirectoryGuard>,std::wstring> InspectExistingCac
   auto cache=fs::OpenDirectory(path); if(!cache) return std::unexpected(cache.error());
   return std::optional<fs::DirectoryGuard>{std::move(*cache)};
 }
+// Sessions contain recovery evidence and are mandatory. Other entries are
+// containers only: recreating a missing container never restores its old data.
+struct SupportDirectories {
+  static constexpr std::array<const wchar_t*,7> names{
+      L"cache",L"logs",L"diagnostics",L"sessions",L"backups",L"metadata",L"metadata\\update"};
+  std::array<std::optional<fs::DirectoryGuard>,7> directories;
+  bool missing() const {
+    return std::any_of(directories.begin(),directories.end(),[](const auto &d) { return !d; });
+  }
+};
+std::wstring SupportError(std::wstring_view name,std::wstring_view detail) {
+  return L"Profile folder '"+std::wstring(name)+L"': "+std::wstring(detail);
+}
+std::expected<SupportDirectories,std::wstring> InspectSupportDirectories(const fs::DirectoryGuard &profile) {
+  SupportDirectories result;
+  for(size_t i=0;i<result.names.size();++i) {
+    // An absent guarded parent is planned separately. Never swallow a general
+    // PATH_NOT_FOUND error or recursively create through unexamined ancestors.
+    if(i==6 && !result.directories[5]) continue;
+    const auto path=profile.path()+L"\\"+result.names[i];
+    if(GetFileAttributesW(Native(path).c_str())==INVALID_FILE_ATTRIBUTES) {
+      const auto error=GetLastError();
+      if(error==ERROR_FILE_NOT_FOUND && i!=3) continue;
+      return std::unexpected(SupportError(result.names[i],
+          L"missing or inaccessible; Win32 "+std::to_wstring(error)+L". Not recreated automatically."));
+    }
+    auto directory=fs::OpenDirectory(path);
+    if(!directory) return std::unexpected(SupportError(result.names[i],directory.error()));
+    result.directories[i].emplace(std::move(*directory));
+  }
+  return result;
+}
+std::expected<void,std::wstring> CreateMissingSupportDirectories(
+    const fs::DirectoryGuard &profile,const fs::WriterLock &,SupportDirectories &support) {
+  // Caller has independently passed all launch admission checks and holds the
+  // existing profile writer lock. Keep every parent/child guard through launch.
+  for(size_t i=0;i<support.names.size();++i) {
+    if(support.directories[i]) continue;
+    if(i==3) return std::unexpected(L"Session history is mandatory; no automatic recreation");
+    const auto &parent=i==6?*support.directories[5]:profile;
+    const auto name=i==6?L"update":support.names[i];
+    const auto path=parent.path()+L"\\"+name;
+    if(!CreateDirectoryW(Native(path).c_str(),nullptr))
+      return std::unexpected(SupportError(support.names[i],
+          L"cannot create missing directory; Win32 "+std::to_wstring(GetLastError())+
+          L". Existing entries were not replaced; check again."));
+    auto directory=fs::OpenDirectory(path);
+    if(!directory) return std::unexpected(SupportError(support.names[i],directory.error()));
+    support.directories[i].emplace(std::move(*directory));
+  }
+  return {};
+}
 struct Adapter { std::wstring name; unsigned index; };
 std::vector<Adapter> Adapters() {
   using Microsoft::WRL::ComPtr;
@@ -216,7 +268,7 @@ struct LauncherController::State {
     return Text(store.directory(),kCollectionParentFile,std::string(kCollectionParentPrefix)+encoded);
   }
 
-  std::expected<uint64_t,std::wstring> CheckLaunch(const UiRequest &r) {
+  std::expected<uint64_t,std::wstring> CheckLaunch(const UiRequest &r,std::wstring &support_notice) {
     // This is a point-in-time, no-write inspection, not launch authorization.
     // Never call Settings, create a writer lock, snapshot a save or start a child.
     try {
@@ -260,13 +312,12 @@ struct LauncherController::State {
         }
         library_roots.push_back(std::move(*root));
       }
-      std::vector<fs::DirectoryGuard> children;
-      for(const auto *name:{L"user",L"cache",L"logs",L"diagnostics",L"sessions",L"backups",L"metadata",L"metadata\\update"}) {
-        auto child=fs::OpenDirectory(profile->path()+L"\\"+name); if(!child) return std::unexpected(child.error());
-        children.push_back(std::move(*child));
-      }
+      auto user=fs::OpenDirectory(profile->path()+L"\\user");
+      if(!user) return std::unexpected(SupportError(L"user",user.error()));
+      auto support=InspectSupportDirectories(*profile); if(!support) return std::unexpected(support.error());
+      const auto &sessions=*support->directories[3];
       size_t history=0;
-      for(const auto &item:std::filesystem::directory_iterator(children[4].path())) {
+      for(const auto &item:std::filesystem::directory_iterator(sessions.path())) {
         if(++history>=1024) return std::unexpected(L"Session history capacity reached; preserve/archive before launch");
         auto previous=fs::OpenDirectory(item.path().wstring()); if(!previous) return std::unexpected(previous.error());
         auto state=fs::ReadFile(*previous,L"state.txt",256);
@@ -274,12 +325,14 @@ struct LauncherController::State {
           return std::unexpected(L"An unfinished session needs review before launch");
       }
       auto name=ReadDisplayName(*profile); if(!name) return std::unexpected(name.error());
-      auto source=ValidateSaveTreeForSnapshot(children[0],
-          children[4].path()+L"\\11111111111111111111111111111111\\before-user");
+      auto source=ValidateSaveTreeForSnapshot(*user,
+          sessions.path()+L"\\11111111111111111111111111111111\\before-user");
       if(!source) return std::unexpected(source.error());
       auto build=VerifyBuild(*build_root); if(!build) return std::unexpected(build.error());
-      auto existing_cache=InspectExistingCache(children[1],build->fingerprint());
-      if(!existing_cache) return std::unexpected(existing_cache.error());
+      if(support->directories[0]) {
+        auto existing_cache=InspectExistingCache(*support->directories[0],build->fingerprint());
+        if(!existing_cache) return std::unexpected(existing_cache.error());
+      }
       auto verified_game=VerifySelectedGame(*game); if(!verified_game) return std::unexpected(verified_game.error());
       auto capability=AdmitCapabilities(p,*build,*verified_game);
       if(!capability) return std::unexpected(capability.error());
@@ -293,6 +346,7 @@ struct LauncherController::State {
       if(!lease) return std::unexpected(lease.error());
       expires=lease->expires_utc;
 #endif
+      if(support->missing()) support_notice=L" Missing support folders will be recreated on START GAME. Existing files are not restored or replaced.";
       return expires;
     } catch(const std::exception &) {
       return std::unexpected(L"Read-only launch inspection failed; no launch or repair was attempted");
@@ -530,7 +584,7 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   const auto *entry=Selected(p);
   auto profile=fs::OpenDirectory(Wide(entry->root)); if(!profile) return std::unexpected(profile.error());
   auto safe=ValidateWritableRoot(*profile); if(!safe) return safe;
-  auto writer=fs::AcquireWriterLock(*profile); if(!writer) return std::unexpected(writer.error());
+  auto writer=fs::AcquireWriterLock(*profile,true); if(!writer) return std::unexpected(writer.error());
   const auto pending=profile->path()+L"\\pending-operation.dat";
   if(GetFileAttributesW(Native(pending).c_str())!=INVALID_FILE_ATTRIBUTES || GetLastError()!=ERROR_FILE_NOT_FOUND)
     return std::unexpected(L"An unfinished profile operation needs review; automatic launch blocked");
@@ -566,13 +620,10 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   auto capability_record=SerializeCapabilities(*capability);
   if(!capability_record) return std::unexpected(L"Cannot encode the admitted capability plan");
   auto gpu=AdapterIndex(Wide(p.gpu_name)); if(!gpu) return std::unexpected(gpu.error());
-  auto user=fs::OpenDirectory(profile->path()+L"\\user"); if(!user) return std::unexpected(user.error());
-  std::vector<fs::DirectoryGuard> children;
-  for(const auto *name:{L"cache",L"logs",L"diagnostics",L"sessions",L"backups",L"metadata",L"metadata\\update"}) {
-    auto child=fs::OpenDirectory(profile->path()+L"\\"+name); if(!child) return std::unexpected(child.error());
-    children.push_back(std::move(*child));
-  }
-  auto &sessions=children[3];
+  auto user=fs::OpenDirectory(profile->path()+L"\\user");
+  if(!user) return std::unexpected(SupportError(L"user",user.error()));
+  auto support=InspectSupportDirectories(*profile); if(!support) return std::unexpected(support.error());
+  auto &sessions=*support->directories[3];
   size_t history=0;
   for(const auto &item:std::filesystem::directory_iterator(sessions.path())) {
     if(++history>=1024) return std::unexpected(L"Session history capacity reached; preserve/archive explicitly before launching");
@@ -598,8 +649,12 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   // Actual copy and cache acquisition below still revalidate their own inputs.
   auto source=ValidateSaveTreeForSnapshot(*user,sessions.path()+L"\\"+*id+L"\\before-user");
   if(!source) return source;
-  auto existing_cache=InspectExistingCache(children[0],build->fingerprint());
-  if(!existing_cache) return std::unexpected(existing_cache.error());
+  if(support->directories[0]) {
+    auto existing_cache=InspectExistingCache(*support->directories[0],build->fingerprint());
+    if(!existing_cache) return std::unexpected(existing_cache.error());
+  }
+  const bool recreated_support=support->missing();
+  auto repaired=CreateMissingSupportDirectories(*profile,*writer,*support); if(!repaired) return repaired;
   auto directory=NewDirectory(sessions,*id); if(!directory) return std::unexpected(directory.error());
   auto state=Text(*directory,L"state.txt","prepared\n"); if(!state) return state;
   auto before=NewDirectory(*directory,L"before-user"); if(!before) return std::unexpected(before.error());
@@ -607,8 +662,8 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   auto receipt=Text(*directory,L"before-snapshot.txt",*snapshot); if(!receipt) return receipt;
   receipt=Text(*directory,L"capabilities.txt",*capability_record); if(!receipt) return receipt;
   auto config=Text(*directory,L"managed.toml",mcla::managed_config::kSentinel); if(!config) return config;
-  auto diagnostics=NewDirectory(children[2],*id); if(!diagnostics) return std::unexpected(diagnostics.error());
-  auto cache_path=children[0].path()+L"\\"+std::wstring(build->fingerprint().begin(),build->fingerprint().end());
+  auto diagnostics=NewDirectory(*support->directories[2],*id); if(!diagnostics) return std::unexpected(diagnostics.error());
+  auto cache_path=support->directories[0]->path()+L"\\"+std::wstring(build->fingerprint().begin(),build->fingerprint().end());
   if(!CreateDirectoryW(Native(cache_path).c_str(),nullptr) && GetLastError()!=ERROR_ALREADY_EXISTS)
     return std::unexpected(L"Cannot prepare build-specific cache");
   auto cache=fs::OpenDirectory(cache_path); if(!cache) return std::unexpected(cache.error());
@@ -616,8 +671,8 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   const auto boolean=[&](std::wstring_view name,bool value) { return flag(name,value?L"true":L"false"); };
   std::vector<std::wstring> args{
     flag(L"game_data_root",game->path()),flag(L"user_data_root",user->path()),
-    flag(L"cache_root",cache->path()),flag(L"metadata_root",children[5].path()),
-    flag(L"update_data_root",children[6].path()),flag(L"log_file",directory->path()+L"\\mcla.log"),
+    flag(L"cache_root",cache->path()),flag(L"metadata_root",support->directories[5]->path()),
+    flag(L"update_data_root",support->directories[6]->path()),flag(L"log_file",directory->path()+L"\\mcla.log"),
     flag(L"mcla_diagnostics_root",diagnostics->path()),flag(L"mcla_managed_launch_config",directory->path()+L"\\managed.toml"),
     flag(L"local_user_display_name",display_name),flag(L"d3d12_adapter",std::to_wstring(*gpu)),
     flag(L"resolution_scale",std::to_wstring(target.scale)),
@@ -645,6 +700,8 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
       "\nvsync "+std::to_string(capability->vsync)+"\nfullscreen "+std::to_string(p.fullscreen)+
       "\ncapability_policy "+std::to_string(kCapabilityPolicyVersion)+"\ncapability_record capabilities.txt\n");
   if(!provenance) return provenance;
+  std::vector<fs::DirectoryGuard> children;
+  for(auto &child:support->directories) children.push_back(std::move(*child));
   children.push_back(std::move(*before)); children.push_back(std::move(*diagnostics)); children.push_back(std::move(*cache));
   state=Text(*directory,L"state.txt","launching\n"); if(!state) return state;
   auto process=StartOwnedProcess(std::filesystem::path(build->path())/L"mcla.exe",args,directory->path());
@@ -655,6 +712,7 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   auto running=Text(session->directory,L"state.txt","running\npid "+std::to_string(session->process.ProcessId())+"\n");
   status=running?L"Game running. This profile is locked across builds. Closing this window leaves the game running.":
       L"Game running, but session receipt update failed. Profile lock remains held; finish the game normally.";
+  if(recreated_support) status+=L" Missing support folders recreated; existing files were not replaced.";
   return {};
 }
 
@@ -692,12 +750,13 @@ UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
   switch(action) {
     case UiAction::Refresh: result=s.Poll(); break;
     case UiAction::CheckLaunch: {
-      auto checked=s.CheckLaunch(request);
+      std::wstring support_notice;
+      auto checked=s.CheckLaunch(request,support_notice);
       if(!checked) result=std::unexpected(checked.error());
       else {
         checked_expiry=*checked;
         const auto description=CheckedStockSettingsDescription(request.render_target);
-        s.status=std::wstring(description.begin(),description.end());
+        s.status=std::wstring(description.begin(),description.end())+support_notice;
       }
       break;
     }
