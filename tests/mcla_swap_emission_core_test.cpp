@@ -163,9 +163,11 @@ void SnapshotTests() {
       {110, 111, 7, 1, 0, 0, 0, true}, absent};
   for (size_t i = 0; i < std::size(invalids); ++i) {
     swap::Ledger<1> ledger(epoch, true); swap::Emission issued; swap::Match match;
+    auto rejected_snapshot = invalids[i];
+    rejected_snapshot.callback_id = std::numeric_limits<uint64_t>::max();
     const auto expected = i < 3 ? swap::SnapshotResult::kInvalidQpc :
                           i < 6 ? swap::SnapshotResult::kMissingIdentity : swap::SnapshotResult::kUnavailable;
-    Check(ledger.issue(stock, fetch, invalids[i], issued) == swap::Result::kTokenIssued &&
+    Check(ledger.issue(stock, fetch, rejected_snapshot, issued) == swap::Result::kTokenIssued &&
           issued.snapshot_result == expected && issued.snapshot == swap::Snapshot{}, "transport issuance separate from invalid snapshot");
     Check(ledger.consume(issued.payload.view(), fetch, match) == swap::Result::kTokenMatched &&
           match.snapshot_result == expected && match.snapshot == swap::Snapshot{}, "unavailable snapshot is not timing provenance");
@@ -174,6 +176,59 @@ void SnapshotTests() {
   Check(swap::NormalizeSnapshot(equal, clean) == swap::SnapshotResult::kAvailable, "equal QPC witness allowed");
   Check(!swap::kSimulationProven && !swap::kSnapshotCoherenceProven && !swap::kNativeAdmitted,
         "token matching never grants simulation/coherence/native admission");
+}
+
+void CallbackIdentityTests() {
+  Check(swap::kSnapshotAbiVersion == 2 && swap::kVersion == 1 && swap::kExtendedWords == 11 &&
+        swap::kMaximumPayloadWords == 56, "snapshot ABI v2 leaves token packet v1/counts unchanged");
+  Check(offsetof(swap::Snapshot, callback_id) > offsetof(swap::Snapshot, snapshot_available),
+        "explicit callback identity appended after existing snapshot fields");
+  for (const uint64_t id : {uint64_t{0}, uint64_t{1}, std::numeric_limits<uint64_t>::max()}) {
+    auto supplied = Available(); supplied.callback_id = id;
+    swap::Snapshot clean;
+    Check(swap::NormalizeSnapshot(supplied, clean) == swap::SnapshotResult::kAvailable && clean == supplied,
+          "zero/positive/max callback IDs opaque in an available snapshot");
+    auto in_place = supplied;
+    Check(swap::NormalizeSnapshot(in_place, in_place) == swap::SnapshotResult::kAvailable && in_place == supplied,
+          "callback ID normalization safe in place");
+    swap::Ledger<1> ledger(epoch, true); swap::Emission issued; swap::Match match;
+    Check(ledger.issue(stock, fetch, supplied, issued) == swap::Result::kTokenIssued &&
+          issued.snapshot.callback_id == id && issued.snapshot == supplied,
+          "callback ID preserved at issuance without replacing timer bits");
+    swap::Payload expected; swap::Encode(stock, issued.token, expected, true);
+    Check(issued.payload.length == expected.length && issued.payload.words == expected.words,
+          "callback ID never encoded into token packet or original stock words");
+    Check(ledger.consume(issued.payload.view(), fetch, match) == swap::Result::kTokenMatched &&
+          match.snapshot == supplied && match.snapshot.callback_id == id,
+          "exact ID available through one-use ledger match");
+    Check(ledger.consume(issued.payload.view(), fetch, match) == swap::Result::kReplay && Clear(match),
+          "replay clears callback ID and whole match");
+    auto absent = supplied; absent.snapshot_available = false;
+    Check(swap::NormalizeSnapshot(absent, clean) == swap::SnapshotResult::kUnavailable &&
+          clean == swap::Snapshot{}, "unavailable normalization clears callback ID including stale maxima");
+    swap::Ledger<1> disabled; swap::Emission legacy;
+    Check(disabled.issue(stock, fetch, supplied, legacy) == swap::Result::kLegacyDisabled &&
+          legacy.payload.length == 4 && legacy.snapshot == swap::Snapshot{} && legacy.token == swap::Token{},
+          "disabled emission retains no callback ID and preserves legacy swap");
+  }
+  // Callback order can differ from issuance order: concurrent observers finish
+  // before taking the SDK ledger lock. No ID==serial/monotonic-ID assumption.
+  swap::Ledger<2> ledger(epoch, true); swap::Emission first, second; swap::Match match;
+  auto observed_later = Available(); observed_later.callback_id = 900;
+  auto observed_earlier = Available(); observed_earlier.callback_id = 7;
+  Check(ledger.issue(stock, fetch, observed_later, first) == swap::Result::kTokenIssued &&
+        first.token.serial == 1 && first.snapshot.callback_id == 900, "later callback can issue first");
+  Check(ledger.issue(stock, fetch, observed_earlier, second) == swap::Result::kTokenIssued &&
+        second.token.serial == 2 && second.snapshot.callback_id == 7, "callback IDs need not increase with serials");
+  Check(ledger.consume(second.payload.view(), fetch, match) == swap::Result::kTokenMatched &&
+        match.token.serial == 2 && match.snapshot.callback_id == 7, "reversed consume keeps second exact ID");
+  Check(ledger.consume(first.payload.view(), fetch, match) == swap::Result::kTokenMatched &&
+        match.token.serial == 1 && match.snapshot.callback_id == 900, "reversed consume keeps first exact ID");
+  Check(ledger.consume(first.payload.view(), fetch, match) == swap::Result::kReplay && Clear(match),
+        "reversed identity record cannot be replayed");
+  first.snapshot.callback_id = std::numeric_limits<uint64_t>::max();
+  Check(ledger.issue(stock, fetch, observed_earlier, first) == swap::Result::kCapacityExhausted && Clear(first),
+        "rejected issuance clears preexisting callback identity with the whole emission");
 }
 
 void AliasAndFallbackTests() {
@@ -206,7 +261,7 @@ void AliasAndFallbackTests() {
 }  // namespace
 
 int main() {
-  ProtocolTests(); DecodeRejectionTests(); LedgerTests(); BindingRejectionTests(); SnapshotTests(); AliasAndFallbackTests();
+  ProtocolTests(); DecodeRejectionTests(); LedgerTests(); BindingRejectionTests(); SnapshotTests(); CallbackIdentityTests(); AliasAndFallbackTests();
   std::cout << "checks=" << checks << " failures=" << failures << '\n';
   return failures ? 1 : 0;
 }

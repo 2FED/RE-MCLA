@@ -16,6 +16,9 @@ inline constexpr size_t kExtendedWords = 11;
 inline constexpr size_t kMaximumPayloadWords = 56;
 inline constexpr uint32_t kMagic = 0x4D535750u;  // Numeric protocol tag, MSWP.
 inline constexpr uint32_t kVersion = 1;
+// In-process Snapshot/Match/capture ABI, not the numerical token packet version.
+// All consumers embedding these types must be rebuilt together for v2.
+inline constexpr uint32_t kSnapshotAbiVersion = 2;
 inline constexpr uint64_t kMaxQpc = uint64_t(std::numeric_limits<int64_t>::max());
 inline constexpr bool kSimulationProven = false;
 inline constexpr bool kSnapshotCoherenceProven = false;
@@ -41,6 +44,10 @@ struct Snapshot {
   uint32_t native_thread_id = 0, guest_caller_lr = 0;
   uint32_t timer_address = 0, timer_counter = 0, timer_delta_bits = 0;
   bool snapshot_available = false;
+  // Optional opaque observer identity. Zero is the legacy/no-ID case. Its
+  // session, uniqueness and record association belong to the host/decoder;
+  // it is unrelated to token serial order and grants no causal claim.
+  uint64_t callback_id = 0;
   constexpr bool operator==(const Snapshot&) const = default;
 };
 struct Payload {
@@ -76,7 +83,8 @@ inline SnapshotResult NormalizeSnapshot(const Snapshot& input, Snapshot& output)
     return SnapshotResult::kInvalidQpc;
   if (!frozen.native_thread_id || !frozen.guest_caller_lr || !frozen.timer_address)
     return SnapshotResult::kMissingIdentity;
-  // Counter/delta bits are opaque, including zero and IEEE special bit patterns.
+  // Counter/delta bits and callback ID are opaque, including zero and maxima.
+  // The unavailable/fault paths above clear the ID with the entire snapshot.
   // Available means only structurally usable caller claims, never coherence.
   output = frozen;
   return SnapshotResult::kAvailable;
