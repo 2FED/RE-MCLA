@@ -156,6 +156,7 @@ class Journal {
 
   EpochResult create(uint64_t cookie, uint64_t qpc, uint32_t initial, uint32_t maximum,
                      Origin origin = Origin::kFresh) noexcept {
+    note_mutation();
     if (auto rejected = admission(qpc)) return {*rejected, 0};
     if (!cookie || !maximum || maximum > kMaxCount || initial > maximum || Name(origin).empty()) {
       reject_argument(); return {Disposition::kInvalidArgument, 0};
@@ -187,6 +188,7 @@ class Journal {
     return 0;
   }
   Disposition destroy(uint64_t cookie, uint64_t qpc) noexcept {
+    note_mutation();
     if (auto rejected = admission(qpc)) return *rejected;
     auto* epoch = find(cookie);
     if (!epoch) return unknown();
@@ -199,6 +201,7 @@ class Journal {
   }
   BeginResult begin_release(uint64_t cookie, uint32_t tid, std::optional<uint32_t> handle,
                             uint64_t qpc, uint32_t count, ReleaseContext context = {}) noexcept {
+    note_mutation();
     auto result = begin(cookie, tid, handle, qpc, Kind::kRelease);
     if (result.ticket.valid()) {
       auto& row = operations_[result.ticket.op_id() - 1]; row.release_count = count; row.context = context;
@@ -210,6 +213,7 @@ class Journal {
   }
   BeginResult begin_wait(uint64_t cookie, uint32_t tid, std::optional<uint32_t> handle,
                          uint64_t qpc, TimeoutKind timeout) noexcept {
+    note_mutation();
     auto result = begin(cookie, tid, handle, qpc, Kind::kWait);
     if (result.ticket.valid()) {
       operations_[result.ticket.op_id() - 1].timeout_kind = timeout;
@@ -219,6 +223,7 @@ class Journal {
   }
   BeginResult begin_unsupported(uint64_t cookie, uint32_t tid, std::optional<uint32_t> handle,
                                 uint64_t qpc, Kind kind) noexcept {
+    note_mutation();
     if (!enabled_) return {Disposition::kDisabled, {}};
     if (Name(kind).empty() || kind == Kind::kRelease || kind == Kind::kWait) {
       reject_argument(); return {Disposition::kInvalidArgument, {}};
@@ -231,6 +236,7 @@ class Journal {
   }
   Disposition end_release(Ticket ticket, uint64_t qpc, bool success,
                           std::optional<int32_t> previous = std::nullopt) noexcept {
+    note_mutation();
     if (!enabled_) return Disposition::kDisabled;
     auto* row = completion(ticket, qpc, Kind::kRelease);
     if (!row) return completion_disposition_;
@@ -241,6 +247,7 @@ class Journal {
     return Disposition::kRecorded;
   }
   Disposition end_wait(Ticket ticket, uint64_t qpc, WaitResult result) noexcept {
+    note_mutation();
     if (!enabled_) return Disposition::kDisabled;
     auto* row = completion(ticket, qpc, Kind::kWait);
     if (!row) return completion_disposition_;
@@ -251,6 +258,7 @@ class Journal {
     return Disposition::kRecorded;
   }
   Disposition end_unsupported(Ticket ticket, uint64_t qpc) noexcept {
+    note_mutation();
     if (!enabled_) return Disposition::kDisabled;
     if (!owns(ticket) || operations_[ticket.op_id() - 1].kind == Kind::kRelease ||
         operations_[ticket.op_id() - 1].kind == Kind::kWait) {
@@ -259,7 +267,7 @@ class Journal {
     return completion(ticket, qpc, operations_[ticket.op_id() - 1].kind)
                ? Disposition::kRecorded : completion_disposition_;
   }
-  void fail() noexcept { if (enabled_) mark(Issue::kExternalFailure); }
+  void fail() noexcept { note_mutation(); if (enabled_) mark(Issue::kExternalFailure); }
   void stop_admissions(uint64_t qpc) noexcept {
     if (!enabled_) return;
     if (stopped_) return;
@@ -271,6 +279,10 @@ class Journal {
   }
   bool drained() const noexcept { return pending_ == 0; }
   bool stopped() const noexcept { return stopped_; }
+  // Separate freeze-identity guard, NOT a replacement for v1 issue/history
+  // semantics. Even a duplicate completion or repeated fail changes the
+  // observation attempt history after the cut. Repeat stop remains a no-op.
+  bool post_stop_mutated() const noexcept { return post_stop_mutated_; }
   bool history_complete() const noexcept {
     return enabled_ && configured_ && generation_ && stopped_ && drained() && issues_ == 0;
   }
@@ -293,6 +305,7 @@ class Journal {
   }
 
  private:
+  void note_mutation() noexcept { if (enabled_ && stopped_) post_stop_mutated_ = true; }
   void mark(Issue issue) noexcept { issues_ |= uint32_t(issue); }
   void increment(uint64_t& value) noexcept {
     if (value == UINT64_MAX) mark(Issue::kCounterOverflow); else ++value;
@@ -367,6 +380,7 @@ class Journal {
   Window window_{};
   uint64_t generation_ = 0;
   bool enabled_ = false, configured_ = false, stopped_ = false, malformed_fields_ = false;
+  bool post_stop_mutated_ = false;
   uint32_t issues_ = 0, pending_ = 0;
   std::optional<uint64_t> cut_qpc_;
   Counts counts_{};
