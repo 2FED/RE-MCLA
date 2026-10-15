@@ -11,6 +11,7 @@ import json
 
 import mcla_phase_census_decode as phase_v1
 import mcla_game_swap_decode as swap_v1
+from mcla_game_source_scout_decode import resolve_source_schedule
 
 PHASE_MAX_BYTES = 2 * 1024 * 1024
 SWAP_MAX_BYTES = 128 * 1024
@@ -58,13 +59,14 @@ def _callback_id(value, low):
 
 
 def validate_phase_source_join(phase_raw_bytes, swap_raw_bytes, source_receipt, token):
-    """Return detached91 observations of explicit IDs; never native acceptance.
+    """Return detached finite-profile observations; never native acceptance.
 
     Unmatched phase callbacks and ID0 are honest coverage holes. Positive
     unknown IDs, reused IDs for distinct tokens, or inconsistent duplicate
     sources are integrity failures. Unhealthy scopes remain descriptive.
     The caller still owns input provenance, native cleanup and pixel review.
     """
+    schedule = resolve_source_schedule(source_receipt, token=token)
     phase = _parse(phase_raw_bytes, PHASE_MAX_BYTES)
     swap = _parse(swap_raw_bytes, SWAP_MAX_BYTES)
     phase_v1.exact(phase, phase_v1.TOP_KEYS, 'exact v2 phase schema')
@@ -82,7 +84,7 @@ def validate_phase_source_join(phase_raw_bytes, swap_raw_bytes, source_receipt, 
     need(callback_ids == set(range(1, len(callbacks) + 1)),
          'complete consecutive phase callback IDs required')
     records = swap['records']
-    need(type(records) is list and len(records) == 91, 'exact91 v2 swap records')
+    need(type(records) is list and len(records) == schedule['scheduled_slots'], 'exact profile v2 swap records')
     for row in records:
         swap_v1.exact(row, swap_v1.ROW_KEYS, 'exact v2 swap row')
         binding = row['binding']

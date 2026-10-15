@@ -1,4 +1,4 @@
-"""Pure, streaming decoder for one fixed passive91-slot source scout.
+"""Pure, streaming decoder for finite fixed passive source scout profiles.
 
 All metadata and the exact BMP inventory pass before the first injected read.
 Only current/previous RGB and current encoded BMP are held, never91 images.
@@ -18,6 +18,11 @@ BMP_STRIDE = WIDTH * 3
 BMP_BYTES = 54 + BMP_STRIDE * HEIGHT
 BUFFER_LIMIT = 536870912
 MAX_RAW_BYTES = 335462400
+LEGACY_PROFILE = 'legacy91_10hz'
+SHORT_PROFILE = 'short31_10hz'
+# Schema selects the entire contract, never a caller-provided arbitrary count.
+_PROFILES = ((LEGACY_PROFILE, 'mcla-guest-source-scout-v1', 91, 335462400),
+             (SHORT_PROFILE, 'mcla-guest-source-scout-short31-v1', 31, 114278400))
 CAPTURE_KEYS = {'presenter_epoch', 'acquired_sequence', 'qpc_frequency',
                 'refresh_cpu_begin_qpc', 'refresh_cpu_end_qpc',
                 'acquire_before_qpc', 'acquire_after_qpc',
@@ -57,10 +62,17 @@ def uint(value, low=1, high=MAX_QPC):
     return value
 
 
-def _metadata(receipt, token):
+def _metadata(receipt, token, expected_profile):
     need(type(token) is str and re.fullmatch('[0-9a-f]{32}', token), 'expected token shape')
     exact(receipt, TOP_KEYS, 'exact native receipt schema')
-    need(receipt['schema'] == 'mcla-guest-source-scout-v1' and
+    need(expected_profile is None or (type(expected_profile) is str and
+         expected_profile in (LEGACY_PROFILE, SHORT_PROFILE)), 'known expected source profile')
+    profile = next((item for item in _PROFILES if type(receipt['schema']) is str and
+                    item[1] == receipt['schema']), None)
+    need(profile is not None, 'known finite native schema')
+    profile_name, _, slot_count, raw_limit = profile
+    need(expected_profile is None or profile_name == expected_profile, 'expected source profile mismatch')
+    need(
          type(receipt['token']) is str and receipt['token'] == token, 'native schema/token binding')
     need(type(receipt['status']) is str and receipt['status'] in (COMPLETE, INCOMPLETE),
          'native failed or unknown terminal status')
@@ -71,7 +83,7 @@ def _metadata(receipt, token):
          'clock/pixel/file interpretation')
     for key, expected in (('scout_delay_seconds', DELAY_SECONDS),
                           ('diagnostic_buffer_limit_bytes', BUFFER_LIMIT),
-                          ('maximum_raw_capture_bytes', MAX_RAW_BYTES)):
+                          ('maximum_raw_capture_bytes', raw_limit)):
         need(type(receipt[key]) is int and receipt[key] == expected, 'fixed scout delay/buffer contract')
     readiness = uint(receipt['readiness_sequence_not_pixel_identity'], 60, 2**64-1)
     uint(receipt['readiness_wait_ms'], 0, 89999)
@@ -81,14 +93,14 @@ def _metadata(receipt, token):
     begin = uint(sequence['begin_qpc'])
     frequency = uint(sequence['qpc_frequency'], 10, 10**10)
     need(begin == uint(anchor + DELAY_SECONDS * frequency), 'exact fixed delay from readiness observation')
-    end = uint(begin + SLOTS * frequency // HZ)
-    need(type(sequence['scheduled_slots']) is int and sequence['scheduled_slots'] == SLOTS and
+    end = uint(begin + slot_count * frequency // HZ)
+    need(type(sequence['scheduled_slots']) is int and sequence['scheduled_slots'] == slot_count and
          type(sequence['schedule_hz']) is int and sequence['schedule_hz'] == HZ,
-         'fixed91 absolute100ms slots')
+         'profile-fixed absolute100ms slots')
     need(type(sequence['width']) is int and sequence['width'] == WIDTH and
          type(sequence['height']) is int and sequence['height'] == HEIGHT, 'fixed1280x720 source')
     slots = sequence['slots']
-    need(type(slots) is list and len(slots) == SLOTS, 'exact91 native slots')
+    need(type(slots) is list and len(slots) == slot_count, 'exact profile native slots')
     frozen, names = [], []
     # A stop while waiting the40s delay may precede begin; calls may not.
     previous_observed = anchor
@@ -172,14 +184,28 @@ def _metadata(receipt, token):
             need(slot['image_state'] == 'absent' and image_bytes == 0, 'uncollected image must be absent')
         frozen.append(row)
         previous_observed = observed
-    need(receipt['status'] == (COMPLETE if collected == SLOTS else INCOMPLETE), 'terminal status versus slot coverage')
-    return tuple(frozen), tuple(names), begin, end, frequency, anchor
+    need(receipt['status'] == (COMPLETE if collected == slot_count else INCOMPLETE), 'terminal status versus slot coverage')
+    return tuple(frozen), tuple(names), begin, end, frequency, anchor, profile_name
 
 
-def validate_metadata(receipt, *, token):
+def validate_metadata(receipt, *, token, expected_profile=LEGACY_PROFILE):
     """Metadata-only live terminal validation; original receipt returned, no IO."""
-    _metadata(receipt, token)
+    _metadata(receipt, token, expected_profile)
     return receipt
+
+
+def resolve_source_schedule(receipt, *, token, expected_profile=None):
+    """Fully validate metadata and return detached finite configuration/rows.
+
+    Pure dependent audits may accept either finite schema. Admission/read paths
+    must pin expected_profile; their public defaults remain the legacy profile.
+    """
+    rows, names, begin, end, frequency, anchor, profile = _metadata(receipt, token, expected_profile)
+    return {'profile': profile, 'scheduled_slots': len(rows), 'schedule_hz': HZ,
+            'begin_qpc': begin, 'schedule_end_qpc': end,
+            'journal_begin_qpc': uint(begin - frequency), 'qpc_frequency': frequency,
+            'readiness_observed_qpc': anchor, 'scout_delay_seconds': DELAY_SECONDS,
+            'prewindow_seconds': 1, 'slots': rows, 'image_names': names}
 
 
 def _bmp_rgb(data):
@@ -198,7 +224,7 @@ def _bmp_rgb(data):
     return bytes(rgb)
 
 
-def decode(receipt, *, token, image_names, read_image):
+def decode(receipt, *, token, image_names, read_image, expected_profile=LEGACY_PROFILE):
     """Post-exit streaming census; callback reads each collected slot once in order.
 
     Complete metadata/inventory gates precede every image read. Pixel failure
@@ -206,8 +232,12 @@ def decode(receipt, *, token, image_names, read_image):
     RGB is retained; monotonic source IDs make this sufficient for duplicates,
     even across missed slots. Returned arrays contain scalars/hashes, no pixels.
     """
-    rows, wanted, begin, end, frequency, anchor = _metadata(receipt, token)
-    need(type(image_names) in (list, tuple) and len(image_names) <= SLOTS and
+    schedule = resolve_source_schedule(receipt, token=token, expected_profile=expected_profile)
+    rows, wanted = schedule['slots'], schedule['image_names']
+    begin, end = schedule['begin_qpc'], schedule['schedule_end_qpc']
+    frequency, anchor = schedule['qpc_frequency'], schedule['readiness_observed_qpc']
+    slot_count = schedule['scheduled_slots']
+    need(type(image_names) in (list, tuple) and len(image_names) <= slot_count and
          all(type(name) is str for name in image_names), 'bounded BMP-only inventory')
     names = tuple(image_names)
     need(len(set(names)) == len(names) and set(names) == set(wanted), 'exact unique BMP-only inventory')
@@ -252,12 +282,12 @@ def decode(receipt, *, token, image_names, read_image):
                             p['copy_completion_observed_qpc'] - p['copy_submit_before_qpc']})
             del raw, rgb
         observations.append(observation)
-    census = {'schema': 'mcla-guest-source-scout-census-v1', 'status': COMPLETE if counts['COLLECTED'] == SLOTS else INCOMPLETE,
-              'scheduled_slots': SLOTS, 'schedule_hz': HZ, 'begin_qpc': begin, 'schedule_end_qpc': end,
+    census = {'schema': 'mcla-guest-source-scout-census-v1', 'status': COMPLETE if counts['COLLECTED'] == slot_count else INCOMPLETE,
+              'scheduled_slots': slot_count, 'schedule_hz': HZ, 'begin_qpc': begin, 'schedule_end_qpc': end,
               'qpc_frequency': frequency, 'readiness_observed_qpc': anchor, 'scout_delay_seconds': DELAY_SECONDS,
               'width': WIDTH, 'height': HEIGHT, 'counts': counts,
               'attempted_calls': counts['COLLECTED'] + counts['FAILED'],
-              'all_slots_collected': counts['COLLECTED'] == SLOTS,
+              'all_slots_collected': counts['COLLECTED'] == slot_count,
               'duplicate_sources': duplicates, 'unique_sources': unique,
               'observations': tuple(observations), 'source_witness_spans': tuple(windows),
               'external_call_costs': tuple(calls), 'interpretation': INTERPRETATION}

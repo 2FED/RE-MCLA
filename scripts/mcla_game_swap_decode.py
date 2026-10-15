@@ -8,7 +8,7 @@ Statistics are explicitly non-quiescent descriptive samples, not acceptance.
 """
 import re
 
-from mcla_game_source_scout_decode import validate_metadata
+from mcla_game_source_scout_decode import resolve_source_schedule
 
 U32, U64, MAX_QPC = 2**32 - 1, 2**64 - 1, 2**63 - 1
 SLOTS, CAPACITY = 91, 1024
@@ -77,7 +77,7 @@ def _binding(value, *, epoch, begin, end, refresh_begin):
 
 
 def validate_swap_receipt(data, scout_receipt, expected_token):
-    """Validate parsed exact dictionaries; return descriptive, detached91 rows.
+    """Validate parsed exact dictionaries; return detached finite-profile rows.
 
     Scout validation is pure metadata only. The supervisor must separately
     validate its pixels/inventory, and must reject duplicate JSON keys before
@@ -88,11 +88,11 @@ def validate_swap_receipt(data, scout_receipt, expected_token):
     need(type(expected_token) is str and re.fullmatch('[0-9a-f]{32}', expected_token),
          'expected lowercase32hex token')
     epoch = uint(int(expected_token[:16], 16), low=1)
-    validate_metadata(scout_receipt, token=expected_token)
-    sequence = scout_receipt['sequence']
+    sequence = resolve_source_schedule(scout_receipt, token=expected_token)
     frequency = sequence['qpc_frequency']
-    begin = uint(sequence['begin_qpc'] - frequency, MAX_QPC, 1)
-    end = uint(sequence['begin_qpc'] + SLOTS * frequency // 10, MAX_QPC, 1)
+    begin = sequence['journal_begin_qpc']
+    end = sequence['schedule_end_qpc']
+    slot_count = sequence['scheduled_slots']
     need(0 < end - begin <= 12 * frequency, 'bounded swap window')
     exact(data, TOP_KEYS, 'exact swap receipt schema')
     for key, expected in (('schema', 'mcla-game-swap-observer-v1'),
@@ -114,14 +114,14 @@ def validate_swap_receipt(data, scout_receipt, expected_token):
     need(callback_failed <= issued + rejected, 'callback failures exceed attempted issuance')
     need(type(stats['failed']) is bool, 'exact failed boolean')
     records = data['records']
-    need(type(records) is list and len(records) == SLOTS, 'exact91 swap records')
+    need(type(records) is list and len(records) == slot_count, 'exact profile swap records')
     rows, sources, tokens = [], {}, {}
     counts = {'bound': 0, 'unbound': 0, 'missing': 0, 'available_snapshots': 0,
               'unavailable_snapshots': 0, 'duplicate_sources': 0}
     previous_serial = None
     for index, (record, scout_row) in enumerate(zip(records, sequence['slots'])):
         exact(record, ROW_KEYS, 'exact swap row schema')
-        need(uint(record['slot'], SLOTS - 1) == index, 'ordered unique swap slots')
+        need(uint(record['slot'], slot_count - 1) == index, 'ordered unique swap slots')
         capture = scout_row['capture']
         if capture is None:
             need(all(record[key] is None for key in ROW_KEYS - {'slot'}),

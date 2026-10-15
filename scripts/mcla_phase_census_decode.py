@@ -9,7 +9,7 @@ import hashlib
 import json
 import re
 
-from mcla_game_source_scout_decode import validate_metadata
+from mcla_game_source_scout_decode import resolve_source_schedule
 
 MAX_BYTES = 2 * 1024 * 1024
 U32, U64, MAX_QPC = 2**32 - 1, 2**64 - 1, 2**63 - 1
@@ -88,11 +88,10 @@ def validate_phase_census(raw_bytes, source_receipt, token):
     Clock-fault exits, scope straddles and native health failures are explicit.
     """
     need(type(token) is str and re.fullmatch('[0-9a-f]{32}', token), 'expected32lowerhex token')
-    validate_metadata(source_receipt, token=token)
-    sequence = source_receipt['sequence']
+    sequence = resolve_source_schedule(source_receipt, token=token)
     frequency = sequence['qpc_frequency']
-    begin = uint(sequence['begin_qpc'] - frequency, MAX_QPC, 1)
-    end = uint(sequence['begin_qpc'] + 91 * frequency // 10, MAX_QPC, 1)
+    begin = sequence['journal_begin_qpc']
+    end = sequence['schedule_end_qpc']
     need(0 < end - begin <= 12 * frequency, 'bounded shared phase window')
     data = _parse(raw_bytes)
     exact(data, TOP_KEYS, 'exact phase census schema')

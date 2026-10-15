@@ -2,6 +2,7 @@
 import json
 from mcla_owner_ready import need, event_name
 from mcla_history_limits import HANDOFF_MAX_BYTES
+from mcla_game_source_scout_decode import resolve_source_schedule
 
 NUMBERS = {'frequency', 'journal_begin_qpc', 'journal_end_qpc', 'ready_deadline_qpc',
            'opened_qpc', 'waiting_before_qpc', 'waiting_after_qpc', 'ready_before_qpc',
@@ -57,8 +58,9 @@ def validate(raw, signal, source, handoff, token):
          source['sequence']['qpc_frequency'] == handoff['qpc_frequency'] == f and
          handoff['observer_begin_qpc'] == value['journal_begin_qpc'] and
          handoff['freeze_qpc'] == value['freeze_qpc'], 'owner-ready exact paired headers')
-    phase_end = source['sequence']['begin_qpc'] + 91*f//10
-    need(source['sequence']['begin_qpc'] == value['source_observed_qpc'] + 40*f and
+    schedule = resolve_source_schedule(source, token=token)
+    phase_end = schedule['schedule_end_qpc']
+    need(schedule['begin_qpc'] == value['source_observed_qpc'] + schedule['scout_delay_seconds']*f and
          phase_end <= value['freeze_qpc'] < value['journal_end_qpc'], 'owner-ready actual cut inside horizon')
     return dict(owner_ready_assertion_validated=True, scene_proven=False, fps_proven=False,
                 source_observed_qpc=value['source_observed_qpc'], freeze_qpc=value['freeze_qpc'])

@@ -27,8 +27,9 @@ def _execution(value):
     return dict(value)
 
 
-def analyze(receipt, *, token, image_names, read_image, execution):
-    """Validate all metadata/inventory/pixels, then report exactly91 slots.
+def analyze(receipt, *, token, image_names, read_image, execution,
+            expected_profile=scout.LEGACY_PROFILE):
+    """Validate all metadata/inventory/pixels, then report the pinned profile.
 
     Duplicate sources use the FIRST observed acquire_after upper witness. Their
     semantic publication elapsed is exactly zero, not a later checkout event.
@@ -38,12 +39,12 @@ def analyze(receipt, *, token, image_names, read_image, execution):
     streaming scout decoder; original caller metadata cannot affect later rows.
     """
     scope = _execution(execution)
-    scout.validate_metadata(receipt, token=token)
+    schedule = scout.resolve_source_schedule(receipt, token=token, expected_profile=expected_profile)
     # Validation limits this to the fixed scalar/dict/list wire schema. Freeze
     # before invoking any caller reader; it may mutate every original input.
     frozen = copy.deepcopy(receipt)
     decoded = scout.decode(frozen, token=token, image_names=image_names,
-                           read_image=read_image)
+                           read_image=read_image, expected_profile=expected_profile)
     census = decoded['census']
     images = {row['slot']: row for row in decoded['images']}
     publications, rows, gaps = {}, [], []
@@ -91,8 +92,8 @@ def analyze(receipt, *, token, image_names, read_image, execution):
               'interpretation': 'MAILBOX_RELEASE_CAS_WITNESSES_NOT_SIMULATION_DISPLAY_OR_PIXEL_AGE',
               'execution_scope_claim': scope,
               'token': token, 'qpc_frequency': census['qpc_frequency'],
-              'scheduled_slots': scout.SLOTS, 'counts': dict(census['counts']),
-              'uncollected_slots': scout.SLOTS - census['counts']['COLLECTED'],
+              'scheduled_slots': schedule['scheduled_slots'], 'counts': dict(census['counts']),
+              'uncollected_slots': schedule['scheduled_slots'] - census['counts']['COLLECTED'],
               'unique_sources': census['unique_sources'],
               'duplicate_sources': census['duplicate_sources'],
               'unsampled_source_ids_between_observed_endpoints': unsampled_total,
