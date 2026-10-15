@@ -14,8 +14,10 @@ import re
 import mcla_semaphore_credit_audit as v1
 import mcla_semaphore_prefix_audit as prefix
 import mcla_phase_source_join as phase_join
+from mcla_history_limits import (HANDOFF_MAX_BYTES, HANDOFF_SCOPE_CAPACITY,
+                                 HANDOFF_EVENT_CAPACITY, semaphore_capacity)
 
-MAX_BYTES = 8 * 1024 * 1024
+MAX_BYTES = HANDOFF_MAX_BYTES
 FALSE_FLAGS = {'native_admitted', 'simulation_proven', 'update_causality_proven',
                'frame_to_step_mapping_proven', 'fps_proven'}
 TOP_KEYS = FALSE_FLAGS | {'schema', 'token', 'qpc_frequency', 'observer_begin_qpc',
@@ -56,15 +58,16 @@ def _prefix_metadata(value, token, begin, cut, frequency):
          value['token'] == token and value['clock'] == 'win32-query-performance-counter',
          'prefix identity')
     for key, expected in (('observer_begin_qpc', begin), ('freeze_qpc', cut),
-                          ('qpc_frequency', frequency), ('capacity', prefix.CAPACITY)):
+                          ('qpc_frequency', frequency)):
         uint(value[key]); need(value[key] == expected, 'prefix clock/capacity binding')
+    capacity = semaphore_capacity(value['capacity'])
     for key in prefix.FALSE_FLAGS:
         need(value[key] is False, 'prefix proof flags false')
     for key in ('admission_inventory_complete', 'observer_failed', 'unknown_coverage_gap'):
         boolean(value[key])
     need(type(value['epochs']) is list and 0 < len(value['epochs']) <= v1.MAX_EPOCHS,
          'bounded nonempty prefix epochs')
-    need(type(value['operations']) is list and len(value['operations']) <= prefix.CAPACITY,
+    need(type(value['operations']) is list and len(value['operations']) <= capacity,
          'bounded prefix operations')
     need(type(value['loss_ranges']) is list and len(value['loss_ranges']) <= prefix.MAX_LOSS_RANGES,
          'bounded prefix losses')
@@ -119,7 +122,8 @@ def _prefix_metadata(value, token, begin, cut, frequency):
     return epochs, operations
 
 
-def _validate_handoff(hand, phase, epochs, operations, token):
+def _validate_handoff(hand, phase, epochs, operations, token, capacity):
+    capacity = semaphore_capacity(capacity)
     exact(hand, TOP_KEYS, 'exact handoff schema')
     need(hand['schema'] == 'mcla-frame-handoff-v1' and hand['token'] == token, 'handoff identity')
     for key in FALSE_FLAGS: need(hand[key] is False, 'handoff proof flags false')
@@ -151,7 +155,9 @@ def _validate_handoff(hand, phase, epochs, operations, token):
     if hand['collector_counters']['late_callbacks']: issues.add('LATE_CALLBACKS_AT_CUT')
     if hand['collector_counters']['annotation_mismatches']: issues.add('ANNOTATION_MISMATCHES')
     if selected['initial_count'] or selected['origin'] != 'fresh': issues.add('NONFRESH_OR_INITIAL_CREDITS')
-    for name, limit in (('scopes', 2048), ('worker_events', 16384), ('operation_annotations', 4096)):
+    for name, limit in (('scopes', HANDOFF_SCOPE_CAPACITY),
+                        ('worker_events', HANDOFF_EVENT_CAPACITY),
+                        ('operation_annotations', capacity)):
         need(type(hand[name]) is list and len(hand[name]) <= limit, 'bounded '+name)
     phase_ids = {row['call_id']: row for row in phase['scopes']}
     scopes, invocation_ids, host_tids = {}, set(), {}
@@ -402,7 +408,8 @@ def validate_frame_handoff(handoff_raw, prefix_raw, phase_raw, swap_raw, source_
             uint(row[key])
         boolean(row['completed']); boolean(row['invalid_bracket'])
     for key in ('qpc_frequency', 'begin_qpc', 'end_qpc_exclusive'): uint(phase.get(key), v1.MAX_QPC, 1)
-    scopes, annotations, issues = _validate_handoff(hand, phase, epochs, operations, token)
+    scopes, annotations, issues = _validate_handoff(hand, phase, epochs, operations,
+                                                 token, pre['capacity'])
     joined = phase_join.validate_phase_source_join(phase_raw, swap_raw, source, token)
     audited = prefix.audit(prefix_raw, token=token, observer_begin_qpc=hand['observer_begin_qpc'],
                            freeze_qpc=hand['freeze_qpc'], qpc_frequency=hand['qpc_frequency'])

@@ -275,20 +275,23 @@ void FailuresAndRepresentation() {
 }
 void OverflowAndBounds() {
   Setup setup;
+  setup.journal = std::make_unique<core::Journal>(core::Window{100, 1000000, 10000}, true);
+  setup.journal->create(cookie, 101, 0, 8);
   for (size_t i = 0; i < core::kOperationCapacity; ++i) {
     const auto wait = setup.journal->begin_wait(cookie, 25, {}, 200 + i, core::TimeoutKind::kZero);
     setup.journal->end_wait(wait.ticket, 201 + i, core::WaitResult::kTimeout);
   }
-  setup.journal->begin_release(cookie, 25, {}, 8000, 1);
-  auto captured = setup.Capture(9000);
-  Check(captured.snapshot && captured.snapshot->raw_counts().observed_operations == 4097 &&
-        captured.snapshot->raw_operations().size() == 4096, "capacity overflow preserves all retained rows plus actual lost count");
+  setup.journal->begin_release(cookie, 25, {}, core::kOperationCapacity + 800, 1);
+  auto captured = setup.Capture(core::kOperationCapacity + 1000);
+  Check(captured.snapshot && captured.snapshot->raw_counts().observed_operations == core::kOperationCapacity + 1 &&
+        captured.snapshot->raw_operations().size() == core::kOperationCapacity, "capacity overflow preserves all retained rows plus actual lost count");
   if (!captured.snapshot) return;
   const auto prefix = captured.snapshot->PrefixJson(); const auto raw = captured.snapshot->RawCoreJson();
   Check(prefix.error == bridge::Error::kNone && raw.error == bridge::Error::kNone &&
         prefix.json.size() <= bridge::kMaxJsonBytes && raw.json.size() <= bridge::kMaxJsonBytes &&
         Has(prefix.json, "\"lost_operations\":1") &&
-        Has(prefix.json, "\"first_op_id\":4097,\"last_op_id\":4097,\"entry_lower_bound_qpc\":null"),
+        Has(prefix.json, "\"first_op_id\":" + std::to_string(core::kOperationCapacity + 1) +
+            ",\"last_op_id\":" + std::to_string(core::kOperationCapacity + 1) + ",\"entry_lower_bound_qpc\":null"),
         "unlocalized overflow loss has null bound, not inferred from last retained row");
   Emit("overflow", *captured.snapshot);
   bridge::detail::Writer writer;

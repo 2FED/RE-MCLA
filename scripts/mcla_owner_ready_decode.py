@@ -1,6 +1,7 @@
 """Strict owner-assertion/source/handoff pairing, never a gameplay or FPS proof."""
 import json
 from mcla_owner_ready import need, event_name
+from mcla_history_limits import HANDOFF_MAX_BYTES
 
 NUMBERS = {'frequency', 'journal_begin_qpc', 'journal_end_qpc', 'ready_deadline_qpc',
            'opened_qpc', 'waiting_before_qpc', 'waiting_after_qpc', 'ready_before_qpc',
@@ -25,7 +26,7 @@ def validate(raw, signal, source, handoff, token):
     # Caller must also validate the full source/handoff journals before pixels.
     event_name(token)
     if type(handoff) is bytes:
-        handoff = strict(handoff, 8 * 1024 * 1024)
+        handoff = strict(handoff, HANDOFF_MAX_BYTES)
     value = strict(raw)
     need(type(value) is dict and set(value) == KEYS, 'owner-ready exact schema')
     need(value['schema'] == 'mcla-owner-ready-v1' and value['token'] == token and

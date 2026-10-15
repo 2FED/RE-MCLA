@@ -5,6 +5,7 @@
 // storage; const spans are not independent snapshots and require that same
 // serialization. Runtime coverage and all supplied identities remain unproven.
 #include "mcla_frame_context_core.h"
+#include "mcla_history_limits.h"
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -15,7 +16,7 @@
 #include <string_view>
 
 namespace mcla::semaphore_observer {
-inline constexpr size_t kEpochCapacity = 64, kOperationCapacity = 4096;
+inline constexpr size_t kEpochCapacity = 64, kOperationCapacity = history_limits::kOperations;
 inline constexpr uint64_t kMaxQpc = uint64_t(std::numeric_limits<int64_t>::max());
 inline constexpr uint32_t kMaxCount = uint32_t(std::numeric_limits<int32_t>::max());
 inline constexpr bool kNativeAdmitted = false, kSimulationProven = false,

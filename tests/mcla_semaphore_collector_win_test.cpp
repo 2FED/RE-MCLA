@@ -36,7 +36,7 @@ constexpr mcla::frame_context::Lane lane{0x1000, 0x2000};
 struct Setup {
   api::Registry registry; Clock clock;
   std::unique_ptr<col::Collector> collector = std::make_unique<col::Collector>(registry, col::ClockProvider{&clock, Clock::Read, Clock::Frequency});
-  Setup() { Check(collector->Configure(window, "44444444444444444444444444444444", true) == col::Status::kOk, "explicit ON configuration"); }
+  explicit Setup(core::Window supplied = window) { Check(collector->Configure(supplied, "44444444444444444444444444444444", true) == col::Status::kOk, "explicit ON configuration"); }
   void Select(bool bind = true) {
     col::Collector::ScopedCreate scope(*collector, {col::kCreationLR, 0, 0x4000, lane});
     clock.now = 101; registry.Create({cookie, 0, 32767, api::Origin::kFresh});
@@ -289,15 +289,15 @@ void DefaultAndOff() {
         "late wrong-thread End cannot mutate frozen journal");
 }
 [[maybe_unused]] void CapacityAndConfiguration() {
-  Setup setup; setup.Select();
+  Setup setup({100, 1000000, 1000}); setup.Select();
   for (size_t i = 0; i < core::kOperationCapacity; ++i) {
     setup.clock.now = 200 + i; const auto ticket = setup.registry.Begin({cookie, api::Kind::kWait, 0, api::TimeoutClass::kZero});
     setup.clock.now = 201 + i; setup.registry.End({ticket, api::Kind::kWait, api::Result::kTimeout, {}});
   }
-  setup.clock.now = 8000; Check(!setup.registry.Begin({cookie, api::Kind::kWait, 0, api::TimeoutClass::kZero}), "fixed ticket capacity cannot recycle IDs");
-  auto frozen = setup.Freeze(true, 10000);
-  Check(frozen.frozen && frozen.frozen->journal().raw_counts().observed_operations == 4097 &&
-        frozen.frozen->journal().raw_counts().stored_operations == 4096 && frozen.frozen->annotations().size() == 4096 &&
+  setup.clock.now = core::kOperationCapacity + 800; Check(!setup.registry.Begin({cookie, api::Kind::kWait, 0, api::TimeoutClass::kZero}), "fixed ticket capacity cannot recycle IDs");
+  auto frozen = setup.Freeze(true, core::kOperationCapacity + 1000);
+  Check(frozen.frozen && frozen.frozen->journal().raw_counts().observed_operations == core::kOperationCapacity + 1 &&
+        frozen.frozen->journal().raw_counts().stored_operations == core::kOperationCapacity && frozen.frozen->annotations().size() == core::kOperationCapacity &&
         Has(frozen.frozen->journal().PrefixJson().json, "\"entry_lower_bound_qpc\":null"), "unlocalized capacity loss is explicit, never prefix success");
   for (unsigned bad = 0; bad < 3; ++bad) {
     api::Registry registry; Clock clock; if (bad == 1) clock.frequency = 999; if (bad == 2) clock.throw_frequency = true;

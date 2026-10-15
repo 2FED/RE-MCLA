@@ -14,9 +14,11 @@ import copy
 import hashlib
 import json
 import re
+from mcla_history_limits import (LEGACY_SEMAPHORE_CAPACITY, SEMAPHORE_MAX_BYTES,
+                                 semaphore_capacity)
 
-MAX_BYTES = 2 * 1024 * 1024
-CAPACITY = 4096
+MAX_BYTES = SEMAPHORE_MAX_BYTES
+CAPACITY = LEGACY_SEMAPHORE_CAPACITY
 MAX_EPOCHS = 64
 U32, U64, MAX_QPC = 2**32 - 1, 2**64 - 1, 2**63 - 1
 MAX_COUNT = 2**31 - 1
@@ -164,9 +166,10 @@ def audit(data, *, token, begin_qpc, end_qpc, qpc_frequency):
     need(source['token'] == token, 'journal token binding')
     need(source['clock'] == 'win32-query-performance-counter', 'QPC clock domain')
     for key, expected in (('begin_qpc', begin_qpc), ('end_qpc_exclusive', end_qpc),
-                          ('qpc_frequency', qpc_frequency), ('capacity', CAPACITY)):
+                          ('qpc_frequency', qpc_frequency)):
         uint(source[key])
         need(source[key] == expected, 'exact journal clock/capacity binding')
+    capacity = semaphore_capacity(source['capacity'])
     for key in FALSE_FLAGS:
         need(source[key] is False, 'proof/admission flag must be false')
     boolean(source['history_complete'])
@@ -174,7 +177,7 @@ def audit(data, *, token, begin_qpc, end_qpc, qpc_frequency):
     epoch_rows, operations = source['epochs'], source['operations']
     need(type(epoch_rows) is list and 0 < len(epoch_rows) <= MAX_EPOCHS,
          'bounded nonempty epochs')
-    need(type(operations) is list and len(operations) <= CAPACITY, 'bounded operations')
+    need(type(operations) is list and len(operations) <= capacity, 'bounded operations')
     epochs = {}
     for epoch in epoch_rows:
         _epoch(epoch)

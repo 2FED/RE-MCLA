@@ -260,18 +260,18 @@ void CapacitiesAndCuts() {
     Check(epochs->create(cookie + i, 101 + i, 0, 8).epoch_id == i + 1, "bounded64 lifetime IDs");
   Check(epochs->create(0x9000, 200, 0, 8).disposition == sem::Disposition::kCapacityExhausted &&
         epochs->epochs().size() == 64 && epochs->has(sem::Issue::kEpochOverflow), "epoch capacity cannot recycle/drop into a clean prefix");
-  auto operations = New(); Create(*operations);
+  auto operations = New(true, {100, 1000000, 1000}); Create(*operations);
   for (size_t i = 0; i < sem::kOperationCapacity; ++i) {
     auto waited = operations->begin_wait(cookie, 1, {}, 200 + i, sem::TimeoutKind::kZero);
     operations->end_wait(waited.ticket, 201 + i, sem::WaitResult::kTimeout);
   }
-  auto overflow = operations->begin_release(cookie, 1, {}, 9000, 1, Update());
+  auto overflow = operations->begin_release(cookie, 1, {}, sem::kOperationCapacity + 1000, 1, Update());
   const auto counts = operations->counts();
   Check(overflow.disposition == sem::Disposition::kCapacityExhausted && !overflow.ticket.valid() &&
-        counts.observed_operations == 4097 && counts.stored_operations == 4096 &&
-        counts.completed_operations == 4096 && counts.overflow_operations == 1,
+        counts.observed_operations == sem::kOperationCapacity + 1 && counts.stored_operations == sem::kOperationCapacity &&
+        counts.completed_operations == sem::kOperationCapacity && counts.overflow_operations == 1,
         "overflow counts known attempt but never fabricates its completion");
-  operations->stop_admissions(window.end_qpc_exclusive);
+  operations->stop_admissions(1000000);
   Check(!operations->history_complete() && operations->has(sem::Issue::kOperationOverflow), "all prefix associations forbidden after overflow");
   auto pending = New(); Create(*pending);
   auto waited = pending->begin_wait(cookie, 1, {}, 110, sem::TimeoutKind::kInfinite);

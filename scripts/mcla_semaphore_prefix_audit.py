@@ -18,8 +18,9 @@ import json
 import re
 
 import mcla_semaphore_credit_audit as v1
+from mcla_history_limits import SEMAPHORE_MAX_BYTES, semaphore_capacity
 
-MAX_BYTES = 2 * 1024 * 1024
+MAX_BYTES = SEMAPHORE_MAX_BYTES
 CAPACITY = v1.CAPACITY
 MAX_LOSS_RANGES = 4096
 FALSE_FLAGS = v1.FALSE_FLAGS | {'prefix_history_proven', 'update_causality_proven'}
@@ -133,7 +134,7 @@ def _projection(source, epoch, rows, end):
     projected.update(schema='mcla-semaphore-credit-journal-v1', token=source['token'],
                      clock=source['clock'], qpc_frequency=source['qpc_frequency'],
                      begin_qpc=source['observer_begin_qpc'], end_qpc_exclusive=end,
-                     capacity=CAPACITY, history_complete=True, observer_failed=False,
+                     capacity=source['capacity'], history_complete=True, observer_failed=False,
                      counts={'observed_operations': len(rows), 'stored_operations': len(rows),
                              'completed_operations': len(rows), 'overflow_operations': 0},
                      epochs=[projected_epoch], operations=[])
@@ -167,15 +168,16 @@ def audit(data, *, token, observer_begin_qpc, freeze_qpc, qpc_frequency):
          source['token'] == token and source['clock'] == 'win32-query-performance-counter',
          'prefix journal identity')
     for key, value in (('observer_begin_qpc', observer_begin_qpc), ('freeze_qpc', freeze_qpc),
-                       ('qpc_frequency', qpc_frequency), ('capacity', CAPACITY)):
+                       ('qpc_frequency', qpc_frequency)):
         uint(source[key]); need(source[key] == value, 'exact clock/capacity binding')
+    capacity = semaphore_capacity(source['capacity'])
     for key in FALSE_FLAGS:
         need(source[key] is False, 'proof flags remain false')
     for key in ('admission_inventory_complete', 'observer_failed', 'unknown_coverage_gap'):
         boolean(source[key])
     need(type(source['epochs']) is list and 0 < len(source['epochs']) <= v1.MAX_EPOCHS,
          'bounded nonempty epochs')
-    need(type(source['operations']) is list and len(source['operations']) <= CAPACITY,
+    need(type(source['operations']) is list and len(source['operations']) <= capacity,
          'bounded operations')
     need(type(source['loss_ranges']) is list and len(source['loss_ranges']) <= MAX_LOSS_RANGES,
          'bounded loss ranges')

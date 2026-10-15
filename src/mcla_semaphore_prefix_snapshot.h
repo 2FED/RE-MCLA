@@ -13,7 +13,7 @@
 
 namespace mcla::semaphore_prefix_snapshot {
 namespace core = semaphore_observer;
-inline constexpr size_t kMaxJsonBytes = 2 * 1024 * 1024;
+inline constexpr size_t kMaxJsonBytes = history_limits::kSemaphoreJsonBytes;
 enum class Coverage { kUnknown, kCompleteThroughFreeze };
 struct EpochCoverage {
   uint64_t epoch_id{}, cookie{}, creation_qpc{};
