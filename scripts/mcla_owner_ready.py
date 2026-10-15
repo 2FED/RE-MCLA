@@ -83,6 +83,7 @@ class ReadyLine:
         self.value = ''
         self.extended = False
         self.finished = False
+        self.invalid = False
 
     def feed(self, key):
         need(not self.finished, 'owner-ready line already consumed')
@@ -94,15 +95,24 @@ class ReadyLine:
             return None
         if key == '\x03':
             raise KeyboardInterrupt()
-        if key == '\b':
+        need(key != '\x1b', 'owner cancelled readiness')
+        if key in ('\b', '\x7f'):
             self.value = self.value[:-1]
         elif key in ('\r', '\n'):
-            self.finished = True
-            need(self.value == 'READY', 'owner cancelled readiness')
-            return 'READY'
+            command = self.value.strip().upper() if not self.invalid else ''
+            need(command != 'CANCEL', 'owner cancelled readiness')
+            if command == 'READY':
+                self.finished = True
+                return 'READY'
+            self.value = ''
+            self.invalid = False
+            return 'INVALID'
         else:
-            need(len(key) == 1 and ' ' <= key <= '~' and len(self.value) < 16, 'owner-ready bounded ASCII line')
-            self.value += key
+            if len(key) == 1 and ' ' <= key <= '~' and len(self.value) < 16:
+                self.value += key
+            else:
+                # Never accept a truncated or partially discarded command.
+                self.invalid = True
         return None
 
 
@@ -121,7 +131,9 @@ class ConsoleReady:
         need(k.FlushConsoleInputBuffer(handle), 'owner-ready console flush failed')
         print('\nLOAD FREE ROAM FIRST. Park and leave the game controls alone.\n'
               'Then Alt+Tab here, type READY and Enter, and return to the game.\n'
-              'Capture begins 40 seconds AFTER that confirmation. Any other line cancels.\n'
+              'Capture begins 40 seconds AFTER that confirmation. Case does not matter.\n'
+              'Backspace edits. Typos ask again without extending the time limit.\n'
+              'Type CANCEL or press Esc to cancel.\n'
               'READY> ', end='', flush=True)
 
     def poll(self):
@@ -130,11 +142,17 @@ class ConsoleReady:
             if not self.console.kbhit():
                 break
             key = self.console.getwch()
+            before = self.parser.value
             result = self.parser.feed(key)
             if key in ('\r', '\n'):
                 print('', flush=True)
-            elif ' ' <= key <= '~':
+            elif len(self.parser.value) < len(before):
+                print('\b \b', end='', flush=True)
+            elif len(self.parser.value) > len(before):
                 print(key, end='', flush=True)
-            if result:
+            if result == 'INVALID':
+                print('Not confirmed. Type READY when parked, or CANCEL. Time limit unchanged.\n'
+                      'READY> ', end='', flush=True)
+            elif result == 'READY':
                 return result
         return None

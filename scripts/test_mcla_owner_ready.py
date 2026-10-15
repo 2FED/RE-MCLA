@@ -1,9 +1,11 @@
 import copy
+import contextlib
+import io
 import json
 import os
 import unittest
 import uuid
-from mcla_owner_ready import NativeEvents, ReadyLine, event_name
+from mcla_owner_ready import ConsoleReady, NativeEvents, ReadyLine, event_name
 from mcla_owner_ready_decode import validate, strict
 from test_mcla_game_source_scout_decode import fixture, TOKEN
 
@@ -84,13 +86,63 @@ class ReadyTests(unittest.TestCase):
         for ch in 'READX\bY': self.assertIsNone(parser.feed(ch))
         self.assertEqual(parser.feed('\r'), 'READY')
         with self.assertRaises(ValueError): parser.feed('\r')
-        for line in ('', 'ready', ' READY', 'READY ', 'CANCEL'):
+        for line in ('reaDY', 'ready', ' READY', 'READY '):
             parser = ReadyLine()
             for ch in line: parser.feed(ch)
-            with self.assertRaises(ValueError): parser.feed('\r')
+            self.assertEqual(parser.feed('\r'), 'READY')
+
+    def test_typo_or_empty_line_reprompts_without_consuming_assertion(self):
         parser = ReadyLine()
-        for _ in range(16): parser.feed('A')
-        with self.assertRaises(ValueError): parser.feed('A')
+        for line in ('', 'READ', 'READYx'):
+            for ch in line: parser.feed(ch)
+            self.assertEqual(parser.feed('\r'), 'INVALID')
+            self.assertFalse(parser.finished)
+            self.assertEqual(parser.value, '')
+        for ch in 'reaDY': parser.feed(ch)
+        self.assertEqual(parser.feed('\r'), 'READY')
+
+    def test_overflow_cannot_truncate_to_ready(self):
+        parser = ReadyLine()
+        for ch in 'READY' + ' ' * 12: parser.feed(ch)
+        self.assertLessEqual(len(parser.value), 16)
+        self.assertEqual(parser.feed('\r'), 'INVALID')
+        for ch in 'ready': parser.feed(ch)
+        self.assertEqual(parser.feed('\r'), 'READY')
+
+    def test_explicit_cancel(self):
+        for line in ('cancel\r', ' CANCEL \r', '\x1b'):
+            parser = ReadyLine()
+            with self.assertRaisesRegex(ValueError, 'owner cancelled'):
+                for ch in line: parser.feed(ch)
+
+    def test_console_visible_edit_retry_and_bounded_poll(self):
+        class Keys:
+            def __init__(self, text): self.keys = list(text)
+            def kbhit(self): return bool(self.keys)
+            def getwch(self): return self.keys.pop(0)
+        console = ConsoleReady.__new__(ConsoleReady)
+        console.parser = ReadyLine()
+        console.console = Keys('wrong\r\xe0KreaDx\bY\r')
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out): result = console.poll()
+        self.assertEqual(result, 'READY')
+        self.assertIn('wrong\n', out.getvalue())
+        self.assertIn('READY> ', out.getvalue())
+        self.assertIn('reaDx\b \bY\n', out.getvalue())
+        self.assertNotIn('K', out.getvalue())
+        console.parser = ReadyLine()
+        console.console = Keys('\r' * 64)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertIsNone(console.poll())
+        self.assertEqual(len(console.console.keys), 32)
+
+    def test_delete_and_unsupported_character_cannot_authorize(self):
+        parser = ReadyLine()
+        for ch in 'READx\x7fY': parser.feed(ch)
+        self.assertEqual(parser.feed('\r'), 'READY')
+        parser = ReadyLine()
+        for ch in 'READY\u044f': parser.feed(ch)
+        self.assertEqual(parser.feed('\r'), 'INVALID')
 
     def test_extended_keys_and_ctrl_c(self):
         parser = ReadyLine()

@@ -24,8 +24,10 @@ The supervisor creates two fresh, non-inheritable, initially unsignaled
 manual-reset Windows events with role-specific names and a random attempt token.
 An existing object is rejected, never reset or adopted. Native code only opens
 these objects, checks both are initially empty, and announces that it is waiting.
-Only then does the supervisor flush stale console input and accept one exact
-`READY` line. Console work is nonblocking and bounded; process attestation,
+Only then does the supervisor flush stale console input and accept one
+`READY` command, ignoring ASCII case and surrounding spaces. Backspace visibly
+edits the line. Unknown or empty lines ask again without signaling or extending
+any deadline; CANCEL, Esc and Ctrl+C cancel. Console work is nonblocking and bounded; process attestation,
 cancellation and the overall deadline remain active.
 
 Both the signal observation and fresh source observation must precede the
@@ -66,6 +68,8 @@ integration, preparation scripts and one-shot supervisor remain separate work.
 
 ## Next gate
 
-Review and pin the separate owner4 package, then have the owner load free roam,
+Owner4 was consumed by the old case-sensitive console cancellation; see the
+[console repair and return audit](M8-owner-ready-console-20261015.md).
+Review and pin the separate owner5 package, then have the owner load free roam,
 park, enter READY in its console and return to the game. Accept the collection
 only after full identity, cleanup, journal and all-frame scene review.
