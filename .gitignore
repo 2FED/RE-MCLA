@@ -44,6 +44,8 @@ compile_commands.json
 **/build/
 
 # Logs, traces, dumps, and local evidence
+# Private game-image-derived title glyph samples; never publish as source assets.
+/src/mcla_autostart_title_masks.h
 *.log
 *.trace
 *.dmp
