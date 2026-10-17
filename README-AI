@@ -20,6 +20,12 @@ For bounded real routine tasks on Spark, use the reviewed advisory client and
 [worker contract](docs/dgx-spark-worker.md). Explicit packets only; no model-driven
 shell actions, automatic task acceptance or PC-local inference. Primary verifies
 source references/numbers/tests and retains actual mutations and physical gates.
+Owner reaffirmed2026-10-17: routinely route suitable bounded extraction, test
+inventories, log triage and document/diff checks to Spark at task planning, not
+only on explicit reminders. Record job receipts and accepted/rejected usefulness;
+if no work is suitable, note why. No busywork quota, invented savings or counting
+Codex subagents as Spark. See AGENTS.md for the standing routing rule. Existing
+credits may be used down to5,000; no purchase/top-up/reset redemption.
 
 The private Oct2 Windows diagnostic now has a GPU/render-scale/VSync launcher.
 Both exact EXEs pass guest-free D3D12 startup on this laptop's NVIDIA RTX 5060;
@@ -352,7 +358,8 @@ Project delivery cadence:
 
 - Subagents may own bounded, explicitly scoped work or provide independent read-only research and review under the repository-local `AGENTS.md`. Because all agents share one worktree, edit ownership and GUI/runtime operations are serialized; the primary agent retains integration, acceptance testing, task status, commits, usage checks, milestone closure, and pushes.
 - Continue autonomously until the active milestone is reviewed, closed, committed, and pushed; user input/authorization is genuinely required; or observable weekly allowance reaches **30% remaining**, per current repository-local `AGENTS.md`. Older dated 25% overrides are historical, not current policy. After each closed task, read live usage before starting another task. If usage is not exposed, never invent a value—continue to milestone closure or a real blocker and rely on the user to signal an external quota threshold.
-- Active owner exception from2026-10-11 until explicitly cancelled: the30% quota stop is suspended; available allowance may be used down to zero. No automatic expiry. The rule in `AGENTS.md` overrides only this quota condition, not other gates or spending authority.
+- Active owner exception from2026-10-11 until explicitly cancelled: the30% quota stop is suspended; available allowance may be used down to zero. Owner reaffirmed this after the28%-remaining handoff. No automatic expiry; repetition of the ordinary rule is not cancellation. This overrides only the quota condition, not other gates or spending authority.
+- Owner clarification2026-10-17: continue using existing credits after weekly zero, stopping at approximately5,000 credits (conservative floor5,000). Read live balance after closed tasks and before substantial new runs. No purchases, top-ups or reset redemption; all safety/review gates remain. This supersedes weekly-zero stopping until the owner changes it.
 - Close one task per commit. A task commit may be created only after that task's acceptance criterion, review, and relevant tests pass.
 - Do not combine unrelated completed task IDs in one commit. If two tasks are inseparable, revise the ledger and dependency rationale before implementation.
 - Recommended task commit subject: `task(Mx-nnn): concise outcome`.

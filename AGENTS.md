@@ -18,9 +18,18 @@ These repository-specific rules supplement the global Codex working rules.
   consume the available allowance down to zero; do not stop solely at 30%.
 - This override remains active until the owner explicitly cancels it. There is
   no automatic expiry; the ordinary 30% rule resumes only after cancellation.
+- Owner explicitly reaffirmed this after the 28%-remaining handoff: "досі можна
+  вижигать в ноль". Repeated ordinary-policy text is not a cancellation.
 - Continue observing/reporting actual usage. This changes only the quota stop,
   not safety, review/testing/commit/push gates, user-only blockers or permission
   boundaries. It does not authorize buying credits or redeeming usage resets.
+- Owner clarification on 2026-10-17: existing paid credits may fund continued
+  work after the weekly allowance reaches zero. Stop at approximately 5,000
+  remaining credits (use 5,000 as the conservative floor); check the live credit
+  balance after closed tasks and before substantial new runs. No credit purchases,
+  automatic top-ups, or usage-reset redemption are authorized. This remains active
+  until the owner changes it; weekly zero alone is not a stop while credits remain
+  above that floor and execution is available.
 
 ### Ordinary policy
 
@@ -29,6 +38,26 @@ These repository-specific rules supplement the global Codex working rules.
 - After every closed task, read the live ChatGPT Settings -> Usage value (or the interactive Codex `/status` fallback) before starting the next task. Continue only while the observable weekly allowance remains above 30%.
 - When the environment does not expose weekly usage, do not guess or fabricate it. Continue until milestone closure or a genuine user blocker, and let the user stop the run if their external usage display approaches the threshold.
 - This persistence rule does not broaden authorization: preserve the repository's safety, review, testing, commit-per-task, and milestone-push gates.
+
+## DGX Spark routine-work routing
+
+- Owner reaffirmed on 2026-10-17: use Spark regularly for suitable routine work,
+  not merely as an installed integration. At each coherent task's planning step,
+  identify bounded extraction, log triage, test-inventory or documentation/diff
+  checks that can be offloaded. Route suitable work through `scripts/spark_worker.py`
+  and `docs/dgx-spark-worker.md`; if none is suitable, record a short reason in the
+  task evidence. Do not manufacture busywork, duplicate completed analysis, or
+  send a task whose validation costs more than doing it deterministically.
+- Use the owner's DGX Spark endpoint and short model aliases, never PC-local
+  inference. Send explicit in-scope source packets, excluding API keys and unrelated
+  credentials. Keep responses advisory: primary checks source facts and tests;
+  no model-generated shell execution, automatic edits, or engineering acceptance.
+- Record each job's receipt and accepted/rejected contribution in task evidence.
+  Report actual job counts and results; do not invent token savings or offload
+  percentages. Codex subagents are not Spark and must not be counted as such.
+- Unavailable Spark or an unsuitable answer is not permission to weaken gates
+  or blindly retry. Preserve the failure, use a justified fallback, and continue
+  safe independent milestone work. Existing credit floor remains 5,000.
 
 ## Scoped multi-agent workflow
 

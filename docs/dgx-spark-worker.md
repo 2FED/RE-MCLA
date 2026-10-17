@@ -17,6 +17,22 @@ provider, autonomous shell agent, or automatic engineering acceptance.
 - Owner allows project/private context on this endpoint; do not send unrelated
   account credentials, global Codex auth or out-of-scope worktrees.
 
+## Standing routine routing (owner reaffirmed October 17)
+
+At the start of a coherent task, select useful bounded routine work for Spark:
+exact source extraction, test-case inventories, log triage, or documentation/diff
+checks. This is an active workflow requirement, not a fixed percentage quota.
+If nothing is suitable, record why; do not manufacture a request or duplicate
+already completed work. Deterministic scripts remain preferable for hashing,
+exact arithmetic and mechanical validation.
+
+Each task evidence records job receipt, requested scope, accepted/rejected
+findings and validation. Completed inference is not accepted engineering work.
+Unavailable inference and rejected answers retain their evidence; do not blindly
+retry or block independent safe progress. Report actual usage rather than guessed
+cost savings; Codex subagents are separate from Spark. The owner's existing-credit
+floor is 5,000, with no authority to purchase credits or redeem resets.
+
 ## Packet and invocation
 
 Prepare a JSON file with exactly this topology; no implicit directory upload:
