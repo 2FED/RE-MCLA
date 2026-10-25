@@ -5,9 +5,10 @@
 // immediately past texture_cache_memory_limit_hard (default 768 MB). Destroying
 // and recreating textures while driving is the suspected cause of the
 // GPU-allocation hitches in docs/evidence/M8-001-timebox-20261025.md. GPUs range
-// from 4 GB to 24 GB, so the limits follow the D3D12 adapter's local budget
-// (which also covers shared-memory integrated GPUs). Under Wine/Proton (Steam
-// Deck, dynamic memory) and whenever the query fails, the SDK defaults stay.
+// from 4 GB to 24 GB, so the limits follow the D3D12 adapter's local budget,
+// which also covers shared-memory integrated GPUs: soft 50 %, hard 80 % but
+// always leaving 1.5 GB for everything else. Under Wine/Proton (Steam Deck,
+// dynamic memory) and whenever the query fails, the SDK defaults stay.
 
 #include "mcla_texture_budget.h"
 
@@ -87,11 +88,20 @@ void ApplyTextureCacheBudget() {
     MCLA_GPU_INFO("MCLA graphics: video-memory budget unavailable; keeping SDK texture cache limits");
     return;
   }
-  const uint64_t soft_mb = std::clamp<uint64_t>(budget_mb / 4, 384, 4096);
-  const uint64_t hard_mb = std::clamp<uint64_t>(budget_mb * 2 / 5, soft_mb + 384, 6144);
+  // MCLA is the foreground process, so textures may use most of the budget.
+  // Render targets, the guest-memory mirror, upload pools and the driver need
+  // the rest: the hard limit always leaves kReserveMb free, so the process does
+  // not exceed its budget and get paged out by Windows.
+  constexpr uint64_t kReserveMb = 1536;
+  // The SDK cvars accept soft 64..4096 MB and hard 128..8192 MB.
+  const uint64_t soft_mb = std::clamp<uint64_t>(budget_mb / 2, 384, 4096);
+  const uint64_t hard_cap = budget_mb > kReserveMb ? budget_mb - kReserveMb : 0;
+  const uint64_t hard_mb =
+      std::clamp<uint64_t>(std::min<uint64_t>(budget_mb * 4 / 5, hard_cap), 768, 8192);
+  const uint64_t soft_final = std::min(soft_mb, hard_mb);
   MCLA_GPU_INFO("MCLA graphics: local video-memory budget {} MB", budget_mb);
   struct Limit { const char* name; uint64_t value; };
-  for (const Limit limit : {Limit{"texture_cache_memory_limit_soft", soft_mb},
+  for (const Limit limit : {Limit{"texture_cache_memory_limit_soft", soft_final},
                             Limit{"texture_cache_memory_limit_hard", hard_mb}}) {
     if (rex::cvar::HasNonDefaultValue(limit.name)) continue;
     if (rex::cvar::SetFlagByName(limit.name, std::to_string(limit.value))) {
