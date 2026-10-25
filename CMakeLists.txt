@@ -167,6 +167,18 @@ set(MCLA_SOURCES
     src/mcla_logging.cpp
 )
 
+# Measured-time game timer (docs/evidence/M8-001-timebox-20261025.md). It
+# overrides sub_822D2478, so it stays out of builds where the diagnostic timer
+# configuration probe owns that function.
+option(MCLA_RAW_TIMER_DEFAULT_ON "Default the measured-time game timer ON" ON)
+if(NOT MCLA_TIMER_CONFIG_PROBE)
+    list(APPEND MCLA_SOURCES src/mcla_raw_timer.cpp)
+    if(NOT MCLA_RAW_TIMER_DEFAULT_ON)
+        set_source_files_properties(src/mcla_raw_timer.cpp PROPERTIES
+            COMPILE_DEFINITIONS MCLA_RAW_TIMER_DEFAULT=0)
+    endif()
+endif()
+
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" MCLA_VERSION)
 string(STRIP "${MCLA_VERSION}" MCLA_VERSION)
 
