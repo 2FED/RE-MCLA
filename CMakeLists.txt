@@ -184,6 +184,7 @@ string(STRIP "${MCLA_VERSION}" MCLA_VERSION)
 
 if(WIN32)
     list(APPEND MCLA_SOURCES src/mcla_native_crash_win.cpp)
+    list(APPEND MCLA_SOURCES src/mcla_timer_resolution_win.cpp)
 else()
     list(APPEND MCLA_SOURCES src/mcla_native_crash_stub.cpp)
 endif()
