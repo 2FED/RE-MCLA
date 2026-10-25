@@ -17,7 +17,6 @@
 #include <rex/cvar.h>
 
 #include <algorithm>
-#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -60,9 +59,13 @@ constexpr double kHitchSeconds = 0.1;
 
 // Updates alternate irregularly between 2 and 3 vblanks (33/50 ms). Applying
 // each measured interval directly makes per-frame motion and motion blur jump
-// by up to +-25 %. The applied step is the average of the last updates plus a
-// share of the accumulated difference, so total game time still tracks the
-// measured time. Timer ticks run on a single guest thread.
+// by up to +-25 %. The applied step follows a slow exponential average of the
+// measured steps (time constant about 20 updates), so in steady scenes such as
+// the pause menu it is nearly constant, like the stock fixed step. The
+// difference to measured time is repaid gently (2 % per update, step held
+// within +-10 % of the average), so game time stays within a fraction of a
+// second of real time and does not drift. Timer ticks run on a single guest
+// thread.
 class StepSmoother {
  public:
   double Apply(double raw) {
@@ -70,31 +73,28 @@ class StepSmoother {
       Reset();
       return raw;
     }
-    window_[next_] = raw;
-    next_ = (next_ + 1) % window_.size();
-    count_ = std::min(count_ + 1, window_.size());
-    double average = 0.0;
-    for (size_t i = 0; i < count_; ++i) average += window_[i];
-    average /= double(count_);
-    const double applied =
-        std::clamp(average + 0.25 * debt_, 0.75 * average, 1.25 * average);
+    average_ = has_average_ ? average_ + kAverageWeight * (raw - average_) : raw;
+    has_average_ = true;
+    const double applied = std::clamp(average_ + kRepayment * debt_,
+                                      (1.0 - kHold) * average_, (1.0 + kHold) * average_);
     debt_ += raw - applied;
     return applied;
   }
   double debt() const { return debt_; }
 
  private:
+  static constexpr double kAverageWeight = 0.05;
+  static constexpr double kRepayment = 0.02;
+  static constexpr double kHold = 0.10;
   void Reset() {
-    count_ = 0;
-    next_ = 0;
+    has_average_ = false;
+    average_ = 0.0;
     debt_ = 0.0;
   }
-  std::array<double, 8> window_{};
-  size_t count_ = 0;
-  size_t next_ = 0;
+  bool has_average_ = false;
+  double average_ = 0.0;
   double debt_ = 0.0;
 };
-
 StepSmoother smoother;
 
 // Optional statistics for checking the effect without a diagnostic build.
