@@ -1,0 +1,13 @@
+#pragma once
+
+namespace mcla {
+
+// Raises the SDK texture cache limits to match the GPU's video-memory budget,
+// unless the user set them. No-op where the budget cannot be queried.
+#if defined(_WIN32)
+void ApplyTextureCacheBudget();
+#else
+inline void ApplyTextureCacheBudget() {}
+#endif
+
+}  // namespace mcla
