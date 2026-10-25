@@ -1248,7 +1248,27 @@ void MclaApp::OnPostSetup() {
   }
 }
 
+// The SDK's texture cache destroys textures unused for 30 s once host texture
+// memory passes 384 MB (and immediately past 768 MB). Driving through the city
+// likely streams more than that; destroying and recreating textures is the
+// suspected cause of the GPU-allocation hitches in the M8-001 profile. Desktop
+// GPUs this build targets have several GB of VRAM; raise the defaults unless
+// the user set them.
+static void RaiseTextureCacheLimits() {
+  struct Limit { const char* name; const char* value; };
+  for (const Limit limit : {Limit{"texture_cache_memory_limit_soft", "2048"},
+                            Limit{"texture_cache_memory_limit_hard", "3072"}}) {
+    if (rex::cvar::HasNonDefaultValue(limit.name)) continue;
+    if (rex::cvar::SetFlagByName(limit.name, limit.value)) {
+      MCLA_GPU_INFO("MCLA graphics: {} = {} MB", limit.name, limit.value);
+    } else {
+      MCLA_GPU_ERROR("MCLA graphics: could not set {}", limit.name);
+    }
+  }
+}
+
 void MclaApp::OnPostLoadGraphicsPlugin() {
+  RaiseTextureCacheLimits();
   if (rex::cvar::HasNonDefaultValue("readback_resolve")) {
     return;
   }
