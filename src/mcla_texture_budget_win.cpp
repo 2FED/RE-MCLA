@@ -6,9 +6,17 @@
 // and recreating textures while driving is the suspected cause of the
 // GPU-allocation hitches in docs/evidence/M8-001-timebox-20261025.md. GPUs range
 // from 4 GB to 24 GB, so the limits follow the D3D12 adapter's local budget,
-// which also covers shared-memory integrated GPUs: soft 50 %, hard 80 % but
-// always leaving 1.5 GB for everything else. Under Wine/Proton (Steam Deck,
-// dynamic memory) and whenever the query fails, the SDK defaults stay.
+// which also covers shared-memory integrated GPUs: soft 50 %, hard 80 %.
+//
+// Render targets, the guest-memory mirror, upload pools and the driver also
+// live in video memory. If the process exceeds its budget, Windows demotes
+// video memory to system RAM, which stalls far worse than evictions. The hard
+// limit therefore starts at most budget - 1.5 GB, and a once-per-second monitor
+// lowers it further whenever the process's total usage comes within 512 MB of
+// the budget (the cache rereads the limits at every eviction). It logs the
+// budget, peak usage and every adjustment. Under Wine/Proton (Steam Deck,
+// dynamic memory), when the query fails, or when the user set the limits
+// themselves, nothing is changed.
 
 #include "mcla_texture_budget.h"
 
@@ -24,13 +32,26 @@
 #include <wrl/client.h>
 
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <string>
+#include <thread>
 
 #pragma comment(lib, "dxgi.lib")
 
 namespace mcla {
 namespace {
+
+constexpr uint64_t kMb = 1024 * 1024;
+constexpr uint64_t kStartReserveMb = 1536;
+constexpr uint64_t kHeadroomMb = 512;
+// The SDK cvars accept soft 64..4096 MB and hard 128..8192 MB.
+constexpr uint64_t kSoftMinMb = 384, kSoftMaxMb = 4096;
+constexpr uint64_t kHardMinMb = 768, kHardMaxMb = 8192;
+constexpr const char* kSoftName = "texture_cache_memory_limit_soft";
+constexpr const char* kHardName = "texture_cache_memory_limit_hard";
 
 bool RunningUnderWine() {
   HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
@@ -49,11 +70,11 @@ int32_t ConfiguredAdapterIndex() {
 
 // Mirrors the SDK's D3D12 provider: an explicit index, or (-1) the first
 // hardware adapter. WARP (-2) has no meaningful video-memory budget.
-bool QueryLocalBudgetMb(uint64_t& budget_mb, std::wstring& adapter_name) {
+Microsoft::WRL::ComPtr<IDXGIAdapter3> FindAdapter() {
   const int32_t wanted = ConfiguredAdapterIndex();
-  if (wanted == -2) return false;
+  if (wanted == -2) return nullptr;
   Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
-  if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return false;
+  if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return nullptr;
   Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
   for (UINT i = 0; factory->EnumAdapters1(i, &adapter) == S_OK; ++i, adapter.Reset()) {
     DXGI_ADAPTER_DESC1 desc{};
@@ -62,18 +83,80 @@ bool QueryLocalBudgetMb(uint64_t& budget_mb, std::wstring& adapter_name) {
                                    : (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0;
     if (!match) continue;
     Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3;
-    DXGI_QUERY_VIDEO_MEMORY_INFO memory{};
-    if (FAILED(adapter.As(&adapter3)) ||
-        FAILED(adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memory)) ||
-        memory.Budget == 0) {
-      return false;
-    }
-    budget_mb = memory.Budget / (1024 * 1024);
-    adapter_name = desc.Description;
-    return true;
+    if (FAILED(adapter.As(&adapter3))) return nullptr;
+    return adapter3;
   }
-  return false;
+  return nullptr;
 }
+
+bool QueryLocal(IDXGIAdapter3* adapter, DXGI_QUERY_VIDEO_MEMORY_INFO& info) {
+  return SUCCEEDED(adapter->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) &&
+         info.Budget != 0;
+}
+
+bool SetLimit(const char* name, uint64_t value_mb) {
+  return rex::cvar::SetFlagByName(name, std::to_string(value_mb));
+}
+
+class Monitor {
+ public:
+  void Start(Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter, uint64_t soft_mb, uint64_t hard_mb) {
+    adapter_ = std::move(adapter);
+    soft_mb_ = soft_mb;
+    hard_mb_ = hard_mb;
+    thread_ = std::thread([this] { Run(); });
+  }
+  void Stop() {
+    if (!thread_.joinable()) return;
+    {
+      std::lock_guard lock(mutex_);
+      stop_ = true;
+    }
+    wake_.notify_all();
+    thread_.join();
+    MCLA_GPU_INFO("MCLA graphics: video memory peak {} MB of {} MB budget; texture cache hard limit {} MB",
+                  peak_mb_, last_budget_mb_, hard_mb_);
+  }
+
+ private:
+  void Run() {
+    auto last_report = std::chrono::steady_clock::now();
+    std::unique_lock lock(mutex_);
+    while (!wake_.wait_for(lock, std::chrono::seconds(1), [this] { return stop_; })) {
+      DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+      if (!QueryLocal(adapter_.Get(), info)) continue;
+      const uint64_t usage_mb = info.CurrentUsage / kMb;
+      last_budget_mb_ = info.Budget / kMb;
+      peak_mb_ = std::max(peak_mb_, usage_mb);
+      // Only ever lower the limit; the cache then evicts down to it.
+      if (usage_mb + kHeadroomMb > last_budget_mb_ && hard_mb_ > kHardMinMb) {
+        const uint64_t over_mb = usage_mb + kHeadroomMb - last_budget_mb_;
+        const uint64_t new_hard = std::max(kHardMinMb, hard_mb_ > over_mb ? hard_mb_ - over_mb : 0);
+        if (new_hard < hard_mb_ && SetLimit(kHardName, new_hard)) {
+          hard_mb_ = new_hard;
+          if (soft_mb_ > hard_mb_ && SetLimit(kSoftName, hard_mb_)) soft_mb_ = hard_mb_;
+          MCLA_GPU_INFO("MCLA graphics: video memory {} MB near budget {} MB; texture cache limits now {}/{} MB",
+                        usage_mb, last_budget_mb_, soft_mb_, hard_mb_);
+        }
+      }
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last_report >= std::chrono::seconds(60)) {
+        last_report = now;
+        MCLA_GPU_INFO("MCLA graphics: video memory {} MB (peak {} MB) of {} MB budget", usage_mb,
+                      peak_mb_, last_budget_mb_);
+      }
+    }
+  }
+
+  Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter_;
+  std::thread thread_;
+  std::mutex mutex_;
+  std::condition_variable wake_;
+  bool stop_ = false;
+  uint64_t soft_mb_ = 0, hard_mb_ = 0, peak_mb_ = 0, last_budget_mb_ = 0;
+};
+
+Monitor monitor;
 
 }  // namespace
 
@@ -82,34 +165,31 @@ void ApplyTextureCacheBudget() {
     MCLA_GPU_INFO("MCLA graphics: Wine/Proton detected; keeping SDK texture cache limits");
     return;
   }
-  uint64_t budget_mb = 0;
-  std::wstring adapter;
-  if (!QueryLocalBudgetMb(budget_mb, adapter)) {
+  if (rex::cvar::HasNonDefaultValue(kSoftName) || rex::cvar::HasNonDefaultValue(kHardName)) {
+    MCLA_GPU_INFO("MCLA graphics: texture cache limits set by the user; keeping them");
+    return;
+  }
+  auto adapter = FindAdapter();
+  DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+  if (!adapter || !QueryLocal(adapter.Get(), info)) {
     MCLA_GPU_INFO("MCLA graphics: video-memory budget unavailable; keeping SDK texture cache limits");
     return;
   }
-  // MCLA is the foreground process, so textures may use most of the budget.
-  // Render targets, the guest-memory mirror, upload pools and the driver need
-  // the rest: the hard limit always leaves kReserveMb free, so the process does
-  // not exceed its budget and get paged out by Windows.
-  constexpr uint64_t kReserveMb = 1536;
-  // The SDK cvars accept soft 64..4096 MB and hard 128..8192 MB.
-  const uint64_t soft_mb = std::clamp<uint64_t>(budget_mb / 2, 384, 4096);
-  const uint64_t hard_cap = budget_mb > kReserveMb ? budget_mb - kReserveMb : 0;
+  const uint64_t budget_mb = info.Budget / kMb;
+  const uint64_t hard_cap = budget_mb > kStartReserveMb ? budget_mb - kStartReserveMb : 0;
   const uint64_t hard_mb =
-      std::clamp<uint64_t>(std::min<uint64_t>(budget_mb * 4 / 5, hard_cap), 768, 8192);
-  const uint64_t soft_final = std::min(soft_mb, hard_mb);
-  MCLA_GPU_INFO("MCLA graphics: local video-memory budget {} MB", budget_mb);
-  struct Limit { const char* name; uint64_t value; };
-  for (const Limit limit : {Limit{"texture_cache_memory_limit_soft", soft_final},
-                            Limit{"texture_cache_memory_limit_hard", hard_mb}}) {
-    if (rex::cvar::HasNonDefaultValue(limit.name)) continue;
-    if (rex::cvar::SetFlagByName(limit.name, std::to_string(limit.value))) {
-      MCLA_GPU_INFO("MCLA graphics: {} = {} MB", limit.name, limit.value);
-    } else {
-      MCLA_GPU_ERROR("MCLA graphics: could not set {}", limit.name);
-    }
+      std::clamp<uint64_t>(std::min<uint64_t>(budget_mb * 4 / 5, hard_cap), kHardMinMb, kHardMaxMb);
+  const uint64_t soft_mb =
+      std::min(std::clamp<uint64_t>(budget_mb / 2, kSoftMinMb, kSoftMaxMb), hard_mb);
+  if (!SetLimit(kSoftName, soft_mb) || !SetLimit(kHardName, hard_mb)) {
+    MCLA_GPU_ERROR("MCLA graphics: could not set texture cache limits");
+    return;
   }
+  MCLA_GPU_INFO("MCLA graphics: video-memory budget {} MB (in use {} MB); texture cache limits {}/{} MB",
+                budget_mb, info.CurrentUsage / kMb, soft_mb, hard_mb);
+  monitor.Start(std::move(adapter), soft_mb, hard_mb);
 }
+
+void StopTextureCacheBudgetMonitor() { monitor.Stop(); }
 
 }  // namespace mcla

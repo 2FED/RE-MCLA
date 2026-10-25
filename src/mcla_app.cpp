@@ -3533,6 +3533,7 @@ bool MclaApp::OnWindowCloseRequested() {
 }
 
 void MclaApp::OnShutdown() {
+  mcla::StopTextureCacheBudgetMonitor();
   readback_probe_lifetime_.reset();
   if (diagnostic_keybind_registered_) {
     rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
