@@ -12,8 +12,9 @@
 // live in video memory. If the process exceeds its budget, Windows demotes
 // video memory to system RAM, which stalls far worse than evictions. The hard
 // limit therefore starts at most budget - 1.5 GB, and a once-per-second monitor
-// lowers it further whenever the process's total usage comes within 512 MB of
-// the budget (the cache rereads the limits at every eviction). It logs the
+// lowers it gently (256 MB per 10 s, never below the starting soft limit)
+// whenever the process's total usage comes within 512 MB of the budget (the
+// cache rereads the limits at every eviction). It logs the
 // budget, peak usage and every adjustment. Under Wine/Proton (Steam Deck,
 // dynamic memory), when the query fails, or when the user set the limits
 // themselves, nothing is changed.
@@ -47,6 +48,8 @@ namespace {
 constexpr uint64_t kMb = 1024 * 1024;
 constexpr uint64_t kStartReserveMb = 1536;
 constexpr uint64_t kHeadroomMb = 512;
+constexpr uint64_t kStepMb = 256;
+constexpr auto kStepInterval = std::chrono::seconds(10);
 // The SDK cvars accept soft 64..4096 MB and hard 128..8192 MB.
 constexpr uint64_t kSoftMinMb = 384, kSoftMaxMb = 4096;
 constexpr uint64_t kHardMinMb = 768, kHardMaxMb = 8192;
@@ -104,6 +107,8 @@ class Monitor {
     adapter_ = std::move(adapter);
     soft_mb_ = soft_mb;
     hard_mb_ = hard_mb;
+    floor_mb_ = soft_mb;
+    last_step_ = std::chrono::steady_clock::now() - kStepInterval;
     thread_ = std::thread([this] { Run(); });
   }
   void Stop() {
@@ -128,18 +133,22 @@ class Monitor {
       const uint64_t usage_mb = info.CurrentUsage / kMb;
       last_budget_mb_ = info.Budget / kMb;
       peak_mb_ = std::max(peak_mb_, usage_mb);
-      // Only ever lower the limit; the cache then evicts down to it.
-      if (usage_mb + kHeadroomMb > last_budget_mb_ && hard_mb_ > kHardMinMb) {
-        const uint64_t over_mb = usage_mb + kHeadroomMb - last_budget_mb_;
-        const uint64_t new_hard = std::max(kHardMinMb, hard_mb_ > over_mb ? hard_mb_ - over_mb : 0);
+      // Only ever lower the hard limit, gently: in-use textures cannot be
+      // evicted, so usage may not drop at once, and ratcheting every second
+      // made the cache destroy textures a scene still needed (l17 garage hang,
+      // 2026-10-25). One kStepMb step per kStepInterval, never below the
+      // starting soft limit.
+      const auto now = std::chrono::steady_clock::now();
+      if (usage_mb + kHeadroomMb > last_budget_mb_ && hard_mb_ > floor_mb_ &&
+          now - last_step_ >= kStepInterval) {
+        const uint64_t new_hard = std::max(floor_mb_, hard_mb_ > kStepMb ? hard_mb_ - kStepMb : 0);
         if (new_hard < hard_mb_ && SetLimit(kHardName, new_hard)) {
           hard_mb_ = new_hard;
-          if (soft_mb_ > hard_mb_ && SetLimit(kSoftName, hard_mb_)) soft_mb_ = hard_mb_;
-          MCLA_GPU_INFO("MCLA graphics: video memory {} MB near budget {} MB; texture cache limits now {}/{} MB",
-                        usage_mb, last_budget_mb_, soft_mb_, hard_mb_);
+          last_step_ = now;
+          MCLA_GPU_INFO("MCLA graphics: video memory {} MB near budget {} MB; texture cache hard limit now {} MB",
+                        usage_mb, last_budget_mb_, hard_mb_);
         }
       }
-      const auto now = std::chrono::steady_clock::now();
       if (now - last_report >= std::chrono::seconds(60)) {
         last_report = now;
         MCLA_GPU_INFO("MCLA graphics: video memory {} MB (peak {} MB) of {} MB budget", usage_mb,
@@ -153,7 +162,8 @@ class Monitor {
   std::mutex mutex_;
   std::condition_variable wake_;
   bool stop_ = false;
-  uint64_t soft_mb_ = 0, hard_mb_ = 0, peak_mb_ = 0, last_budget_mb_ = 0;
+  uint64_t soft_mb_ = 0, hard_mb_ = 0, floor_mb_ = 0, peak_mb_ = 0, last_budget_mb_ = 0;
+  std::chrono::steady_clock::time_point last_step_{};
 };
 
 Monitor monitor;
