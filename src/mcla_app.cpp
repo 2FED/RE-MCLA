@@ -1257,9 +1257,11 @@ void MclaApp::OnPostLoadGraphicsPlugin() {
   // Photo Mode encodes its JPEG from a CPU-visible resolve buffer. Keep the
   // delayed readback path enabled by default for this title so that buffer is
   // populated without imposing the stalls of the fully synchronous mode.
-  if (rex::cvar::SetFlagByName("readback_resolve", "fast")) {
+  // "some" skips most per-frame CPU copies; Photo Mode keeps resolving the
+  // frozen frame, so its buffer is still refreshed (owner-tested on l20).
+  if (rex::cvar::SetFlagByName("readback_resolve", "some")) {
     MCLA_GPU_INFO(
-        "MCLA graphics: enabled fast render-to-texture CPU readback for photo "
+        "MCLA graphics: enabled light render-to-texture CPU readback for photo "
         "mode");
   } else {
     MCLA_GPU_ERROR(
