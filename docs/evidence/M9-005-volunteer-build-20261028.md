@@ -8,7 +8,7 @@ rules: [M9 priorities](../M9-priorities.md).
 |---|---|
 | Kill switch (V2 tickets) | Implemented and unit-tested; not published |
 | Post-session report prompt | Implemented and unit-tested; not yet in a tester build |
-| Fresh F10 image or explicit stale mark (KI-042) | Not started |
+| Fresh F10 image or explicit stale mark (KI-042) | Implemented, builds; in-game check pending |
 | Diagnostics export with frame-pacing/CP/GPU summaries | Export exists (M9-002); summaries not started |
 | Allowlisted staging and sentinel audit | Not started |
 | Tester guide, one tester smoke | Not started |
@@ -85,3 +85,25 @@ owner's explicit yes. The volunteer `mcla.exe` must also be built with
   rewrite (343 checks). The UI checks prompt once, yes/no, and silence without
   reports (971 checks). All 21 launcher, export and lease suites pass; ast-grep
   is clean.
+
+## Fresh F10 frame, KI-042 (2026-10-28)
+
+- Cause: the F10 package used a `BitBlt` of the game window. With a D3D12
+  flip-model swapchain, GDI can keep returning an old image (three presses,
+  one identical `frame.bmp`).
+- Fix: F10 now reads back the game's own last presented output through the
+  SDK presenter (`CaptureGuestOutput`, the path the first-frame and race
+  probes already use), so the image is the game's 1280x720 frame without window
+  artifacts. The manifest records `source guest-output-readback`,
+  `freshness presented-guest-output`.
+- Hang safety: that readback waits on a GPU fence without a bound, and F10
+  must still work during a freeze (KI-035). It runs on a detached helper
+  thread; the package worker waits at most 1.5 s and then falls back to the
+  window capture. The host hard-exits at shutdown, so a stuck helper cannot
+  block the exit.
+- Fallback guard: a window capture byte-identical to the previous one in the
+  same process is dropped and marked `freshness stale-duplicate-dropped`,
+  so no package carries a misleading picture.
+- Build: `mcla.exe` rebuilt (private `l38-host`); no compiler warnings;
+  ast-grep clean. Pending: one in-game check with two F10 presses in different
+  scenes (needs an announced run or the owner).

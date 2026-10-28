@@ -1144,6 +1144,19 @@ void MclaApp::OnPostInitLogging() {
             user_data_root(), diagnostics_root,
             [this]() { return CaptureDiagnosticState(); },
             REXCVAR_GET(mcla_crash_reporter_dialog))) {
+      // F10 frames come from the game's presented output (KI-042); the
+      // diagnostics worker bounds this GPU readback and falls back otherwise.
+      diagnostics_->SetGuestFrameProvider([this](mcla::diagnostics::GuestFrame &out) {
+        auto *graphics = runtime() ? runtime()->graphics_system() : nullptr;
+        auto *presenter = graphics ? graphics->presenter() : nullptr;
+        rex::ui::RawImage image;
+        if (!presenter || !presenter->CaptureGuestOutput(image)) return false;
+        out.width = image.width;
+        out.height = image.height;
+        out.stride = image.stride;
+        out.rgbx = std::move(image.data);
+        return true;
+      });
       rex::ui::RegisterBind(
           "bind_mcla_debug_snapshot", "F10",
           "Capture an MCLA-R live diagnostic package", [this]() {

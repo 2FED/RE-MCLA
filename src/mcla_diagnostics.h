@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace mcla::diagnostics {
 
@@ -87,6 +88,17 @@ struct RuntimeState {
 
 using CaptureProvider = std::function<RuntimeState()>;
 
+// The game's last presented output image (R8 G8 B8 X8 rows), for F10 frames
+// (KI-042: a window BitBlt of the flip-model swapchain can return a stale
+// image). The provider may wait on the GPU; the package worker bounds that wait.
+struct GuestFrame {
+  uint32_t width = 0;
+  uint32_t height = 0;
+  size_t stride = 0;
+  std::vector<uint8_t> rgbx;
+};
+using GuestFrameProvider = std::function<bool(GuestFrame &)>;
+
 enum class SnapshotStatus : uint8_t {
   kIdle,
   kCapturing,
@@ -105,6 +117,8 @@ public:
              const std::filesystem::path &diagnostics_root,
              CaptureProvider provider, bool show_crash_reporter_dialog);
   bool RequestSnapshot(std::string reason, const UiState &ui_state);
+  // Optional; without it F10 keeps the window capture with staleness checks.
+  void SetGuestFrameProvider(GuestFrameProvider provider);
   SnapshotStatus snapshot_status() const;
   bool WaitForIdle(std::chrono::milliseconds timeout);
   void Stop();

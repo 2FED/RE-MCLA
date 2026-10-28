@@ -400,6 +400,7 @@ struct WindowFrameCapture {
   bool written = false;
   FrameSignal signal;
   const char *source = "win32-client-bitblt";
+  const char *freshness = "not-established";
 #if defined(MCLA_EXPERIMENTAL_F10_WGC)
   image::CaptureResult helper;
 #endif
@@ -509,6 +510,90 @@ WindowFrameCapture CaptureWindowFrame(const std::filesystem::path &path,
   (void)token;
   return {};
 #endif
+}
+
+// KI-042: the game's own presented output, read back on a helper thread. The
+// readback waits on a GPU fence without a bound, so the package worker waits at
+// most kGuestFrameWait and otherwise falls back; a stuck helper is left behind
+// (the host hard-exits at shutdown). Returns a written frame or nothing.
+constexpr auto kGuestFrameWait = std::chrono::milliseconds(1500);
+WindowFrameCapture CaptureGuestFrame(const std::filesystem::path &path,
+                                     const GuestFrameProvider &provider,
+                                     std::stop_token token) {
+  if (!provider) return {};
+  struct Shared {
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool done = false;
+    bool ok = false;
+    GuestFrame frame;
+  };
+  auto shared = std::make_shared<Shared>();
+  try {
+    std::thread([shared, provider]() {
+      GuestFrame frame;
+      bool ok = false;
+      try { ok = provider(frame); } catch (...) { ok = false; }
+      std::lock_guard lock(shared->mutex);
+      shared->ok = ok;
+      shared->frame = std::move(frame);
+      shared->done = true;
+      shared->cv.notify_all();
+    }).detach();
+  } catch (...) {
+    return {};
+  }
+  std::unique_lock lock(shared->mutex);
+  const auto deadline = std::chrono::steady_clock::now() + kGuestFrameWait;
+  while (!shared->done && !token.stop_requested() &&
+         shared->cv.wait_until(lock, deadline) != std::cv_status::timeout) {
+  }
+  if (!shared->done || !shared->ok) {
+    REXLOG_WARN("MCLA diagnostics: guest frame readback {}; using window capture",
+                shared->done ? "failed" : "timed out");
+    return {};
+  }
+  const auto &image = shared->frame;
+  const uint64_t row = uint64_t(image.width) * 4;
+  if (!image.width || !image.height || image.width > 8192 || image.height > 8192 ||
+      image.stride < row || image.rgbx.size() < image.stride * (image.height - 1) + row ||
+      row * image.height > kMaxFrameBytes) {
+    return {};
+  }
+  std::vector<uint8_t> bgra(static_cast<size_t>(row * image.height));
+  for (uint32_t y = 0; y < image.height; ++y) {
+    const uint8_t *src = image.rgbx.data() + size_t(y) * image.stride;
+    uint8_t *dst = bgra.data() + size_t(y) * row;
+    for (uint32_t x = 0; x < image.width; ++x) {
+      dst[x * 4 + 0] = src[x * 4 + 2];
+      dst[x * 4 + 1] = src[x * 4 + 1];
+      dst[x * 4 + 2] = src[x * 4 + 0];
+      dst[x * 4 + 3] = 0xFF;
+    }
+  }
+  WindowFrameCapture frame;
+  frame.signal = MeasureBgraFrame(bgra, image.width, image.height, static_cast<uint32_t>(row));
+  if (frame.signal.classification == FrameRgbClass::kUnavailable ||
+      !WriteBgraBmp(path, image.width, image.height, static_cast<uint32_t>(row), bgra)) {
+    return {};
+  }
+  frame.written = true;
+  frame.source = "guest-output-readback";
+  frame.freshness = "presented-guest-output";
+  return frame;
+}
+
+uint64_t FileDigest64(const std::filesystem::path &path) {
+  std::ifstream stream(path, std::ios::binary);
+  uint64_t hash = 1469598103934665603ULL; // FNV-1a
+  std::array<char, 65536> buffer{};
+  while (stream.read(buffer.data(), buffer.size()) || stream.gcount() > 0) {
+    for (std::streamsize i = 0; i < stream.gcount(); ++i) {
+      hash ^= static_cast<uint8_t>(buffer[static_cast<size_t>(i)]);
+      hash *= 1099511628211ULL;
+    }
+  }
+  return hash;
 }
 
 void ReplaceAll(std::string &text, std::string_view needle,
@@ -934,6 +1019,15 @@ public:
     return true;
   }
 
+  void SetGuestFrameProvider(GuestFrameProvider provider) {
+    std::lock_guard lock(request_mutex_);
+    guest_frame_provider_ = std::move(provider);
+  }
+  GuestFrameProvider CurrentGuestFrameProvider() {
+    std::lock_guard lock(request_mutex_);
+    return guest_frame_provider_;
+  }
+
   bool RequestSnapshot(std::string reason, const UiState &ui_state) {
     if (!started_.load(std::memory_order_acquire) ||
         stopping_.load(std::memory_order_acquire)) {
@@ -1057,8 +1151,23 @@ public:
 
     // No in-process GPU readback/fence wait. The experimental image helper is
     // isolated/cancellable; this does not bound all package or OS operations.
-    const WindowFrameCapture frame =
-        CaptureWindowFrame(partial / "frame.bmp", ui, token);
+    WindowFrameCapture frame =
+        CaptureGuestFrame(partial / "frame.bmp", CurrentGuestFrameProvider(), token);
+    if (!frame.written && !token.stop_requested()) {
+      frame = CaptureWindowFrame(partial / "frame.bmp", ui, token);
+      // A window capture identical to the previous one in this process is the
+      // stale flip-model image (KI-042): drop it rather than ship a wrong frame.
+      if (frame.written) {
+        const uint64_t digest = FileDigest64(partial / "frame.bmp");
+        if (digest == last_window_frame_digest_) {
+          std::error_code ignored;
+          std::filesystem::remove(partial / "frame.bmp", ignored);
+          frame.written = false;
+          frame.freshness = "stale-duplicate-dropped";
+        }
+        last_window_frame_digest_ = digest;
+      }
+    }
     if (token.stop_requested()) return false;
     const bool frame_written = frame.written;
 
@@ -1230,7 +1339,7 @@ public:
              << "  \"capture\": {\"frame\": "
              << (frame_written ? "true" : "false")
              << ", \"frame_signal\": {\"source\": \"" << frame.source << "\", "
-                "\"freshness\": \"not-established\", "
+                "\"freshness\": \"" << frame.freshness << "\", "
                 "\"classification\": \""
              << FrameRgbClassName(frame.signal.classification)
              << "\", \"width\": " << frame.signal.width
@@ -1291,6 +1400,8 @@ public:
   std::filesystem::path runtime_root_;
   std::filesystem::path journal_path_;
   CaptureProvider provider_;
+  GuestFrameProvider guest_frame_provider_;
+  uint64_t last_window_frame_digest_ = 0;
   std::shared_ptr<rex::LogCaptureSink> capture_sink_;
   spdlog::sink_ptr journal_sink_;
   std::jthread worker_;
@@ -1321,6 +1432,10 @@ bool Manager::Start(const std::filesystem::path &user_data_root,
 
 bool Manager::RequestSnapshot(std::string reason, const UiState &ui_state) {
   return impl_->RequestSnapshot(std::move(reason), ui_state);
+}
+
+void Manager::SetGuestFrameProvider(GuestFrameProvider provider) {
+  impl_->SetGuestFrameProvider(std::move(provider));
 }
 
 SnapshotStatus Manager::snapshot_status() const {
