@@ -3,7 +3,7 @@
 **Status:** built from published source, checked against the sources of
 `l31-s30` and `l33-sunc`, and staged as `private/l34-s30` and
 `private/l34-sunc`. Still open: the owner's title-plus-drive check. Not a
-physical PASS.
+physical PASS. Automated title checks pass on both (below).
 
 ## What changed in the repository
 
@@ -128,6 +128,45 @@ Binary behaviour switches (string inventory, no launch):
 - Both receipts list 17 files and all hashes verify on disk. The launcher (l12
   binary `DB0D84A5...`), CRT and image helper are the same files as in l31-s30.
   Receipts mark no external delivery, no game assets and no personal data.
+
+## Automated title start checks (2026-10-28, owner-approved and announced)
+
+Same procedure as the l31-s30 / l33-sunc baselines: direct `mcla.exe` from the
+staged `build` folder, empty isolated profile under `private/m9-001-runs`,
+1280x720 windowed (swapchain 1600x900 as in the baselines), about 170 s on the
+title and attract scene, then a normal window close. No owner profile or save
+was used. An automated run cannot drive on an empty profile, so the drive part
+remains for the owner.
+
+**First series (16:14-16:21 Kyiv): invalid for performance.** DXGI picked the
+integrated AMD Radeon 860M. The RTX 5060 now drives the 4K display, so it is
+no longer the first adapter, and the direct launch used `d3d12_adapter=-1`
+(first physical adapter). The l12 launcher pins the adapter by name, so
+launcher runs are not affected. Functional results still matched the
+baselines.
+
+**Second series (16:22-16:28 Kyiv), `--d3d12_adapter=1`, log confirms RTX 5060:**
+
+| Run | Alive 170 s / normal close / crash dirs | FPS min 1 / 2 | GPU busy ms/frame | frames >50 ms (min 2) |
+|---|---|---|---|---|
+| l31-s30 baseline | yes / yes / 0 | 29.2 / 29.8 | 10.3 / 15.5 | 11 |
+| **l34-s30** | yes / yes / 0 | 29.6 / 30.0 | 11.2 / 17.3 | 0 |
+| l33-sunc baseline | yes / yes / 0 | 31.9 / 45.7 | 11.3 / 16.3 | 1 |
+| **l34-sunc** | yes / yes / 0 | 37.6 / 63.6 | 10.4 / 14.6 | 0 |
+
+- **Behaviour switches, identical to the baselines:**
+  - UI cap on at 3 draws and off on the 3D title, on again at 138 or 236 draws.
+  - sunc vblank: 60 Hz, then 240 Hz at about 45 s, then 60 Hz under the UI cap.
+  - Tear-free present on sunc only.
+  - Raw timer applied.
+  - The unlocked startup message appears only in l34-sunc.
+- **sunc minute 2:** the title scene drew about 5.1 k draws per frame against
+  7.9 k in the baseline run, so the higher frame rate partly reflects scene
+  content; it is not a measured speed-up.
+- **Error lines:** 10 in every log (l31/l33 baselines and both l34 runs), the
+  known `t:\` VFS probes.
+- **Not covered:** driving, races, saves and the race timer. These need the
+  owner's manual check on a real profile through the launcher.
 
 ## Spark routing
 
