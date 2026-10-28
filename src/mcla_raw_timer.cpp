@@ -43,6 +43,10 @@ REXCVAR_DEFINE_BOOL(mcla_raw_timer_ms_steps, true, "MCLA",
     "Round raw timer steps to whole milliseconds, carrying the remainder")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_raw_timer_scale_log, true, "MCLA",
+    "Log changes of the main game timer scale (diagnostic)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_BOOL(mcla_raw_timer_stats, false, "MCLA",
     "Log measured/applied timer step statistics every 300 updates")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -180,6 +184,21 @@ StepStats stats;
 // clamps and history updates.
 REX_EXTERN(sub_821BDA90) {
   const uint32_t timer = ctx.r3.u32;
+  if (timer == kMainTimer && REXCVAR_GET(mcla_raw_timer_scale_log)) {
+    // Diagnostic: log changes of the timer scale (+84), which the game may use
+    // for pauses and slow motion, as a candidate menu/pause signal.
+    static uint32_t last_scale_bits = 0xFFFFFFFFu;
+    static int scale_logs = 0;
+    const uint32_t scale_bits = REX_LOAD_U32(timer + 84);
+    if (scale_bits != last_scale_bits && scale_logs < 400) {
+      float scale = 0.0f;
+      std::memcpy(&scale, &scale_bits, sizeof(scale));
+      ++scale_logs;
+      MCLA_APP_INFO("MCLA timer scale: {} (fixed {} first {})", scale,
+                    REX_LOAD_U8(timer + 58), REX_LOAD_U8(timer + 56));
+      last_scale_bits = scale_bits;
+    }
+  }
   if (RawTimerWanted() && timer == kMainTimer && ctx.f1.f64 < 0.0 &&
       REX_LOAD_U32(timer + 60) == 0 && REX_LOAD_U8(timer + 56) == 0 &&
       REX_LOAD_U8(timer + 58) == 0) {
