@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory=$true)][string]$BuildDirectory,
     [Parameter(Mandatory=$true)][string]$Destination,
-    [Parameter(Mandatory=$true)][string]$CrtDirectory
+    [Parameter(Mandatory=$true)][string]$CrtDirectory,
+    # Optional plain-text guide copied to the root as TESTER-GUIDE.txt (M9-005).
+    [string]$TesterGuide
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -118,6 +120,7 @@ $paths = @{}
 foreach ($name in $runtime) { $paths[$name] = Join-Path $source $name }
 foreach ($entry in $policy.files) { $paths[$entry.name] = Join-Path $crt $entry.name }
 $paths['MCLA-Launcher.exe'] = Join-Path $source 'MCLA-Launcher.exe'
+if ($TesterGuide) { $paths['TESTER-GUIDE.txt'] = Assert-LocalPath $TesterGuide }
 $pinned = @{}
 try {
     # Freeze every source before creating output. Competing rebuilds must wait
@@ -158,6 +161,10 @@ try {
     }
     Copy-PinnedInput $pinned['MCLA-Launcher.exe'] (Join-Path $target 'MCLA-Launcher.exe')
     $inventory.Add([ordered]@{path='MCLA-Launcher.exe'; bytes=$pinned['MCLA-Launcher.exe'].Bytes; sha256=$pinned['MCLA-Launcher.exe'].Sha256})
+    if ($pinned.ContainsKey('TESTER-GUIDE.txt')) {
+        Copy-PinnedInput $pinned['TESTER-GUIDE.txt'] (Join-Path $target 'TESTER-GUIDE.txt')
+        $inventory.Add([ordered]@{path='TESTER-GUIDE.txt'; bytes=$pinned['TESTER-GUIDE.txt'].Bytes; sha256=$pinned['TESTER-GUIDE.txt'].Sha256})
+    }
     foreach ($entry in $policy.files) {
         $record = $pinned[$entry.name]
         Copy-PinnedInput $record (Join-Path $target $entry.name)

@@ -1,0 +1,89 @@
+MCLA-R - TEST BUILD - TESTER GUIDE
+(Українською нижче / Ukrainian below)
+
+This is a private test build for a small group. Do not share it. You need your
+own copy of Midnight Club: Los Angeles Complete Edition (Xbox 360); the build
+contains no game files.
+
+1. FIRST START
+   - Unpack the folder anywhere. Run MCLA-Launcher.exe.
+   - Setup: choose the "build" folder from this package and your game-data folder.
+   - Profiles: create an empty profile (or import your saves).
+   - Play: choose your graphics card and resolution (720p-1440p recommended),
+     then CHECK SETUP, then START GAME.
+   - Be online for the first start. The build checks once that it is still
+     active. Offline it starts for 3 days after it was built, or 24 hours after
+     the last online check.
+
+2. FRAME RATE
+   - "30 FPS (recommended)": the original pacing. Use this for normal play.
+   - "Unlocked FPS (experimental)": smoother driving (often 60+), but menus over
+     the city can run fast, busy junctions drop to 30-40 FPS, and some lights
+     flicker at night or after a race.
+
+3. WHEN SOMETHING GOES WRONG
+   - Press F10 on the keyboard at the moment it happens. You can press it
+     several times.
+   - The game may also save a report by itself if it crashes.
+   - After you close the game, the launcher tells you how many reports were
+     recorded and offers to open the folder. Open report.txt there, answer the
+     four questions, save it, and send the whole folder to the owner.
+   - Nothing is uploaded automatically. Reports contain your save file copy and
+     a screenshot, so send them only to the owner.
+
+4. KNOWN PROBLEMS (no need to report again)
+   - The first photo in Photo Mode can be broken; take it again.
+   - Traffic lights make car paint glow at night.
+   - Entering a garage can freeze; close the game, the save is safe.
+   - Some signs show a plain colour block, mostly above 1440p.
+   - A gamepad on a USB 2.4 GHz dongle can stop working after it drops.
+
+5. IF THE LAUNCHER SAYS
+   - "This test build was withdrawn": get the current build from the owner.
+   - "BUILD CHECK NEEDED": connect to the internet once and start again.
+   Your saves are never touched by these checks.
+
+-------------------------------------------------------------------------------
+
+MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕРА
+
+Це приватна тестова збірка для невеликої групи. Не передавайте її далі.
+Потрібна власна копія Midnight Club: Los Angeles Complete Edition (Xbox 360):
+файлів гри в збірці немає.
+
+1. ПЕРШИЙ ЗАПУСК
+   - Розпакуйте папку будь-куди. Запустіть MCLA-Launcher.exe.
+   - Setup: вкажіть папку "build" з цього пакета і папку з даними гри.
+   - Profiles: створіть порожній профіль (або імпортуйте свої сейви).
+   - Play: виберіть відеокарту й роздільність (рекомендовано 720p-1440p),
+     потім CHECK SETUP, потім START GAME.
+   - Під час першого запуску будьте онлайн: збірка один раз перевіряє, що вона
+     ще активна. Без інтернету вона запускається 3 дні після збирання або
+     24 години після останньої онлайн-перевірки.
+
+2. ЧАСТОТА КАДРІВ (Frame rate)
+   - "30 FPS (recommended)": оригінальний темп. Для звичайної гри.
+   - "Unlocked FPS (experimental)": плавніша їзда (часто 60+), але меню поверх
+     міста можуть бігти швидко, на завантажених перехрестях 30-40 FPS, деяке
+     світло мерехтить уночі або після гонки.
+
+3. ЯКЩО ЩОСЬ НЕ ТАК
+   - Натисніть F10 на клавіатурі саме в цей момент. Можна кілька разів.
+   - Якщо гра впаде, звіт може зберегтися сам.
+   - Коли закриєте гру, лаунчер скаже, скільки звітів записано, і запропонує
+     відкрити папку. Відкрийте там report.txt, дайте відповіді на чотири
+     питання, збережіть і надішліть усю папку власнику.
+   - Нічого не відправляється автоматично. У звітах є копія вашого сейву і
+     знімок екрана, тож надсилайте їх лише власнику.
+
+4. ВІДОМІ ПРОБЛЕМИ (повторно повідомляти не треба)
+   - Перше фото у Photo Mode може бути зіпсоване; зробіть ще раз.
+   - Світлофори вночі підсвічують фарбу авто.
+   - Вхід у гараж може зависнути; закрийте гру, сейв у безпеці.
+   - Деякі вивіски показують однотонний прямокутник, переважно вище 1440p.
+   - Геймпад через USB-донгл 2.4 ГГц може перестати працювати після обриву.
+
+5. ЯКЩО ЛАУНЧЕР ПИШЕ
+   - "This test build was withdrawn": візьміть актуальну збірку у власника.
+   - "BUILD CHECK NEEDED": один раз підключіться до інтернету й запустіть знову.
+   Ці перевірки ніколи не чіпають ваші сейви.

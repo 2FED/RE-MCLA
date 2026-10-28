@@ -10,8 +10,8 @@ rules: [M9 priorities](../M9-priorities.md).
 | Post-session report prompt | Implemented and unit-tested; not yet in a tester build |
 | Fresh F10 image or explicit stale mark (KI-042) | Implemented, builds; in-game check pending |
 | Diagnostics export with frame-pacing/CP/GPU summaries | Implemented and unit-tested |
-| Allowlisted staging and sentinel audit | Not started |
-| Tester guide, one tester smoke | Not started |
+| Allowlisted staging and sentinel audit | Audit script done; first run found path leaks; path-clean build in progress |
+| Tester guide, one tester smoke | Guide written (EN/UK); smoke pending |
 
 ## Kill switch (2026-10-28)
 
@@ -123,3 +123,31 @@ owner's explicit yes. The volunteer `mcla.exe` must also be built with
 - Tests use real line shapes copied from owner logs, a private-path sentinel,
   malformed values, a 25-minute log (bounded to 10) and an oversized tail. Export
   policy 538 checks, 0 failures; all 21 suites pass.
+
+## Volunteer audit and guide (2026-10-28)
+
+- `scripts/Test-MclaVolunteerStaging.ps1` audits a staged folder and changes nothing:
+  - an exact file allowlist, with no reparse points or alternate streams;
+  - no game, save, PDB, TOML, log, dump or image files;
+  - ASCII and UTF-16 searches of every file for owner-identifying strings: the`n    project path, `MCLA-Saves`, the Windows profile path in path form, the
+    computer name and caller sentinels;
+  - with `-RequireVolunteer`, a V2 ticket and an expiry-enabled host.
+- First run on `private/l37` (an internal build, not volunteer):
+  - **absolute source paths** (`C:/BDU/MCLA-Recomp/private/l34-src/...` from
+    `__FILE__` in log and assert macros) in `mcla.exe`, `rexruntime.dll` and
+    `rexgpu-xenos.dll`;
+  - **absolute PDB paths** in `rexgpu-xenos.dll` and `TracyClient.dll`;
+  - an old image helper (from l12) carrying the main-checkout path;
+  - expected for that build: a V1 ticket and no expiry host.
+  The bare Windows user name matched only colour and controller names, so it is
+  now matched in path form only. The computer name occurs nowhere.
+- Fix for volunteer builds: compile with `-ffile-prefix-map=<source root>=.`,
+  link with `/pdbaltpath:%_PDB%`, and rebuild the image helper. A path-clean
+  SDK build is running (`private/l38-sdk-*`).
+- `Stage-MclaInternalLauncher.ps1 -TesterGuide <file>` adds `TESTER-GUIDE.txt`
+  to the package and its receipt. Staging tests are still 63/0/0.
+- `docs/volunteer-tester-guide.txt`: a one-page guide in English and Ukrainian,
+  covering first start, the online check, the frame-rate choice, F10 and the
+  report prompt, known issues and the launcher refusal messages. A claim that a
+  wheel button can trigger F10 was removed: no such binding exists in this
+  source.
