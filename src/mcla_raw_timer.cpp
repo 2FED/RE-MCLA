@@ -33,6 +33,16 @@ REXCVAR_DEFINE_BOOL(mcla_raw_timer_smoothing, true, "MCLA",
     "Average the measured timer step over recent updates (total time is kept)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+// The race clock appears to add each update's step in whole milliseconds,
+// dropping the fraction: the owner measured a loss of about 0.5 ms per update
+// against a phone stopwatch (-1.9 % at about 27 ms steps, -3.5 % at about
+// 14 ms steps, 2026-10-28). Supplying steps that are whole milliseconds, with
+// the remainder carried to the next update, keeps both the race clock and the
+// total game time exact.
+REXCVAR_DEFINE_BOOL(mcla_raw_timer_ms_steps, true, "MCLA",
+    "Round raw timer steps to whole milliseconds, carrying the remainder")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_BOOL(mcla_raw_timer_stats, false, "MCLA",
     "Log measured/applied timer step statistics every 300 updates")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -108,6 +118,26 @@ class StepSmoother {
 };
 StepSmoother smoother;
 
+// Whole-millisecond steps with the remainder carried (see mcla_raw_timer_ms_steps).
+// The tiny bias keeps a float conversion of n / 1000 from truncating to n - 1.
+class MillisecondSteps {
+ public:
+  double Apply(double step) {
+    const double total = step + carry_;
+    const double whole_ms = std::floor(total * 1000.0);
+    if (whole_ms < 1.0) {
+      carry_ = total;
+      return step;
+    }
+    carry_ = total - whole_ms / 1000.0;
+    return whole_ms / 1000.0 + 1.0e-7;
+  }
+
+ private:
+  double carry_ = 0.0;
+};
+MillisecondSteps millisecond_steps;
+
 // Optional statistics for checking the effect without a diagnostic build.
 struct StepStats {
   uint64_t count = 0;
@@ -160,8 +190,8 @@ REX_EXTERN(sub_821BDA90) {
     std::memcpy(&factor, &factor_bits, sizeof(factor));
     if (last != 0 && now > last && factor > 0.0f) {
       const double raw = double(now - last) * double(factor);
-      const double applied =
-          REXCVAR_GET(mcla_raw_timer_smoothing) ? smoother.Apply(raw) : raw;
+      double applied = REXCVAR_GET(mcla_raw_timer_smoothing) ? smoother.Apply(raw) : raw;
+      if (REXCVAR_GET(mcla_raw_timer_ms_steps)) applied = millisecond_steps.Apply(applied);
       if (REXCVAR_GET(mcla_raw_timer_stats)) stats.Add(raw, applied);
       ctx.f1.f64 = applied;
     }
