@@ -71,3 +71,16 @@ All of these changes are private builds and local commits; nothing was pushed.
 - Distant pop-in (KI-036).
 - Placeholder sign textures, mostly at 4K (KI-038).
 - Gamepad drop with a USB 2.4 GHz dongle (KI-040, first seen 28.10).
+
+## Owner decisions (2026-10-28)
+
+- **M8-006, M8-007, M8-018:** moved to the start of M9.
+- **M8-001/002:** "60 FPS is covered at a basic level". The experimental unlocked mode (l33-sunc) counts as M8's 60 FPS deliverable, with its documented limits. Stable 60 in heavy scenes, the multi-threaded command processor and the launcher toggle are future work.
+- **M8-004:** "different resolutions are covered". It closes with KI-032 and KI-038 as recorded residuals.
+
+**Remaining before closure:**
+
+1. The M8-012 bounded owner regression on l31-s30 and l33-sunc: save and reload, profile switch, a few races, garage, Photo Mode and clean exit.
+2. M8-011 closes on the timebox measurements.
+3. M8-017 residual dispositions per KI, owner-reviewed.
+4. Ledger and `current-state.md` update with the final tally, then commit. Pushing needs explicit owner approval.
