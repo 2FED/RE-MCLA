@@ -2,8 +2,7 @@
 
 **Status:** the repository now builds the launcher the owner uses (l12). The
 rebuilt `MCLA-Launcher.exe` has byte-identical code to the l12 binary. Staged
-as `private/l35-s30` and `private/l35-sunc`. Pending: the owner's smoke on a
-non-MAIN profile.
+as `private/l35-s30` and `private/l35-sunc`. Owner smoke on `l35-s30` passed 2026-10-28: "everything works".
 
 ## Where the l12 launcher came from
 
@@ -84,7 +83,6 @@ which a model answer would not make cheaper to verify.
 
 ## Open
 
-1. Owner smoke on a non-MAIN profile through `private/l35-s30` (profiles,
-   Setup, readiness, F10, lock). MAIN still works with the l12 launcher.
+1. Done: the owner smoke-tested `private/l35-s30` and reports everything works.
 2. The main checkout's uncommitted probe work stays where it is; a separate
    owner decision is needed before cleaning that tree.
