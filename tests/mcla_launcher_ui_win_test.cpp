@@ -578,76 +578,6 @@ void TestSections() {
   Check(recorder.calls.size() == running_calls, "navigation while running never refreshes or mutates");
 }
 
-void TestConfigurationCategorySummary() {
-  // These three IDs are appended after the existing stable export ID. Keep
-  // tests compilable before the production header/UI lands to observe RED.
-  const std::pair<int,const wchar_t *> summaries[] = {
-      {UiExportReport + 1,L"Fixes come with the selected build. Frame rate (30 / Unlocked) is on the Play page."},
-      {UiExportReport + 2,L"No launcher overrides; use the game's own options."},
-      {UiExportReport + 3,L"No launcher controls or cheat arguments."}};
-  Recorder recorder;
-  InvisibleWindow window(recorder);
-  if (!window) return;
-  RECT initial_window{}; GetWindowRect(window,&initial_window);
-  Edit(window,UiBuildRoot,L"C:/UnsubmittedCategorySetup");
-  Edit(window,UiGameRoot,L"F:/UnsubmittedCategoryGame");
-  const auto readiness = Text(window,UiReadiness);
-  const size_t before = recorder.calls.size();
-  for (const auto &[id,caption] : summaries) {
-    Check(GetDlgItem(window,id)!=nullptr,"configuration category has a real native summary control");
-    Check(!Shown(window,id),"configuration summary is absent from initial Play");
-  }
-  for (const int page : {UiPageSetup,UiPageProfiles,UiPagePlay,UiPageSetup}) {
-    Click(window,page);
-    for (const auto &[id,caption] : summaries) {
-      const HWND control=GetDlgItem(window,id);
-      if (!control) continue; // Missing controls are already RED, not a GDI error.
-      Check(Shown(window,id)==(page==UiPageSetup),"configuration categories are Setup-only, not Play or Profiles clutter");
-      Check(Text(window,id)==caption,"configuration category wording is exact and does not promise absent features");
-      const auto style=GetWindowLongPtrW(control,GWL_STYLE);
-      Check(Class(window,id)==L"Static" && !(style & WS_TABSTOP) && !(style & SS_NOTIFY),
-          "category is read-only STATIC without focus stops or click notification");
-      if (page!=UiPageSetup) continue;
-      RECT client{},bounds{}; GetClientRect(control,&client); GetWindowRect(control,&bounds);
-      const HDC dc=GetDC(control);
-      Check(dc!=nullptr,"category fit measures only its own native control DC");
-      if (dc) {
-        const auto font=reinterpret_cast<HFONT>(SendMessageW(control,WM_GETFONT,0,0));
-        const auto old=SelectObject(dc,font);
-        SIZE extent{};
-        const bool measured=GetTextExtentPoint32W(dc,caption,static_cast<int>(std::wstring_view(caption).size()),&extent)!=0;
-        Check(measured && extent.cx<=client.right-client.left && extent.cy<=client.bottom-client.top,
-              "complete category caption fits actual font and native client bounds without wrapping or clipping");
-        SelectObject(dc,old); ReleaseDC(control,dc);
-      }
-      RECT value_column{}; GetWindowRect(GetDlgItem(window,UiBuildRoot),&value_column);
-      Check(bounds.left==value_column.left,
-            "category value is a separate row aligned with the form's value column (M9-004)");
-      RECT main_client{}; GetClientRect(window,&main_client);
-      RECT local=bounds; MapWindowPoints(nullptr,window,reinterpret_cast<POINT *>(&local),2);
-      Check(local.left>=0 && local.top>=0 && local.right<=main_client.right && local.bottom<=main_client.bottom,
-          "category remains inside unchanged main client geometry");
-      for (const int footer : {UiSaveSettings,UiCheckLaunch,UiPlay,UiReadiness,UiStatus}) {
-        RECT other{},overlap{}; GetWindowRect(GetDlgItem(window,footer),&other);
-        Check(!IntersectRect(&overlap,&bounds,&other),"category does not overlap common launch/status footer");
-        Check(bounds.bottom<=other.top,"all category captions finish above the common footer");
-      }
-      for (const auto &[other_id,unused] : summaries) if (other_id>id && GetDlgItem(window,other_id)) {
-        RECT other{},overlap{}; GetWindowRect(GetDlgItem(window,other_id),&other);
-        Check(!IntersectRect(&overlap,&bounds,&other),"category captions do not overlap one another");
-      }
-      RawClick(window,id);
-      SendMessageW(window,WM_COMMAND,MAKEWPARAM(id,STN_CLICKED),reinterpret_cast<LPARAM>(control));
-    }
-  }
-  RECT final_window{}; GetWindowRect(window,&final_window);
-  Check(EqualRect(&initial_window,&final_window)!=0,"category inspection does not resize main window");
-  Check(recorder.calls.size()==before,"read-only categories and section changes never dispatch backend actions");
-  Check(Text(window,UiBuildRoot)==L"C:/UnsubmittedCategorySetup" && Text(window,UiGameRoot)==L"F:/UnsubmittedCategoryGame",
-        "category inspection preserves unsaved setup drafts");
-  Check(Text(window,UiReadiness)==readiness,"category inspection does not change readiness");
-}
-
 void TestNavigationKeys() {
   Recorder recorder;
   InvisibleWindow window(recorder);
@@ -1589,7 +1519,6 @@ int main() {
   TestRenameValidation();
   TestImportPreservesUnsavedSetup();
   TestSections();
-  TestConfigurationCategorySummary();
   TestNavigationKeys();
   TestDraftCallbackMatrix();
   TestOperationDialogs();

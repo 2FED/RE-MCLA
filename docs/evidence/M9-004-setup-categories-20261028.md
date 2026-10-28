@@ -1,8 +1,18 @@
 # M9-004 Setup categories (2026-10-28)
 
-**Status:** implemented, with tests passing. Staged as `private/l37`. Pending: the
-owner's two-minute UI review. Carries M8-007 ("compatibility, accessibility
-and cheat categories are visibly separated").
+**Status:** deferred by owner decision (2026-10-28). The rows are removed;
+the requirement moved to the public release as REL-019. Carried M8-007
+("compatibility, accessibility and cheat categories are visibly separated").
+
+## Owner decision (2026-10-28)
+
+After reviewing `private/l37`, the owner decided the three rows should go:
+they describe categories that have no options, so they do nothing for a
+tester. M9-004 is not needed for the volunteer build. The three read-only
+rows, their control IDs and the category UI test are removed (native UI test
+959 checks, 0 failures; controller 338 and export UI 249 unchanged). The
+Setup page now shows only folders and verification. The frame-rate choice stays
+on the Play page (M9-003). The record below describes the reviewed version.
 
 ## Before
 

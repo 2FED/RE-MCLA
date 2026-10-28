@@ -80,7 +80,6 @@ enum UiControlId : int {
   UiSelectedProfileName, UiOperationConfirm, UiOperationCancel,
   UiCheckLaunch, UiReadiness, UiRenderTargetNote,
   UiExportReport,
-  UiCompatibilitySummary, UiAccessibilitySummary, UiCheatsSummary,
   UiTimingNote,
 };
 
