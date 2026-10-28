@@ -1,0 +1,119 @@
+# M9 volunteer build and stabilisation (proposed revision)
+
+Draft 2026-10-28, awaiting owner approval. [README-AI](../README-AI) owns the
+milestone ledger; until the owner approves this revision, section 17 there still
+holds the earlier draft release plan. Inputs: the
+[M8 closure record](evidence/M8-closure-readiness-20261028.md), the
+[performance timebox](evidence/M8-001-timebox-20261025.md),
+[current state](current-state.md) and [known issues](known-issues.md).
+
+## Decision summary
+
+M8 closed on 2026-10-28 (10 complete, 9 deferred of 19, GREEN). The owner moved
+M8-006, M8-007 and M8-018 to the start of M9 and agreed that a multi-threaded
+command processor (CP) is separate work after M8.
+
+This revision proposes:
+
+1. **M9 = a closed volunteer build plus stabilisation**, not a public release.
+   M9 starts with the three carried M8 items, makes the build reproducible from
+   published source, and triages the known issues a tester will meet first.
+2. **M10 = multi-threaded command processor** (evidence below).
+3. **Public release hardening** (the earlier M9-001 to M9-018 draft: dump
+   validation, installer, clean-machine install, release tags) moves unchanged to
+   a later release milestone, renumbered when it starts. It needs the
+   asset-free prepare pipeline, which is a large separate piece of work.
+
+Strategic direction stays hybrid: the recomp is the base, and selected
+subsystems may be replaced by readable C++ through hooks when that is cheaper
+or more reliable than fixing them in place. No full decompilation.
+
+## Why the multi-threaded CP is M10, not M9
+
+- **It only helps the experimental unlocked mode.** Heavy intersections draw
+  about 6-10 k objects per frame at about 2.5 us of CP work each, so 15-25 ms of
+  CP per frame. That fits the 33 ms budget of stock 30 (`l31-s30`, the
+  recommended mode) and breaks only the 16.7 ms budget of unlocked mode.
+  Volunteers get stock 30 by default, so M9's goal does not depend on it.
+- **It is an architecture change, not a tuning step.** Xenia-style CP state
+  (register file, shared-memory write-watch, EDRAM and texture cache, deferred
+  command list) is single-threaded by design. Splitting it means ordering
+  guarantees across threads, and every regression would land on the same
+  rendering paths that volunteers are testing. Mixing the two would make
+  volunteer reports hard to attribute.
+- **The CP may not be the only wall.** The 2026-10-26 review measured the
+  game's own render thread at 13-17 ms of CPU per frame. If it does not shrink
+  at heavy intersections, a faster CP still will not give 60 there. This needs
+  one measurement before any design work (M10-001 below).
+- **Volunteer data makes M10 better.** If the volunteer diagnostics export
+  carries per-minute CP-busy, GPU-busy and draws-per-frame (already logged),
+  M10 starts with numbers from several CPUs instead of one laptop.
+
+Proposed M10 opening task (recorded here so it is not lost): **M10-001**
+measure, at one repeatable heavy intersection on unlocked mode, the guest render
+thread, the CP thread and real GPU busy time in the same window, plus the
+per-draw CP cost split (state/bindings, shared-memory requests, primitive
+processing, replay). Decide the split design only after that.
+
+## Execution order
+
+| Order | Task | Carries | What closes it |
+|---|---|---|---|
+| 1 | **M9-001** Reproducible source build | SDK pointer | Bump `third_party/rexglue-sdk` from `5dd58f8` to `a239b83` (fork branch `mcla/mcla-r-hotfixes`, already published). Remove the build-time 32bpp patch step, which that commit now contains. A clean clone builds a stock-30 and an unlocked artifact whose behaviour matches `l31-s30` and `l33-sunc` on a short title-plus-drive check. Private `sdk-l18-s` patch scripts become history, not a build input. |
+| 2 | **M9-002** Launcher source reconciliation | prerequisite for 006/007 | The repository launcher source and the l12 binary the owner uses have diverged. Rebuild one launcher from source that keeps every l12 behaviour the owner accepted (profiles, Setup, readiness, F10, lock). Owner smoke on a non-MAIN profile. |
+| 3 | **M9-003** Mode option in the launcher | M8-006 | One option: "30 FPS (recommended)" or "Unlocked FPS (experimental)", with the limits shown next to it. Switching back restores stock exactly. This replaces the two shortcut folders. It meets the M8-006 criterion: each option toggles independently, restores stock, and stays hidden until verified. No other graphics options in M9. |
+| 4 | **M9-004** Setup categories | M8-007 | Compatibility, accessibility and cheats are visibly separate. Owner two-minute review on the M9-002 launcher. |
+| 5 | **M9-005** Volunteer build and diagnostics export | M8-018 | Allowlisted staging (no game data, saves, owner paths, logs, keys), sentinel audit, signed 14-day expiry (already implemented), explicit export with a visible contents list that adds frame-pacing/CP/GPU summaries, a one-page tester guide, and one independent tester smoke test. **Blocked on the distribution decision below.** |
+| 6 | **M9-006** Known-issue triage for testers | M8-017 residuals | Every open KI gets a disposition (fix in M9, tester-visible known issue, or later milestone). Order: hangs and lost input first, then visible defects. See the table below. |
+| 7 | **M9-007** Menu state from the game | unlocked limit | Time-boxed to 2 days. Find the game's own pause/menu state by reverse engineering and read it through a hook, instead of the draw-count heuristic. If found, cap pause and Arcade-over-map menus at 30. If not, the limit stays accepted and documented. A static-scene detector stays rejected (misfires at traffic lights). |
+| 8 | **M9-008** Bounded regression and closure | M8-012 pattern | Owner regression on the reproducible build (save/reload, profile switch, a race, garage, photo, pause, exit) in both modes, plus volunteer smoke results. Ledger and current-state update, then the milestone push. |
+
+Order 1 and 2 can start immediately. Order 5 needs the owner's distribution
+decision before anything leaves the PC. Order 6 runs in parallel with 3-5 and
+continues with volunteer reports.
+
+## Known-issue triage (proposal for M9-006)
+
+| KI | Sev | Symptom | Proposed M9 action |
+|---|---|---|---|
+| KI-035 | S2 | Garage transition freeze, must close the game | **Fix attempt.** A hang is the worst tester experience. Start from the existing F10 pair (render thread waiting, CP busy in copy/upload), find what the CP loops on. Owner 100% repro would help. |
+| KI-026 | S2 | Camera stuck after Red Light Driver / Race Back | **Fix attempt, time-boxed.** Pre-existing since September, reproduced on l33-sunc with three F10 dumps. Compare against the healthy two-site camera-apply trace. Candidate for a hook-level fix if the guest state machine is understood. |
+| KI-040 | S2 | Gamepad not re-acquired after a reconnect | **Fix attempt.** Make SDL/XInput re-scan on device arrival and accept a controller at any XInput index. Volunteers will use many pad types. |
+| KI-037 | S3 | First photo broken; save-slot preview shows the previous photo | **Investigate, 2 days.** Leads: partial multi-tile EDRAM resolve on first use, or photo draws skipped during async shader compilation. Workaround (discard and retake) goes into the tester guide either way. |
+| KI-038 / KI-032 | S3 / S2 | Placeholder-colour signs, all signs at 4K | **Investigate after the above.** Likely one texture-cache/resolution-scaling cause. Until fixed, the tester guide recommends 720p-1440p. |
+| KI-013 | S2 | Traffic lights over-light car paint | **Known issue for testers.** Also present in Xenia, long-standing renderer defect. Reconsider in a later rendering milestone. |
+| KI-036 | S3 | Distant pop-in | **Compare with stock l12 once**, then decide (may be original LOD). |
+| `DEVICE_HUNG` | - | One GPU reset in eight l29 title runs | **Watch.** Count in owner and volunteer runs; act if it repeats. |
+
+## Volunteer boundary (unchanged from M8, still binding)
+
+The volunteer build excludes the owner's profiles, saves, settings, absolute
+paths, logs, F10/crash packages, keys and source game data. No upload or
+telemetry; diagnostics leave a tester's PC only by an explicit export. The
+current portable publisher output is not the volunteer artifact.
+
+[Source-data policy](source-data-policy.md) forbids distributing binaries that
+reproduce proprietary game code "unless an explicit legal review approves
+distribution". `mcla.exe` is such a binary. M9-005 therefore needs one owner
+decision first:
+
+- **A.** A small closed group of trusted testers who own the game, with the
+  owner's explicit written approval recorded as the review for that group only.
+- **B.** Testers prepare their own build from their own dump. This pulls the
+  dump-validation and local codegen work from the release milestone into M9 and
+  makes M9 several weeks longer.
+
+## Estimate
+
+About 2-3 weeks of agent work for orders 1-7 under option A, plus owner checks
+(launcher smoke, Setup review, regression) and one volunteer's time. Option B
+adds the prepare pipeline and is not estimated yet.
+
+## Deferred, not dropped
+
+- Multi-threaded CP and stable 60 at heavy intersections: M10.
+- Present at native monitor refresh (owner has 144 Hz / 4K120, no VRR) and an
+  in-game settings overlay: candidates for after M10.
+- Ultrawide (M8-005), shader-cache distribution (M8-008), Linux (M8-009/010),
+  macOS (M8-013/014), Steam Deck: later platform milestones, without PASS.
+- Public release hardening and distribution: the later release milestone.

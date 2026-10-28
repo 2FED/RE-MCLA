@@ -1871,6 +1871,8 @@ a separate future scope decision. No content is sent to volunteers by this plan.
 ## 17. Milestone M9 — Release hardening, packaging, and public distribution
 
 This is draft future release planning, not a current distribution/support claim.
+A proposed 2026-10-28 revision (volunteer build and stabilisation first, multi-threaded
+CP as M10, public release later) awaits owner approval: [M9 priorities](docs/M9-priorities.md).
 Launcher/capability requirements remain subject to the post-M7/M8 scope review.
 
 **Goal:** produce a reproducible, legally clean, supportable public release that requires users to supply their own supported game dump.
