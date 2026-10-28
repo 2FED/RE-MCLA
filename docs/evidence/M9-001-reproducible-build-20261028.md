@@ -2,8 +2,7 @@
 
 **Status:** built from published source, checked against the sources of
 `l31-s30` and `l33-sunc`, and staged as `private/l34-s30` and
-`private/l34-sunc`. Still open: the owner's title-plus-drive check. Not a
-physical PASS. Automated title checks pass on both (below).
+`private/l34-sunc`. Owner manual drive at 2K passed on both (KI-041 flicker on sunc, see below). Automated title checks pass on both (below).
 
 ## What changed in the repository
 
@@ -167,6 +166,10 @@ baselines.
   known `t:\` VFS probes.
 - **Not covered:** driving, races, saves and the race timer. These need the
   owner's manual check on a real profile through the launcher.
+
+## Owner manual check (2026-10-28)
+
+The owner drove both staged builds through the launcher at 2K: "all good" on both. One finding on `l34-sunc` only: at night, light flickers slightly and bushes flicker constantly while lit by the headlights when driving past. It is logged as KI-041. l34 matches l33-sunc at source and codegen level, so it is probably a pre-existing unlocked-mode effect; a 720p repro and the same route on `l33-sunc` will classify it. M9-001 is closed on this result; KI-041 goes to M9-006 unless it turns out to be an l34 regression.
 
 ## Spark routing
 

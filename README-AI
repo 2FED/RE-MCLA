@@ -1889,7 +1889,7 @@ honest dispositions for the issues testers will meet first.
 
 ### Tasks
 
-- [-] **M9-001** Reproducible source build: SDK submodule `5dd58f8` -> `a239b83`, remove the build-time 32bpp patch step; clean clone reproduces l31-s30 / l33-sunc behaviour. 2026-10-28: pin bumped (package 0.20.0.2), no SDK patch step left, unlocked via `MCLA_UNLOCKED_VBLANK_HZ`; fresh clone builds, codegen byte-identical, SDK tests 1864/1864, source equivalence to l31/l33 shown. Staged as `private/l34-s30` / `l34-sunc`; automated 170 s title checks on RTX 5060 pass and match l31-s30/l33-sunc (30.0 fps s30, vblank 60/240/60 and UI cap on sunc). Pending: owner drive check on a real profile. [Evidence](docs/evidence/M9-001-reproducible-build-20261028.md).
+- [x] **M9-001** Reproducible source build: SDK submodule `5dd58f8` -> `a239b83`, remove the build-time 32bpp patch step; clean clone reproduces l31-s30 / l33-sunc behaviour. 2026-10-28: pin bumped (package 0.20.0.2), no SDK patch step left, unlocked via `MCLA_UNLOCKED_VBLANK_HZ`; fresh clone builds, codegen byte-identical, SDK tests 1864/1864, source equivalence to l31/l33 shown. Staged as `private/l34-s30` / `l34-sunc`; automated 170 s title checks on RTX 5060 pass and match l31-s30/l33-sunc (30.0 fps s30, vblank 60/240/60 and UI cap on sunc). Owner manual drive at 2K on both passed 2026-10-28; one unlocked-only night flicker logged as KI-041 (likely pre-existing, M9-006). [Evidence](docs/evidence/M9-001-reproducible-build-20261028.md).
 - [ ] **M9-002** Launcher source reconciliation with the accepted l12 binary.
 - [ ] **M9-003** Launcher mode option 30 / Unlocked (experimental) with limits shown (carries M8-006).
 - [ ] **M9-004** Setup categories visibly separated (carries M8-007).
@@ -1897,6 +1897,7 @@ honest dispositions for the issues testers will meet first.
 - [ ] **M9-006** Known-issue triage and fix attempts: KI-035, KI-026, KI-040 first, then KI-037, KI-038/032; dispositions for the rest.
 - [ ] **M9-007** Menu state from the game via hook, time-boxed 2 days; otherwise keep the accepted limit.
 - [ ] **M9-008** Bounded regression in both modes plus volunteer smoke, closure and push.
+- [ ] **M9-009** Hide the mouse cursor while the game window is active and receiving gamepad or wheel input; show it again on mouse movement (owner request 2026-10-28).
 
 ### Exit criteria
 
@@ -1908,6 +1909,7 @@ honest dispositions for the issues testers will meet first.
 
 - 2026-10-28 — Plan approved by owner. Health: `NOT STARTED`. Next tasks: M9-001, M9-002.
 - 2026-10-28 — M9-001 build from published SDK `a239b83` done (`private/l34-build`); equivalence to l31-s30/l33-sunc shown at source, codegen and binary-switch level. Not a physical PASS. Blocker: test-build ticket signing needs PowerShell 7 (owner decision). Health: `GREEN`. Next: M9-001 owner check, then M9-002.
+- 2026-10-28 — M9-001 closed: owner manual drive at 2K on l34-s30 and l34-sunc passed; automated title checks match l31/l33. New: KI-041 (night light/bush flicker under headlights, l34-sunc only, 720p and l33-sunc comparison pending) and task M9-009 (hide mouse cursor on pad/wheel input, owner request). Completed 1 of 9. Health: `GREEN`. Next: M9-002 after the owner's 720p result, then M9-003.
 
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 
@@ -2178,6 +2180,7 @@ The criterion below is additional to the task wording and universal Definition o
 | M9-006 | Each open KI has a reviewed disposition; claimed fixes have before/after evidence / KI ledger |
 | M9-007 | Menu cap uses a game-state signal and does not cap driving, or the limit stays documented after the time box / route check |
 | M9-008 | Both modes pass the bounded regression on the exact volunteer artifacts / route record |
+| M9-009 | With the game window focused, gamepad or wheel input hides the mouse cursor and mouse movement shows it again; no effect while unfocused, in the launcher or on other windows / unit test of the hide/show state rule plus owner check with pad and wheel |
 
 ### Release milestone criteria (draft, section 17a)
 

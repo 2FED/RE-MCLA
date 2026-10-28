@@ -66,6 +66,7 @@ processing, replay). Decide the split design only after that.
 | 6 | **M9-006** Known-issue triage for testers | M8-017 residuals | Every open KI gets a disposition (fix in M9, tester-visible known issue, or later milestone). Order: hangs and lost input first, then visible defects. See the table below. |
 | 7 | **M9-007** Menu state from the game | unlocked limit | Time-boxed to 2 days. Find the game's own pause/menu state by reverse engineering and read it through a hook, instead of the draw-count heuristic. If found, cap pause and Arcade-over-map menus at 30. If not, the limit stays accepted and documented. A static-scene detector stays rejected (misfires at traffic lights). |
 | 8 | **M9-008** Bounded regression and closure | M8-012 pattern | Owner regression on the reproducible build (save/reload, profile switch, a race, garage, photo, pause, exit) in both modes, plus volunteer smoke results. Ledger and current-state update, then the milestone push. |
+| 9 | **M9-009** Hide the mouse cursor on pad/wheel input | owner request 2026-10-28 | While the game window is focused, gamepad or wheel input hides the mouse cursor and mouse movement shows it again. No effect when unfocused or in the launcher. Small host change (input listener plus window cursor state); it can run alongside M9-003 to M9-006 and must land before the M9-008 regression. |
 
 Order 1 and 2 can start immediately. Order 5 needs the owner's distribution
 decision before anything leaves the PC. Order 6 runs in parallel with 3-5 and
@@ -81,6 +82,7 @@ continues with volunteer reports.
 | KI-037 | S3 | First photo broken; save-slot preview shows the previous photo | **Investigate, 2 days.** Leads: partial multi-tile EDRAM resolve on first use, or photo draws skipped during async shader compilation. Workaround (discard and retake) goes into the tester guide either way. |
 | KI-038 / KI-032 | S3 / S2 | Placeholder-colour signs, all signs at 4K | **Investigate after the above.** Likely one texture-cache/resolution-scaling cause. Until fixed, the tester guide recommends 720p-1440p. |
 | KI-013 | S2 | Traffic lights over-light car paint | **Known issue for testers.** Also present in Xenia, long-standing renderer defect. Reconsider in a later rendering milestone. |
+| KI-041 | S3 | Night light and bush flicker under headlights, unlocked mode (l34-sunc, owner 2026-10-28) | **Classify first.** 720p repro (owner) and the same night route on l33-sunc. If l33-sunc shows it too, it is a pre-existing unlocked-mode issue and joins the unlocked limits; otherwise it is an M9-001 regression and is fixed before M9-003. |
 | KI-036 | S3 | Distant pop-in | **Compare with stock l12 once**, then decide (may be original LOD). |
 | `DEVICE_HUNG` | - | One GPU reset in eight l29 title runs | **Watch.** Count in owner and volunteer runs; act if it repeats. |
 
