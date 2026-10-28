@@ -235,8 +235,19 @@ std::expected<ExportPlan, std::wstring> PrepareLiveExport(
   } else if (GetLastError() != ERROR_FILE_NOT_FOUND) {
     return std::unexpected(L"Cannot inspect optional capability record");
   }
+  // Optional: per-minute performance counters are parsed from it (numbers only).
+  std::optional<PinnedFile> log_tail;
+  const auto log_attrs = GetFileAttributesW(Native(package->path() + L"\\log-tail.txt").c_str());
+  if (log_attrs != INVALID_FILE_ATTRIBUTES) {
+    auto read = ReadPinned(*package, L"log-tail.txt", kMaximumExportLogTailBytes);
+    if (!read) return std::unexpected(read.error());
+    log_tail.emplace(std::move(*read));
+  } else if (GetLastError() != ERROR_FILE_NOT_FOUND) {
+    return std::unexpected(L"Cannot inspect optional package log tail");
+  }
   auto projection = ProjectLiveMetadata({selected->id, receipt->bytes, status->bytes,
-      manifest->bytes, diagnostic->bytes, capabilities ? std::string_view(capabilities->bytes) : std::string_view{}});
+      manifest->bytes, diagnostic->bytes, capabilities ? std::string_view(capabilities->bytes) : std::string_view{},
+      log_tail ? std::string_view(log_tail->bytes) : std::string_view{}});
   if (!projection) return std::unexpected(L"Unsupported or inconsistent export metadata: " + Wide(projection.error()));
   auto diagnostic_hash = Hash(diagnostic->bytes);
   if (!diagnostic_hash || *diagnostic_hash != projection->state_sha256 || diagnostic->bytes.size() != projection->state_bytes)
@@ -245,6 +256,7 @@ std::expected<ExportPlan, std::wstring> PrepareLiveExport(
   state->inputs.push_back(std::move(*receipt)); state->inputs.push_back(std::move(*status));
   state->inputs.push_back(std::move(*manifest)); state->inputs.push_back(std::move(*diagnostic));
   if (capabilities) state->inputs.push_back(std::move(*capabilities));
+  if (log_tail) state->inputs.push_back(std::move(*log_tail));
   state->sources.push_back(std::move(*profile)); state->sources.push_back(std::move(*session));
   state->sources.push_back(std::move(*package));
   auto report_hash = Hash(state->report);

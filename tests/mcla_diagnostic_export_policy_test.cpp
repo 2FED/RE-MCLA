@@ -26,7 +26,7 @@ struct Fixture {
   std::string receipt = "MCLA-MANAGED-SESSION-V1\nprofile " + kProfile +
       "\nbuild " + kHash + "\ngame " + kGame +
       "\ntiming stock\ngpu NVIDIA PRIVATE_SENTINEL_NEVER_EXPORT\nadapter 1\nscale 2\nvsync 1\nfullscreen 0\n";
-  std::string session = "complete\nexit 0\n", capabilities;
+  std::string session = "complete\nexit 0\n", capabilities, log_tail;
   Json state = {{"schema","mcla-diagnostic-state-v1"},{"reason","f10"}};
   Json manifest = {{"schema","mcla-diagnostic-package-v1"},{"kind","live"},
       {"platform","windows"},{"mcla_version","0.1.0.0"},{"reason","f10"},
@@ -52,7 +52,7 @@ struct Fixture {
     manifest_bytes = manifest.dump();
   }
   ExportMetadataInput Input() const {
-    return {profile,receipt,session,manifest_bytes,state_bytes,capabilities};
+    return {profile,receipt,session,manifest_bytes,state_bytes,capabilities,log_tail};
   }
   void Field(std::string_view key, std::string_view value) {
     const auto prefix = "\n" + std::string(key) + " ";
@@ -105,6 +105,39 @@ Json Accept(Fixture fixture, const char *label) {
 }
 
 int RunTests() {
+  {
+    // M9-005: per-minute performance counters from the package log tail.
+    const std::string minute =
+        "[2026-10-28 17:35:01.600] [info] [gpu] [t1] MCLA replay/min: submissions 21261 (streamed 21261), replay 6937137 us, end-of-submission wait 1 us\n"
+        "[2026-10-28 17:35:01.601] [info] [gpu] [t1] MCLA frame pacing/min: frames 4942 (82.4 fps), interval us p50 11980 p90 16389 p95 18060 p99 22359 max 131938; >20ms 136 >34ms 7 >50ms 2 >100ms 1\n"
+        "[2026-10-28 17:35:01.602] [info] [gpu] [t1] MCLA draws per frame/min: p10 2930 p50 3622 p90 4713 max 6873\n"
+        "[2026-10-28 17:35:01.603] [info] [gpu] [t1] MCLA gpu busy/min: 49809 ms over 21261 submissions, 10.08 ms per frame\n";
+    Fixture fixture;
+    fixture.log_tail = "[x] [info] [core] Game directory: C:\\Users\\PRIVATE_SENTINEL_NEVER_EXPORT\\game\n" + minute +
+        "[x] MCLA frame pacing/min: frames NaN (abc fps) PRIVATE_SENTINEL_NEVER_EXPORT\n";
+    const auto report = Accept(fixture, "log tail with counters accepted");
+    const auto perf = report.contains("performance_per_minute") ? report.at("performance_per_minute") : Json();
+    Check(perf.is_array() && perf.size() == 2, "one record per pacing line; malformed line keeps no numbers");
+    if (perf.is_array() && !perf.empty()) {
+      const auto &m = perf.at(0);
+      Check(m.at("fps") == 82.4 && m.at("frame_p50_ms") == 12.0 && m.at("frame_p95_ms") == 18.1 &&
+            m.at("frames_over_50ms") == 2 && m.at("draws_p50") == 3622 && m.at("gpu_busy_ms_per_frame") == 10.1 &&
+            m.at("cp_replay_ms_per_minute") == 6937.1, "counters parsed into rounded numbers");
+      Check(perf.size() < 2 || !perf.at(1).contains("fps"), "unparseable values are omitted, not guessed");
+    }
+    Check(report.at("disclaimers").dump().find("performance-counters-from-log-not-certified") != std::string::npos,
+          "performance block carries its own disclaimer");
+    std::string many;
+    for (int i = 0; i < 25; ++i) many += minute;
+    fixture.log_tail = many;
+    const auto bounded = Accept(fixture, "long log tail accepted");
+    Check(bounded.at("performance_per_minute").size() == kMaximumPerformanceMinutes, "only the last 10 minutes are kept");
+    fixture.log_tail = "[x] [info] [core] PRIVATE_SENTINEL_NEVER_EXPORT nothing to see\n";
+    Check(!Accept(fixture, "log tail without counters accepted").contains("performance_per_minute"),
+          "no counters, no performance block");
+    fixture.log_tail = std::string(kMaximumExportLogTailBytes + 1, 'x');
+    Reject(fixture, "oversized log tail is rejected");
+  }
   {
     // M9-003: an unlocked session exports with its recorded mode, and its
     // capability record must be the canonical unlocked plan of a tested build.

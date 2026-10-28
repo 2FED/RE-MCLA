@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -20,7 +21,13 @@ namespace mcla::launcher::diagnostic_export {
 
 struct ExportMetadataInput {
   std::string_view profile_id, session_receipt, session_state, manifest, diagnostic_state, capabilities;
+  // Optional private log tail of the package. Only the per-minute frame-pacing,
+  // draw, GPU-busy and replay counter lines are parsed into numbers (M9-005);
+  // no other text from it can reach the report.
+  std::string_view log_tail;
 };
+inline constexpr size_t kMaximumExportLogTailBytes = 1024 * 1024;
+inline constexpr size_t kMaximumPerformanceMinutes = 10;
 struct MetadataProjection {
   std::string report_json;
   std::string state_sha256;
@@ -164,6 +171,76 @@ inline std::string_view Reason(std::string_view reason) {
   if (reason == "unexpected-guest-exit") return "unexpected-guest-exit";
   return "other";
 }
+// Number after `key` within `line`, or nullopt. Digits and one '.' only; the
+// value is range-checked by the caller.
+inline std::optional<double> NumberAfter(std::string_view line, std::string_view key) {
+  const auto at = line.find(key);
+  if (at == line.npos) return std::nullopt;
+  size_t i = at + key.size();
+  const size_t begin = i;
+  bool dot = false;
+  while (i < line.size() && ((line[i] >= '0' && line[i] <= '9') || (line[i] == '.' && !dot))) {
+    dot |= line[i] == '.';
+    ++i;
+  }
+  if (i == begin || i - begin > 15) return std::nullopt;
+  try { return std::stod(std::string(line.substr(begin, i - begin))); } catch (...) { return std::nullopt; }
+}
+// Per-minute counters the GPU plugin logs (frame pacing, draws, GPU busy, CP
+// replay). Each record groups consecutive distinct kinds; only the last
+// kMaximumPerformanceMinutes records are kept. Numbers only, bounded ranges.
+inline Json PerformanceSummary(std::string_view log) {
+  struct Minute { std::optional<double> fps, p50, p95, over50, gpu, draws, replay; bool pacing = false; };
+  std::vector<Minute> minutes;
+  Minute current;
+  bool open = false;
+  const auto bounded = [](std::optional<double> v, double max) { return v && *v >= 0 && *v <= max ? v : std::nullopt; };
+  const auto flush = [&]() { if (open && current.pacing) minutes.push_back(current); current = {}; open = false; };
+  while (!log.empty()) {
+    const auto end = log.find('\n');
+    const auto line = log.substr(0, end);
+    log.remove_prefix(end == log.npos ? log.size() : end + 1);
+    if (line.size() > 2048) continue;
+    if (line.find("MCLA frame pacing/min: ") != line.npos) {
+      if (current.pacing) flush();
+      current.pacing = true; open = true;
+      const auto paren = line.find('(');
+      if (paren != line.npos) current.fps = bounded(NumberAfter(line.substr(paren), "("), 10000);
+      current.p50 = bounded(NumberAfter(line, " p50 "), 1e9);
+      current.p95 = bounded(NumberAfter(line, " p95 "), 1e9);
+      current.over50 = bounded(NumberAfter(line, ">50ms "), 1e7);
+    } else if (line.find("MCLA draws per frame/min: ") != line.npos) {
+      if (current.draws) flush();
+      open = true;
+      current.draws = bounded(NumberAfter(line, " p50 "), 1e7);
+    } else if (line.find("MCLA gpu busy/min: ") != line.npos) {
+      if (current.gpu) flush();
+      open = true;
+      current.gpu = bounded(NumberAfter(line, "submissions, "), 1e6);
+    } else if (line.find("MCLA replay/min: ") != line.npos) {
+      if (current.replay || current.pacing) flush();
+      open = true;
+      current.replay = bounded(NumberAfter(line, " replay "), 1e12);
+    }
+  }
+  flush();
+  if (minutes.size() > kMaximumPerformanceMinutes)
+    minutes.erase(minutes.begin(), minutes.end() - kMaximumPerformanceMinutes);
+  Json result = Json::array();
+  const auto round = [](double v) { return std::round(v * 10.0) / 10.0; };
+  for (const auto &m : minutes) {
+    Json item = Json::object();
+    if (m.fps) item["fps"] = round(*m.fps);
+    if (m.p50) item["frame_p50_ms"] = round(*m.p50 / 1000.0);
+    if (m.p95) item["frame_p95_ms"] = round(*m.p95 / 1000.0);
+    if (m.over50) item["frames_over_50ms"] = static_cast<uint64_t>(*m.over50);
+    if (m.gpu) item["gpu_busy_ms_per_frame"] = round(*m.gpu);
+    if (m.draws) item["draws_p50"] = static_cast<uint64_t>(*m.draws);
+    if (m.replay) item["cp_replay_ms_per_minute"] = round(*m.replay / 1000.0);
+    result.push_back(std::move(item));
+  }
+  return result;
+}
 } // namespace detail
 
 // Pure metadata projection only. Caller binds source paths/managed marker and
@@ -248,6 +325,14 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
       report["session_recorded"]["guest_mode"] = {{"width",target->guest_width},{"height",target->guest_height}};
     }
     if (has_capabilities) report["session_recorded"]["guest_refresh_hz"] = kStockGuestRefreshHz;
+    if (!input.log_tail.empty()) {
+      Require(input.log_tail.size() <= kMaximumExportLogTailBytes);
+      auto performance = PerformanceSummary(input.log_tail);
+      if (!performance.empty()) {
+        report["performance_per_minute"] = std::move(performance);
+        report["disclaimers"].push_back("performance-counters-from-log-not-certified");
+      }
+    }
     if (state.contains("window")) {
       const auto &window = Object(state, "window");
       report["diagnostic_window"] = {{"logical_width",Unsigned(window,"logical_width",8192)},

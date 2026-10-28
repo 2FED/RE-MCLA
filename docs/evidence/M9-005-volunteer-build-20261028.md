@@ -9,7 +9,7 @@ rules: [M9 priorities](../M9-priorities.md).
 | Kill switch (V2 tickets) | Implemented and unit-tested; not published |
 | Post-session report prompt | Implemented and unit-tested; not yet in a tester build |
 | Fresh F10 image or explicit stale mark (KI-042) | Implemented, builds; in-game check pending |
-| Diagnostics export with frame-pacing/CP/GPU summaries | Export exists (M9-002); summaries not started |
+| Diagnostics export with frame-pacing/CP/GPU summaries | Implemented and unit-tested |
 | Allowlisted staging and sentinel audit | Not started |
 | Tester guide, one tester smoke | Not started |
 
@@ -107,3 +107,19 @@ owner's explicit yes. The volunteer `mcla.exe` must also be built with
 - Build: `mcla.exe` rebuilt (private `l38-host`); no compiler warnings;
   ast-grep clean. Pending: one in-game check with two F10 presses in different
   scenes (needs an announced run or the owner).
+
+## Export performance summary (2026-10-28)
+
+- The export (Export report... in the launcher) now also reads the package's
+  private `log-tail.txt` when present. That file is pinned, capped at 1 MiB and
+  bound into the confirmation token like the other inputs.
+- Only four counter lines are parsed, into numbers: `frame pacing/min`,
+  `draws per frame/min`, `gpu busy/min` and `replay/min`. The report gains
+  `performance_per_minute` (last 10 minutes): `fps`, `frame_p50_ms`,
+  `frame_p95_ms`, `frames_over_50ms`, `gpu_busy_ms_per_frame`,
+  `draws_p50`, `cp_replay_ms_per_minute`, plus the disclaimer
+  `performance-counters-from-log-not-certified`. No other log text, path or name
+  can reach the report. A value that does not parse is omitted, not guessed.
+- Tests use real line shapes copied from owner logs, a private-path sentinel,
+  malformed values, a 25-minute log (bounded to 10) and an oversized tail. Export
+  policy 538 checks, 0 failures; all 21 suites pass.
