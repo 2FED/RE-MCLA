@@ -112,7 +112,8 @@ Reuses the signed M8-018 expiry mechanism ([policy](test-build-expiry.md)):
 the RSA-signed `active-builds.txt` on branch `DebugBundle` and the signed ticket
 beside `mcla.exe`. Changes:
 
-- **Offline lifetime 3 days** instead of 14 (compile-time constant).
+- **Offline lifetime 3 days** from build creation instead of 14, plus a 24-hour
+  online-check cache (rule below).
 - **Online check is authoritative.** If the signed list downloads and verifies,
   a hash that is listed may start; a hash that is missing is refused and its
   cached grant is deleted. Removing a hash from the list therefore revokes the
@@ -124,9 +125,13 @@ beside `mcla.exe`. Changes:
 - Limits stay honest: local clock rollback and patched binaries are not
   defended; this is a freshness switch, not DRM.
 
-Open detail: count the 3 days from build creation (owner's wording) or from
-the last successful online check. The second one avoids locking out a valid
-build for a tester who goes offline on day 4.
+Offline rule (owner decision 2026-10-28): without internet a build may start if
+**either** it is less than 3 days old (signed creation time) **or** the cache
+holds a successful online check that listed this hash less than 24 hours ago.
+Every successful online check refreshes that 24-hour cache; a check that does
+not list the hash deletes it. So an active tester needs to be online about once
+a day after day 3, and a revoked build stops within a day even if the tester
+stays offline.
 
 ## Post-session report prompt (M9-005, owner request 2026-10-28)
 
