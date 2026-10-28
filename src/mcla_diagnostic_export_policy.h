@@ -178,7 +178,9 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
     Require(Decimal(input.session_state.substr(complete.size(), input.session_state.size() - complete.size() - 1)).has_value());
     const auto receipt = Receipt(input.session_receipt);
     Require(receipt.at("profile") == input.profile_id && ValidCapabilityIdentity(receipt.at("build")) &&
-            ValidCapabilityIdentity(receipt.at("game")) && receipt.at("timing") == "stock" && receipt.at("vsync") == "1" &&
+            ValidCapabilityIdentity(receipt.at("game")) &&
+            (receipt.at("timing") == kStockTimingKey || receipt.at("timing") == kUnlockedTimingKey) &&
+            receipt.at("vsync") == "1" &&
             (receipt.at("fullscreen") == "0" || receipt.at("fullscreen") == "1") &&
             SafeUtf8(receipt.at("gpu"), 800) && Decimal(receipt.at("adapter")).has_value());
     const auto scale = Decimal(receipt.at("scale")); Require(scale && *scale >= 1 && *scale <= 3);
@@ -194,7 +196,8 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
     if (has_capabilities) {
       Require(target && receipt.at("capability_policy") == "1" && receipt.at("capability_record") == "capabilities.txt" &&
               input.capabilities.size() <= kMaximumExportReceiptBytes);
-      const auto plan = ResolveCapabilities({receipt.at("build"), receipt.at("game"), TimingMode::Stock, target->id, true});
+      const auto timing = receipt.at("timing") == kUnlockedTimingKey ? TimingMode::Unlocked : TimingMode::Stock;
+      const auto plan = ResolveCapabilities({receipt.at("build"), receipt.at("game"), timing, target->id, true});
       Require(plan.has_value());
       const auto canonical = SerializeCapabilities(*plan);
       Require(canonical && *canonical == input.capabilities);
@@ -233,7 +236,7 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
       {"schema","mcla-local-diagnostic-metadata-export-v1"}, {"version",1}, {"kind","live"},
       {"mcla_version",std::string(version)}, {"reason",std::string(Reason(reason))},
       {"session_recorded",{{"build_sha256",receipt.at("build")},{"game_sha256",receipt.at("game")},
-          {"timing","stock"},{"scale",*scale},{"vsync",true},{"fullscreen",receipt.at("fullscreen") == "1"},
+          {"timing",receipt.at("timing")},{"scale",*scale},{"vsync",true},{"fullscreen",receipt.at("fullscreen") == "1"},
           {"gpu_vendor",std::string(Vendor(receipt.at("gpu")))},{"gpu_driver","unavailable"},{"cpu","unavailable"},
           {"capabilities",has_capabilities ? "recorded-v1" : "unavailable-legacy"}}},
       {"capture",{{"frame_written",frame_written}}},

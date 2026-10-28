@@ -67,6 +67,33 @@ int main() {
     bad = *bytes; bad[0] = 'X'; check(!DecodePreferences(bad));
     bad = *bytes; bad[7] = '3'; check(!DecodePreferences(bad));
   }
+  // M9-003: unlocked timing is V3 only (V2 layout plus one timing code).
+  p.timing = TimingMode::Unlocked;
+  for (const auto &target : kRenderTargets) {
+    p.render_target = target.id;
+    bytes = EncodePreferences(p); check(bytes.has_value());
+    if (!bytes) return 1;
+    auto expected = Fixture(p, '3', target.id);
+    codec_detail::AppendU32(expected, kUnlockedTimingCode);
+    check((*bytes)[7] == '3' && *bytes == expected);
+    parsed = DecodePreferences(*bytes); check(parsed && *parsed == p && parsed->timing == TimingMode::Unlocked);
+    for (size_t i = 0; i < bytes->size(); ++i)
+      check(!DecodePreferences(std::span(*bytes).first(i)));
+    auto bad = *bytes; bad.push_back(0); check(!DecodePreferences(bad));
+    for (const uint32_t code : {0u, 1u, 3u, 0xffffffffu}) {
+      bad = Fixture(p, '3', target.id); codec_detail::AppendU32(bad, code);
+      check(!DecodePreferences(bad));
+    }
+    bad = *bytes; bad[7] = '2'; check(!DecodePreferences(bad));
+  }
+  p.render_target = 720;
+  for (const auto invalid : {TimingMode::Fixed60, static_cast<TimingMode>(3), static_cast<TimingMode>(0xFF)}) {
+    p.timing = invalid; check(!EncodePreferences(p));
+  }
+  // Switching back to 30 FPS restores the exact stock encoding.
+  p.timing = TimingMode::Stock;
+  bytes = EncodePreferences(p);
+  check(bytes && *bytes == Fixture(p, '1', 1));
   for (const uint32_t legacy_scale : {1u, 2u}) {
     p.render_target = legacy_scale == 1 ? 720 : 1440;
     const auto legacy = Fixture(p, '1', legacy_scale);

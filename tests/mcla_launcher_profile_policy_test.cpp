@@ -51,7 +51,11 @@ int main() {
   auto changed_request = request;
   changed_request.timing = TimingMode::Fixed60;
   ExpectPlanIssue(library, changed_request, IssueCode::UnverifiedTiming);
-  for (int invalid : {-1, 2, 90, 120}) {
+  changed_request.timing = TimingMode::Unlocked;
+  const auto unlocked_plan = MakeLaunchPlan(library, changed_request);
+  Check(unlocked_plan && unlocked_plan->timing == TimingMode::Unlocked && unlocked_plan->profile.id == main_id &&
+        unlocked_plan->requires_runtime_validation, "unlocked lexical plan keeps the mode and runtime gate");
+  for (int invalid : {-1, 3, 90, 120}) {
     changed_request.timing = static_cast<TimingMode>(invalid);
     ExpectPlanIssue(library, changed_request, IssueCode::InvalidTiming);
   }

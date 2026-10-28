@@ -3,9 +3,11 @@
 #include "mcla_launcher_profile_policy.h"
 #include "mcla_render_target_policy.h"
 
+#include <array>
 #include <expected>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace mcla::launcher {
 
@@ -16,7 +18,15 @@ inline constexpr std::string_view kRenderTargetTestedBuild =
 inline constexpr std::string_view kCleanRenderTargetTestedBuild =
     "FED35A361F4A4A10BB03A6BC45072C82924085A0D3ADB8A3298243066DB4A850";
 inline constexpr std::string_view kStockTimingKey = "stock";
+inline constexpr std::string_view kUnlockedTimingKey = "unlocked";
 inline constexpr std::string_view kFixed60UnavailableReason = "not yet validated";
+// Unlocked (experimental, M9-003): guest vblank override passed to the host.
+// The same value as the owner-tested l33-sunc/l34-sunc builds.
+inline constexpr uint32_t kUnlockedGuestVblankHz = 240;
+// Exact builds whose GPU plugin carries the vblank override and UI cap
+// (SDK a239b83). Other builds keep the option refused, not silently stock.
+inline constexpr std::array<std::string_view, 1> kUnlockedTestedBuilds{{
+    "0789DBB5F8B59C698FC269B18E87D20A9EC6EB44913709A321829A0DF36DC105"}};
 
 enum class CapabilityError {
   InvalidBuildIdentity,
@@ -27,6 +37,7 @@ enum class CapabilityError {
   UnknownRenderTarget,
   UntestedTargetBuild,
   InconsistentPlan,
+  UntestedUnlockedBuild,
 };
 
 struct CapabilityRequest {
@@ -46,6 +57,8 @@ struct CapabilityPlan {
   TimingMode timing = TimingMode::Stock;
   RenderTargetPlan target{};
   uint32_t guest_refresh_hz = kStockGuestRefreshHz;
+  // 0 = stock vblank (no argument emitted); otherwise the override in Hz.
+  uint32_t guest_vblank_hz = 0;
   bool vsync = true;
 };
 
@@ -57,13 +70,27 @@ inline constexpr bool ValidCapabilityIdentity(std::string_view value) {
 }
 
 inline constexpr bool TimingPolicySupported(TimingMode timing) {
-  return timing == TimingMode::Stock;
+  return timing == TimingMode::Stock || timing == TimingMode::Unlocked;
+}
+
+inline constexpr bool UnlockedBuildTested(std::string_view build) {
+  for (const auto tested : kUnlockedTestedBuilds)
+    if (build == tested) return true;
+  return false;
 }
 
 inline std::string StockTimingDescription() {
   // The same stock-only policy drives admission and the visible limitation.
   return std::string(TimingPolicySupported(TimingMode::Stock) ? "Stock only. " : "Stock unavailable. ") +
       "60 FPS unavailable: " + std::string(kFixed60UnavailableReason) + ".";
+}
+
+// Visible limits next to the frame-rate choice; the same text for every build.
+inline std::string TimingLimitation(TimingMode timing) {
+  if (timing == TimingMode::Unlocked)
+    return "Experimental. Menus over the city can run fast, heavy intersections drop to 30-40 FPS, "
+           "some lights flicker at night. Start Game checks build support.";
+  return "Stock 30 FPS, the original pacing. Recommended.";
 }
 
 // Presentation after a successful read-only check, not an admission operation.
@@ -74,6 +101,16 @@ inline std::string CheckedStockSettingsDescription(uint32_t render_target) {
   return "Stock timing | VSync On | render " + std::to_string(target->width) +
       " x " + std::to_string(target->height) + " | guest refresh " +
       std::to_string(kStockGuestRefreshHz) + " Hz.\r\n"
+      "Checked arguments, not measured FPS or world quality. Start Game rechecks.";
+}
+
+inline std::string CheckedSettingsDescription(uint32_t render_target, TimingMode timing) {
+  if (timing != TimingMode::Unlocked) return CheckedStockSettingsDescription(render_target);
+  const auto *target = FindRenderTarget(render_target);
+  if (!target) return {};
+  return "Unlocked FPS (experimental) | VSync On | render " + std::to_string(target->width) +
+      " x " + std::to_string(target->height) + " | guest vblank " +
+      std::to_string(kUnlockedGuestVblankHz) + " Hz after the start delay.\r\n"
       "Checked arguments, not measured FPS or world quality. Start Game rechecks.";
 }
 
@@ -88,6 +125,8 @@ inline std::expected<CapabilityPlan, CapabilityError> ResolveCapabilities(
   if (!TimingPolicySupported(request.timing))
     return std::unexpected(CapabilityError::UnsupportedTiming);
   if (!request.vsync) return std::unexpected(CapabilityError::UnsupportedVsync);
+  if (request.timing == TimingMode::Unlocked && !UnlockedBuildTested(request.build_fingerprint))
+    return std::unexpected(CapabilityError::UntestedUnlockedBuild);
   const auto *target = FindRenderTarget(request.render_target);
   if (!target) return std::unexpected(CapabilityError::UnknownRenderTarget);
   // Retain historical records and rollback alongside the reviewed clean SDK
@@ -96,8 +135,18 @@ inline std::expected<CapabilityPlan, CapabilityError> ResolveCapabilities(
       request.build_fingerprint != kRenderTargetTestedBuild &&
       request.build_fingerprint != kCleanRenderTargetTestedBuild)
     return std::unexpected(CapabilityError::UntestedTargetBuild);
+  const bool unlocked = request.timing == TimingMode::Unlocked;
   return CapabilityPlan{std::string(request.build_fingerprint), std::string(request.game_fingerprint),
-                        TimingMode::Stock, *target, kStockGuestRefreshHz, true};
+                        request.timing, *target, kStockGuestRefreshHz,
+                        unlocked ? kUnlockedGuestVblankHz : 0, true};
+}
+
+// Host arguments added by the frame-rate choice. Stock adds none, so returning
+// to 30 FPS restores the exact stock command line; unlocked adds only the
+// admitted guest vblank override.
+inline std::vector<std::wstring> TimingLaunchArguments(const CapabilityPlan &plan) {
+  if (!plan.guest_vblank_hz) return {};
+  return {L"--mcla_guest_vblank_hz=" + std::to_wstring(plan.guest_vblank_hz)};
 }
 
 inline std::string_view CapabilityErrorDescription(CapabilityError error) {
@@ -110,6 +159,7 @@ inline std::string_view CapabilityErrorDescription(CapabilityError error) {
     case CapabilityError::UnknownRenderTarget: return "Select a supported render resolution target";
     case CapabilityError::UntestedTargetBuild: return "1080p/2160p require the render-target-tested build";
     case CapabilityError::InconsistentPlan: return "Resolved settings disagree with the capability policy";
+    case CapabilityError::UntestedUnlockedBuild: return "Unlocked FPS is not verified for this build; choose 30 FPS";
   }
   return "Unknown capability error";
 }
@@ -129,14 +179,18 @@ inline std::expected<std::string, CapabilityError> SerializeCapabilities(const C
   if (!resolved) return std::unexpected(resolved.error());
   const auto &expected = resolved->target;
   if (plan.guest_refresh_hz != resolved->guest_refresh_hz ||
+      plan.guest_vblank_hz != resolved->guest_vblank_hz ||
       plan.target.width != expected.width || plan.target.height != expected.height ||
       plan.target.guest_width != expected.guest_width || plan.target.guest_height != expected.guest_height ||
       plan.target.scale != expected.scale)
     return std::unexpected(CapabilityError::InconsistentPlan);
   return "MCLA-LAUNCHER-CAPABILITIES-V1\npolicy_version " + std::to_string(kCapabilityPolicyVersion) +
       "\nbuild " + plan.build_fingerprint + "\ngame " + plan.game_fingerprint +
-      "\nsettings_scope resolved-launch-arguments\ntiming " + std::string(kStockTimingKey) +
+      "\nsettings_scope resolved-launch-arguments\ntiming " +
+      std::string(plan.timing == TimingMode::Unlocked ? kUnlockedTimingKey : kStockTimingKey) +
       "\nguest_refresh_hz " + std::to_string(plan.guest_refresh_hz) +
+      // Stock records stay byte-identical to policy V1; only unlocked adds a key.
+      (plan.guest_vblank_hz ? "\nguest_vblank_hz " + std::to_string(plan.guest_vblank_hz) : std::string()) +
       "\nvsync on\nrender_target_id " + std::to_string(plan.target.id) +
       "\nrender_target " + std::to_string(plan.target.width) + "x" + std::to_string(plan.target.height) +
       "\nguest_mode " + std::to_string(plan.target.guest_width) + "x" + std::to_string(plan.target.guest_height) +

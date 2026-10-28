@@ -105,6 +105,26 @@ Json Accept(Fixture fixture, const char *label) {
 }
 
 int RunTests() {
+  {
+    // M9-003: an unlocked session exports with its recorded mode, and its
+    // capability record must be the canonical unlocked plan of a tested build.
+    Fixture unlocked; unlocked.Field("timing","unlocked");
+    unlocked.Field("scale","1"); unlocked.Field("render_target","1280x720"); unlocked.Field("guest_mode","1280x720");
+    const std::string build(kUnlockedTestedBuilds[0]);
+    unlocked.Field("build",build);
+    unlocked.Field("capability_policy","1"); unlocked.Field("capability_record","capabilities.txt");
+    const auto plan = ResolveCapabilities({build,kGame,TimingMode::Unlocked,720,true});
+    unlocked.capabilities = plan ? *SerializeCapabilities(*plan) : std::string();
+    const auto report = Accept(unlocked,"unlocked session metadata accepted");
+    Check(report.contains("session_recorded") && report.at("session_recorded").at("timing") == "unlocked",
+          "report records the unlocked mode, not stock");
+    auto stock_record = unlocked;
+    const auto stock_plan = ResolveCapabilities({build,kGame,TimingMode::Stock,720,true});
+    stock_record.capabilities = stock_plan ? *SerializeCapabilities(*stock_plan) : std::string();
+    Reject(stock_record,"unlocked receipt with a stock capability record is inconsistent");
+    auto untested = unlocked; untested.Field("build",kHash);
+    Reject(untested,"unlocked capability record of an untested build is rejected");
+  }
   const auto baseline = Accept(Fixture{},"minimum historical live metadata accepted");
   const auto &record = baseline.at("session_recorded");
   Check(record.at("capabilities") == "unavailable-legacy" && !record.contains("guest_refresh_hz") &&

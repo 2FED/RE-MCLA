@@ -177,6 +177,17 @@ void SetText(HWND window, int id, const std::wstring &text) {
   SetWindowTextW(GetDlgItem(window, id), text.c_str());
 }
 
+// Frame-rate choices in display order (M9-003). Fixed60 is not offered.
+constexpr std::array<std::pair<TimingMode, const wchar_t *>, 2> kTimingChoices{{
+    {TimingMode::Stock, L"30 FPS (recommended)"},
+    {TimingMode::Unlocked, L"Unlocked FPS (experimental)"}}};
+constexpr auto kInvalidTimingChoice = static_cast<TimingMode>(0xFF);
+
+void TimingNote(HWND window, TimingMode timing) {
+  const auto text = TimingLimitation(timing);
+  SetText(window, UiTimingNote, std::wstring(text.begin(), text.end()));
+}
+
 HWND Add(HWND window, WindowState &state, const wchar_t *kind,
          const wchar_t *text, DWORD style, int id, int x, int y, int w, int h) {
   HWND control = CreateWindowExW(
@@ -270,11 +281,15 @@ void Controls(HWND window, WindowState &state) {
       UiVsync, 360, 361, 205, 28);
   Add(window, state, L"BUTTON", L"Fullscreen", WS_TABSTOP | BS_AUTOCHECKBOX | BS_NOTIFY,
       UiFullscreen, 570, 361, 160, 28);
-  label(L"Frame timing", 24, 409, 145);
-  const auto timing=StockTimingDescription();
-  const std::wstring timing_label(timing.begin(),timing.end());
-  Add(window, state, L"STATIC", timing_label.c_str(),
-      0, UiTiming, 180, 405, 696, 28);
+  label(L"Frame rate", 24, 409, 145);
+  HWND timing = Add(window, state, L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST,
+      UiTiming, 180, 405, 260, 120);
+  for (const auto &[mode, text] : kTimingChoices) {
+    const auto index = SendMessageW(timing, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text));
+    if (index >= 0) SendMessageW(timing, CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(mode));
+  }
+  // The limits stay visible next to the choice, not only after a check.
+  Add(window, state, L"STATIC", L"", 0, UiTimingNote, 452, 401, 424, 34);
   Add(window, state, L"STATIC", L"1080p: experimental 960 x 540 guest mode + 2x rendering. Build support is checked.",
       0, UiRenderTargetNote, 180, 434, 696, 24);
   button(UiOpenSave, L"Open save folder", 180, 460, 205);
@@ -353,6 +368,14 @@ UiRequest Request(HWND window, const WindowState &state) {
   }
   request.vsync = SendDlgItemMessageW(window, UiVsync, BM_GETCHECK, 0, 0) == BST_CHECKED;
   request.fullscreen = SendDlgItemMessageW(window, UiFullscreen, BM_GETCHECK, 0, 0) == BST_CHECKED;
+  // Missing/invalid selection must never silently become stock or unlocked.
+  request.timing = kInvalidTimingChoice;
+  const auto timing_index = SendDlgItemMessageW(window, UiTiming, CB_GETCURSEL, 0, 0);
+  if (timing_index >= 0 && static_cast<size_t>(timing_index) < kTimingChoices.size()) {
+    const auto mode = static_cast<TimingMode>(SendDlgItemMessageW(window, UiTiming, CB_GETITEMDATA,
+        static_cast<WPARAM>(timing_index), 0));
+    if (mode == kTimingChoices[static_cast<size_t>(timing_index)].first) request.timing = mode;
+  }
   const auto selected = SendDlgItemMessageW(window, UiProfiles, CB_GETCURSEL, 0, 0);
   if (selected >= 0 && static_cast<size_t>(selected) < state.model.library.entries.size())
     request.selected_profile_id = state.model.library.entries[static_cast<size_t>(selected)].id;
@@ -501,6 +524,7 @@ void Render(HWND window, WindowState &state, const UiRequest &draft) {
   const auto render_target = state.initialized ? draft.render_target : state.model.render_target;
   const bool vsync = state.initialized ? draft.vsync : state.model.vsync;
   const bool fullscreen = state.initialized ? draft.fullscreen : state.model.fullscreen;
+  const auto timing = state.initialized ? draft.timing : state.model.timing;
   SetText(window, UiBuildRoot, build);
   SetText(window, UiGameRoot, game);
   HWND profiles = GetDlgItem(window, UiProfiles);
@@ -540,6 +564,11 @@ void Render(HWND window, WindowState &state, const UiRequest &draft) {
   SendDlgItemMessageW(window, UiScale, CB_SETCURSEL, target_index, 0);
   SendDlgItemMessageW(window, UiVsync, BM_SETCHECK, vsync ? BST_CHECKED : BST_UNCHECKED, 0);
   SendDlgItemMessageW(window, UiFullscreen, BM_SETCHECK, fullscreen ? BST_CHECKED : BST_UNCHECKED, 0);
+  int timing_index = -1;
+  for (size_t i = 0; i < kTimingChoices.size(); ++i)
+    if (kTimingChoices[i].first == timing) timing_index = static_cast<int>(i);
+  SendDlgItemMessageW(window, UiTiming, CB_SETCURSEL, timing_index, 0);
+  TimingNote(window, timing);
   for (int id = UiBuildRoot; id <= UiPlay; ++id)
     EnableWindow(GetDlgItem(window, id), !state.model.running);
   EnableWindow(GetDlgItem(window, UiPlay), !state.model.running && managed);
@@ -1057,10 +1086,11 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
       const int notification = HIWORD(wparam);
       if (state->initialized &&
           (((id == UiBuildRoot || id == UiGameRoot) && notification == EN_CHANGE) ||
-           ((id == UiGpu || id == UiScale) && notification == CBN_SELCHANGE) ||
+           ((id == UiGpu || id == UiScale || id == UiTiming) && notification == CBN_SELCHANGE) ||
            ((id == UiVsync || id == UiFullscreen) && notification == BN_CLICKED))) {
         InvalidateReadiness(*state);
         ReadinessPresentation(window, *state);
+        if (id == UiTiming) TimingNote(window, Request(window, *state).timing);
       }
       if (notification == EN_SETFOCUS || notification == CBN_SETFOCUS || notification == BN_SETFOCUS) {
         RevealControl(window, *state, GetDlgItem(window, id));

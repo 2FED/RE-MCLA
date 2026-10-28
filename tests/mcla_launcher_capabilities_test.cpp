@@ -77,7 +77,8 @@ int main() {
   const CapabilityRequest baseline{kRenderTargetTestedBuild, game, TimingMode::Stock, 720, true};
   Check(kCapabilityPolicyVersion == 1 && kStockGuestRefreshHz == 60, "stable schema and guest refresh policy");
   Check(StockTimingDescription() == "Stock only. 60 FPS unavailable: not yet validated.", "UI description remains honest stock-only policy");
-  Check(TimingPolicySupported(TimingMode::Stock) && !TimingPolicySupported(TimingMode::Fixed60), "UI timing support agrees with resolver");
+  Check(TimingPolicySupported(TimingMode::Stock) && TimingPolicySupported(TimingMode::Unlocked) &&
+        !TimingPolicySupported(TimingMode::Fixed60), "UI timing support agrees with resolver");
   for (const auto &target : kRenderTargets) {
     auto request = baseline; request.render_target = target.id;
     const auto result = ResolveCapabilities(request);
@@ -88,7 +89,8 @@ int main() {
           result->target.guest_height == target.guest_height && result->target.scale == target.scale,
           "resolved tuple exactly matches reviewed target table");
     Check(result->build_fingerprint == request.build_fingerprint && result->game_fingerprint == game &&
-          result->timing == TimingMode::Stock && result->vsync && result->guest_refresh_hz == 60,
+          result->timing == TimingMode::Stock && result->vsync && result->guest_refresh_hz == 60 &&
+          result->guest_vblank_hz == 0,
           "resolved identities and stock settings bind exact request");
     const auto text = SerializeCapabilities(*result);
     Check(text.has_value(), "valid resolved plan serializes");
@@ -131,7 +133,7 @@ int main() {
       Check(!rejected && rejected.error() == CapabilityError::InconsistentPlan, "serializer refuses mutated effective tuple");
     }
   }
-  for (const auto invalid : {TimingMode::Fixed60, static_cast<TimingMode>(-1), static_cast<TimingMode>(2),
+  for (const auto invalid : {TimingMode::Fixed60, static_cast<TimingMode>(-1), static_cast<TimingMode>(3),
                             static_cast<TimingMode>(60), static_cast<TimingMode>(90), static_cast<TimingMode>(120)}) {
     auto request = baseline; request.timing = invalid;
     Reject(request, invalid == TimingMode::Fixed60 ? CapabilityError::UnverifiedTiming : CapabilityError::UnsupportedTiming);
@@ -179,8 +181,65 @@ int main() {
   }
   for (const auto error : {CapabilityError::InvalidBuildIdentity, CapabilityError::InvalidGameIdentity,
        CapabilityError::UnverifiedTiming, CapabilityError::UnsupportedTiming, CapabilityError::UnsupportedVsync,
-       CapabilityError::UnknownRenderTarget, CapabilityError::UntestedTargetBuild, CapabilityError::InconsistentPlan})
+       CapabilityError::UnknownRenderTarget, CapabilityError::UntestedTargetBuild, CapabilityError::InconsistentPlan,
+       CapabilityError::UntestedUnlockedBuild})
     Check(!CapabilityErrorDescription(error).empty(), "every rejected capability has an explanation");
-  std::cout << "Capabilities: " << checks << " checks, " << failures << " failures\n";
+  // M9-003 unlocked timing: exact tested builds only, one extra serialized key.
+  Check(kUnlockedGuestVblankHz == 240 && kUnlockedTestedBuilds.size() == 1, "unlocked policy constants");
+  for (const auto build : kUnlockedTestedBuilds) for (const auto &target : kRenderTargets) {
+    const CapabilityRequest unlocked{build, game, TimingMode::Unlocked, target.id, true};
+    const auto plan = ResolveCapabilities(unlocked);
+    if (target.id == 1080 || target.id == 2160) {
+      Check(!plan && plan.error() == CapabilityError::UntestedTargetBuild,
+            "unlocked does not widen render-target admission");
+      continue;
+    }
+    Check(plan && plan->timing == TimingMode::Unlocked && plan->guest_vblank_hz == 240 &&
+          plan->guest_refresh_hz == 60 && plan->vsync, "tested build admits unlocked with the 240 Hz override");
+    if (!plan) continue;
+    const auto text = SerializeCapabilities(*plan);
+    Check(text.has_value(), "unlocked plan serializes");
+    if (!text) continue;
+    auto fields = Fields(*text);
+    Check(fields.size() == 18 && fields.at("timing") == "unlocked" && fields.at("guest_vblank_hz") == "240" &&
+          fields.at("fixed60_available") == "false" && fields.at("fps_measured") == "false",
+          "unlocked record adds exactly one key and keeps the honest claims");
+    Check(text->find("\nguest_refresh_hz 60\nguest_vblank_hz 240\nvsync on\n") != text->npos,
+          "unlocked key has a fixed position");
+    const auto arguments = TimingLaunchArguments(*plan);
+    Check(arguments.size() == 1 && arguments.front() == L"--mcla_guest_vblank_hz=240",
+          "unlocked launch adds exactly the vblank override argument");
+    auto bad = *plan; bad.guest_vblank_hz = 1000;
+    Check(!SerializeCapabilities(bad), "mutated vblank cannot serialize");
+    bad = *plan; bad.guest_vblank_hz = 0;
+    Check(!SerializeCapabilities(bad), "unlocked plan without override cannot serialize");
+    bad = *plan; bad.timing = TimingMode::Stock;
+    const auto stock_text = SerializeCapabilities(bad);
+    Check(!stock_text && stock_text.error() == CapabilityError::InconsistentPlan,
+          "stock record cannot carry an unlocked override");
+    auto stock_request = unlocked; stock_request.timing = TimingMode::Stock;
+    const auto stock = ResolveCapabilities(stock_request);
+    std::expected<std::string, CapabilityError> stock_serialized = std::unexpected(CapabilityError::InconsistentPlan);
+    if (stock) stock_serialized = SerializeCapabilities(*stock);
+    Check(stock && stock->guest_vblank_hz == 0 && stock_serialized &&
+          stock_serialized->find("guest_vblank_hz") == std::string::npos &&
+          Fields(*stock_serialized).at("timing") == "stock",
+          "returning to 30 FPS on the same build restores the stock record");
+    Check(stock && TimingLaunchArguments(*stock).empty(), "stock launch adds no timing argument");
+    auto no_vsync = unlocked; no_vsync.vsync = false; Reject(no_vsync, CapabilityError::UnsupportedVsync);
+  }
+  for (const auto build : {std::string(kRenderTargetTestedBuild), std::string(kCleanRenderTargetTestedBuild), other_build})
+    Reject({build, game, TimingMode::Unlocked, 720, true}, CapabilityError::UntestedUnlockedBuild);
+  {
+    std::string stale(kUnlockedTestedBuilds[0]); stale.back() = stale.back() == '5' ? '4' : '5';
+    Reject({stale, game, TimingMode::Unlocked, 720, true}, CapabilityError::UntestedUnlockedBuild);
+  }
+  Check(TimingLimitation(TimingMode::Unlocked).find("Experimental") != std::string::npos &&
+        TimingLimitation(TimingMode::Stock).find("Recommended") != std::string::npos,
+        "visible limits name the experimental and recommended modes");
+  Check(CheckedSettingsDescription(1440, TimingMode::Stock) == CheckedStockSettingsDescription(1440) &&
+        CheckedSettingsDescription(1440, TimingMode::Unlocked).find("guest vblank 240 Hz") != std::string::npos &&
+        CheckedSettingsDescription(999, TimingMode::Unlocked).empty(),
+        "checked description follows the selected mode");  std::cout << "Capabilities: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

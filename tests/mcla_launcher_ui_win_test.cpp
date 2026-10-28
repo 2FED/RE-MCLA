@@ -234,15 +234,16 @@ void TestInitialAndRequests() {
         "1080p experimental guest-mode route is disclosed");
   Check(SendDlgItemMessageW(window, UiVsync, BM_GETCHECK, 0, 0) == BST_CHECKED, "default VSync checked");
   Check(SendDlgItemMessageW(window, UiFullscreen, BM_GETCHECK, 0, 0) == BST_UNCHECKED, "default fullscreen unchecked");
-  Check(Class(window, UiTiming) == L"Static", "timing is text, not selectable control");
-  const auto timing_policy=StockTimingDescription();
-  Check(Text(window,UiTiming)==std::wstring(timing_policy.begin(),timing_policy.end()),
-        "visible timing description derives from the admission policy");
-  Check(Text(window, UiTiming).find(L"Stock only") != std::wstring::npos &&
-        Text(window, UiTiming).find(L"60 FPS unavailable") != std::wstring::npos,
-        "stock only and unavailable 60 explicit");
-  Check((GetWindowLongPtrW(GetDlgItem(window, UiTiming), GWL_STYLE) & WS_TABSTOP) == 0,
-        "unsupported timing not keyboard selectable");
+  Check(Class(window, UiTiming) == L"ComboBox", "frame rate is an explicit dropdown");
+  Check(SendDlgItemMessageW(window, UiTiming, CB_GETCOUNT, 0, 0) == 2,
+        "only 30 FPS and Unlocked are offered; no fixed60 choice");
+  Check(SendDlgItemMessageW(window, UiTiming, CB_GETCURSEL, 0, 0) == 0 &&
+        Text(window, UiTiming) == L"30 FPS (recommended)", "default frame rate is stock 30");
+  const auto stock_note = TimingLimitation(TimingMode::Stock);
+  Check(Text(window, UiTimingNote) == std::wstring(stock_note.begin(), stock_note.end()),
+        "visible stock note derives from the capability policy");
+  Check((GetWindowLongPtrW(GetDlgItem(window, UiTiming), GWL_STYLE) & WS_TABSTOP) != 0,
+        "frame rate is keyboard selectable");
   CheckMutationControls(window, true);
   SelectProfile(window, 1);
   Check(recorder.calls.size() == 2 && recorder.calls.back().action == UiAction::SelectProfile,
@@ -1262,6 +1263,45 @@ void TestCreateParentSuggestion() {
   Check(recorder.calls.size() == before, "suggestion and cancellation perform no filesystem/backend action");
 }
 
+void TestTimingChoice() {
+  const TimingMode modes[] = {TimingMode::Stock, TimingMode::Unlocked};
+  const wchar_t *labels[] = {L"30 FPS (recommended)", L"Unlocked FPS (experimental)"};
+  Recorder recorder;
+  recorder.model.readiness = LaunchReadiness::Ready;
+  recorder.model.eligibility_expires_utc = 1800100000;
+  InvisibleWindow window(recorder);
+  if (!window) return;
+  SetLauncherClockForTest(window, 1000, 1800000000);
+  for (size_t i : {1u, 0u, 1u}) {
+    SendDlgItemMessageW(window, UiTiming, CB_SETCURSEL, i, 0);
+    SendMessageW(window, WM_COMMAND, MAKEWPARAM(UiTiming, CBN_SELCHANGE),
+                 reinterpret_cast<LPARAM>(GetDlgItem(window, UiTiming)));
+    Check(!Text(window, UiReadiness).starts_with(L"Ready."),
+          "each frame-rate selection invalidates prior readiness");
+    Check(Text(window, UiTiming) == labels[i] &&
+          static_cast<TimingMode>(SendDlgItemMessageW(window, UiTiming, CB_GETITEMDATA, i, 0)) == modes[i],
+          "each frame-rate label maps to its explicit timing mode");
+    const auto note = TimingLimitation(modes[i]);
+    Check(Text(window, UiTimingNote) == std::wstring(note.begin(), note.end()),
+          "limits shown next to the selected frame rate");
+    Click(window, UiCheckLaunch);
+    Check(recorder.calls.back().request.timing == modes[i], "readiness check receives the exact mode");
+    Click(window, UiSaveSettings);
+    Check(recorder.calls.back().request.timing == modes[i], "Save marshals the exact mode");
+    Click(window, UiPageProfiles);
+    Click(window, UiPagePlay);
+    Check(Text(window, UiTiming) == labels[i], "section navigation preserves the frame-rate choice");
+  }
+  Check(Text(window, UiTimingNote).find(L"Experimental") != std::wstring::npos,
+        "unlocked limits are explicit");
+  // Win32 rejects an out-of-range index by removing selection, never selecting a mode.
+  SendDlgItemMessageW(window, UiTiming, CB_SETCURSEL, static_cast<WPARAM>(-1), 0);
+  Click(window, UiSaveSettings);
+  const auto sent = recorder.calls.back().request.timing;
+  Check(sent != TimingMode::Stock && sent != TimingMode::Unlocked,
+        "missing selection is sent as invalid, never as a silent default");
+}
+
 void TestRenderTargets() {
   const uint32_t ids[] = {720, 1080, 1440, 2160};
   const wchar_t *labels[] = {L"1280 x 720", L"1920 x 1080", L"2560 x 1440", L"3840 x 2160"};
@@ -1530,6 +1570,7 @@ int main() {
   TestDraftCallbackMatrix();
   TestOperationDialogs();
   TestRenderTargets();
+  TestTimingChoice();
   TestLaunchReadiness();
   TestAutomaticChecks();
   TestAsyncStaleAndSerialization();

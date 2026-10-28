@@ -4,6 +4,8 @@
 `l31-s30` and `l33-sunc`, and staged as `private/l34-s30` and
 `private/l34-sunc`. Owner manual drive at 2K passed on both (KI-041 flicker on sunc, see below). Automated title checks pass on both (below).
 
+> **Superseded (M9-003, 2026-10-28):** the `MCLA_UNLOCKED_VBLANK_HZ` CMake option below is removed; the launcher's Frame rate choice passes `--mcla_guest_vblank_hz=240` instead. See [M9-003](M9-003-launcher-mode-option-20261028.md).
+
 ## What changed in the repository
 
 - `third_party/rexglue-sdk`: `5dd58f8` -> `a239b83` (fork branch

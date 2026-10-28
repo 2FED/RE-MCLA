@@ -26,7 +26,9 @@ inline constexpr size_t kMaximumPathUnits = 1024;
 inline constexpr uint32_t kMaximumFutureFps = 60;
 
 enum class Layout { ManagedExternalV1, LegacyBundleUserReadOnlyV1 };
-enum class TimingMode { Stock, Fixed60 };
+// Unlocked raises only the guest vblank (M9-003); simulation keeps the raw
+// measured-time timer. Fixed60 stays an unvalidated policy value.
+enum class TimingMode { Stock, Fixed60, Unlocked };
 enum class IssueCode {
   UnsupportedVersion,
   InvalidCount,
@@ -222,7 +224,7 @@ inline std::expected<LaunchPlan, Issue> MakeLaunchPlan(
   if (const auto issue = ValidateLibrary(library)) return std::unexpected(*issue);
   if (request.timing == TimingMode::Fixed60)
     return std::unexpected(Issue{IssueCode::UnverifiedTiming});
-  if (request.timing != TimingMode::Stock)
+  if (request.timing != TimingMode::Stock && request.timing != TimingMode::Unlocked)
     return std::unexpected(Issue{IssueCode::InvalidTiming});
   auto build = NormalizeRoot(request.build_root);
   auto game = NormalizeRoot(request.game_root);
@@ -243,7 +245,7 @@ inline std::expected<LaunchPlan, Issue> MakeLaunchPlan(
     return std::unexpected(Issue{IssueCode::LegacyReadOnly});
   auto profile = *selected;
   profile.root = *NormalizeRoot(profile.root);
-  return LaunchPlan{std::move(profile), std::move(*build), std::move(*game), TimingMode::Stock};
+  return LaunchPlan{std::move(profile), std::move(*build), std::move(*game), request.timing};
 }
 
 } // namespace mcla::launcher

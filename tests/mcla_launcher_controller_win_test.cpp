@@ -142,6 +142,8 @@ int FakeChild(int argc, wchar_t **argv) {
       args[L"video_mode_width"] != L"1280" || args[L"video_mode_height"] != L"720" ||
       args[L"vsync"] != L"true" || args[L"fullscreen"] != L"false" ||
       args[L"gpu_backend"] != L"d3d12") return finish(89);
+  // Stock (30 FPS) emits no vblank override: the exact stock command line.
+  if (args.contains(L"mcla_guest_vblank_hz")) return finish(95);
   const auto caps=RecordFields(Read(cwd/L"capabilities.txt"),"MCLA-LAUNCHER-CAPABILITIES-V1\n");
   const auto receipt=RecordFields(Read(cwd/L"launch-receipt.txt"),"MCLA-MANAGED-SESSION-V1\n");
   const auto field=[&](std::string key,std::string value) {
@@ -512,7 +514,12 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
         "read-only preflight uses drafts without persisting them or creating a session");
   Check(controller.Dispatch(UiAction::Refresh,{}).readiness==LaunchReadiness::Unchecked,
         "readiness is not persisted across unrelated controller responses");
-  auto invalid=request; invalid.selected_profile_id.clear();
+  auto invalid=request; invalid.timing=TimingMode::Unlocked;
+  const auto unlocked=run_check(invalid,LaunchReadiness::Blocked,"unlocked on an unverified build is Blocked");
+  Check(unlocked.status.find(L"Unlocked FPS is not verified for this build")!=unlocked.status.npos ||
+        unlocked.readiness_reason.find(L"Unlocked FPS is not verified for this build")!=unlocked.readiness_reason.npos,
+        "unlocked refusal names the reason instead of falling back to stock");
+  invalid=request; invalid.selected_profile_id.clear();
   run_check(invalid,LaunchReadiness::Blocked,"missing acknowledged request profile is Blocked");
   invalid=request; invalid.selected_profile_id="11111111111111111111111111111111";
   run_check(invalid,LaunchReadiness::Blocked,"different request profile cannot borrow selected profile readiness");

@@ -33,6 +33,7 @@ struct UiState {
   uint32_t render_target = 720;
   bool vsync = true;
   bool fullscreen = false;
+  TimingMode timing = TimingMode::Stock;
   bool running = false;
   std::wstring status;
   std::wstring in_game_name;
@@ -53,6 +54,7 @@ struct UiRequest {
   uint32_t render_target = 720;
   bool vsync = true;
   bool fullscreen = false;
+  TimingMode timing = TimingMode::Stock;
   std::string selected_profile_id;
   std::wstring profile_label;
   std::wstring profile_root;
@@ -79,6 +81,7 @@ enum UiControlId : int {
   UiCheckLaunch, UiReadiness, UiRenderTargetNote,
   UiExportReport,
   UiCompatibilitySummary, UiAccessibilitySummary, UiCheatsSummary,
+  UiTimingNote,
 };
 
 // Callbacks are serialized. Only the read-only CheckLaunch may run on a worker;

@@ -10,8 +10,7 @@ The submodule pins rexglue-sdk `a239b83` (package `0.20.0.2`), which already
 contains the 32bpp resolve fix and the M8 command-processor work. No SDK patch
 is applied at build time. Build the SDK from a clean recursive clone, then build
 `mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.2` (quote the
-argument in PowerShell). `-DMCLA_UNLOCKED_VBLANK_HZ=240` produces the
-experimental unlocked host; the default 0 is stock 30. The exact flags, the
+argument in PowerShell). One host serves both modes: the launcher's Frame rate choice (M9-003) adds `--mcla_guest_vblank_hz=240` for Unlocked. The exact flags, the
 `libmspack` link materialization and the reference hashes are in the
 [M9-001 evidence](evidence/M9-001-reproducible-build-20261028.md). The older
 sections below describe the `5dd58f8` / 0.20.0.0 era.

@@ -14,9 +14,7 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 resolve-downscale correction below, now in the SDK) and `a239b83` (the M8
 command-processor optimizations and unlocked-frame-rate support, with
 `mcla_guest_vblank_hz` defaulting to 0, i.e. stock 30). No build step applies
-SDK patches any more; the patch files below are history and test fixtures. The
-unlocked build sets the vblank through the MCLA-R CMake option
-`MCLA_UNLOCKED_VBLANK_HZ` instead of an SDK source edit. The SDK still reports
+SDK patches any more; the patch files below are history and test fixtures. Unlocked mode is a launcher choice (M9-003) that passes `--mcla_guest_vblank_hz=240`, not an SDK source edit. The SDK still reports
 package version 0.20.0.0. Evidence: [M9-001](evidence/M9-001-reproducible-build-20261028.md).
 The text below describes the earlier `5dd58f8` pin and stays as history.
 
