@@ -10,7 +10,7 @@ rules: [M9 priorities](../M9-priorities.md).
 | Post-session report prompt | Implemented and unit-tested; not yet in a tester build |
 | Fresh F10 image or explicit stale mark (KI-042) | Implemented, builds; in-game check pending |
 | Diagnostics export with frame-pacing/CP/GPU summaries | Implemented and unit-tested |
-| Allowlisted staging and sentinel audit | Path-clean volunteer build done; signing, staging and audit need the owner's PowerShell 7 run |
+| Allowlisted staging and sentinel audit | Done: `private/l38-volunteer` audited, 193 checks, 0 findings |
 | Tester guide, one tester smoke | Guide written (EN/UK); smoke pending |
 
 ## Kill switch (2026-10-28)
@@ -176,3 +176,20 @@ owner's explicit yes. The volunteer `mcla.exe` must also be built with
   ticket and the new list, stages `private/l38-volunteer` with the guide,
   verifies the list and runs the volunteer audit. Publishing the list to
   `DebugBundle` is a separate step that needs the owner's explicit yes.
+
+## Volunteer candidate l38 staged (2026-10-28 19:19 Kyiv)
+
+- The owner ran `l38-volunteer-prepare.ps1` (PowerShell 7):
+  - V2 ticket for `9777D5BE...`, created 1793207955 (2026-10-28 19:19 Kyiv);
+  - `l38-active-builds.txt` issued 1793207956, SHA-256 `0486D5A8...`, 2 entries;
+  - the lease probe verified it with the real key: `SIGNED_LEASES_VERIFIED
+    entries=2` (local, not deployment);
+  - volunteer audit 193 checks, 0 findings.
+- Agent re-check: all 18 receipt hashes match, `TESTER-GUIDE.txt` is included,
+  and the ticket is `MCLA-TEST-BUILD-V2` for the staged host. Audit rerun: 193
+  checks, 0 findings.
+- Offline window (no list check): until 2026-10-31 19:19 Kyiv. Online, the
+  build is refused until `l38-active-builds.txt` is published to `DebugBundle`,
+  which needs the owner's explicit yes.
+- Pending: the in-game smoke test (F10 freshness, report prompt, kill switch), the
+  publication decision, and one tester smoke.
