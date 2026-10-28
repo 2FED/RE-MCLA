@@ -63,7 +63,7 @@ processing, replay). Decide the split design only after that.
 | 2 | **M9-002** Launcher source reconciliation | prerequisite for 006/007 | The repository launcher source and the l12 binary the owner uses have diverged. Rebuild one launcher from source that keeps every l12 behaviour the owner accepted (profiles, Setup, readiness, F10, lock). Owner smoke on a non-MAIN profile. |
 | 3 | **M9-003** Mode option in the launcher | M8-006 | One option: "30 FPS (recommended)" or "Unlocked FPS (experimental)", with the limits shown next to it. Switching back restores stock exactly. This replaces the two shortcut folders. It meets the M8-006 criterion: each option toggles independently, restores stock, and stays hidden until verified. No other graphics options in M9. |
 | 4 | **M9-004** Setup categories | M8-007 | Compatibility, accessibility and cheats are visibly separate. Owner two-minute review on the M9-002 launcher. |
-| 5 | **M9-005** Volunteer build and diagnostics export | M8-018 | Allowlisted staging (no game data, saves, owner paths, logs, keys), sentinel audit, signed 14-day expiry (already implemented), explicit export with a visible contents list that adds frame-pacing/CP/GPU summaries, a one-page tester guide, and one independent tester smoke test. **Blocked on the distribution decision below.** |
+| 5 | **M9-005** Volunteer build and diagnostics export | M8-018 | Allowlisted staging (no game data, saves, owner paths, logs, keys), sentinel audit, signed 14-day expiry (already implemented), explicit export with a visible contents list that adds frame-pacing/CP/GPU summaries, a one-page tester guide, and one independent tester smoke test. Distribution: option A (owner decision 2026-10-28), see below. Includes the build kill switch and the post-session report prompt below. |
 | 6 | **M9-006** Known-issue triage for testers | M8-017 residuals | Every open KI gets a disposition (fix in M9, tester-visible known issue, or later milestone). Order: hangs and lost input first, then visible defects. See the table below. |
 | 7 | **M9-007** Menu state from the game | unlocked limit | Time-boxed to 2 days. Find the game's own pause/menu state by reverse engineering and read it through a hook, instead of the draw-count heuristic. If found, cap pause and Arcade-over-map menus at 30. If not, the limit stays accepted and documented. A static-scene detector stays rejected (misfires at traffic lights). |
 | 8 | **M9-008** Bounded regression and closure | M8-012 pattern | Owner regression on the reproducible build (save/reload, profile switch, a race, garage, photo, pause, exit) in both modes, plus volunteer smoke results. Ledger and current-state update, then the milestone push. |
@@ -102,6 +102,42 @@ decision first:
 - **B.** Testers prepare their own build from their own dump. This pulls the
   dump-validation and local codegen work from the release milestone into M9 and
   makes M9 several weeks longer.
+
+Owner decision 2026-10-28: **option A**. The owner hands the build to a closed
+group personally through a private file-sharing link.
+
+## Build kill switch (M9-005, owner request 2026-10-28)
+
+Reuses the signed M8-018 expiry mechanism ([policy](test-build-expiry.md)):
+the RSA-signed `active-builds.txt` on branch `DebugBundle` and the signed ticket
+beside `mcla.exe`. Changes:
+
+- **Offline lifetime 3 days** instead of 14 (compile-time constant).
+- **Online check is authoritative.** If the signed list downloads and verifies,
+  a hash that is listed may start; a hash that is missing is refused and its
+  cached grant is deleted. Removing a hash from the list therefore revokes the
+  build on its next online start (today removal does not revoke).
+- **No internet:** only the offline window applies. A network error, timeout or
+  bad signature never revokes and never extends.
+- Launcher and host both check, as today. Expiry never stops a running game or
+  touches saves.
+- Limits stay honest: local clock rollback and patched binaries are not
+  defended; this is a freshness switch, not DRM.
+
+Open detail: count the 3 days from build creation (owner's wording) or from
+the last successful online check. The second one avoids locking out a valid
+build for a tester who goes offline on day 4.
+
+## Post-session report prompt (M9-005, owner request 2026-10-28)
+
+The launcher already waits for the game process. After the game exits it lists
+F10 packages (keyboard or wheel/pad binding) and crash packages created during
+that session. If there are any, it shows: "N reports were recorded in this
+session", with **Open folder** and a short form (what you were doing, steps,
+what went wrong, expected). The answers are saved as `report.txt` inside each
+package, next to build, mode, resolution and time, which the launcher fills in.
+Nothing is sent anywhere; the tester shares the folder by hand. A crash or hang
+that ended the session is shown first.
 
 ## Estimate
 
