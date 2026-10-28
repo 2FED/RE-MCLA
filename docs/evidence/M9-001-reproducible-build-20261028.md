@@ -1,9 +1,9 @@
 # M9-001 reproducible source build (2026-10-28)
 
-**Status:** the build from published source is done and checked against the
-sources of `l31-s30` and `l33-sunc`. Still open: signing the test-build tickets
-and staging (PowerShell 7 is missing on the owner PC; owner decision pending),
-then the owner's title-plus-drive check. Not a physical PASS.
+**Status:** built from published source, checked against the sources of
+`l31-s30` and `l33-sunc`, and staged as `private/l34-s30` and
+`private/l34-sunc`. Still open: the owner's title-plus-drive check. Not a
+physical PASS.
 
 ## What changed in the repository
 
@@ -115,6 +115,20 @@ Binary behaviour switches (string inventory, no launch):
   message and the vblank log line. Their defaults are verified at source level
   above (a239b83 = the l29/l33 source with vblank 0).
 
+## Staging
+
+- PowerShell 7.4.22 (official `win-x64` zip from GitHub) is in `private/tools/pwsh`.
+  The zip SHA-256 `5F89F518...6359` matches the release `hashes.sha256` and the
+  GitHub asset digest; `pwsh.exe` has a valid Microsoft Corporation signature.
+  The agent session may not run downloaded binaries, so the owner ran
+  `private/l34-sign-and-stage.ps1`. It checks the `mcla.exe` hashes, signs the
+  tickets with the current-user key and calls `Stage-MclaInternalLauncher.ps1`.
+- `l34-s30` ticket: host `A50E30C6...`, created 1793196759. `l34-sunc` ticket:
+  host `766899067E...`, created 1793196761.
+- Both receipts list 17 files and all hashes verify on disk. The launcher (l12
+  binary `DB0D84A5...`), CRT and image helper are the same files as in l31-s30.
+  Receipts mark no external delivery, no game assets and no personal data.
+
 ## Spark routing
 
 Not used: the work was exact file and hash comparison and builds, which are
@@ -122,8 +136,7 @@ cheaper to do directly than to validate a model answer.
 
 ## Open
 
-1. Signed test-build tickets and staging into `private/l34-s30` and
-   `private/l34-sunc` (needs PowerShell 7; owner decision).
+1. Done 2026-10-28 16:12 Kyiv, see Staging below.
 2. Owner title-plus-drive check on both: 30 cap on s30; on sunc 60 Hz until
    45 s, then 240 Hz with the UI cap, as in the l33 log.
 3. `VERSION` stays 0.20.37.0 because it is embedded in the tested binaries;
