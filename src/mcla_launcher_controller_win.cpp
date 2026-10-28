@@ -1,6 +1,7 @@
 #include "mcla_launcher_controller_win.h"
 #include "mcla_launcher_build_win.h"
 #include "mcla_launcher_capabilities.h"
+#include "mcla_diagnostic_export_win.h"
 #include "mcla_launcher_game_win.h"
 #include "mcla_launcher_process_win.h"
 #include "mcla_launcher_snapshot_win.h"
@@ -207,6 +208,77 @@ struct LauncherController::State {
   };
   std::optional<Session> session;
   bool completion_failed=false;
+  std::optional<diagnostic_export::ExportPlan> export_plan;
+  diagnostic_export::DialogResult export_result;
+  UiRequest export_request;
+  std::vector<fs::DirectoryGuard> export_draft_roots;
+
+  void CancelExport() {
+    export_plan.reset(); export_draft_roots.clear();
+    export_result.ready=false; export_result.confirmation_token.clear();
+  }
+  std::expected<void,std::wstring> PrepareExport(const UiRequest &request) {
+    CancelExport(); export_result={};
+    const auto &p=store.preferences();
+    const auto *entry=Selected(p);
+    if(!entry || entry->id!=request.selected_profile_id || entry->layout!=Layout::ManagedExternalV1)
+      return std::unexpected(L"Select an acknowledged managed profile before exporting");
+    auto profile=fs::OpenDirectory(Wide(entry->root));
+    auto package=fs::OpenDirectory(request.export_request.package_path);
+    auto parent=fs::OpenDirectory(request.export_request.destination_parent);
+    if(!profile || !package || !parent) return std::unexpected(L"Choose an existing completed live-package folder and a separate export folder");
+    const auto prefix=profile->path()+L"\\diagnostics\\";
+    // Both paths are handle-canonical. Exact casing matters on case-sensitive
+    // NTFS: a sibling A/a must never be rebound to the selected profile.
+    if(package->path().size()<=prefix.size() || package->path().compare(0,prefix.size(),prefix)!=0)
+      return std::unexpected(L"Choose a live package beneath the selected profile's diagnostics folder");
+    const auto relative=package->path().substr(prefix.size());
+    const auto slash=relative.find(L'\\');
+    if(slash!=32 || relative.substr(slash,6)!=L"\\live\\")
+      return std::unexpected(L"Choose a completed live package, not a session, crash or parent directory");
+    const auto session_wide=relative.substr(0,32);
+    const std::string session_id(session_wide.begin(),session_wide.end());
+    for(size_t i=0;i<session_id.size();++i)
+      if(static_cast<wchar_t>(session_id[i])!=session_wide[i]) return std::unexpected(L"Invalid diagnostic session identity");
+    // Protect saved roots via the backend and also unsaved Setup drafts. Keep
+    // these handles through confirmation without ever saving those drafts.
+    for(const auto &path:{request.build_root,request.game_root}) if(!path.empty()) {
+      auto guard=fs::OpenDirectory(path);
+      if(!guard || !fs::CompareDisjoint(*guard,*parent)) {
+        export_draft_roots.clear();
+        return std::unexpected(L"Export folder overlaps or cannot be checked against draft build/game roots");
+      }
+      export_draft_roots.push_back(std::move(*guard));
+    }
+    auto plan=diagnostic_export::PrepareLiveExport(p,store.directory(),session_id,relative.substr(slash+6),parent->path());
+    if(!plan) { export_draft_roots.clear(); return std::unexpected(plan.error()); }
+    export_request=request;
+    export_result.ready=true;
+    export_result.destination=plan->destination();
+    export_result.report_json=plan->report_json(); export_result.inventory_text=plan->inventory_text();
+    export_result.confirmation_token=plan->confirmation_token();
+    export_result.status=L"Preview only. No output files created. Inspect both files before Save report.";
+    export_plan.emplace(std::move(*plan));
+    return {};
+  }
+  std::expected<void,std::wstring> ConfirmExport(const UiRequest &request) {
+    if(!export_plan || request.selected_profile_id!=export_request.selected_profile_id ||
+        request.selected_profile_id!=store.preferences().library.selected_id ||
+        request.build_root!=export_request.build_root || request.game_root!=export_request.game_root ||
+        request.export_request.package_path!=export_request.export_request.package_path ||
+        request.export_request.destination_parent!=export_request.export_request.destination_parent ||
+        request.export_request.confirmation_token!=export_result.confirmation_token) {
+      CancelExport();
+      return std::unexpected(L"Export selection or confirmation changed. Preview again; nothing exported.");
+    }
+    auto result=diagnostic_export::ConfirmExport(*export_plan,request.export_request.confirmation_token);
+    CancelExport();
+    if(!result) return std::unexpected(result.error());
+    export_result.complete=true;
+    export_result.destination=*result;
+    export_result.status=L"Report saved locally. Nothing uploaded. Review before sharing.";
+    return {};
+  }
 
   std::expected<fs::DirectoryGuard,std::wstring> CollectionParent(std::wstring_view path) const {
     auto parent=fs::OpenDirectory(path); if(!parent) return std::unexpected(parent.error());
@@ -564,6 +636,7 @@ struct LauncherController::State {
     ui.library=p.library; ui.build_root=Wide(p.build_root); ui.game_root=Wide(p.game_root);
     ui.gpu_name=Wide(p.gpu_name); ui.render_target=p.render_target;
     ui.vsync=p.vsync; ui.fullscreen=p.fullscreen; ui.running=session.has_value(); ui.status=status;
+    ui.export_result=export_result;
     if(session) {
       ui.readiness=LaunchReadiness::Running;
       ui.readiness_reason=L"Game session owns this profile";
@@ -744,10 +817,17 @@ UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
   auto &s=*state_;
   std::expected<void,std::wstring> result;
   uint64_t checked_expiry=0;
+  const bool export_action=action==UiAction::ExportPrepare || action==UiAction::ExportConfirm || action==UiAction::ExportCancel;
+  if(s.export_plan && !export_action) {
+    s.status=L"Close the diagnostic preview before starting a game or changing profiles/settings."; return s.View();
+  }
   if(s.session && action!=UiAction::Refresh && action!=UiAction::OpenSave && action!=UiAction::OpenDiagnostics) {
     s.status=L"Game session still owns this profile. Settings and profile changes are blocked."; return s.View();
   }
   switch(action) {
+    case UiAction::ExportPrepare: result=s.PrepareExport(request); break;
+    case UiAction::ExportConfirm: result=s.ConfirmExport(request); break;
+    case UiAction::ExportCancel: s.CancelExport(); break;
     case UiAction::Refresh: result=s.Poll(); break;
     case UiAction::CheckLaunch: {
       std::wstring support_notice;
@@ -821,6 +901,12 @@ UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
     }
   }
   if(!result) s.status=result.error();
+  if(export_action) {
+    if(!result) {
+      s.CancelExport(); s.export_result.complete=false; s.export_result.status=result.error();
+    }
+    if(action!=UiAction::ExportCancel) s.status=s.export_result.status;
+  }
   auto view=s.View();
   if(action==UiAction::CheckLaunch && !s.session) {
     view.readiness=result?LaunchReadiness::Ready:LaunchReadiness::Blocked;

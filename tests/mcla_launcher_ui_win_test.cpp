@@ -10,6 +10,7 @@
 #include <atomic>
 #include <memory>
 #include <thread>
+#include <algorithm>
 
 namespace {
 using namespace mcla::launcher;
@@ -574,6 +575,73 @@ void TestSections() {
   Check(Shown(window, UiImport) && !IsWindowEnabled(GetDlgItem(window, UiImport)),
         "running session may inspect sections but mutations stay disabled");
   Check(recorder.calls.size() == running_calls, "navigation while running never refreshes or mutates");
+}
+
+void TestConfigurationCategorySummary() {
+  // These three IDs are appended after the existing stable export ID. Keep
+  // tests compilable before the production header/UI lands to observe RED.
+  const std::pair<int,const wchar_t *> summaries[] = {
+      {UiExportReport + 1,L"Compatibility: fixes come with the selected build; no gameplay-assist switches."},
+      {UiExportReport + 2,L"Accessibility: no launcher overrides; use the game's own options."},
+      {UiExportReport + 3,L"Cheats: no launcher controls or cheat arguments."}};
+  Recorder recorder;
+  InvisibleWindow window(recorder);
+  if (!window) return;
+  RECT initial_window{}; GetWindowRect(window,&initial_window);
+  Edit(window,UiBuildRoot,L"C:/UnsubmittedCategorySetup");
+  Edit(window,UiGameRoot,L"F:/UnsubmittedCategoryGame");
+  const auto readiness = Text(window,UiReadiness);
+  const size_t before = recorder.calls.size();
+  for (const auto &[id,caption] : summaries) {
+    Check(GetDlgItem(window,id)!=nullptr,"configuration category has a real native summary control");
+    Check(!Shown(window,id),"configuration summary is absent from initial Play");
+  }
+  for (const int page : {UiPageSetup,UiPageProfiles,UiPagePlay,UiPageSetup}) {
+    Click(window,page);
+    for (const auto &[id,caption] : summaries) {
+      const HWND control=GetDlgItem(window,id);
+      if (!control) continue; // Missing controls are already RED, not a GDI error.
+      Check(Shown(window,id)==(page==UiPageSetup),"configuration categories are Setup-only, not Play or Profiles clutter");
+      Check(Text(window,id)==caption,"configuration category wording is exact and does not promise absent features");
+      const auto style=GetWindowLongPtrW(control,GWL_STYLE);
+      Check(Class(window,id)==L"Static" && !(style & WS_TABSTOP) && !(style & SS_NOTIFY),
+          "category is read-only STATIC without focus stops or click notification");
+      if (page!=UiPageSetup) continue;
+      RECT client{},bounds{}; GetClientRect(control,&client); GetWindowRect(control,&bounds);
+      const HDC dc=GetDC(control);
+      Check(dc!=nullptr,"category fit measures only its own native control DC");
+      if (dc) {
+        const auto font=reinterpret_cast<HFONT>(SendMessageW(control,WM_GETFONT,0,0));
+        const auto old=SelectObject(dc,font);
+        SIZE extent{};
+        const bool measured=GetTextExtentPoint32W(dc,caption,static_cast<int>(std::wstring_view(caption).size()),&extent)!=0;
+        Check(measured && extent.cx<=client.right-client.left && extent.cy<=client.bottom-client.top,
+              "complete category caption fits actual font and native client bounds without wrapping or clipping");
+        SelectObject(dc,old); ReleaseDC(control,dc);
+      }
+      RECT main_client{}; GetClientRect(window,&main_client);
+      RECT local=bounds; MapWindowPoints(nullptr,window,reinterpret_cast<POINT *>(&local),2);
+      Check(local.left>=0 && local.top>=0 && local.right<=main_client.right && local.bottom<=main_client.bottom,
+          "category remains inside unchanged main client geometry");
+      for (const int footer : {UiSaveSettings,UiCheckLaunch,UiPlay,UiReadiness,UiStatus}) {
+        RECT other{},overlap{}; GetWindowRect(GetDlgItem(window,footer),&other);
+        Check(!IntersectRect(&overlap,&bounds,&other),"category does not overlap common launch/status footer");
+        Check(bounds.bottom<=other.top,"all category captions finish above the common footer");
+      }
+      for (const auto &[other_id,unused] : summaries) if (other_id>id && GetDlgItem(window,other_id)) {
+        RECT other{},overlap{}; GetWindowRect(GetDlgItem(window,other_id),&other);
+        Check(!IntersectRect(&overlap,&bounds,&other),"category captions do not overlap one another");
+      }
+      RawClick(window,id);
+      SendMessageW(window,WM_COMMAND,MAKEWPARAM(id,STN_CLICKED),reinterpret_cast<LPARAM>(control));
+    }
+  }
+  RECT final_window{}; GetWindowRect(window,&final_window);
+  Check(EqualRect(&initial_window,&final_window)!=0,"category inspection does not resize main window");
+  Check(recorder.calls.size()==before,"read-only categories and section changes never dispatch backend actions");
+  Check(Text(window,UiBuildRoot)==L"C:/UnsubmittedCategorySetup" && Text(window,UiGameRoot)==L"F:/UnsubmittedCategoryGame",
+        "category inspection preserves unsaved setup drafts");
+  Check(Text(window,UiReadiness)==readiness,"category inspection does not change readiness");
 }
 
 void TestNavigationKeys() {
@@ -1264,6 +1332,79 @@ void TestRenderTargets() {
         "unknown persisted target never falls back to720p");
 }
 
+HWND ExportOperation(HWND owner) {
+  struct Search { HWND owner; HWND result=nullptr; } search{owner};
+  EnumThreadWindows(GetCurrentThreadId(), [](HWND item, LPARAM value) -> BOOL {
+    auto &found=*reinterpret_cast<Search *>(value);
+    wchar_t name[64]{}; GetClassNameW(item,name,64);
+    if(GetWindow(item,GW_OWNER)==found.owner && std::wstring_view(name)==L"MclaMetadataExportDialogV1") {
+      found.result=item; return FALSE;
+    }
+    return TRUE;
+  },reinterpret_cast<LPARAM>(&search));
+  return search.result;
+}
+
+void TestExportBridge() {
+  using namespace diagnostic_export;
+  {
+    Recorder recorder;
+    InvisibleWindow window(recorder);
+    if(!window) return;
+    Edit(window,UiBuildRoot,L"C:/UnsavedBuild");
+    Edit(window,UiGameRoot,L"F:/UnsavedGame");
+    const auto count=recorder.calls.size();
+    Click(window,UiExportReport);
+    auto dialog=ExportOperation(window);
+    Check(dialog && !IsWindowVisible(dialog),"export opens only owned hidden test dialog");
+    if(dialog) {
+      Check(recorder.calls.size()==count,"opening export does not preview or write");
+      SetDlgItemTextW(dialog,ExportPackage,L"D:/SyntheticSaves/MAIN/diagnostics/session/live/package");
+      SetDlgItemTextW(dialog,ExportParent,L"E:/SyntheticReports");
+      Click(dialog,ExportPreview);
+      const auto found=std::find_if(recorder.calls.begin(),recorder.calls.end(),[](const Call &call) {
+        return call.action==UiAction::ExportPrepare;
+      });
+      Check(found!=recorder.calls.end() && found->request.build_root==L"C:/UnsavedBuild" &&
+            found->request.game_root==L"F:/UnsavedGame" &&
+            found->request.export_request.destination_parent==L"E:/SyntheticReports",
+            "export bridge binds current unsaved setup and explicit dialog fields");
+      Click(dialog,ExportCancel);
+      SendMessageW(window,kExportDialogClosedMessage,0,0);
+      Check(!IsWindow(dialog) && Text(window,UiBuildRoot)==L"C:/UnsavedBuild" &&
+            Text(window,UiGameRoot)==L"F:/UnsavedGame","export Cancel preserves unsaved Setup fields");
+      Click(window,UiExportReport);
+      dialog=ExportOperation(window);
+      Check(dialog!=nullptr,"completed export dialog cleanup permits reopen");
+      if(dialog) Click(dialog,ExportCancel);
+    }
+  }
+  // Exercise the actual main-window callback bridge, not just the standalone
+  // dialog: its owner state is deleted synchronously during Prepare.
+  HWND window=nullptr;
+  unsigned prepares=0,cancels_after_prepare=0;
+  bool plan_held=false;
+  window=CreateLauncherUiForTest([&](UiAction action,const UiRequest &) {
+    if(action==UiAction::ExportPrepare) { ++prepares; plan_held=true; DestroyWindow(window); }
+    if(action==UiAction::ExportCancel) { if(prepares) ++cancels_after_prepare; plan_held=false; }
+    return Model();
+  });
+  Check(window!=nullptr,"reentrant export owner fixture created");
+  if(!window) return;
+  Click(window,UiExportReport);
+  const auto dialog=ExportOperation(window);
+  Check(dialog!=nullptr,"reentrant fixture opens export bridge");
+  if(dialog) {
+    SetDlgItemTextW(dialog,ExportPackage,L"D:/SyntheticPackage");
+    SetDlgItemTextW(dialog,ExportParent,L"E:/SyntheticReports");
+    Click(dialog,ExportPreview);
+    Check(prepares==1 && !IsWindow(window) && !IsWindow(dialog),
+          "owner destruction during export callback cannot retain dead UI state");
+    Check(cancels_after_prepare==1 && !plan_held,"owner destruction still releases returned backend preview through copied callback");
+  }
+  if(IsWindow(window)) DestroyWindow(window);
+}
+
 void TestLaunchReadiness() {
   Recorder recorder;
   InvisibleWindow window(recorder);
@@ -1384,6 +1525,7 @@ int main() {
   TestRenameValidation();
   TestImportPreservesUnsavedSetup();
   TestSections();
+  TestConfigurationCategorySummary();
   TestNavigationKeys();
   TestDraftCallbackMatrix();
   TestOperationDialogs();
@@ -1396,6 +1538,7 @@ int main() {
   TestLeaseAutomaticRenewal();
   TestUnchangedBackendActions();
   TestCreateParentSuggestion();
+  TestExportBridge();
   std::cout << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

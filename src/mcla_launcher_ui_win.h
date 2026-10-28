@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "mcla_launcher_profile_policy.h"
+#include "mcla_diagnostic_export_ui_win.h"
 
 namespace mcla::launcher {
 
@@ -18,6 +19,7 @@ enum class UiAction {
   Refresh, SaveSettings, SelectProfile, RegisterManaged, CreateProfile,
   ImportLegacy, Play, OpenSave, OpenDiagnostics, RenameLabel, RenameInGameName,
   DuplicateProfile, RestoreSnapshot, VerifyRoots, CheckLaunch,
+  ExportPrepare, ExportConfirm, ExportCancel,
 };
 
 enum class LaunchReadiness { Unchecked, Ready, Blocked, Running };
@@ -41,6 +43,7 @@ struct UiState {
   std::wstring collection_parent;
   // Explicit VerifyRoots failure contradicts any prior readiness approval.
   bool verification_failed = false;
+  diagnostic_export::DialogResult export_result;
 };
 
 struct UiRequest {
@@ -55,6 +58,7 @@ struct UiRequest {
   std::wstring profile_root;
   std::wstring legacy_source_root;
   std::wstring in_game_name;
+  diagnostic_export::DialogRequest export_request;
 };
 
 using UiCallback = std::function<UiState(UiAction, const UiRequest &)>;
@@ -73,6 +77,8 @@ enum UiControlId : int {
   UiCurrentName,
   UiSelectedProfileName, UiOperationConfirm, UiOperationCancel,
   UiCheckLaunch, UiReadiness, UiRenderTargetNote,
+  UiExportReport,
+  UiCompatibilitySummary, UiAccessibilitySummary, UiCheatsSummary,
 };
 
 // Callbacks are serialized. Only the read-only CheckLaunch may run on a worker;

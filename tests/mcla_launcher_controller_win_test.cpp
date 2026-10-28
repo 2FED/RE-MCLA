@@ -612,6 +612,136 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
         "all read-only checks preserve immutable build and game inventories");
   return true;
 }
+bool ExportControllerMatrix(const std::filesystem::path &root, LauncherController &controller,
+                            const UiRequest &saved_request, const ProfileEntry &profile,
+                            const ProfileEntry &other, const std::filesystem::path &session) {
+  const auto matrix=root/L"export-controller", destination=matrix/L"destination";
+  const auto draft_build=matrix/L"draft-build", draft_game=matrix/L"draft-game";
+  const std::filesystem::path profile_root(profile.root), other_root(other.root);
+  const auto diagnostic_session=profile_root/L"diagnostics"/session.filename();
+  const auto live=diagnostic_session/L"live", package=live/L"live-20261011T120000Z-123-1";
+  const auto foreign=other_root/L"diagnostics"/session.filename()/L"live"/package.filename();
+  const auto crash=diagnostic_session/L"crash"/L"crash-20261011T120000Z-123";
+  for(const auto &path:{destination,draft_build,draft_game,package,foreign,crash,package/L"nested"})
+    std::filesystem::create_directories(path);
+  const std::string diagnostic="{\"schema\":\"mcla-diagnostic-state-v1\",\"reason\":\"f10\","
+      "\"process\":{\"private\":\"CONTROLLER_PRIVATE_SENTINEL\"}}\n";
+  if(!NewFile(package/L"state.json",diagnostic)) return false;
+  const auto state_hash=HashFile(package/L"state.json"); if(!state_hash) return false;
+  const std::string manifest="{\"schema\":\"mcla-diagnostic-package-v1\",\"kind\":\"live\","
+      "\"platform\":\"windows\",\"mcla_version\":\"0.19.0.0\",\"reason\":\"f10\","
+      "\"capture\":{\"frame\":false},\"artifacts\":[{\"name\":\"state.json\",\"sha256\":\""+
+      *state_hash+"\",\"bytes\":"+std::to_string(diagnostic.size())+"},{\"name\":\"log-tail.txt\"},"
+      "{\"name\":\"save-metadata.json\"},{\"name\":\"save-files-private.json\"}]}\n";
+  if(!NewFile(package/L"manifest.json",manifest) ||
+      !NewFile(package/L"log-tail.txt","CONTROLLER_PRIVATE_SENTINEL\n")) return false;
+  const auto settings_root=root/L"store-a";
+  const auto settings_before=FixtureInventory(settings_root), source_before=FixtureInventory(profile_root);
+  const auto other_before=FixtureInventory(other_root);
+  if(!settings_before || !source_before || !other_before) return false;
+  auto request=saved_request;
+  request.build_root=draft_build.wstring(); request.game_root=draft_game.wstring();
+  request.gpu_name=L"UNSAVED_GPU_SENTINEL"; request.render_target=720; request.fullscreen=true;
+  request.export_request.package_path=package.wstring();
+  request.export_request.destination_parent=destination.wstring();
+  const auto no_output=[&] { return std::filesystem::is_empty(destination); };
+  const auto unchanged=[&] {
+    const auto settings_after=FixtureInventory(settings_root), source_after=FixtureInventory(profile_root);
+    const auto other_after=FixtureInventory(other_root);
+    return settings_after && source_after && other_after && *settings_before==*settings_after &&
+        *source_before==*source_after && *other_before==*other_after;
+  };
+  auto preview=controller.Dispatch(UiAction::ExportPrepare,request);
+  Check(preview.export_result.ready && !preview.export_result.complete && no_output(),
+        "controller prepares metadata preview without publishing a directory");
+  if(!preview.export_result.ready) { std::wcerr<<preview.export_result.status<<L'\n'; return false; }
+  Check(!preview.export_result.report_json.empty() && !preview.export_result.inventory_text.empty() &&
+        !preview.export_result.confirmation_token.empty() &&
+        preview.export_result.report_json.find("CONTROLLER_PRIVATE_SENTINEL")==std::string::npos &&
+        preview.export_result.report_json.find("UNSAVED_GPU_SENTINEL")==std::string::npos,
+        "controller preview exposes only sanitized historical metadata and exact inventory");
+  Check(preview.build_root==saved_request.build_root && preview.game_root==saved_request.game_root &&
+        preview.render_target==saved_request.render_target && preview.fullscreen==saved_request.fullscreen,
+        "export does not save or substitute unsaved Setup drafts");
+  Check(unchanged(),"preparing preview leaves settings sources and other profile byte-identical");
+  for(const auto action:{UiAction::Play,UiAction::RenameLabel,UiAction::RenameInGameName,
+      UiAction::SelectProfile,UiAction::SaveSettings}) {
+    auto blocked_request=request; blocked_request.selected_profile_id=other.id;
+    blocked_request.profile_label=L"MUST_NOT_RENAME"; blocked_request.in_game_name=L"MustNotRename";
+    const auto blocked=controller.Dispatch(action,blocked_request);
+    Check(blocked.export_result.ready && !blocked.running && !controller.running() &&
+          blocked.library.selected_id==profile.id && no_output(),
+          "open export preview blocks Play rename profile selection and settings mutation");
+  }
+  const auto canceled=controller.Dispatch(UiAction::ExportCancel,request);
+  Check(!canceled.export_result.ready && canceled.export_result.confirmation_token.empty() && no_output() && unchanged(),
+        "Cancel releases preview without output or settings/source changes");
+
+  // Existing directories reach controller path classification, rather than only
+  // failing because a fabricated source path does not exist.
+  for(const auto &path:{matrix,foreign,crash,diagnostic_session,live,package/L"nested"}) {
+    auto invalid=request; invalid.export_request.package_path=path.wstring();
+    const auto rejected=controller.Dispatch(UiAction::ExportPrepare,invalid);
+    Check(!rejected.export_result.ready && !rejected.export_result.complete && no_output(),
+          "controller rejects outside cross-profile crash parent or nested package selections");
+  }
+  for(const auto &path:{draft_build,draft_game,profile_root,other_root,settings_root,
+      std::filesystem::path(saved_request.build_root),std::filesystem::path(saved_request.game_root)}) {
+    auto invalid=request; invalid.export_request.destination_parent=path.wstring();
+    const auto rejected=controller.Dispatch(UiAction::ExportPrepare,invalid);
+    Check(!rejected.export_result.ready && no_output(),
+          "export destination cannot overlap saved or unsaved protected roots");
+  }
+  {
+    auto invalid=request; invalid.selected_profile_id=other.id;
+    Check(!controller.Dispatch(UiAction::ExportPrepare,invalid).export_result.ready && no_output(),
+          "prepare requires currently selected managed profile identity");
+    invalid=request; invalid.export_request.package_path=(package/L".."/package.filename()).wstring();
+    Check(!controller.Dispatch(UiAction::ExportPrepare,invalid).export_result.ready && no_output(),
+          "noncanonical traversal spelling rejected even when it would reach the same package");
+  }
+  for(unsigned change=0;change<6;++change) {
+    const auto prepared=controller.Dispatch(UiAction::ExportPrepare,request);
+    Check(prepared.export_result.ready,"fresh preview required before each stale confirmation test");
+    if(!prepared.export_result.ready) return false;
+    auto stale=request; stale.export_request.confirmation_token=prepared.export_result.confirmation_token;
+    if(change==0) stale.export_request.confirmation_token=std::string(64,'0');
+    if(change==1) stale.build_root=saved_request.build_root;
+    if(change==2) stale.game_root=saved_request.game_root;
+    if(change==3) stale.export_request.package_path=foreign.wstring();
+    if(change==4) stale.export_request.destination_parent=matrix.wstring();
+    if(change==5) stale.selected_profile_id=other.id;
+    const auto rejected=controller.Dispatch(UiAction::ExportConfirm,stale);
+    Check(!rejected.export_result.ready && !rejected.export_result.complete &&
+          rejected.export_result.confirmation_token.empty() && no_output(),
+          "changed token draft root package destination or selected identity invalidates confirmation");
+    auto old=request; old.export_request.confirmation_token=prepared.export_result.confirmation_token;
+    Check(!controller.Dispatch(UiAction::ExportConfirm,old).export_result.complete && no_output(),
+          "invalidated preview cannot be reused with the original token");
+  }
+  Check(unchanged(),"all denied export operations preserve preferences source and independent profile");
+  preview=controller.Dispatch(UiAction::ExportPrepare,request);
+  if(!preview.export_result.ready) return false;
+  auto confirm=request; confirm.export_request.confirmation_token=preview.export_result.confirmation_token;
+  const auto complete=controller.Dispatch(UiAction::ExportConfirm,confirm);
+  Check(complete.export_result.complete && !complete.export_result.ready && !complete.running &&
+        complete.export_result.destination==preview.export_result.destination,
+        "explicit confirmation saves the exact preview destination without starting a child");
+  if(!complete.export_result.complete) { std::wcerr<<complete.export_result.status<<L'\n'; return false; }
+  const std::filesystem::path output(complete.export_result.destination);
+  const auto files=Children(output);
+  Check(Children(destination).size()==1 && files==std::set<std::filesystem::path>{output/L"report.json",output/L"EXPORT-COMPLETE.txt"} &&
+        Read(output/L"report.json")==preview.export_result.report_json &&
+        Read(output/L"EXPORT-COMPLETE.txt")==preview.export_result.inventory_text,
+        "controller publishes exactly two byte-identical preview files and no private artifacts");
+  Check(unchanged(),"successful export leaves preferences completed session save and source package unchanged");
+  const auto repeated=controller.Dispatch(UiAction::ExportConfirm,confirm);
+  Check(!repeated.export_result.complete && Children(destination).size()==1 && unchanged(),
+        "completed export token cannot publish another directory");
+  controller.Dispatch(UiAction::ExportCancel,request);
+  return true;
+}
+
 bool CollectionParentMatrix(const std::filesystem::path &root,
                             const std::filesystem::path &build,
                             const std::filesystem::path &game) {
@@ -859,6 +989,9 @@ int wmain(int argc, wchar_t **argv) {
         "unvalidated VSync Off is rejected before another session or child");
   Check(!prefs_before_vsync.empty() && Read(root / L"store-a/preferences.dat") == prefs_before_vsync,
         "rejected VSync Off leaves authoritative preferences unchanged");
+
+  Check(ExportControllerMatrix(root,first,request,*main_profile,*other_profile,session),
+        "controller diagnostic export preview-confirm-cancel matrix completed");
 
   UiRequest rename_label; rename_label.profile_label = L"Renamed fixture label";
   const auto labeled = first.Dispatch(UiAction::RenameLabel, rename_label);

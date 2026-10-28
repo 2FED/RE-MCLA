@@ -1,6 +1,6 @@
 // Synthetic owned-window visual QA only; not a desktop/window-capture tool.
 // Usage: renderer --output C:\explicit\new.png [--page play|profiles|setup|checked]
-//        renderer --output C:\explicit\new.png --operation rename|create|register|import|copy|restore
+//        renderer --output C:\explicit\new.png --operation rename|create|register|import|copy|restore|export
 // Link UI source with user32 gdi32 ole32 uuid gdiplus. No game backend.
 #include "mcla_launcher_ui_win.h"
 #include "mcla_launcher_capabilities.h"
@@ -176,14 +176,14 @@ bool ExplicitOutputPath(std::wstring_view path) {
       (path.substr(path.size() - 4) == L".bmp" || path.substr(path.size() - 4) == L".png");
 }
 
-HWND OwnedOperation(HWND owner) {
-  struct Search { HWND owner; HWND result = nullptr; } search{owner};
+HWND OwnedOperation(HWND owner, bool export_operation = false) {
+  struct Search { HWND owner; bool export_operation; HWND result = nullptr; } search{owner, export_operation};
   EnumThreadWindows(GetCurrentThreadId(), [](HWND item, LPARAM value) -> BOOL {
     auto &search = *reinterpret_cast<Search *>(value);
     wchar_t name[64]{};
     GetClassNameW(item, name, 64);
     if (GetWindow(item, GW_OWNER) == search.owner &&
-        std::wstring_view(name) == L"MclaLauncherProfileOperationV1") {
+        std::wstring_view(name) == (search.export_operation ? L"MclaMetadataExportDialogV1" : L"MclaLauncherProfileOperationV1")) {
       search.result = item; return FALSE;
     }
     return TRUE;
@@ -210,7 +210,8 @@ int wmain(int argc, wchar_t **argv) {
         Require(option == L"--operation", "Expected --page or --operation.");
         operation = value == L"rename" ? UiRenameLabel : value == L"create" ? UiCreate :
             value == L"register" ? UiRegister : value == L"import" ? UiImport :
-            value == L"copy" ? UiDuplicateProfile : value == L"restore" ? UiRestoreSnapshot : 0;
+            value == L"copy" ? UiDuplicateProfile : value == L"restore" ? UiRestoreSnapshot :
+            value == L"export" ? UiExportReport : 0;
         Require(operation != 0, "Unknown operation.");
         page = UiPageProfiles;
       }
@@ -218,13 +219,43 @@ int wmain(int argc, wchar_t **argv) {
     Require(SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE) != nullptr,
             "Cannot set deterministic system-aware DPI context.");
     const UINT dpi = GetDpiForSystem();
+    const bool export_operation = operation == UiExportReport;
     unsigned refreshes = 0;
+    unsigned export_previews = 0, export_cancels = 0;
     bool unexpected_callback = false;
     OwnedWindow window;
-    window.value = CreateLauncherUiForTest([&](UiAction action, const UiRequest &) {
+    window.value = CreateLauncherUiForTest([&](UiAction action, const UiRequest &request) {
+      auto state = SyntheticState(checked_status);
       if (action == UiAction::Refresh) ++refreshes;
+      else if (export_operation && action == UiAction::ExportPrepare) {
+        ++export_previews;
+        Require(request.export_request.package_path == L"D:/SyntheticProfiles/MAIN/diagnostics/1234567890abcdef1234567890abcdef/live/live-20261011T120000Z-123-1" &&
+                request.export_request.destination_parent == L"D:/SyntheticReports",
+                "Export preview changed the explicitly supplied synthetic paths.");
+        auto &preview = state.export_result;
+        preview.ready = true;
+        preview.destination = L"D:/SyntheticReports/metadata-export-synthetic-preview";
+        preview.report_json = "{\n  \"schema\": \"mcla-local-diagnostic-metadata-export-v1\",\n"
+            "  \"version\": 1,\n  \"kind\": \"live\",\n  \"mcla_version\": \"0.19.0.0\",\n"
+            "  \"reason\": \"f10\",\n  \"session_recorded\": {\n"
+            "    \"build_sha256\": \"" + std::string(64, 'C') + "\",\n"
+            "    \"game_sha256\": \"" + std::string(64, 'D') + "\",\n"
+            "    \"timing\": \"stock\",\n    \"scale\": 2,\n    \"vsync\": true,\n"
+            "    \"fullscreen\": true,\n    \"gpu_vendor\": \"NVIDIA\",\n"
+            "    \"gpu_driver\": \"unavailable\",\n    \"cpu\": \"unavailable\",\n"
+            "    \"capabilities\": \"unavailable-legacy\"\n  },\n"
+            "  \"capture\": {\"frame_written\": true},\n"
+            "  \"disclaimers\": [\"local-directory-provenance-not-authenticated\",\n"
+            "    \"settings-receipt-reported-not-observed\",\n"
+            "    \"no-measured-fps-or-world-certification\", \"review-before-sharing\"]\n}\n";
+        preview.inventory_text = "MCLA-METADATA-EXPORT-V1\n" + std::string(64, 'A') + " " +
+            std::to_string(preview.report_json.size()) + " report.json\n";
+        preview.confirmation_token = std::string(64, 'B');
+        preview.status = L"SYNTHETIC PREVIEW ONLY. No source files read or output exported. Review both files before Save report.";
+      }
+      else if (export_operation && action == UiAction::ExportCancel) ++export_cancels;
       else unexpected_callback = true;
-      return SyntheticState(checked_status);
+      return state;
     });
     Require(window.value && !IsWindowVisible(window.value), "Fixture was not created hidden.");
     Require(refreshes == 1 && !unexpected_callback, "Unexpected fixture backend action.");
@@ -235,15 +266,28 @@ int wmain(int argc, wchar_t **argv) {
     if (operation) {
       SendMessageW(window.value, WM_COMMAND, MAKEWPARAM(operation, BN_CLICKED),
                    reinterpret_cast<LPARAM>(GetDlgItem(window.value, operation)));
-      target = OwnedOperation(window.value);
-      Require(target && !IsWindowVisible(target) && !IsWindowEnabled(window.value),
+      target = OwnedOperation(window.value, export_operation);
+      Require(target && !IsWindowVisible(target) &&
+              (IsWindowEnabled(window.value) != FALSE) == export_operation,
               "Operation did not create only its owned hidden modal.");
-      SetWindowTextW(GetDlgItem(target, UiProfileLabel), L"Copy for testing");
-      if (GetDlgItem(target, UiProfileRoot))
-        SetWindowTextW(GetDlgItem(target, UiProfileRoot), L"D:/SyntheticProfiles/NewProfiles");
-      if (GetDlgItem(target, UiLegacySource))
-        SetWindowTextW(GetDlgItem(target, UiLegacySource),
-                       L"D:/SyntheticProfiles/MAIN/backups/synthetic-snapshot");
+      if (export_operation) {
+        using namespace mcla::launcher::diagnostic_export;
+        SetWindowTextW(GetDlgItem(target, ExportPackage),
+            L"D:/SyntheticProfiles/MAIN/diagnostics/1234567890abcdef1234567890abcdef/live/live-20261011T120000Z-123-1");
+        SetWindowTextW(GetDlgItem(target, ExportParent), L"D:/SyntheticReports");
+        SendMessageW(target, WM_COMMAND, MAKEWPARAM(ExportPreview, BN_CLICKED),
+                     reinterpret_cast<LPARAM>(GetDlgItem(target, ExportPreview)));
+        Require(export_previews == 1 && IsWindowEnabled(GetDlgItem(target, ExportSave)) &&
+                GetWindowTextLengthW(GetDlgItem(target, ExportContents)) > 0,
+                "Synthetic export preview was not presented by the real dialog.");
+      } else {
+        SetWindowTextW(GetDlgItem(target, UiProfileLabel), L"Copy for testing");
+        if (GetDlgItem(target, UiProfileRoot))
+          SetWindowTextW(GetDlgItem(target, UiProfileRoot), L"D:/SyntheticProfiles/NewProfiles");
+        if (GetDlgItem(target, UiLegacySource))
+          SetWindowTextW(GetDlgItem(target, UiLegacySource),
+                         L"D:/SyntheticProfiles/MAIN/backups/synthetic-snapshot");
+      }
       Require(refreshes == 1 && !unexpected_callback, "Opening an operation submitted a backend action.");
     }
 
@@ -252,6 +296,9 @@ int wmain(int argc, wchar_t **argv) {
     ContentBounds content{target};
     EnumChildWindows(target, MeasureChild, reinterpret_cast<LPARAM>(&content));
     Require(content.right > 0 && content.bottom > 0, "Could not measure own fixture controls.");
+    // Export is rendered at its actual production dialog size: never enlarge it
+    // to make clipping disappear. Older renderer modes retain their behavior.
+    if (!export_operation) {
     const int margin = MulDiv(12, static_cast<int>(dpi), 96);
     SCROLLINFO horizontal{sizeof(horizontal), SIF_RANGE};
     SCROLLINFO vertical{sizeof(vertical), SIF_RANGE};
@@ -271,6 +318,7 @@ int wmain(int argc, wchar_t **argv) {
             "Cannot size own hidden fixture.");
     SendMessageW(target, WM_VSCROLL, SB_TOP, 0);
     SendMessageW(target, WM_HSCROLL, SB_TOP, 0);
+    }
     // Resize/scroll handlers may reposition children. The final client bounds,
     // not pre-resize measurements or window-frame coordinates, own the proof.
     content = ContentBounds{target};
@@ -313,6 +361,13 @@ int wmain(int argc, wchar_t **argv) {
     GdiFlush();
     Require(!IsWindowVisible(window.value) && !IsWindowVisible(target) && refreshes == 1 && !unexpected_callback,
             "Fixture unexpectedly became visible or dispatched an action.");
+    if (export_operation) {
+      SendMessageW(target, WM_COMMAND,
+          MAKEWPARAM(mcla::launcher::diagnostic_export::ExportCancel, BN_CLICKED),
+          reinterpret_cast<LPARAM>(GetDlgItem(target, mcla::launcher::diagnostic_export::ExportCancel)));
+      Require(!IsWindow(target) && IsWindowEnabled(window.value) && export_cancels > 0 && !unexpected_callback,
+              "Owned export Cancel did not release the synthetic preview.");
+    }
 
     BITMAPFILEHEADER header{};
     header.bfType = 0x4d42;
@@ -336,6 +391,8 @@ int wmain(int argc, wchar_t **argv) {
               << "dpi=" << dpi << " width=" << client.right << " height=" << client.bottom
               << " hidden=1 refreshes=" << refreshes << " controls=" << rendered.controls
               << " content_right=" << content.right << " content_bottom=" << content.bottom << "\n";
+    if (export_operation) std::cout << "export_previews=" << export_previews
+                                   << " export_cancels=" << export_cancels << " actual_dialog_bounds=1\n";
     return 0;
   } catch (const std::exception &error) {
     std::cerr << "Fixture render failed: " << error.what() << '\n';

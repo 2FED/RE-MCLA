@@ -258,13 +258,22 @@ if(WIN32)
         src/mcla_launcher_store_win.cpp src/mcla_launcher_fs_win.cpp
         src/mcla_launcher_writable_root_win.cpp src/mcla_launcher_process_win.cpp
         src/mcla_launcher_snapshot_win.cpp src/mcla_launcher_build_win.cpp
-        src/mcla_launcher_game_win.cpp)
+        src/mcla_launcher_game_win.cpp src/mcla_diagnostic_export_win.cpp
+        src/mcla_diagnostic_export_ui_win.cpp)
     add_executable(mcla_internal_launcher WIN32 src/mcla_launcher_main_win.cpp ${MCLA_LAUNCHER_SOURCES})
     set_target_properties(mcla_internal_launcher PROPERTIES OUTPUT_NAME "MCLA-Launcher")
     target_include_directories(mcla_internal_launcher PRIVATE src
         third_party/rexglue-sdk/thirdparty/inja/third_party/include)
     target_link_libraries(mcla_internal_launcher PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
     target_link_libraries(mcla_internal_launcher PRIVATE mcla_build_lease)
+    # Local, explicit metadata projection only. Not part of volunteer staging yet.
+    add_executable(mcla_diagnostic_export_win EXCLUDE_FROM_ALL
+        src/mcla_diagnostic_export_main_win.cpp src/mcla_diagnostic_export_win.cpp
+        src/mcla_launcher_fs_win.cpp src/mcla_launcher_writable_root_win.cpp)
+    set_target_properties(mcla_diagnostic_export_win PROPERTIES OUTPUT_NAME "MCLA-Export-Metadata")
+    target_include_directories(mcla_diagnostic_export_win PRIVATE src
+        third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+    target_link_libraries(mcla_diagnostic_export_win PRIVATE bcrypt shell32 ole32 uuid)
 
     if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         add_executable(mcla_build_lease_policy_test EXCLUDE_FROM_ALL tests/mcla_build_lease_policy_test.cpp)
@@ -282,9 +291,10 @@ if(WIN32)
         target_include_directories(mcla_launcher_fs_win_test PRIVATE src)
         target_link_libraries(mcla_launcher_fs_win_test PRIVATE bcrypt)
         add_executable(mcla_launcher_ui_win_test EXCLUDE_FROM_ALL
-            tests/mcla_launcher_ui_win_test.cpp src/mcla_launcher_ui_win.cpp)
+            tests/mcla_launcher_ui_win_test.cpp src/mcla_launcher_ui_win.cpp
+            src/mcla_diagnostic_export_ui_win.cpp)
         target_include_directories(mcla_launcher_ui_win_test PRIVATE src)
-        target_link_libraries(mcla_launcher_ui_win_test PRIVATE user32 gdi32 ole32 uuid)
+        target_link_libraries(mcla_launcher_ui_win_test PRIVATE user32 gdi32 shell32 ole32 uuid)
         add_executable(mcla_launcher_process_win_test EXCLUDE_FROM_ALL
             tests/mcla_launcher_process_win_test.cpp src/mcla_launcher_process_win.cpp)
         target_include_directories(mcla_launcher_process_win_test PRIVATE src)
@@ -312,6 +322,20 @@ if(WIN32)
         target_include_directories(mcla_launcher_capabilities_test PRIVATE src)
         target_include_directories(mcla_launcher_import_policy_test PRIVATE src
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        add_executable(mcla_diagnostic_export_policy_test EXCLUDE_FROM_ALL tests/mcla_diagnostic_export_policy_test.cpp)
+        target_include_directories(mcla_diagnostic_export_policy_test PRIVATE src
+            third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        add_executable(mcla_diagnostic_export_win_test EXCLUDE_FROM_ALL
+            tests/mcla_diagnostic_export_win_test.cpp src/mcla_diagnostic_export_win.cpp
+            src/mcla_launcher_fs_win.cpp src/mcla_launcher_writable_root_win.cpp)
+        target_include_directories(mcla_diagnostic_export_win_test PRIVATE src
+            third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        target_link_libraries(mcla_diagnostic_export_win_test PRIVATE bcrypt shell32 ole32 uuid)
+        target_compile_definitions(mcla_diagnostic_export_win_test PRIVATE MCLA_DIAGNOSTIC_EXPORT_TESTING)
+        add_executable(mcla_diagnostic_export_ui_win_test EXCLUDE_FROM_ALL
+            tests/mcla_diagnostic_export_ui_win_test.cpp src/mcla_diagnostic_export_ui_win.cpp)
+        target_include_directories(mcla_diagnostic_export_ui_win_test PRIVATE src)
+        target_link_libraries(mcla_diagnostic_export_ui_win_test PRIVATE user32 gdi32 shell32 ole32 uuid)
         add_executable(mcla_launcher_controller_win_test EXCLUDE_FROM_ALL
             tests/mcla_launcher_controller_win_test.cpp ${MCLA_LAUNCHER_SOURCES})
         target_include_directories(mcla_launcher_controller_win_test PRIVATE src

@@ -13,7 +13,7 @@ M8 is closed by owner decisions and the bounded M8-012 regression (2026-10-28): 
 - **Daily: `private/l31-s30`.** Stock 30 FPS. It adds the raw measured-time timer (smoothing, whole-millisecond steps, hitch debt), streaming replay, `clear_memory_page_state=false`, bulk Type-0 register writes, light readback (`some`) and the DXGI-budget texture cache. The launcher Build folder selects it; `C:\BDU\MCLA-Play` holds the shortcuts and README.
 - **Experimental unlocked: `private/l33-sunc`.** Guest vblank 240 Hz, draw-count UI cap, 45 s start delay, tear-free present.
 - **Fallbacks:** `l27-s30`, `l20`, `l12` (stock).
-- **Launcher:** the owner still uses the l12 launcher binary. The repository launcher source has diverged, so no launcher toggle was shipped.
+- **Launcher:** the owner uses the l12 launcher binary. M9-002 (in progress): the repository now builds it. The l12 source was uncommitted work in the main working tree, now ported. The rebuilt launcher has byte-identical code, and `private/l35-s30` / `l35-sunc` carry it. Pending: owner smoke on a non-MAIN profile.
 
 ## Where the work lives
 

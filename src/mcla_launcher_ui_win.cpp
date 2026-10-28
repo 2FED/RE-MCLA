@@ -279,6 +279,7 @@ void Controls(HWND window, WindowState &state) {
       0, UiRenderTargetNote, 180, 434, 696, 24);
   button(UiOpenSave, L"Open save folder", 180, 460, 205);
   button(UiOpenDiagnostics, L"Open diagnostics", 400, 460, 205);
+  button(UiExportReport, L"Export report...", 620, 460, 256);
 
   state.adding_page = 1;
   label(L"Profile name", 24, 246, 145);
@@ -309,7 +310,18 @@ void Controls(HWND window, WindowState &state) {
   edit(UiGameRoot, 180, 368, 576);
   button(UiBrowseGame, L"Browse...", 768, 367, 108);
   button(UiVerifyRoots, L"Verify build / game", 180, 418, 240);
-  label(L"Verify checks identity without saving settings or launching the game.\nYour typed folders stay here while you import or switch profiles.", 180, 466, 696, 48);
+  label(L"Verify only checks identity. No save or launch.\nTyped folders stay while you import or switch profiles.",
+        436, 415, 440, 40);
+  // Read-only category boundaries, not switches for absent gameplay features.
+  // Keep ordinary display/profile actions on their existing pages.
+  Add(window, state, L"STATIC",
+      L"Compatibility: fixes come with the selected build; no gameplay-assist switches.",
+      0, UiCompatibilitySummary, 24, 462, 852, 20);
+  Add(window, state, L"STATIC",
+      L"Accessibility: no launcher overrides; use the game's own options.",
+      0, UiAccessibilitySummary, 24, 482, 852, 20);
+  Add(window, state, L"STATIC", L"Cheats: no launcher controls or cheat arguments.",
+      0, UiCheatsSummary, 24, 502, 852, 20);
 
   state.adding_page = -1;
   button(UiSaveSettings, L"Save settings", 24, 534, 165);
@@ -412,7 +424,7 @@ void ReadinessPresentation(HWND window, WindowState &state) {
   if (pending || state.closing) {
     for (int id : {UiProfiles, UiSaveSettings, UiRegister, UiCreate, UiImport, UiRenameLabel,
          UiInGameName, UiRenameInGameName, UiDuplicateProfile, UiRestoreSnapshot, UiVerifyRoots,
-         UiOpenSave, UiOpenDiagnostics}) EnableWindow(GetDlgItem(window, id), FALSE);
+         UiOpenSave, UiOpenDiagnostics, UiExportReport}) EnableWindow(GetDlgItem(window, id), FALSE);
   }
   InvalidateRect(GetDlgItem(window, UiPlay), nullptr, TRUE);
   InvalidateRect(GetDlgItem(window, UiCheckLaunch), nullptr, TRUE);
@@ -542,6 +554,7 @@ void Render(HWND window, WindowState &state, const UiRequest &draft) {
   EnableWindow(GetDlgItem(window, UiVsync), !state.model.running && !vsync);
   EnableWindow(GetDlgItem(window, UiOpenSave), !selected_root.empty());
   EnableWindow(GetDlgItem(window, UiOpenDiagnostics), !selected_root.empty());
+  EnableWindow(GetDlgItem(window, UiExportReport), !selected_root.empty() && !state.model.running);
   SetText(window, UiStatus, state.model.status);
   state.initialized = true;
   state.rendering = false;
@@ -977,6 +990,50 @@ void OpenOperation(HWND window, WindowState &owner, UiAction action) {
   }
 }
 
+void OpenExport(HWND window, WindowState &owner) {
+  if (owner.operation || owner.model.running || owner.check_worker.valid() || owner.closing || owner.dispatching) return;
+  const auto draft = Request(window, owner);
+  const auto selected = SelectedManagedRoot(owner, draft);
+  if (selected.empty() || draft.selected_profile_id != owner.model.library.selected_id) return;
+  owner.operation = diagnostic_export::CreateExportDialog(window, selected + L"\\diagnostics",
+      [window, owner_state=&owner, backend=owner.callback, draft](diagnostic_export::DialogAction action, const diagnostic_export::DialogRequest &fields) {
+        diagnostic_export::DialogResult failure;
+        failure.status = L"Export action failed. No report is approved; close and inspect local output before retrying.";
+        const auto alive = [&] {
+          return IsWindow(window) && reinterpret_cast<WindowState *>(GetWindowLongPtrW(window,GWLP_USERDATA))==owner_state;
+        };
+        UiRequest request = draft;
+        request.export_request = fields;
+        const auto mapped = action == diagnostic_export::DialogAction::Prepare ? UiAction::ExportPrepare :
+            action == diagnostic_export::DialogAction::Confirm ? UiAction::ExportConfirm : UiAction::ExportCancel;
+        // Retain a copy of the backend callback across reentrant owner close.
+        // Cancel may still release a pinned plan after the UI owner is gone.
+        if (!backend) return failure;
+        if (!alive()) {
+          if (mapped==UiAction::ExportCancel) { try { backend(mapped,request); } catch (...) {} }
+          return failure;
+        }
+        if (owner_state->dispatching || owner_state->check_worker.valid()) return failure;
+        owner_state->dispatching = true;
+        try {
+          auto model = backend(mapped,request);
+          if (!alive()) return failure;
+          owner_state->model = std::move(model);
+          owner_state->dispatching = false;
+          return owner_state->model.export_result;
+        } catch (...) {
+          if (alive()) owner_state->dispatching = false;
+          // Export cannot launch a game. Cancel releases a pinned preview; never
+          // retry a potentially partly completed publication automatically.
+          try {
+            auto model=backend(UiAction::ExportCancel,request);
+            if (alive()) owner_state->model=std::move(model);
+          } catch (...) {}
+          return failure;
+        }
+      }, owner.testing);
+}
+
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
   auto *state = reinterpret_cast<WindowState *>(GetWindowLongPtrW(window, GWLP_USERDATA));
   if (message == WM_NCCREATE) {
@@ -1041,6 +1098,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
           break;
         case UiOpenSave: Dispatch(window, *state, UiAction::OpenSave); break;
         case UiOpenDiagnostics: Dispatch(window, *state, UiAction::OpenDiagnostics); break;
+        case UiExportReport: OpenExport(window, *state); break;
         case UiRenameLabel: OpenOperation(window, *state, UiAction::RenameLabel); break;
         case UiRenameInGameName: Dispatch(window, *state, UiAction::RenameInGameName); break;
         case UiDuplicateProfile: OpenOperation(window, *state, UiAction::DuplicateProfile); break;
@@ -1049,6 +1107,14 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
       }
       return 0;
     }
+    case diagnostic_export::kExportDialogClosedMessage:
+      if (state->operation && !IsWindow(state->operation)) {
+        state->operation = nullptr;
+        // Modal actions do not save or reset the main window's Setup drafts.
+        const auto draft = Request(window, *state);
+        Render(window, *state, draft);
+      }
+      return 0;
     case WM_TIMER:
       if (wparam == kRefreshTimer) Dispatch(window, *state, UiAction::Refresh);
       if (wparam == kReadinessTimer) PollCheck(window, *state);
