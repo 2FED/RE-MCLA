@@ -53,9 +53,14 @@ std::atomic<int> logged{0};
 // to seconds (sub_821BDA90: lfs f0,4368(r9) with r9 = 0x82010000).
 constexpr uint32_t kMainTimer = 0x827D7500u;
 constexpr uint32_t kTicksToSeconds = 0x82011110u;
-// Raw steps above the game's own 0.1 s clamp are hitches (loading, pauses);
-// they pass through unchanged and restart the average.
+// Raw steps above the game's own 0.1 s clamp are hitches (loading, stutters).
+// The game drops the time above the clamp; up to kMaxHitchDebtSeconds of it is
+// kept as debt and repaid over the following updates, so short stutters during
+// races do not make the race clock fall behind real time (owner-measured 1.9 %
+// over a 3 minute race on 2026-10-28), while long loading pauses are not
+// replayed.
 constexpr double kHitchSeconds = 0.1;
+constexpr double kMaxHitchDebtSeconds = 1.0;
 
 // Updates alternate irregularly between 2 and 3 vblanks (33/50 ms). Applying
 // each measured interval directly makes per-frame motion and motion blur jump
@@ -69,9 +74,15 @@ constexpr double kHitchSeconds = 0.1;
 class StepSmoother {
  public:
   double Apply(double raw) {
-    if (!(raw > 0.0) || raw > kHitchSeconds) {
+    if (!(raw > 0.0)) {
       Reset();
       return raw;
+    }
+    if (raw > kHitchSeconds) {
+      // Apply what the game would clamp to anyway, and keep the rest (and the
+      // pending repayment) instead of losing it. The average is left as is.
+      debt_ = std::min(debt_ + (raw - kHitchSeconds), kMaxHitchDebtSeconds);
+      return kHitchSeconds;
     }
     average_ = has_average_ ? average_ + kAverageWeight * (raw - average_) : raw;
     has_average_ = true;
