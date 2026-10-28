@@ -1,8 +1,7 @@
 # M9-003 launcher frame-rate option (2026-10-28)
 
-**Status:** implemented on top of the M9-002 launcher, with tests passing.
-Staged as `private/l36`. Pending: the owner check with both modes (M9-002
-smoke can run on the same folder). Carries M8-006.
+**Status:** done. Owner check passed on 2026-10-28 with the `private/l36`
+launcher on a non-MAIN profile. Carries M8-006.
 
 ## Behaviour
 
@@ -73,6 +72,17 @@ No compiler warnings; ast-grep scan and rule tests pass.
 
 `private/l36`: the l34-s30 build (stock `mcla.exe` `A50E30C6...`, ticket
 unchanged, build fingerprint `0789DBB5...`) with launcher `D8E4C25D...`. Staging tests 63/0/0.
+
+## Owner check (2026-10-28)
+
+The owner used the `private/l36` launcher with the build folder `private/l34-s30/build`. That is the same build as `l36/build`; the fingerprint `0789DBB5...` is on the allowlist, so CHECK SETUP admitting it was correct. Profile main-bak, 720p. The session records:
+
+- **30 FPS** (18:02-18:11): receipt `timing stock`, no vblank override, guest vblank 60 Hz throughout, 28.1-29.9 fps per minute.
+- **Unlocked** (18:17): receipt `timing unlocked`, capability record `guest_vblank_hz 240`, tear-free present on, guest vblank 60 Hz then 240 Hz at 18:17:49 (45 s after start). Owner: over 30 FPS in gameplay.
+
+So the stock path and the runtime flag are confirmed on a real build. The SDK applies a command-line value for a cvar that registers later (the GPU plugin) when it registers; the launcher already relies on this for other GPU-plugin flags.
+
+After the check, the unlocked limits text was shortened to fit its two-line control (a new UI test measures the wrapped text; the first version clipped one line).
 
 ## Spark routing
 

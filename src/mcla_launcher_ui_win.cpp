@@ -289,7 +289,7 @@ void Controls(HWND window, WindowState &state) {
     if (index >= 0) SendMessageW(timing, CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(mode));
   }
   // The limits stay visible next to the choice, not only after a check.
-  Add(window, state, L"STATIC", L"", 0, UiTimingNote, 452, 401, 424, 34);
+  Add(window, state, L"STATIC", L"", 0, UiTimingNote, 452, 394, 424, 40);
   Add(window, state, L"STATIC", L"1080p: experimental 960 x 540 guest mode + 2x rendering. Build support is checked.",
       0, UiRenderTargetNote, 180, 434, 696, 24);
   button(UiOpenSave, L"Open save folder", 180, 460, 205);

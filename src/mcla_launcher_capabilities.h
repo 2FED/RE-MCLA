@@ -88,8 +88,7 @@ inline std::string StockTimingDescription() {
 // Visible limits next to the frame-rate choice; the same text for every build.
 inline std::string TimingLimitation(TimingMode timing) {
   if (timing == TimingMode::Unlocked)
-    return "Experimental. Menus over the city can run fast, heavy intersections drop to 30-40 FPS, "
-           "some lights flicker at night. Start Game checks build support.";
+    return "Experimental: fast menus over the city, 30-40 FPS at busy junctions, night light flicker.";
   return "Stock 30 FPS, the original pacing. Recommended.";
 }
 

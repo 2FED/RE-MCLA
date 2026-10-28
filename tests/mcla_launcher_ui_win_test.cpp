@@ -1294,6 +1294,27 @@ void TestTimingChoice() {
   }
   Check(Text(window, UiTimingNote).find(L"Experimental") != std::wstring::npos,
         "unlocked limits are explicit");
+  {
+    // The wrapped note must fit its own control (two lines), not spill into the
+    // render-target note below it.
+    const HWND note = GetDlgItem(window, UiTimingNote);
+    RECT client{}; GetClientRect(note, &client);
+    const HDC dc = GetDC(note);
+    Check(dc != nullptr, "timing note fit measures its own native control DC");
+    if (dc) {
+      const auto font = reinterpret_cast<HFONT>(SendMessageW(note, WM_GETFONT, 0, 0));
+      const auto old = SelectObject(dc, font);
+      const auto text = Text(window, UiTimingNote);
+      RECT needed{0, 0, client.right - client.left, 0};
+      DrawTextW(dc, text.c_str(), static_cast<int>(text.size()), &needed, DT_CALCRECT | DT_WORDBREAK);
+      Check(needed.bottom - needed.top <= client.bottom - client.top,
+            "unlocked limits wrap inside the note without clipping");
+      SelectObject(dc, old); ReleaseDC(note, dc);
+    }
+    RECT bounds{}, below{}, overlap{};
+    GetWindowRect(note, &bounds); GetWindowRect(GetDlgItem(window, UiRenderTargetNote), &below);
+    Check(!IntersectRect(&overlap, &bounds, &below), "timing note does not overlap the render-target note");
+  }
   // Win32 rejects an out-of-range index by removing selection, never selecting a mode.
   SendDlgItemMessageW(window, UiTiming, CB_SETCURSEL, static_cast<WPARAM>(-1), 0);
   Click(window, UiSaveSettings);
