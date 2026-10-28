@@ -20,6 +20,7 @@ enum class UiAction {
   ImportLegacy, Play, OpenSave, OpenDiagnostics, RenameLabel, RenameInGameName,
   DuplicateProfile, RestoreSnapshot, VerifyRoots, CheckLaunch,
   ExportPrepare, ExportConfirm, ExportCancel,
+  OpenReportFolder,
 };
 
 enum class LaunchReadiness { Unchecked, Ready, Blocked, Running };
@@ -45,6 +46,10 @@ struct UiState {
   // Explicit VerifyRoots failure contradicts any prior readiness approval.
   bool verification_failed = false;
   diagnostic_export::DialogResult export_result;
+  // Set after a session that recorded F10/crash packages (M9-005); the UI asks
+  // once whether to open the folder. Empty when nothing is waiting.
+  std::wstring report_folder;
+  std::wstring report_prompt;
 };
 
 struct UiRequest {
@@ -98,6 +103,11 @@ HWND CreateLauncherUiForTest(UiCallback callback);
 // keyboard input. Returns true only for a consumed Ctrl(+Shift)+Tab key-down.
 bool HandleLauncherNavigationKey(HWND window, UINT message, WPARAM key,
                                  bool control_down, bool shift_down);
+
+// Hidden fixtures only: answer the post-session report prompt without a dialog
+// and count how often it was shown. Ignored for production windows.
+void SetLauncherReportAnswerForTest(HWND window, bool open_folder);
+unsigned LauncherReportPromptsForTest(HWND window);
 
 // Deterministic clock only for hidden fixture windows; ignored in production.
 void SetLauncherClockForTest(HWND window, uint64_t monotonic_ms, uint64_t utc_seconds);

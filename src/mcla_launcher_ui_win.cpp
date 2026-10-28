@@ -31,6 +31,8 @@ struct WindowState {
   UINT dpi = 96;
   bool dispatching = false;
   bool testing = false;
+  bool test_report_answer = false;
+  unsigned test_report_prompts = 0;
   bool window_owned = false;
   bool initialized = false;
   bool rendering = false;
@@ -722,6 +724,14 @@ void Dispatch(HWND window, WindowState &state, UiAction action, const UiRequest 
     else state.model.status = L"No launcher backend is connected.";
     if (was_running && !state.model.running)
       InvalidateReadiness(state, L"Game session ended. CHECK SETUP before the next launch.");
+    // Post-session report prompt (M9-005): asked once, right after the game ends.
+    if (was_running && !state.model.running && !state.model.report_prompt.empty()) {
+      bool open = false;
+      if (state.testing) { ++state.test_report_prompts; open = state.test_report_answer; }
+      else open = MessageBoxW(window, state.model.report_prompt.c_str(), L"MCLA-R test reports",
+                              MB_YESNO | MB_ICONINFORMATION | MB_DEFBUTTON1) == IDYES;
+      if (open && state.callback) state.model = state.callback(UiAction::OpenReportFolder, request);
+    }
     if (action == UiAction::SaveSettings &&
         (state.model.build_root != request.build_root || state.model.game_root != request.game_root ||
          state.model.gpu_name != request.gpu_name || state.model.render_target != request.render_target ||
@@ -1254,6 +1264,17 @@ void EnableLauncherAutoChecksForTest(HWND window) {
   if (!state || !state->testing) return;
   state->auto_checks = true;
   PostMessageW(window, kAutoCheckMessage, 0, 0);
+}
+
+void SetLauncherReportAnswerForTest(HWND window, bool open_folder) {
+  auto *state = reinterpret_cast<WindowState *>(GetWindowLongPtrW(window, GWLP_USERDATA));
+  if (!state || !state->testing) return;
+  state->test_report_answer = open_folder;
+}
+
+unsigned LauncherReportPromptsForTest(HWND window) {
+  auto *state = reinterpret_cast<WindowState *>(GetWindowLongPtrW(window, GWLP_USERDATA));
+  return state && state->testing ? state->test_report_prompts : 0;
 }
 
 bool PollLauncherCheckForTest(HWND window) {

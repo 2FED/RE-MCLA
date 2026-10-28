@@ -156,6 +156,11 @@ int FakeChild(int argc, wchar_t **argv) {
       !field("fps_measured","false") || !field("settings_scope","resolved-launch-arguments") ||
       !receipt.contains("build") || !receipt.contains("game") ||
       !field("build",receipt.at("build")) || !field("game",receipt.at("game"))) return finish(94);
+  // One completed and one unfinished F10-style package for the report prompt.
+  const auto live = path(L"mcla_diagnostics_root") / L"live";
+  if (!CreateDirectoryW(live.c_str(), nullptr) ||
+      !CreateDirectoryW((live / L"live-fixture-1").c_str(), nullptr) ||
+      !CreateDirectoryW((live / L"live-fixture-2.partial").c_str(), nullptr)) return finish(96);
   if (!NewFile(path(L"user_data_root") / L"fixture-save.bin", "FIXTURE_SAVE_ONLY\n") ||
       !NewFile(cwd / L"fixture-ready.txt", "ROOTS_ENV_SETTINGS_SENTINEL_PASS\n")) return finish(90);
   const auto started = GetTickCount64();
@@ -962,6 +967,25 @@ int wmain(int argc, wchar_t **argv) {
   if (first.running()) { std::wcerr << final.status << L'\n'; return 1; }
   Check(!first.completion_failed(), "successful fixture reports no finalization failure");
   Check(Read(session / L"state.txt") == "complete\nexit 0\n", "complete session exact normal-exit receipt");
+  {
+    // M9-005 post-session report: only completed packages of this session.
+    const auto diagnostics = main_root / L"diagnostics" / session.filename();
+    const auto report = Read(diagnostics / L"report.txt");
+    Check(!final.report_folder.empty() &&
+          std::filesystem::equivalent(std::filesystem::path(final.report_folder), diagnostics),
+          "finished session with a package offers its own diagnostics folder");
+    Check(final.report_prompt.starts_with(L"1 report was recorded in this session."),
+          "prompt counts only the completed package");
+    Check(report.starts_with("MCLA-R TEST REPORT\n") && report.find("\nmode stock\n") != report.npos &&
+          report.find("\nrender_target 2560x1440\n") != report.npos &&
+          report.find("  live/live-fixture-1\n") != report.npos && report.find(".partial") == report.npos &&
+          report.find("\nexit_code 0\n") != report.npos,
+          "report.txt is prefilled with build facts and the package list");
+    const auto opened = first.Dispatch(UiAction::OpenReportFolder, {});
+    Check(opened.report_folder.empty() && opened.report_prompt.empty(), "opening the folder clears the prompt");
+    first.Dispatch(UiAction::OpenReportFolder, {});
+    Check(Read(diagnostics / L"report.txt") == report, "a second open neither rewrites nor duplicates the report");
+  }
   Check(Read(session / L"before-snapshot.txt") == "MCLA-SAVE-SNAPSHOT-V1\n" &&
       Read(session / L"after-snapshot.txt").find("F ") != std::string::npos,
       "before and after full-tree snapshot manifests retained");

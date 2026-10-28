@@ -319,6 +319,39 @@ void TestRunning() {
         "close while running neither stops nor relaunches child");
 }
 
+void TestSessionReportPrompt() {
+  // M9-005: the prompt appears once, when a running game ends with reports.
+  for (const bool open : {false, true}) {
+    Recorder recorder;
+    recorder.model.running = true;
+    InvisibleWindow window(recorder);
+    if (!window) return;
+    SetLauncherReportAnswerForTest(window, open);
+    SendMessageW(window, WM_TIMER, 1, 0);
+    Check(LauncherReportPromptsForTest(window) == 0, "no prompt while the game still runs");
+    recorder.model.running = false;
+    recorder.model.report_folder = L"D:/SyntheticSaves/MAIN/diagnostics/session";
+    recorder.model.report_prompt = L"2 reports were recorded in this session.";
+    const size_t before = recorder.calls.size();
+    SendMessageW(window, WM_TIMER, 1, 0);
+    Check(LauncherReportPromptsForTest(window) == 1, "game end with reports prompts exactly once");
+    const bool opened = recorder.calls.size() == before + 2 &&
+        recorder.calls.back().action == UiAction::OpenReportFolder;
+    Check(open ? opened : recorder.calls.size() == before + 1,
+          open ? "yes opens the report folder through the backend" : "no leaves the folder closed");
+    Click(window, UiPageSetup);
+    Click(window, UiPagePlay);
+    Check(LauncherReportPromptsForTest(window) == 1, "the prompt is not repeated on later actions");
+  }
+  Recorder quiet;
+  quiet.model.running = true;
+  InvisibleWindow window(quiet);
+  if (!window) return;
+  quiet.model.running = false;
+  SendMessageW(window, WM_TIMER, 1, 0);
+  Check(LauncherReportPromptsForTest(window) == 0, "a session without reports ends silently");
+}
+
 void TestMissingSelectionAndGpu() {
   Recorder recorder;
   recorder.model.library.selected_id = "4234567890abcdef1234567890abcdef";
@@ -1511,6 +1544,7 @@ int main() {
   Check(CheckedStockSettingsDescription(999).empty(),"unsupported target has no success description");
   TestInitialAndRequests();
   TestRunning();
+  TestSessionReportPrompt();
   TestMissingSelectionAndGpu();
   TestExceptions(false);
   TestExceptions(true);

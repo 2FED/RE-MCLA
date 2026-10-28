@@ -7,7 +7,7 @@ rules: [M9 priorities](../M9-priorities.md).
 | Part | State |
 |---|---|
 | Kill switch (V2 tickets) | Implemented and unit-tested; not published |
-| Post-session report prompt | Not started |
+| Post-session report prompt | Implemented and unit-tested; not yet in a tester build |
 | Fresh F10 image or explicit stale mark (KI-042) | Not started |
 | Diagnostics export with frame-pacing/CP/GPU summaries | Export exists (M9-002); summaries not started |
 | Allowlisted staging and sentinel audit | Not started |
@@ -57,3 +57,31 @@ Not done: nothing was published to `DebugBundle`. Every volunteer host hash
 must be listed there before testers go online, and each publication needs the
 owner's explicit yes. The volunteer `mcla.exe` must also be built with
 `MCLA_TEST_BUILD_EXPIRY=ON`, so the host checks as well as the launcher.
+
+## Post-session report prompt (2026-10-28)
+
+- When the launcher sees the game exit, it lists this session's completed
+  packages in `<profile>/diagnostics/<session>/live` and `/crash`. Unfinished
+  `.partial` packages and unexpected names are skipped; crashes come first.
+  Every session has its own diagnostics folder, so only this session counts.
+- If there are any, it writes `report.txt` into that folder at once. The file
+  holds the build fingerprint, mode, resolution, start and end UTC, exit code
+  and the package list, then four questions for the tester: what they were
+  doing, steps, what went wrong, what they expected. No paths, profile names
+  or hardware identifiers. It is written before any dialog, so it exists even
+  if the launcher is closed.
+- The launcher then asks once: `N reports were recorded in this session (k
+  crash). Open the folder now? Fill in report.txt there, then send the whole
+  folder to the owner by hand. Nothing is uploaded automatically.`
+  Yes opens the folder in Explorer.
+- This is simpler than the in-launcher form in the plan: the tester fills in
+  `report.txt` in a text editor instead. That is the owner decision as
+  relayed (open the dumps folder to prompt a bug report); a form can be added
+  if testers struggle.
+- Code: `src/mcla_session_report.h` (pure), controller `Poll` completion and
+  `OpenReportFolder`, and the prompt on the running-to-stopped transition in
+  the UI. Tests: `mcla_session_report_test` 17 checks. The controller fixture
+  writes a real package and checks `report.txt` content, the clearing and no
+  rewrite (343 checks). The UI checks prompt once, yes/no, and silence without
+  reports (971 checks). All 21 launcher, export and lease suites pass; ast-grep
+  is clean.

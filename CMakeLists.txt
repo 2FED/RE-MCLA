@@ -310,6 +310,8 @@ if(WIN32)
         target_include_directories(mcla_launcher_capabilities_test PRIVATE src)
         target_include_directories(mcla_launcher_import_policy_test PRIVATE src
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        add_executable(mcla_session_report_test EXCLUDE_FROM_ALL tests/mcla_session_report_test.cpp)
+        target_include_directories(mcla_session_report_test PRIVATE src)
         add_executable(mcla_diagnostic_export_policy_test EXCLUDE_FROM_ALL tests/mcla_diagnostic_export_policy_test.cpp)
         target_include_directories(mcla_diagnostic_export_policy_test PRIVATE src
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)

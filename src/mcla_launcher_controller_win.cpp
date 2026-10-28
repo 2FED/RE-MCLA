@@ -10,6 +10,7 @@
 #include "mcla_managed_config_policy.h"
 #include "mcla_build_lease_runtime_win.h"
 #include "mcla_portable_adapter_policy.h"
+#include "mcla_session_report.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <dxgi1_6.h>
@@ -39,6 +40,17 @@ bool StrictAncestor(std::wstring_view parent,std::wstring_view child) {
   return parent.size()<child.size() && child[parent.size()]==L'\\' &&
       CompareStringOrdinal(parent.data(),static_cast<int>(parent.size()),
           child.data(),static_cast<int>(parent.size()),TRUE)==CSTR_EQUAL;
+}
+uint64_t UtcSeconds() {
+  FILETIME ft{}; GetSystemTimeAsFileTime(&ft);
+  return ((uint64_t{ft.dwHighDateTime}<<32)|ft.dwLowDateTime)/10000000-11644473600ULL;
+}
+// Completed package directory names directly below <session diagnostics>/<kind>.
+std::vector<std::wstring> PackageNames(const std::wstring &root,std::wstring_view kind) {
+  std::vector<std::wstring> names; std::error_code ec;
+  for(std::filesystem::directory_iterator it(std::filesystem::path(root)/kind,ec),end; !ec && it!=end; it.increment(ec))
+    if(it->is_directory(ec) && !it->is_symlink(ec)) names.push_back(it->path().filename().wstring());
+  return names;
 }
 std::expected<void,std::wstring> Text(const fs::DirectoryGuard &dir, std::wstring_view name, std::string_view value) {
   return fs::AtomicWrite(dir,name,{reinterpret_cast<const uint8_t *>(value.data()),value.size()});
@@ -204,9 +216,14 @@ struct LauncherController::State {
     VerifiedGame verified_game;
     std::vector<fs::DirectoryGuard> children;
     std::string profile_id;
+    std::wstring diagnostics_path;
+    report::Context report_context;
     OwnedProcess process;
   };
   std::optional<Session> session;
+  // Reports from the last finished session, until the tester opens the folder.
+  struct PendingReport { std::wstring folder, prompt; };
+  std::optional<PendingReport> pending_report;
   bool completion_failed=false;
   std::optional<diagnostic_export::ExportPlan> export_plan;
   diagnostic_export::DialogResult export_result;
@@ -637,6 +654,7 @@ struct LauncherController::State {
     ui.gpu_name=Wide(p.gpu_name); ui.render_target=p.render_target;
     ui.vsync=p.vsync; ui.fullscreen=p.fullscreen; ui.timing=p.timing; ui.running=session.has_value(); ui.status=status;
     ui.export_result=export_result;
+    if(pending_report) { ui.report_folder=pending_report->folder; ui.report_prompt=pending_report->prompt; }
     if(session) {
       ui.readiness=LaunchReadiness::Running;
       ui.readiness_reason=L"Game session owns this profile";
@@ -775,6 +793,9 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
       "\ncapability_policy "+std::to_string(kCapabilityPolicyVersion)+"\ncapability_record capabilities.txt\n");
   if(!provenance) return provenance;
   std::vector<fs::DirectoryGuard> children;
+  const auto diagnostics_path=diagnostics->path();
+  const report::Context report_context{build_hash,std::string(capability->timing==TimingMode::Unlocked?kUnlockedTimingKey:kStockTimingKey),
+      std::to_string(target.width)+"x"+std::to_string(target.height),UtcSeconds()};
   for(auto &child:support->directories) children.push_back(std::move(*child));
   children.push_back(std::move(*before)); children.push_back(std::move(*diagnostics)); children.push_back(std::move(*cache));
   state=Text(*directory,L"state.txt","launching\n"); if(!state) return state;
@@ -782,7 +803,8 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   if(!process) return std::unexpected(process.error());
   // From here ownership cannot be lost on a failed receipt write.
   session.emplace(Session{std::move(*profile),std::move(*user),std::move(*directory),std::move(*build_root),
-      std::move(*game),std::move(*writer),std::move(*build),std::move(*verified_game),std::move(children),entry->id,std::move(*process)});
+      std::move(*game),std::move(*writer),std::move(*build),std::move(*verified_game),std::move(children),entry->id,
+      diagnostics_path,report_context,std::move(*process)});
   auto running=Text(session->directory,L"state.txt","running\npid "+std::to_string(session->process.ProcessId())+"\n");
   status=running?L"Game running. This profile is locked across builds. Closing this window leaves the game running.":
       L"Game running, but session receipt update failed. Profile lock remains held; finish the game normally.";
@@ -806,6 +828,18 @@ std::expected<void,std::wstring> LauncherController::State::Poll() {
   status=result?L"Session finished; before/after saves retained. Exit code "+std::to_wstring(*polled->exit_code)+L" (not a gameplay PASS).":
       L"Game stopped, but final snapshot failed. Session preserved for review; automatic relaunch blocked.";
   completion_failed=!result || *polled->exit_code!=0;
+  // Post-session report prompt (M9-005): only this session's completed packages.
+  pending_report.reset();
+  const auto packages=report::SessionPackages(PackageNames(session->diagnostics_path,L"live"),
+                                              PackageNames(session->diagnostics_path,L"crash"));
+  if(!packages.empty()) {
+    auto context=session->report_context;
+    context.ended_utc=UtcSeconds(); context.exit_code=static_cast<int64_t>(*polled->exit_code);
+    auto folder=fs::OpenDirectory(session->diagnostics_path);
+    if(folder && Text(*folder,report::kReportFile,report::ReportText(context,packages)))
+      pending_report=PendingReport{folder->path(),report::PromptText(packages)};
+    else status+=L" Reports were recorded, but report.txt could not be written; use Open diagnostics.";
+  }
   session.reset();
   return result;
 }
@@ -882,6 +916,17 @@ UiState LauncherController::Dispatch(UiAction action,const UiRequest &request) {
       break;
     case UiAction::Play:
       result=s.Settings(request); if(result) result=s.Start(); break;
+    case UiAction::OpenReportFolder: {
+      if(!s.pending_report) { result=std::unexpected(L"No session reports are waiting"); break; }
+      auto dir=fs::OpenDirectory(s.pending_report->folder);
+      if(!dir) { result=std::unexpected(dir.error()); break; }
+      s.pending_report.reset();
+#ifndef MCLA_LAUNCHER_CONTROLLER_TESTING
+      if(reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr,L"open",dir->path().c_str(),nullptr,nullptr,SW_SHOWNORMAL))<=32)
+        result=std::unexpected(L"Cannot open the report folder");
+#endif
+      break;
+    }
     case UiAction::OpenSave: case UiAction::OpenDiagnostics: {
       const auto *entry=Selected(s.store.preferences());
       if(!entry) { result=std::unexpected(L"No profile selected"); break; }
