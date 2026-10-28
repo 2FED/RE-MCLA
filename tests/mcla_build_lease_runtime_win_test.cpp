@@ -86,6 +86,9 @@ struct SigningKey {
   std::string Ticket(uint64_t when = created) const {
     return Sign("MCLA-TEST-BUILD-V1\n" + hash_a + " " + std::to_string(when) + '\n');
   }
+  std::string KillSwitchTicket(uint64_t when = created) const {
+    return Sign("MCLA-TEST-BUILD-V2\n" + hash_a + " " + std::to_string(when) + '\n');
+  }
   std::string Lease(uint64_t expiry, uint64_t issued = created, std::string_view host = hash_a) const {
     return Sign("MCLA-TEST-LEASES-V1\n" + std::to_string(issued) + '\n' + std::string(host) + " " + std::to_string(expiry) + '\n');
   }
@@ -279,6 +282,82 @@ int main() {
         &read_only, online, false, [] { return extension_end; }, true);
     Check(!result && Read(read_only) == proof && Children(read_only) == ro_children,
           "read-only rechecks signed expiry after fetch without mutation");
+    {
+      // M9-005 kill switch (V2 ticket). Offline window 3 days from creation or
+      // 24 h after a listing online check; online list authoritative.
+      const std::wstring ks_name = std::wstring(64, L'A') + L".killswitch";
+      const auto ks_read = [&](const fs::DirectoryGuard &guard) -> std::string {
+        auto bytes = fs::ReadFile(guard, ks_name, kMaximumEnvelopeBytes + 128);
+        return bytes ? std::string(bytes->begin(), bytes->end()) : std::string();
+      };
+      const uint64_t offline_end = created + kKillSwitchOfflineSeconds;
+      const auto ks = signer.KillSwitchTicket();
+      const auto listed = signer.Lease(created + 30 * 86400, created);
+      const auto unlisted = signer.Lease(created + 30 * 86400, created, hash_b);
+      const auto lapsed = signer.Lease(created + 60, created);
+      unsigned ks_fetches = 0;
+      const auto ks_offline = [&]() -> Response { ++ks_fetches; return std::unexpected(L"fixture offline"); };
+      const auto ks_answer = [&](const std::string &body) {
+        return [&ks_fetches, body]() -> Response { ++ks_fetches; return body; };
+      };
+      auto cache = NewCache(root, L"killswitch");
+      auto r = CheckLeaseForTest(ks, hash_a, signer.public_blob, created, &cache, ks_offline);
+      Check(r && r->expires_utc == offline_end && !r->extended, "V2 offline start admitted for exactly 3 days");
+      Check(ks_read(cache).empty(), "offline V2 attempt writes no cache record");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, offline_end - 1, &cache, ks_offline);
+      Check(r.has_value(), "last offline second admitted");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, offline_end, &cache, ks_offline);
+      Check(!r && r.error().starts_with(L"BUILD CHECK NEEDED"), "after 3 days offline, a check is required");
+      Check(!CheckLeaseForTest(ks, hash_a, signer.public_blob, offline_end, nullptr, ks_offline),
+            "V2 never falls back to the 14-day V1 grace");
+
+      const uint64_t t = offline_end + 100;
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t, &cache, ks_answer(listed));
+      Check(r && r->expires_utc == t + kKillSwitchCheckSeconds && r->extended,
+            "listed online check admits and allows 24 h offline");
+      Check(ks_read(cache) == "MCLA-KILLSWITCH-CACHE-V1\nchecked " + std::to_string(t) + "\n" + listed,
+            "cache records the check time and exact signed list");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + kKillSwitchCheckSeconds - 1, &cache, ks_offline);
+      Check(r.has_value(), "offline start within 24 h of the listed check");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + kKillSwitchCheckSeconds, &cache, ks_offline);
+      Check(!r && r.error().starts_with(L"BUILD CHECK NEEDED"), "24 h after the check, offline start stops");
+      const auto before = ks_fetches;
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + 60, &cache, ks_offline, true);
+      Check(r && ks_fetches == before, "host after a fresh launcher check uses the cache, no second request");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + 60, &cache, ks_answer("not a signed list"));
+      Check(r && ks_read(cache).find("checked " + std::to_string(t)) != std::string::npos,
+            "untrusted response neither revokes nor rewrites the cache");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + 60, &cache, ks_answer(untrusted.Lease(created + 30 * 86400, created, hash_b)));
+      Check(r.has_value(), "list signed by another key cannot revoke");
+
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + 120, &cache, ks_answer(unlisted));
+      Check(!r && r.error().find(L"withdrawn") != std::wstring::npos, "verified list without the host refuses");
+      Check(ks_read(cache) == "MCLA-KILLSWITCH-CACHE-V1\nrevoked " + std::to_string(t + 120) + "\n",
+            "withdrawal replaces the cached grant with a revocation record");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + 180, &cache, ks_offline);
+      Check(!r && r.error().find(L"withdrawn") != std::wstring::npos, "revoked build stays refused offline");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + 180, &cache, ks_offline, true);
+      Check(!r, "prefer-cached host cannot reuse a revoked record");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t + 240, &cache, ks_answer(listed));
+      Check(r && ks_read(cache).starts_with("MCLA-KILLSWITCH-CACHE-V1\nchecked "), "listing the host again restores it");
+
+      auto young = NewCache(root, L"killswitch-young");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, created + 10, &young, ks_answer(unlisted));
+      Check(!r, "online absence revokes even inside the 3-day window");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, created + 20, &young, ks_offline);
+      Check(!r, "a withdrawn build does not restart offline inside the 3-day window");
+      auto lapsed_cache = NewCache(root, L"killswitch-lapsed");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, created + 120, &lapsed_cache, ks_answer(lapsed));
+      Check(!r && ks_read(lapsed_cache).find("revoked") != std::string::npos,
+            "listed grant past its valid_until is treated as withdrawn");
+      auto read_only_ks = NewCache(root, L"killswitch-readonly");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, created, &read_only_ks, ks_answer(unlisted),
+                            false, {}, true);
+      Check(!r && ks_read(read_only_ks).empty(), "read-only check refuses without writing a record");
+      r = CheckLeaseForTest(ks, hash_a, signer.public_blob, t, &cache, ks_answer(listed), false,
+                            [&] { return t - 1; });
+      Check(!r && r.error().find(L"clock") != std::wstring::npos, "backwards clock during the check stops the launch");
+    }
     std::cout << "Build lease runtime: " << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
   } catch (const std::exception &error) {

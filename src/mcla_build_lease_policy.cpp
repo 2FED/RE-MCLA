@@ -14,6 +14,8 @@
 namespace mcla::lease {
 namespace {
 constexpr std::string_view kTicketHeader = "MCLA-TEST-BUILD-V1\n";
+// Same row as V1; the schema alone selects kill-switch admission (M9-005).
+constexpr std::string_view kKillSwitchTicketHeader = "MCLA-TEST-BUILD-V2\n";
 constexpr std::string_view kLeasesHeader = "MCLA-TEST-LEASES-V1\n";
 constexpr std::string_view kSignatureMarker = "--SIGNATURE--\n";
 struct Algorithm {
@@ -146,13 +148,15 @@ std::expected<Ticket, std::wstring> ParseTicket(
   auto authenticated = AuthenticatedPayload(envelope, public_key);
   if (!authenticated) return std::unexpected(authenticated.error());
   auto payload = *authenticated;
-  if (!payload.starts_with(kTicketHeader)) return std::unexpected(L"Malformed build ticket: unknown schema");
-  payload.remove_prefix(kTicketHeader.size());
+  const bool kill_switch = payload.starts_with(kKillSwitchTicketHeader);
+  if (!kill_switch && !payload.starts_with(kTicketHeader))
+    return std::unexpected(L"Malformed build ticket: unknown schema");
+  payload.remove_prefix(kill_switch ? kKillSwitchTicketHeader.size() : kTicketHeader.size());
   auto line = Line(payload);
   if (!line || !payload.empty()) return std::unexpected(L"Malformed build ticket: exactly one row required");
   auto row = Row(*line);
   if (!row) return std::unexpected(row.error());
-  return Ticket{std::move(row->host_sha256), row->valid_until};
+  return Ticket{std::move(row->host_sha256), row->valid_until, kill_switch};
 }
 std::expected<Leases, std::wstring> ParseLeases(
     std::string_view envelope, std::span<const uint8_t> public_key) {
@@ -181,6 +185,8 @@ std::expected<Leases, std::wstring> ParseLeases(
 std::expected<uint64_t, std::wstring> Evaluate(
     const Ticket &ticket, std::string_view actual_hash, uint64_t now,
     const std::optional<Leases> &leases) {
+  // A V2 ticket must never fall back to the 14-day V1 allowance.
+  if (ticket.kill_switch) return std::unexpected(L"Kill-switch build ticket requires kill-switch admission");
   if (!HashValid(ticket.host_sha256) || !DateValid(ticket.created_utc) || !HashValid(actual_hash))
     return std::unexpected(L"Malformed build ticket or measured host hash");
   if (ticket.host_sha256 != actual_hash) return std::unexpected(L"Build ticket does not match the measured host");
@@ -196,5 +202,42 @@ std::expected<uint64_t, std::wstring> Evaluate(
   }
   if (now >= expiry) return std::unexpected(L"BUILD EXPIRED: obtain a newer test build or a signed extension.");
   return expiry;
+}
+std::expected<KillSwitchDecision, std::wstring> EvaluateKillSwitch(
+    const Ticket &ticket, std::string_view actual_hash, uint64_t now,
+    const std::optional<Leases> &online, const std::optional<CachedCheck> &cached, bool revoked) {
+  if (!ticket.kill_switch) return std::unexpected(L"Kill-switch admission requires a V2 build ticket");
+  if (!HashValid(ticket.host_sha256) || !DateValid(ticket.created_utc) || !HashValid(actual_hash))
+    return std::unexpected(L"Malformed build ticket or measured host hash");
+  if (ticket.host_sha256 != actual_hash) return std::unexpected(L"Build ticket does not match the measured host");
+  if (!DateValid(now)) return std::unexpected(L"Clock error: current UTC is outside the admitted range");
+  if (now < ticket.created_utc) return std::unexpected(L"Clock error: current UTC precedes build creation");
+  const auto listed = [&](const Leases &leases) -> const Grant * {
+    for (const auto &grant : leases.grants)
+      if (grant.host_sha256 == actual_hash) return &grant;
+    return nullptr;
+  };
+  // A verified online list is authoritative. A malformed or future-issued list
+  // is treated as no answer: it can neither revoke nor extend.
+  if (online && ModelValid(*online) && !(online->issued_utc > now && online->issued_utc - now > 300)) {
+    const auto *grant = listed(*online);
+    if (grant && grant->valid_until > now)
+      return KillSwitchDecision{true, std::min(now + kKillSwitchCheckSeconds, grant->valid_until),
+                                KillSwitchCache::Refresh, {}};
+    return KillSwitchDecision{false, 0, KillSwitchCache::Revoke,
+        L"This test build was withdrawn. Your saves are unchanged. Get the current build from the owner."};
+  }
+  if (revoked)
+    return KillSwitchDecision{false, 0, KillSwitchCache::Keep,
+        L"This test build was withdrawn. Your saves are unchanged. Get the current build from the owner."};
+  uint64_t expiry = ticket.created_utc + kKillSwitchOfflineSeconds;
+  if (cached && ModelValid(cached->leases) && DateValid(cached->checked_utc) && cached->checked_utc <= now) {
+    const auto *grant = listed(cached->leases);
+    if (grant) expiry = std::max(expiry, std::min(cached->checked_utc + kKillSwitchCheckSeconds, grant->valid_until));
+  }
+  if (now >= expiry)
+    return KillSwitchDecision{false, 0, KillSwitchCache::Keep,
+        L"BUILD CHECK NEEDED - connect to the internet once and start again. Your saves are unchanged."};
+  return KillSwitchDecision{true, expiry, KillSwitchCache::Keep, {}};
 }
 } // namespace mcla::lease

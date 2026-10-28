@@ -36,6 +36,40 @@ failure neither expires a still-valid local allowance early nor unlocks an
 expired build. UTC is checked again after the request. A future creation time or
 backwards clock movement during admission is rejected.
 
+## Kill-switch builds (V2 tickets, M9-005)
+
+Volunteer builds are signed with `New-MclaTestBuildTicket.ps1 -KillSwitch`,
+which writes a `MCLA-TEST-BUILD-V2` ticket with the same row as V1. The schema
+alone selects these rules, and a V2 ticket never falls back to the 14-day V1
+allowance. Owner decisions 2026-10-28 ([M9 priorities](M9-priorities.md)):
+
+- **Online check is authoritative.** If `active-builds.txt` downloads and its
+  signature verifies, a host listed with `valid_until` in the future may start.
+  A host that is missing or past its `valid_until` is refused with "This test
+  build was withdrawn". Its cached check is replaced by a local `revoked`
+  record, so the build also stays refused offline, even inside its first
+  3 days. A later list that names the host again restores it.
+- **Offline start:** allowed while the build is less than 3 days old (signed
+  creation time), or within 24 hours of the last online check that listed it.
+  The 24-hour window never exceeds that grant's `valid_until`.
+- **Network failure, timeout, a malformed list, a list signed by another key or
+  one issued more than 300 seconds in the future** never revoke and never
+  extend: only the offline rule applies.
+- Every listing check rewrites the cache. The record is
+  `%LOCALAPPDATA%\MCLA-R-TestLeaseCache-v1\<host>.killswitch` and holds the
+  local check time plus the exact signed list. The managed host follows a
+  check younger than 24 hours instead of sending a second request.
+- Expiry or withdrawal never stops a running game and never touches saves.
+  Refusal messages say saves are unchanged.
+
+Limits as before: the local clock and the unsigned check time in the cache are
+trusted; clock rollback and patched binaries are not defended. This is a
+freshness and withdrawal switch, not DRM.
+
+Publishing: every volunteer host hash must be listed in `active-builds.txt` on
+`DebugBundle` before testers go online, or the build is refused. Publishing that
+file needs the owner's explicit approval each time; nothing is pushed from
+the agent without it.
 ## Maintainer procedure
 
 Signing scripts require Windows PowerShell 7.1 or later with .NET 5 or later.

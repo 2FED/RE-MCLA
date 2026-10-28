@@ -140,7 +140,7 @@ try {
     if ($ticketStream.Read($ticketBytes,0,$ticketBytes.Length) -ne $ticketBytes.Length) { throw 'Ticket truncated.' }
     $ticketStream.Position=0
     $ticketText=[Text.Encoding]::ASCII.GetString($ticketBytes)
-    if ($ticketText -cnotmatch '\AMCLA-TEST-BUILD-V1\n([0-9A-F]{64}) ([1-9][0-9]{9})\n--SIGNATURE--\n[0-9A-F]{512}\n\z' -or
+    if ($ticketText -cnotmatch '\AMCLA-TEST-BUILD-V[12]\n([0-9A-F]{64}) ([1-9][0-9]{9})\n--SIGNATURE--\n[0-9A-F]{512}\n\z' -or
         $Matches[1] -cne $pinned['mcla.exe'].Sha256) { throw 'Test-build ticket does not match the staged host.' }
     New-Item -ItemType Directory -Path $target -ErrorAction Stop | Out-Null
     $bin = Join-Path $target 'build'

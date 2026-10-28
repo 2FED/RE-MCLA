@@ -72,7 +72,7 @@ function New-MclaTestBuildSignedEnvelope([Security.Cryptography.RSA]$Signer, [st
         throw 'Signing payload must be LF-terminated ASCII without carriage returns.'
     }
     $lines = $Payload.Split([char]10)
-    if ($lines[0] -ceq 'MCLA-TEST-BUILD-V1') {
+    if ($lines[0] -ceq 'MCLA-TEST-BUILD-V1' -or $lines[0] -ceq 'MCLA-TEST-BUILD-V2') {
         if ($lines.Count -ne 3 -or $lines[1] -cnotmatch '\A([0-9A-F]{64}) ([1-9][0-9]{9})\z') {
             throw 'Noncanonical ticket signing payload.'
         }
@@ -99,10 +99,12 @@ function New-MclaTestBuildSignedEnvelope([Security.Cryptography.RSA]$Signer, [st
     return $envelope
 }
 
-function New-MclaTestBuildTicketEnvelope([Security.Cryptography.RSA]$Signer, [string]$HostSha256, [string]$CreatedUtc) {
+# -KillSwitch issues a V2 ticket: 3-day offline start, online list authoritative (M9-005).
+function New-MclaTestBuildTicketEnvelope([Security.Cryptography.RSA]$Signer, [string]$HostSha256, [string]$CreatedUtc, [switch]$KillSwitch) {
     Assert-MclaTestBuildHash $HostSha256
     $created = ConvertTo-MclaTestBuildUtc $CreatedUtc
-    return New-MclaTestBuildSignedEnvelope $Signer ("MCLA-TEST-BUILD-V1`n" + $HostSha256 + ' ' + $created + "`n")
+    $schema = if ($KillSwitch) { 'MCLA-TEST-BUILD-V2' } else { 'MCLA-TEST-BUILD-V1' }
+    return New-MclaTestBuildSignedEnvelope $Signer ($schema + "`n" + $HostSha256 + ' ' + $created + "`n")
 }
 
 function New-MclaTestBuildLeaseEnvelope([Security.Cryptography.RSA]$Signer, [string]$EntriesJson, [string]$IssuedUtc) {

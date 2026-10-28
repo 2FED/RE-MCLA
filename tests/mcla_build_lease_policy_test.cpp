@@ -139,7 +139,7 @@ int main() {
     }
     for (const auto &bad_hash : {std::string(63, 'A'), std::string(65, 'A'), std::string(64, 'a'), std::string(64, 'G')})
       Check(!ParseTicket(signer.Sign(TicketPayload(bad_hash)), signer.public_blob), "signed invalid host hash rejected");
-    for (const auto &bad_payload : {std::string("MCLA-TEST-BUILD-V2\n") + hash_a + " 1893456000\n",
+    for (const auto &bad_payload : {std::string("MCLA-TEST-BUILD-V3\n") + hash_a + " 1893456000\n",
         TicketPayload() + '\n', TicketPayload() + hash_b + " 1893456000\n", TicketPayload(hash_a, " 1893456000"),
         TicketPayload(hash_a, "1893456000\r"), TicketPayload(hash_a, "1893456000") + std::string(1, char(0xFF))})
       Check(!ParseTicket(signer.Sign(bad_payload), signer.public_blob), "signed noncanonical ticket grammar rejected");
@@ -186,7 +186,52 @@ int main() {
     Check(hashed && *hashed == "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", "SHA256 utility known vector");
     const auto empty_hash = Sha256({});
     Check(empty_hash && *empty_hash == "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855", "SHA256 empty vector");
-    std::cout << "Build lease policy: " << checks << " checks, " << failures << " failures\n";
+    {
+      // M9-005 kill switch: V2 ticket schema and pure admission matrix.
+      const auto v2 = ParseTicket(signer.Sign(std::string("MCLA-TEST-BUILD-V2\n") + hash_a + " 1893456000\n"), signer.public_blob);
+      Check(v2 && v2->kill_switch && v2->created_utc == 1893456000, "V2 ticket parses as kill-switch build");
+      const auto v1 = ParseTicket(signer.Sign(TicketPayload(hash_a, "1893456000")), signer.public_blob);
+      Check(v1 && !v1->kill_switch, "V1 ticket keeps the 14-day policy");
+      const Ticket ks{hash_a, created, true};
+      Check(!Evaluate(ks, hash_a, created), "V2 ticket never falls back to the V1 grace");
+      Check(!EvaluateKillSwitch(ticket, hash_a, created, std::nullopt, std::nullopt, false), "V1 ticket rejected by kill-switch admission");
+      const uint64_t window = created + kKillSwitchOfflineSeconds;
+      const Leases listed{created, {{hash_a, created + 30 * 86400}}}, unlisted{created, {{hash_b, created + 30 * 86400}}};
+      auto d = EvaluateKillSwitch(ks, hash_a, created, std::nullopt, std::nullopt, false);
+      Check(d && d->allowed && d->expires_utc == window && d->cache == KillSwitchCache::Keep, "offline: 3 days from creation");
+      d = EvaluateKillSwitch(ks, hash_a, window, std::nullopt, std::nullopt, false);
+      Check(d && !d->allowed && d->cache == KillSwitchCache::Keep, "offline after 3 days refused, nothing revoked");
+      d = EvaluateKillSwitch(ks, hash_a, window + 10, listed, std::nullopt, false);
+      Check(d && d->allowed && d->expires_utc == window + 10 + kKillSwitchCheckSeconds && d->cache == KillSwitchCache::Refresh,
+            "online listed: admitted, 24 h cache refreshed");
+      d = EvaluateKillSwitch(ks, hash_a, created + 10, unlisted, std::nullopt, false);
+      Check(d && !d->allowed && d->cache == KillSwitchCache::Revoke, "online unlisted: refused and revoked inside 3 days");
+      d = EvaluateKillSwitch(ks, hash_a, created + 10, Leases{created, {{hash_a, created + 5}}}, std::nullopt, false);
+      Check(d && !d->allowed && d->cache == KillSwitchCache::Revoke, "listed grant past valid_until is withdrawn");
+      d = EvaluateKillSwitch(ks, hash_a, created + 10, Leases{created + 100000, {}}, std::nullopt, false);
+      Check(d && d->allowed && d->cache == KillSwitchCache::Keep, "future-issued list is no answer: neither revokes nor extends");
+      d = EvaluateKillSwitch(ks, hash_a, created + 10, Leases{0, {}}, std::nullopt, false);
+      Check(d && d->allowed && d->cache == KillSwitchCache::Keep, "malformed list model is no answer");
+      const CachedCheck check{listed, window + 10};
+      d = EvaluateKillSwitch(ks, hash_a, window + 10 + kKillSwitchCheckSeconds - 1, std::nullopt, check, false);
+      Check(d && d->allowed, "offline within 24 h of the listing check");
+      d = EvaluateKillSwitch(ks, hash_a, window + 10 + kKillSwitchCheckSeconds, std::nullopt, check, false);
+      Check(d && !d->allowed, "offline 24 h after the check refused");
+      d = EvaluateKillSwitch(ks, hash_a, created + 60, std::nullopt, CachedCheck{Leases{created, {{hash_a, created + 120}}}, created + 50}, false);
+      Check(d && d->allowed && d->expires_utc == window, "cached grant cannot shorten the creation window");
+      d = EvaluateKillSwitch(ks, hash_a, window + 20, std::nullopt, CachedCheck{Leases{created, {{hash_a, window + 30}}}, window + 10}, false);
+      Check(d && d->allowed && d->expires_utc == window + 30, "cache window capped by the grant's valid_until");
+      d = EvaluateKillSwitch(ks, hash_a, window + 5, std::nullopt, CachedCheck{listed, window + 10}, false);
+      Check(d && d->allowed == false, "check time after now (clock rollback) gives no cached window");
+      d = EvaluateKillSwitch(ks, hash_a, window + 20, std::nullopt, CachedCheck{unlisted, window + 10}, false);
+      Check(d && !d->allowed, "cached list without the host gives no window");
+      d = EvaluateKillSwitch(ks, hash_a, created + 10, std::nullopt, std::nullopt, true);
+      Check(d && !d->allowed && d->reason.find(L"withdrawn") != std::wstring::npos, "revoked stays refused offline inside 3 days");
+      d = EvaluateKillSwitch(ks, hash_a, created + 10, listed, std::nullopt, true);
+      Check(d && d->allowed && d->cache == KillSwitchCache::Refresh, "a later listing restores a revoked build");
+      Check(!EvaluateKillSwitch(ks, hash_b, created, std::nullopt, std::nullopt, false), "wrong host rejected");
+      Check(!EvaluateKillSwitch(ks, hash_a, created - 1, std::nullopt, std::nullopt, false), "clock before creation rejected");
+    }    std::cout << "Build lease policy: " << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
   } catch (const std::exception &error) {
     std::cerr << "In-memory lease fixture error: " << error.what() << '\n';
