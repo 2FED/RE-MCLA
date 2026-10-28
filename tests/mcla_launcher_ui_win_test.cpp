@@ -582,9 +582,9 @@ void TestConfigurationCategorySummary() {
   // These three IDs are appended after the existing stable export ID. Keep
   // tests compilable before the production header/UI lands to observe RED.
   const std::pair<int,const wchar_t *> summaries[] = {
-      {UiExportReport + 1,L"Compatibility: fixes come with the selected build; no gameplay-assist switches."},
-      {UiExportReport + 2,L"Accessibility: no launcher overrides; use the game's own options."},
-      {UiExportReport + 3,L"Cheats: no launcher controls or cheat arguments."}};
+      {UiExportReport + 1,L"Fixes come with the selected build. Frame rate (30 / Unlocked) is on the Play page."},
+      {UiExportReport + 2,L"No launcher overrides; use the game's own options."},
+      {UiExportReport + 3,L"No launcher controls or cheat arguments."}};
   Recorder recorder;
   InvisibleWindow window(recorder);
   if (!window) return;
@@ -620,6 +620,9 @@ void TestConfigurationCategorySummary() {
               "complete category caption fits actual font and native client bounds without wrapping or clipping");
         SelectObject(dc,old); ReleaseDC(control,dc);
       }
+      RECT value_column{}; GetWindowRect(GetDlgItem(window,UiBuildRoot),&value_column);
+      Check(bounds.left==value_column.left,
+            "category value is a separate row aligned with the form's value column (M9-004)");
       RECT main_client{}; GetClientRect(window,&main_client);
       RECT local=bounds; MapWindowPoints(nullptr,window,reinterpret_cast<POINT *>(&local),2);
       Check(local.left>=0 && local.top>=0 && local.right<=main_client.right && local.bottom<=main_client.bottom,

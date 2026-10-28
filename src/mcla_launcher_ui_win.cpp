@@ -328,15 +328,19 @@ void Controls(HWND window, WindowState &state) {
   label(L"Verify only checks identity. No save or launch.\nTyped folders stay while you import or switch profiles.",
         436, 415, 440, 40);
   // Read-only category boundaries, not switches for absent gameplay features.
-  // Keep ordinary display/profile actions on their existing pages.
+  // One label|value row per category, aligned with the form fields above, so
+  // the three categories read as separate (M9-004 / M8-007).
+  label(L"Compatibility", 24, 462, 145, 20);
   Add(window, state, L"STATIC",
-      L"Compatibility: fixes come with the selected build; no gameplay-assist switches.",
-      0, UiCompatibilitySummary, 24, 462, 852, 20);
+      L"Fixes come with the selected build. Frame rate (30 / Unlocked) is on the Play page.",
+      0, UiCompatibilitySummary, 180, 462, 696, 20);
+  label(L"Accessibility", 24, 482, 145, 20);
   Add(window, state, L"STATIC",
-      L"Accessibility: no launcher overrides; use the game's own options.",
-      0, UiAccessibilitySummary, 24, 482, 852, 20);
-  Add(window, state, L"STATIC", L"Cheats: no launcher controls or cheat arguments.",
-      0, UiCheatsSummary, 24, 502, 852, 20);
+      L"No launcher overrides; use the game's own options.",
+      0, UiAccessibilitySummary, 180, 482, 696, 20);
+  label(L"Cheats", 24, 502, 145, 20);
+  Add(window, state, L"STATIC", L"No launcher controls or cheat arguments.",
+      0, UiCheatsSummary, 180, 502, 696, 20);
 
   state.adding_page = -1;
   button(UiSaveSettings, L"Save settings", 24, 534, 165);

@@ -353,9 +353,10 @@ if(WIN32)
         target_link_libraries(mcla_launcher_import_win_test PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
         target_link_libraries(mcla_launcher_import_win_test PRIVATE mcla_build_lease)
         add_executable(mcla_launcher_ui_render_win EXCLUDE_FROM_ALL
-            tests/mcla_launcher_ui_render_win.cpp src/mcla_launcher_ui_win.cpp)
+            tests/mcla_launcher_ui_render_win.cpp src/mcla_launcher_ui_win.cpp
+            src/mcla_diagnostic_export_ui_win.cpp)
         target_include_directories(mcla_launcher_ui_render_win PRIVATE src)
-        target_link_libraries(mcla_launcher_ui_render_win PRIVATE user32 gdi32 ole32 uuid gdiplus)
+        target_link_libraries(mcla_launcher_ui_render_win PRIVATE user32 gdi32 shell32 ole32 uuid gdiplus)
     endif()
 endif()
 
