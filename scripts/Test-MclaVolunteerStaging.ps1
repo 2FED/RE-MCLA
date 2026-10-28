@@ -75,7 +75,8 @@ if ($RequireVolunteer) {
     }
     $checks++
     $hostBytes = [IO.File]::ReadAllBytes((Join-Path $root 'build\mcla.exe'))
-    $hostText = [Text.Encoding]::GetEncoding(28591).GetString($hostBytes)
+    # The admission message is a wide (UTF-16) string literal in mcla_app.cpp.
+    $hostText = [Text.Encoding]::Unicode.GetString($hostBytes)
     if ($hostText.IndexOf('MCLA test-build admission', [StringComparison]::Ordinal) -lt 0) {
         $findings.Add('mcla.exe was not built with MCLA_TEST_BUILD_EXPIRY=ON')
     }

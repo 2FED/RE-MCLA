@@ -10,7 +10,7 @@ rules: [M9 priorities](../M9-priorities.md).
 | Post-session report prompt | Implemented and unit-tested; not yet in a tester build |
 | Fresh F10 image or explicit stale mark (KI-042) | Implemented, builds; in-game check pending |
 | Diagnostics export with frame-pacing/CP/GPU summaries | Implemented and unit-tested |
-| Allowlisted staging and sentinel audit | Audit script done; first run found path leaks; path-clean build in progress |
+| Allowlisted staging and sentinel audit | Path-clean volunteer build done; signing, staging and audit need the owner's PowerShell 7 run |
 | Tester guide, one tester smoke | Guide written (EN/UK); smoke pending |
 
 ## Kill switch (2026-10-28)
@@ -151,3 +151,28 @@ owner's explicit yes. The volunteer `mcla.exe` must also be built with
   report prompt, known issues and the launcher refusal messages. A claim that a
   wheel button can trigger F10 was removed: no such binding exists in this
   source.
+
+## Path-clean volunteer build l38 (2026-10-28)
+
+- **SDK** `private/l38-sdk-*`: same source as l34 (`a239b83`) and same flags,
+  plus `-ffile-prefix-map=<clone>=.` and `/pdbaltpath:%_PDB%`. The three DLLs
+  contain no `C:\BDU` path; the PDB reference is a bare file name.
+- **Host** `private/l38-build`: compiled with `MCLA_TEST_BUILD_EXPIRY=ON`, the
+  image helper is rebuilt (`MCLA_BUILD_IMAGE_CAPTURE_TESTS=ON`, Windows SDK
+  10.0.26100 cppwinrt), and there are prefix maps for the clone and the SDK
+  install. The first attempt still embedded the install path of the SDK's
+  `rex_app.cpp`, so a backslash map was added. No compiler warnings. None of the
+  seven binaries contains `C:\BDU` or `Users\<name>`. The admission message is
+  present as a UTF-16 literal, which confirms expiry ON (the l34 expiry-OFF host
+  lacks it); the audit now searches that marker in UTF-16.
+- Identities: `mcla.exe` `9777D5BE...6E090CB`, launcher `009BC3B1...`. Input
+  folder: `private/l38-vol-input`.
+- `private/l38-entries.json` keeps the published l2 grant
+  (`9195117A...`, valid until 2026-11-07) and adds the volunteer host until
+  2026-11-27 18:57 Kyiv (30 days; the owner may change it).
+- The current public `active-builds.txt` verifies with the real key through the
+  lease probe: `SIGNED_LEASES_VERIFIED entries=1` (local, not deployment).
+- Owner step (PowerShell 7): `private/l38-volunteer-prepare.ps1`. It signs the V2
+  ticket and the new list, stages `private/l38-volunteer` with the guide,
+  verifies the list and runs the volunteer audit. Publishing the list to
+  `DebugBundle` is a separate step that needs the owner's explicit yes.
