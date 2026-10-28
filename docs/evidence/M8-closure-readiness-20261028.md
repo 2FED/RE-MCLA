@@ -84,3 +84,12 @@ All of these changes are private builds and local commits; nothing was pushed.
 2. M8-011 closes on the timebox measurements.
 3. M8-017 residual dispositions per KI, owner-reviewed.
 4. Ledger and `current-state.md` update with the final tally, then commit. Pushing needs explicit owner approval.
+## Publication state (2026-10-28)
+
+- **RE-MCLA:** the closure commit `ca11999` and everything before it are local on branch `claude/amazing-haslett-a083e6`: 105 commits ahead of `origin/main` and 0 behind. The final audit found no binaries, no files over 500 KB, no secret patterns and no personal paths. The owner approved the push. The agent's attempts to push to `main` and to the session branch were blocked by this session's permission policy, so the owner pushes.
+- **rexglue-sdk M8 work:** in a local clone at `private/sdk-fork-m8`, branch `mcla/m8-perf`. It has two commits on top of `5dd58f8`, which is the current tip of `origin/mcla/mcla-r-hotfixes`:
+  - `678adc4`: resolve downscale for 32bpp.
+  - `a239b83`: the M8 command-processor optimizations and unlocked-frame-rate support, with the vblank cvar default 0.
+  - The audit is clean. The clone's origin is the local submodule path; push to GitHub explicitly.
+- **SDK publication precedent:** MCLA SDK work lives on the fork branch `mcla/mcla-r-hotfixes`, so this is a fast-forward of that branch.
+- **Not committed anywhere:** the RE-MCLA superproject submodule pointer stays at `5dd58f8`; the repo build still applies the 32bpp patch itself. Bumping the pointer needs a separate review of the patch-application step.
