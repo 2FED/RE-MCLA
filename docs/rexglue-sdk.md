@@ -8,7 +8,19 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
-The current source pin is tagged v0.20.0.0 and published in the project fork;
+**M9-001 (2026-10-28): the submodule pin is now
+`a239b834194011ab6f5fa197cea4998899010062`** on the published fork branch
+`mcla/mcla-r-hotfixes`. On top of `5dd58f8` it adds `678adc4` (the 32bpp
+resolve-downscale correction below, now in the SDK) and `a239b83` (the M8
+command-processor optimizations and unlocked-frame-rate support, with
+`mcla_guest_vblank_hz` defaulting to 0, i.e. stock 30). No build step applies
+SDK patches any more; the patch files below are history and test fixtures. The
+unlocked build sets the vblank through the MCLA-R CMake option
+`MCLA_UNLOCKED_VBLANK_HZ` instead of an SDK source edit. The SDK still reports
+package version 0.20.0.0. Evidence: [M9-001](evidence/M9-001-reproducible-build-20261028.md).
+The text below describes the earlier `5dd58f8` pin and stays as history.
+
+The previous source pin is tagged v0.20.0.0 and published in the project fork;
 the remote tag resolves to5dd58f894bf34b9ea85e59d3903c7f0e8044d853
 (read-only remote verification October12,2026). Its isolated build and install at
 `private/sdk20install-unpublished` passed. The fresh WGC-enabled host build at

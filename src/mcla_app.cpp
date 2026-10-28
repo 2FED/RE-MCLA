@@ -1251,6 +1251,21 @@ void MclaApp::OnPostSetup() {
 
 void MclaApp::OnPostLoadGraphicsPlugin() {
   mcla::ApplyTextureCacheBudget();
+#if MCLA_UNLOCKED_VBLANK_HZ > 0
+  // Unlocked (experimental) build: the published SDK defaults the guest vblank
+  // override to 0 (stock 30). Raise it here, before the plugin's Setup starts
+  // the vblank thread, unless the user set mcla_guest_vblank_hz explicitly.
+  if (!rex::cvar::HasNonDefaultValue("mcla_guest_vblank_hz")) {
+    if (rex::cvar::SetFlagByName("mcla_guest_vblank_hz",
+                                 std::to_string(MCLA_UNLOCKED_VBLANK_HZ))) {
+      MCLA_GPU_INFO("MCLA graphics: unlocked build, guest vblank {} Hz",
+                    MCLA_UNLOCKED_VBLANK_HZ);
+    } else {
+      MCLA_GPU_ERROR("MCLA graphics: mcla_guest_vblank_hz is unavailable; "
+                     "unlocked build runs at the stock rate");
+    }
+  }
+#endif
   if (rex::cvar::HasNonDefaultValue("readback_resolve")) {
     return;
   }

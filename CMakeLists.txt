@@ -91,7 +91,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     endif()
 endif()
 
-set(MCLA_REXGLUE_VERSION "0.20.0.0")
+set(MCLA_REXGLUE_VERSION "0.20.0.2")
 if(DEFINED REXSDK_VERSION AND
    NOT REXSDK_VERSION STREQUAL "" AND
    NOT REXSDK_VERSION STREQUAL "${MCLA_REXGLUE_VERSION}")
@@ -179,6 +179,14 @@ if(NOT MCLA_TIMER_CONFIG_PROBE)
     endif()
 endif()
 
+# Unlocked (experimental) build: guest vblank override in Hz, 0 = stock 30 FPS.
+# l33-sunc used 240. The launcher mode option (M9-003) replaces this switch.
+set(MCLA_UNLOCKED_VBLANK_HZ 0 CACHE STRING
+    "Guest vblank override applied at startup; 0 keeps the stock rate")
+if(NOT MCLA_UNLOCKED_VBLANK_HZ MATCHES "^[0-9]+$" OR MCLA_UNLOCKED_VBLANK_HZ GREATER 1000)
+    message(FATAL_ERROR "MCLA_UNLOCKED_VBLANK_HZ must be an integer from 0 to 1000")
+endif()
+
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" MCLA_VERSION)
 string(STRIP "${MCLA_VERSION}" MCLA_VERSION)
 
@@ -198,6 +206,10 @@ endif()
 
 rexglue_setup_target(mcla GPU_PLUGINS xenos)
 target_compile_definitions(mcla PRIVATE MCLA_VERSION="${MCLA_VERSION}")
+if(MCLA_UNLOCKED_VBLANK_HZ GREATER 0)
+    set_property(SOURCE src/mcla_app.cpp APPEND PROPERTY
+        COMPILE_DEFINITIONS MCLA_UNLOCKED_VBLANK_HZ=${MCLA_UNLOCKED_VBLANK_HZ})
+endif()
 if(MCLA_EXPERIMENTAL_F10_WGC)
     set(MCLA_IMAGE_PIN_HEADER "${CMAKE_CURRENT_BINARY_DIR}/mcla_image_helper_pin.h")
     add_custom_command(OUTPUT "${MCLA_IMAGE_PIN_HEADER}"

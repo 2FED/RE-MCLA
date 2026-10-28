@@ -1889,7 +1889,7 @@ honest dispositions for the issues testers will meet first.
 
 ### Tasks
 
-- [ ] **M9-001** Reproducible source build: SDK submodule `5dd58f8` -> `a239b83`, remove the build-time 32bpp patch step; clean clone reproduces l31-s30 / l33-sunc behaviour.
+- [-] **M9-001** Reproducible source build: SDK submodule `5dd58f8` -> `a239b83`, remove the build-time 32bpp patch step; clean clone reproduces l31-s30 / l33-sunc behaviour. 2026-10-28: pin bumped (package 0.20.0.2), no SDK patch step left, unlocked via `MCLA_UNLOCKED_VBLANK_HZ`; fresh clone builds, codegen byte-identical, SDK tests 1864/1864, source equivalence to l31/l33 shown. Pending: ticket signing/staging (PowerShell 7 missing) and owner title-plus-drive check. [Evidence](docs/evidence/M9-001-reproducible-build-20261028.md).
 - [ ] **M9-002** Launcher source reconciliation with the accepted l12 binary.
 - [ ] **M9-003** Launcher mode option 30 / Unlocked (experimental) with limits shown (carries M8-006).
 - [ ] **M9-004** Setup categories visibly separated (carries M8-007).
@@ -1907,6 +1907,7 @@ honest dispositions for the issues testers will meet first.
 ### Checkpoint log
 
 - 2026-10-28 — Plan approved by owner. Health: `NOT STARTED`. Next tasks: M9-001, M9-002.
+- 2026-10-28 — M9-001 build from published SDK `a239b83` done (`private/l34-build`); equivalence to l31-s30/l33-sunc shown at source, codegen and binary-switch level. Not a physical PASS. Blocker: test-build ticket signing needs PowerShell 7 (owner decision). Health: `GREEN`. Next: M9-001 owner check, then M9-002.
 
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 

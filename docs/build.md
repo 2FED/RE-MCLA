@@ -4,6 +4,18 @@ Owner: MCLA-R maintainers
 
 Purpose: provide reproducible setup, codegen, build, test, and package commands without relying on undocumented machine state.
 
+## M9-001 build from the published SDK
+
+The submodule pins rexglue-sdk `a239b83` (package `0.20.0.2`), which already
+contains the 32bpp resolve fix and the M8 command-processor work. No SDK patch
+is applied at build time. Build the SDK from a clean recursive clone, then build
+`mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.2` (quote the
+argument in PowerShell). `-DMCLA_UNLOCKED_VBLANK_HZ=240` produces the
+experimental unlocked host; the default 0 is stock 30. The exact flags, the
+`libmspack` link materialization and the reference hashes are in the
+[M9-001 evidence](evidence/M9-001-reproducible-build-20261028.md). The older
+sections below describe the `5dd58f8` / 0.20.0.0 era.
+
 ## M7 WGC and local profile candidate
 
 The portable publisher supports explicit `-EnableF10Wgc` together with

@@ -47,9 +47,9 @@ if (-not $RenderDocPath) {
 
 $expected = [ordered]@{
     AstGrepVersion     = '0.45.0'
-    ReXGlueCommit      = '5dd58f894bf34b9ea85e59d3903c7f0e8044d853'
-    ReXGlueTag         = 'v0.20.0.0'
-    ReXGlueVersion     = '0.20.0.0'
+    ReXGlueCommit      = 'a239b834194011ab6f5fa197cea4998899010062'
+    ReXGlueTag         = ''  # M9-001 pin a239b83 has no release tag; the commit is checked
+    ReXGlueVersion     = '0.20.0.2-dev.ga239b83'
     ExtractorSha256    = '7C7AF9C17E095C3C1E78E644DF5F0E72F01C4690B3117F038AAFE26EB5A8A2F4'
     XeniaSha256        = 'C51D73364180D5F09B29BC348732A5B79D3959D5639321BDA58D490B4ABCF06A'
     GhidraVersion      = '12.0.4'
@@ -188,8 +188,10 @@ Invoke-PrerequisiteCheck -Name 'ReXGlue recursive source pin' -Action {
     $commit = Invoke-NativeText -Executable $gitExe -Arguments @('-c', 'safe.directory=*', '-C', $sdkRoot, 'rev-parse', 'HEAD')
     Assert-Equal -Actual $commit -Expected $expected.ReXGlueCommit -Label 'ReXGlue commit'
 
-    $tagCommit = Invoke-NativeText -Executable $gitExe -Arguments @('-c', 'safe.directory=*', '-C', $sdkRoot, 'rev-parse', "$($expected.ReXGlueTag)^{commit}")
-    Assert-Equal -Actual $tagCommit -Expected $expected.ReXGlueCommit -Label "ReXGlue $($expected.ReXGlueTag) target"
+    if ($expected.ReXGlueTag) {
+        $tagCommit = Invoke-NativeText -Executable $gitExe -Arguments @('-c', 'safe.directory=*', '-C', $sdkRoot, 'rev-parse', "$($expected.ReXGlueTag)^{commit}")
+        Assert-Equal -Actual $tagCommit -Expected $expected.ReXGlueCommit -Label "ReXGlue $($expected.ReXGlueTag) target"
+    }
 
     $dirty = Invoke-NativeText -Executable $gitExe -Arguments @('-c', 'safe.directory=*', '-C', $sdkRoot, 'status', '--porcelain', '--untracked-files=no')
     if ($dirty) {
@@ -205,7 +207,7 @@ Invoke-PrerequisiteCheck -Name 'ReXGlue recursive source pin' -Action {
     if ($nodeCount -lt 2) {
         throw 'Recursive ReXGlue dependency status did not contain nested submodules.'
     }
-    "$($expected.ReXGlueTag) at $($expected.ReXGlueCommit.Substring(0, 12)); $nodeCount recursive nodes"
+    "ReXGlue $($expected.ReXGlueCommit.Substring(0, 12)); $nodeCount recursive nodes"
 }
 
 Invoke-PrerequisiteCheck -Name 'ReXGlue installed CLI' -Action {
