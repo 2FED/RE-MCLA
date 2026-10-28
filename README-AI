@@ -1868,11 +1868,52 @@ a separate future scope decision. No content is sent to volunteers by this plan.
 
 - 2026-09-28 - M8 allowance-stop handoff. The Windows interval1 candidate `48E8F4F6...` is statically reviewed but has **never run**; no correct-speed or FPS claim. The A1/B/A2 rejection harness remains Live-disabled. Source-only schema hardening has172 checks, isolated owner/seed staging has28 mocks, and passive capture contract has70 mocks; real Win32 capture/input/collector and cycle-feature extraction are absent. The Deck UploadShape3 diagnostic was accepted for shape counts only; no within-invocation merging opportunity appeared, and its performance stability gate failed. Owner weekly allowance reached **25% remaining**, so active work stops here. No normal bundle/Deck candidate promotion, version bump, commit or push. Handoff: docs/current-state.md; evidence: docs/evidence/M8-001-stock-interval1-20260928.md and docs/evidence/M8-001-deck-gameplay-census-and-cost-20260928.md.
 
-## 17. Milestone M9 — Release hardening, packaging, and public distribution
+## 17. Milestone M9 — Volunteer build and stabilisation
+
+Owner approved 2026-10-28. Scope, order, kill-switch rules and KI triage:
+[M9 priorities](docs/M9-priorities.md). M9 starts with the items moved from M8
+(M8-006, M8-007, M8-018). Multi-threaded CP is M10; public release hardening is
+the later milestone in section 17a.
+
+**Goal:** a reproducible closed-group volunteer build (stock 30 recommended,
+unlocked experimental) with a kill switch, a post-session report prompt and
+honest dispositions for the issues testers will meet first.
+
+**Estimate:** about 2-3 weeks of agent work plus owner checks and one volunteer.
+
+### Prerequisites
+
+- M8 closed and published (RE-MCLA `e93ebf4`, SDK fork `a239b83`).
+- Volunteer distribution option A: closed trusted group, shared by the owner.
+- Volunteer boundary from M8 still binding (no personal/game/private payloads).
+
+### Tasks
+
+- [ ] **M9-001** Reproducible source build: SDK submodule `5dd58f8` -> `a239b83`, remove the build-time 32bpp patch step; clean clone reproduces l31-s30 / l33-sunc behaviour.
+- [ ] **M9-002** Launcher source reconciliation with the accepted l12 binary.
+- [ ] **M9-003** Launcher mode option 30 / Unlocked (experimental) with limits shown (carries M8-006).
+- [ ] **M9-004** Setup categories visibly separated (carries M8-007).
+- [ ] **M9-005** Volunteer build: allowlisted staging, kill switch (3 days offline from creation or 24 h after a listed online check; online absence revokes), post-session report prompt, diagnostics export, tester guide, one tester smoke (carries M8-018).
+- [ ] **M9-006** Known-issue triage and fix attempts: KI-035, KI-026, KI-040 first, then KI-037, KI-038/032; dispositions for the rest.
+- [ ] **M9-007** Menu state from the game via hook, time-boxed 2 days; otherwise keep the accepted limit.
+- [ ] **M9-008** Bounded regression in both modes plus volunteer smoke, closure and push.
+
+### Exit criteria
+
+- A clean clone builds the volunteer artifacts; staging audit passes.
+- Kill switch and report prompt pass fixture tests and one real tester run.
+- No new progression blocker or save hazard; open KIs have owner-reviewed dispositions.
+
+### Checkpoint log
+
+- 2026-10-28 — Plan approved by owner. Health: `NOT STARTED`. Next tasks: M9-001, M9-002.
+
+## 17a. Later milestone — Release hardening, packaging, and public distribution
+
+Moved out of M9 by owner decision 2026-10-28. Task IDs are renumbered REL-xxx and get
+their milestone number when this work starts. Content is unchanged otherwise.
 
 This is draft future release planning, not a current distribution/support claim.
-A proposed 2026-10-28 revision (volunteer build and stabilisation first, multi-threaded
-CP as M10, public release later) awaits owner approval: [M9 priorities](docs/M9-priorities.md).
 Launcher/capability requirements remain subject to the post-M7/M8 scope review.
 
 **Goal:** produce a reproducible, legally clean, supportable public release that requires users to supply their own supported game dump.
@@ -1888,24 +1929,24 @@ Launcher/capability requirements remain subject to the post-M7/M8 scope review.
 
 ### Tasks
 
-- [ ] **M9-001** Freeze the release candidate against exact project and ReXGlue SHAs.
-- [ ] **M9-002** Review all code, scripts, dependencies, licenses, and generated artifacts.
-- [ ] **M9-003** Run `ast-grep scan`, `ast-grep test`, compiler warnings, sanitizers where supported, unit tests, integration tests, and campaign regression tests.
-- [ ] **M9-004** Run secret, proprietary-file, large-file, and license scans over the full Git history and release staging directory.
-- [ ] **M9-005** Harden/package the M8 internal launcher for release: asset-free dump validation, contained local extraction/codegen/compilation, atomic prepared-game reuse, clean-machine installation and updates. Reuse M8-015/016 settings/profile isolation rather than defer that working functionality to M9. Keep unsupported options disabled; no game assets or prohibited generated content in distribution.
-- [ ] **M9-006** Ensure extraction/import never overwrites the source ISO and never targets broad or unresolved paths.
-- [ ] **M9-007** Test install, first launch, data import, update, repair, uninstall, and rollback on clean Windows machines, including settings persistence/restart, missing or changed wheel devices, malformed settings, synchronized-folder conflicts, and interrupted backup restore.
-- [ ] **M9-008** Verify uninstall never removes user game dumps, saves, unrelated directories, or shared dependencies.
-- [ ] **M9-009** Document minimum/recommended hardware, supported OS/GPU APIs, data hash, known issues, logs, and support bundle creation.
-- [ ] **M9-010** Harden the M8-016 versioned personal-data/settings contract for released-version upgrades, rollback, interrupted restore and clean-machine migration. Core profile selection, stable roots and atomic preferences are M8 prerequisites, not delayed release features.
-- [ ] **M9-011** Create deterministic release archives and checksums.
-- [ ] **M9-012** Bump the four-part version only after review and tests pass.
-- [ ] **M9-013** Update README-AI, README, changelog, compatibility matrix, build guide, and troubleshooting guide.
-- [ ] **M9-014** Explicitly stage only reviewed release files.
-- [ ] **M9-015** Commit and push the reviewed release candidate.
-- [ ] **M9-016** Verify the exact protected-merge/deployment head SHA.
-- [ ] **M9-017** Create and dereference the release tag; verify `HEAD == origin/main == dereferenced release tag` at release parity.
-- [ ] **M9-018** Publish checksums and release notes, then perform a post-release clean install from public artifacts.
+- [ ] **REL-001** Freeze the release candidate against exact project and ReXGlue SHAs.
+- [ ] **REL-002** Review all code, scripts, dependencies, licenses, and generated artifacts.
+- [ ] **REL-003** Run `ast-grep scan`, `ast-grep test`, compiler warnings, sanitizers where supported, unit tests, integration tests, and campaign regression tests.
+- [ ] **REL-004** Run secret, proprietary-file, large-file, and license scans over the full Git history and release staging directory.
+- [ ] **REL-005** Harden/package the M8 internal launcher for release: asset-free dump validation, contained local extraction/codegen/compilation, atomic prepared-game reuse, clean-machine installation and updates. Reuse M8-015/016 settings/profile isolation rather than defer that working functionality to M9. Keep unsupported options disabled; no game assets or prohibited generated content in distribution.
+- [ ] **REL-006** Ensure extraction/import never overwrites the source ISO and never targets broad or unresolved paths.
+- [ ] **REL-007** Test install, first launch, data import, update, repair, uninstall, and rollback on clean Windows machines, including settings persistence/restart, missing or changed wheel devices, malformed settings, synchronized-folder conflicts, and interrupted backup restore.
+- [ ] **REL-008** Verify uninstall never removes user game dumps, saves, unrelated directories, or shared dependencies.
+- [ ] **REL-009** Document minimum/recommended hardware, supported OS/GPU APIs, data hash, known issues, logs, and support bundle creation.
+- [ ] **REL-010** Harden the M8-016 versioned personal-data/settings contract for released-version upgrades, rollback, interrupted restore and clean-machine migration. Core profile selection, stable roots and atomic preferences are M8 prerequisites, not delayed release features.
+- [ ] **REL-011** Create deterministic release archives and checksums.
+- [ ] **REL-012** Bump the four-part version only after review and tests pass.
+- [ ] **REL-013** Update README-AI, README, changelog, compatibility matrix, build guide, and troubleshooting guide.
+- [ ] **REL-014** Explicitly stage only reviewed release files.
+- [ ] **REL-015** Commit and push the reviewed release candidate.
+- [ ] **REL-016** Verify the exact protected-merge/deployment head SHA.
+- [ ] **REL-017** Create and dereference the release tag; verify `HEAD == origin/main == dereferenced release tag` at release parity.
+- [ ] **REL-018** Publish checksums and release notes, then perform a post-release clean install from public artifacts.
 
 ### Deliverables
 
@@ -1935,7 +1976,7 @@ Launcher/capability requirements remain subject to the post-M7/M8 scope review.
 
 ### Checkpoint log
 
-- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: M9-001, M9-002.
+- No checkpoint yet. Health: `NOT STARTED`. Next tasks after gate entry: REL-001, REL-002.
 
 ## 18. Task acceptance criteria register
 
@@ -2128,24 +2169,37 @@ The criterion below is additional to the task wording and universal Definition o
 
 | ID | Individual acceptance criterion / minimum evidence |
 |---|---|
-| M9-001 | RC records exact project, SDK, compiler, and dependency SHAs/versions / manifest |
-| M9-002 | Review has no unresolved release-blocking finding / signed review summary |
-| M9-003 | Entire required analysis/test suite passes on RC / consolidated test report |
-| M9-004 | Git history and staging scans find no secret/proprietary violation / scan reports |
-| M9-005 | Release package adds audited asset-free prepare/reuse/install/update around accepted M8 launcher/data isolation; immutable contents and personal roots stay separate / clean-machine and content audits |
-| M9-006 | Import rejects broad/unresolved targets and preserves source ISO / safety tests |
-| M9-007 | Install/update/repair/uninstall/rollback plus settings, device-change, corruption, sync-conflict and interrupted-restore cases pass on clean machines / lifecycle and fault-injection matrix |
-| M9-008 | Uninstall preservation tests prove user data safety / filesystem diff |
-| M9-009 | User documentation covers all claimed requirements and diagnostics / doc review |
-| M9-010 | Released-version migration/rollback preserves the M8 personal-root and mutable-settings contract under interruption / compatibility and migration report |
-| M9-011 | Two clean builds produce matching intended artifacts/checksums / reproducibility report |
-| M9-012 | Version bump follows highest-impact included change after tests / version review |
-| M9-013 | All named docs match RC behavior / documentation diff review |
-| M9-014 | Staged set equals reviewed release manifest / `git diff --cached` review |
-| M9-015 | Commit/push succeed only after gates and point to approved RC / remote evidence |
-| M9-016 | Protected operation SHA equals approved RC SHA / SHA record |
-| M9-017 | HEAD, origin/main, and dereferenced tag are identical / parity command output |
-| M9-018 | Public artifact clean-installs and checksums match published values / post-release report |
+| M9-001 | Clean clone with the bumped submodule builds both modes without private patch scripts; short title and drive check matches l31-s30/l33-sunc / build log and owner or agent run record |
+| M9-002 | One launcher built from source keeps every accepted l12 behaviour / UI and controller tests plus owner smoke on a non-MAIN profile |
+| M9-003 | Mode option toggles independently, returning to 30 restores stock exactly, limits are shown / capability and settings tests plus owner check (M8-006 criterion) |
+| M9-004 | Compatibility, accessibility and cheat categories are visibly separate / owner UI review (M8-007 criterion) |
+| M9-005 | Allowlisted volunteer build excludes personal/game/private payloads; kill switch follows the 3-day / 24-hour / revoke rules and never revokes on network failure; report prompt lists only this session's packages; explicit export works without touching owner roots / sentinel staging audit, expiry fixture matrix and tester smoke |
+| M9-006 | Each open KI has a reviewed disposition; claimed fixes have before/after evidence / KI ledger |
+| M9-007 | Menu cap uses a game-state signal and does not cap driving, or the limit stays documented after the time box / route check |
+| M9-008 | Both modes pass the bounded regression on the exact volunteer artifacts / route record |
+
+### Release milestone criteria (draft, section 17a)
+
+| ID | Individual acceptance criterion / minimum evidence |
+|---|---|
+| REL-001 | RC records exact project, SDK, compiler, and dependency SHAs/versions / manifest |
+| REL-002 | Review has no unresolved release-blocking finding / signed review summary |
+| REL-003 | Entire required analysis/test suite passes on RC / consolidated test report |
+| REL-004 | Git history and staging scans find no secret/proprietary violation / scan reports |
+| REL-005 | Release package adds audited asset-free prepare/reuse/install/update around accepted M8 launcher/data isolation; immutable contents and personal roots stay separate / clean-machine and content audits |
+| REL-006 | Import rejects broad/unresolved targets and preserves source ISO / safety tests |
+| REL-007 | Install/update/repair/uninstall/rollback plus settings, device-change, corruption, sync-conflict and interrupted-restore cases pass on clean machines / lifecycle and fault-injection matrix |
+| REL-008 | Uninstall preservation tests prove user data safety / filesystem diff |
+| REL-009 | User documentation covers all claimed requirements and diagnostics / doc review |
+| REL-010 | Released-version migration/rollback preserves the M8 personal-root and mutable-settings contract under interruption / compatibility and migration report |
+| REL-011 | Two clean builds produce matching intended artifacts/checksums / reproducibility report |
+| REL-012 | Version bump follows highest-impact included change after tests / version review |
+| REL-013 | All named docs match RC behavior / documentation diff review |
+| REL-014 | Staged set equals reviewed release manifest / `git diff --cached` review |
+| REL-015 | Commit/push succeed only after gates and point to approved RC / remote evidence |
+| REL-016 | Protected operation SHA equals approved RC SHA / SHA record |
+| REL-017 | HEAD, origin/main, and dereferenced tag are identical / parity command output |
+| REL-018 | Public artifact clean-installs and checksums match published values / post-release report |
 
 ## 19. Risk register
 

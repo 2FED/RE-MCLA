@@ -1,8 +1,7 @@
-# M9 volunteer build and stabilisation (proposed revision)
+# M9 volunteer build and stabilisation
 
-Draft 2026-10-28, awaiting owner approval. [README-AI](../README-AI) owns the
-milestone ledger; until the owner approves this revision, section 17 there still
-holds the earlier draft release plan. Inputs: the
+Owner approved 2026-10-28. [README-AI](../README-AI) section 17 owns the
+task ledger; the earlier release draft is now section 17a there. Inputs: the
 [M8 closure record](evidence/M8-closure-readiness-20261028.md), the
 [performance timebox](evidence/M8-001-timebox-20261025.md),
 [current state](current-state.md) and [known issues](known-issues.md).
@@ -13,7 +12,7 @@ M8 closed on 2026-10-28 (10 complete, 9 deferred of 19, GREEN). The owner moved
 M8-006, M8-007 and M8-018 to the start of M9 and agreed that a multi-threaded
 command processor (CP) is separate work after M8.
 
-This revision proposes:
+The approved plan:
 
 1. **M9 = a closed volunteer build plus stabilisation**, not a public release.
    M9 starts with the three carried M8 items, makes the build reproducible from
