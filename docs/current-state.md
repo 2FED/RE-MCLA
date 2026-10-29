@@ -1,8 +1,14 @@
 # Current state and handoff
 
-Updated October 29, 2026 Kyiv. README-AI owns the milestone ledger and checkpoint history.
+Updated October 29, 2026 Kyiv (end of the coordinator continuation). README-AI owns the milestone ledger and checkpoint history.
 
 ## Active outcome
+
+**Owner-only next actions (everything agent-side is done and committed):**
+1. l38 volunteer candidate: in-game smoke (two F10 in different scenes, report prompt, kill switch), publication decision for `l38-active-builds.txt`, one tester smoke.
+2. l39 owner candidate: run `private\l39-internal-prepare.ps1` (PowerShell 7), point the launcher at `private\l39-internal`, check M9-009 cursor, KI-040 pad reconnect, M9-007 paused-menu cap, M9-010 wheel/pad triggers, KI-035/KI-026 diagnostics; A/B tests for KI-037 (Test A/B) and KI-038/032 (scale 3 vs 2 at 2160p).
+3. Decide on pinning/publishing the three local SDK deltas (`private/l39-sdk-src`, `mcla/ki-040-xinput-rescan`).
+4. M9-008 regression after the checks; then a refreshed volunteer candidate from the merged tree.
 
 **M9 at 2026-10-29: M9-001/002/003 closed, M9-004 deferred to REL-019, M9-005 staged and waiting on the owner, M9-006 and M9-009 in progress.** Ledger: README-AI section 17; plan: [M9 priorities](M9-priorities.md).
 

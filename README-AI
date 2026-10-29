@@ -1917,6 +1917,8 @@ honest dispositions for the issues testers will meet first.
 
 - 2026-10-29 (later) — KI-040 fix built in an isolated SDK copy (unpinned); M9-007 pause hook and the KI-035/KI-026 diagnostics implemented host-only and compiled together in `private/l39-hooks-build` (one commit: they share the CMake/app registration hunks and one gate run). M9-009 found defective in review (second SDL instance) and queued for a port to an SDK event observer with M9-010, which is in progress on branch `claude/m9-010-triggers`. Completed 3 of 10. Health: `GREEN`. Next: M9-010 review/merge, owner checks (l38 smoke, KI-040 pad, M9-007 route), SDK pin bump decision.
 
+- 2026-10-29 (end of continuation) — M9-010 implemented and merged with the SDK SDL event observer API and the M9-009 port; merged tree verified (0 warnings, 32 suites). KI-037 (first photo), KI-038/KI-032 (signs) analysed with owner A/B tests; dispositions recorded for KI-013/036/041/043. Owner candidate l39 prepared in `private/l39-int-input` with `private/l39-internal-prepare.ps1` (owner signs/stages). SDK deltas `259d0b2`/`9ad1c11`/`d968f59` remain local and unpinned. Completed 3 of 10 (M9-005/006/007/009/010 implemented, owner checks pending). Health: `GREEN`. Blocked on owner: l38 smoke/publication, l39 checks, SDK pin/publication decision, M9-008 regression.
+
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 
 Moved out of M9 by owner decision 2026-10-28. Task IDs are renumbered REL-xxx and get
