@@ -1349,6 +1349,28 @@ public:
       }
     }
 
+    // Prefilled tester answers file. Not a manifest artifact: the tester edits
+    // it. A failed write is logged; the launcher creates a fallback later.
+    {
+      PackageReportFacts facts;
+      facts.package = name;
+      facts.kind = "live";
+      facts.created_utc = UtcStamp();
+      facts.mcla_version = MCLA_VERSION;
+      facts.category = trigger.category;
+      facts.source = trigger.source;
+      if (ui.physical_width && ui.physical_height) {
+        facts.window = std::to_string(ui.physical_width) + "x" +
+                       std::to_string(ui.physical_height) +
+                       (ui.fullscreen ? " fullscreen" : " windowed");
+      }
+      facts.wheel = WheelReportLine(trigger.wheel);
+      if (!WriteText(partial / std::string(kPackageReportFile),
+                     BuildPackageReportText(facts))) {
+        REXLOG_ERROR("MCLA diagnostics: report.txt write failed");
+      }
+    }
+
     std::ostringstream manifest;
     manifest << "{\n"
              << "  \"schema\": \"mcla-diagnostic-package-v1\",\n"

@@ -3,8 +3,10 @@
 #include "mcla_launcher_profile_policy.h"
 #include "mcla_render_target_policy.h"
 
+#include <algorithm>
 #include <array>
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,6 +29,18 @@ inline constexpr uint32_t kUnlockedGuestVblankHz = 240;
 // (SDK a239b83). Other builds keep the option refused, not silently stock.
 inline constexpr std::array<std::string_view, 1> kUnlockedTestedBuilds{{
     "0789DBB5F8B59C698FC269B18E87D20A9EC6EB44913709A321829A0DF36DC105"}};
+// Owner admission for internal candidates (KI-045). An optional file in the
+// launcher's local settings directory (never in a build or package folder)
+// lists exact build fingerprints the owner admits for the gated options
+// (1080p/2160p render targets and Unlocked FPS). Absent, unreadable or
+// malformed files admit nothing. Format: ASCII, LF only, final LF:
+//   MCLA-OWNER-ADMITTED-BUILDS-V1
+//   <64 uppercase hex fingerprint>[ <label>]   (label: 1-32 of A-Z a-z 0-9 . _ -)
+inline constexpr std::wstring_view kOwnerAdmissionFile = L"owner-admitted-builds.txt";
+inline constexpr std::string_view kOwnerAdmissionHeader = "MCLA-OWNER-ADMITTED-BUILDS-V1\n";
+inline constexpr size_t kOwnerAdmissionMaximumBytes = 16 * 1024;
+inline constexpr size_t kOwnerAdmissionMaximumEntries = 64;
+inline constexpr std::string_view kOwnerAdmissionKey = "owner-allowlist";
 
 enum class CapabilityError {
   InvalidBuildIdentity,
@@ -46,6 +60,9 @@ struct CapabilityRequest {
   TimingMode timing = TimingMode::Stock;
   uint32_t render_target = 720;
   bool vsync = true;
+  // The build is listed in the owner admission file. Used only when the
+  // requested option is otherwise gated for this exact build.
+  bool owner_admitted = false;
 };
 
 // Resolved arguments to emit, NOT measured FPS or observed host state. Caller
@@ -60,6 +77,8 @@ struct CapabilityPlan {
   // 0 = stock vblank (no argument emitted); otherwise the override in Hz.
   uint32_t guest_vblank_hz = 0;
   bool vsync = true;
+  // True only when a gated option was admitted by the owner admission file.
+  bool owner_admitted = false;
 };
 
 inline constexpr bool ValidCapabilityIdentity(std::string_view value) {
@@ -77,6 +96,39 @@ inline constexpr bool UnlockedBuildTested(std::string_view build) {
   for (const auto tested : kUnlockedTestedBuilds)
     if (build == tested) return true;
   return false;
+}
+
+// Strict parse of the owner admission file. nullopt for any malformed byte.
+inline std::optional<std::vector<std::string>> ParseOwnerAdmission(std::string_view text) {
+  if (text.size() > kOwnerAdmissionMaximumBytes || !text.starts_with(kOwnerAdmissionHeader) ||
+      text.back() != '\n')
+    return std::nullopt;
+  text.remove_prefix(kOwnerAdmissionHeader.size());
+  std::vector<std::string> builds;
+  while (!text.empty()) {
+    const auto end = text.find('\n');
+    const auto row = text.substr(0, end);
+    text.remove_prefix(end + 1);
+    if (builds.size() >= kOwnerAdmissionMaximumEntries || row.size() < 64) return std::nullopt;
+    const auto build = row.substr(0, 64);
+    if (!ValidCapabilityIdentity(build)) return std::nullopt;
+    if (row.size() > 64) {
+      const auto label = row.substr(65);
+      if (row[64] != ' ' || label.empty() || label.size() > 32) return std::nullopt;
+      for (const char c : label)
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+              c == '.' || c == '_' || c == '-'))
+          return std::nullopt;
+    }
+    if (std::find(builds.begin(), builds.end(), build) != builds.end()) return std::nullopt;
+    builds.emplace_back(build);
+  }
+  return builds;
+}
+
+inline bool OwnerAdmissionListed(std::string_view file_text, std::string_view build) {
+  const auto builds = ParseOwnerAdmission(file_text);
+  return builds && std::find(builds->begin(), builds->end(), build) != builds->end();
 }
 
 inline std::string StockTimingDescription() {
@@ -124,20 +176,24 @@ inline std::expected<CapabilityPlan, CapabilityError> ResolveCapabilities(
   if (!TimingPolicySupported(request.timing))
     return std::unexpected(CapabilityError::UnsupportedTiming);
   if (!request.vsync) return std::unexpected(CapabilityError::UnsupportedVsync);
-  if (request.timing == TimingMode::Unlocked && !UnlockedBuildTested(request.build_fingerprint))
+  const bool owner_unlocked =
+      request.timing == TimingMode::Unlocked && !UnlockedBuildTested(request.build_fingerprint);
+  if (owner_unlocked && !request.owner_admitted)
     return std::unexpected(CapabilityError::UntestedUnlockedBuild);
   const auto *target = FindRenderTarget(request.render_target);
   if (!target) return std::unexpected(CapabilityError::UnknownRenderTarget);
   // Retain historical records and rollback alongside the reviewed clean SDK
   // candidate. Exact admission is not a world-quality or gameplay certificate.
-  if ((target->id == 1080 || target->id == 2160) &&
+  const bool owner_target = (target->id == 1080 || target->id == 2160) &&
       request.build_fingerprint != kRenderTargetTestedBuild &&
-      request.build_fingerprint != kCleanRenderTargetTestedBuild)
+      request.build_fingerprint != kCleanRenderTargetTestedBuild;
+  if (owner_target && !request.owner_admitted)
     return std::unexpected(CapabilityError::UntestedTargetBuild);
   const bool unlocked = request.timing == TimingMode::Unlocked;
+  // Owner admission is recorded only when it actually admitted a gated option.
   return CapabilityPlan{std::string(request.build_fingerprint), std::string(request.game_fingerprint),
                         request.timing, *target, kStockGuestRefreshHz,
-                        unlocked ? kUnlockedGuestVblankHz : 0, true};
+                        unlocked ? kUnlockedGuestVblankHz : 0, true, owner_unlocked || owner_target};
 }
 
 // Host arguments added by the frame-rate choice. Stock adds none, so returning
@@ -174,10 +230,12 @@ inline constexpr std::string_view RenderTargetLimitation(uint32_t id) {
 // Public plans are revalidated so mutation cannot serialize a forged capability.
 inline std::expected<std::string, CapabilityError> SerializeCapabilities(const CapabilityPlan &plan) {
   const auto resolved = ResolveCapabilities({plan.build_fingerprint, plan.game_fingerprint,
-                                             plan.timing, plan.target.id, plan.vsync});
+                                             plan.timing, plan.target.id, plan.vsync,
+                                             plan.owner_admitted});
   if (!resolved) return std::unexpected(resolved.error());
   const auto &expected = resolved->target;
-  if (plan.guest_refresh_hz != resolved->guest_refresh_hz ||
+  if (plan.owner_admitted != resolved->owner_admitted ||
+      plan.guest_refresh_hz != resolved->guest_refresh_hz ||
       plan.guest_vblank_hz != resolved->guest_vblank_hz ||
       plan.target.width != expected.width || plan.target.height != expected.height ||
       plan.target.guest_width != expected.guest_width || plan.target.guest_height != expected.guest_height ||
@@ -196,7 +254,9 @@ inline std::expected<std::string, CapabilityError> SerializeCapabilities(const C
       "\ndraw_scale " + std::to_string(plan.target.scale) + "x" + std::to_string(plan.target.scale) +
       "\nfixed60_available false\nfixed60_reason " + std::string(kFixed60UnavailableReason) +
       "\nhost_state_observed false\nfps_measured false\nworld_validation not-certified-by-policy\nrender_limitation " +
-      std::string(RenderTargetLimitation(plan.target.id)) + "\n";
+      std::string(RenderTargetLimitation(plan.target.id)) +
+      // Records without owner admission stay byte-identical to earlier ones.
+      (plan.owner_admitted ? "\nadmission " + std::string(kOwnerAdmissionKey) : std::string()) + "\n";
 }
 
 } // namespace mcla::launcher

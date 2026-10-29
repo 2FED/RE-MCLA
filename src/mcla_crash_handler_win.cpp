@@ -1,6 +1,7 @@
 // mcla - Windows out-of-process minidump and crash-package writer
 
 #include "mcla_crash_ipc.h"
+#include "mcla_diagnostic_trigger.h"
 
 #include <DbgHelp.h>
 #include <Windows.h>
@@ -536,6 +537,20 @@ void CaptureCrashPackage(HANDLE parent, HANDLE dump_done,
   if (!save_inventory_written || !readme_written) {
     InterlockedExchange(&state.crash_result, -1);
     return;
+  }
+  // Prefilled tester answers file; not a manifest artifact (the tester edits
+  // it). Best effort: the launcher writes a fallback when it is missing.
+  {
+    mcla::diagnostics::PackageReportFacts facts;
+    facts.package = name;
+    facts.kind = "crash";
+    facts.created_utc = UtcStamp();
+    facts.mcla_version = NarrowAscii(state.app_version);
+    facts.category = "crash";
+    facts.source = "crash";
+    facts.wheel = "not-recorded (crash)";
+    WriteText(partial / std::string(mcla::diagnostics::kPackageReportFile),
+              mcla::diagnostics::BuildPackageReportText(facts));
   }
 
   uint64_t dump_bytes = 0;

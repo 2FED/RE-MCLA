@@ -1023,6 +1023,64 @@ void TestAutomaticChecks() {
   DestroyWindow(window);
 }
 
+// KI-044: a current Ready check saves exactly the checked setup, so a newly
+// chosen Build folder survives a launcher restart; a result that went stale
+// because the folder changed while checking saves nothing.
+void TestCheckPersistsChosenFolder() {
+  ControlledChecks fixture(5);
+  std::vector<UiRequest> saves;
+  HWND window = CreateLauncherUiForTest([&](UiAction action, const UiRequest &request) {
+    if (action != UiAction::SaveSettings) return fixture.Invoke(action, request);
+    saves.push_back(request);
+    const auto persist = [&](UiState &model) {
+      model.build_root = request.build_root; model.game_root = request.game_root;
+      model.gpu_name = request.gpu_name; model.render_target = request.render_target;
+      model.vsync = request.vsync; model.fullscreen = request.fullscreen; model.timing = request.timing;
+    };
+    persist(fixture.initial);
+    for (auto &gate : fixture.gates) persist(gate->result);
+    UiState saved = fixture.initial;
+    saved.status = L"Local settings saved outside the build.";
+    return saved;
+  });
+  Check(window != nullptr, "folder persistence fixture created");
+  if (!window) return;
+  SetLauncherClockForTest(window, 1000, 1800000000);
+  const auto check = [&](unsigned index) {
+    RawClick(window, UiCheckLaunch);
+    fixture.WaitStarted(index + 1);
+    fixture.Release(index);
+    DrainCheck(window);
+  };
+  Edit(window, UiBuildRoot, L"C:/ChosenBuildA");
+  check(0);
+  Check(Text(window, UiReadiness).starts_with(L"Ready.") && saves.size() == 1 &&
+        saves.back().build_root == L"C:/ChosenBuildA" && Text(window, UiStatus).find(L"Setup saved.") != std::wstring::npos,
+        "select A, check: the checked folder A is saved");
+  Edit(window, UiBuildRoot, L"C:/ChosenBuildB");
+  check(1);
+  Check(Text(window, UiReadiness).starts_with(L"Ready.") && saves.size() == 2 &&
+        saves.back().build_root == L"C:/ChosenBuildB" && Text(window, UiBuildRoot) == L"C:/ChosenBuildB",
+        "select B, check: B replaces A");
+  Edit(window, UiBuildRoot, L"C:/ChosenBuildA");
+  RawClick(window, UiCheckLaunch);
+  fixture.WaitStarted(3);
+  Edit(window, UiBuildRoot, L"C:/ChosenBuildB2");
+  fixture.Release(2);
+  DrainCheck(window);
+  Check(saves.size() == 2 && Text(window, UiBuildRoot) == L"C:/ChosenBuildB2" &&
+        !Text(window, UiReadiness).starts_with(L"Ready."),
+        "the pending check of A finishing after B2 was chosen saves nothing and keeps B2");
+  check(3);
+  Check(saves.size() == 3 && saves.back().build_root == L"C:/ChosenBuildB2" &&
+        Text(window, UiReadiness).starts_with(L"Ready."), "checking B2 saves B2");
+  check(4);
+  Check(saves.size() == 3 && Text(window, UiReadiness).starts_with(L"Ready."),
+        "a Ready check of the already saved setup does not save again");
+  Check(!fixture.concurrent && !fixture.wrong_thread, "save runs on the GUI thread, never overlapping a check");
+  DestroyWindow(window);
+}
+
 void TestAsyncStaleAndSerialization() {
   ControlledChecks fixture(2);
   HWND window = CreateLauncherUiForTest([&](UiAction action, const UiRequest &request) {
@@ -1561,6 +1619,7 @@ int main() {
   TestLaunchReadiness();
   TestAutomaticChecks();
   TestAsyncStaleAndSerialization();
+  TestCheckPersistsChosenFolder();
   TestAsyncCloseAndFailure();
   TestReturnedCheckBinding();
   TestLeaseAutomaticRenewal();

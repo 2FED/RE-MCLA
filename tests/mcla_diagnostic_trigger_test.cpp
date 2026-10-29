@@ -265,6 +265,92 @@ void TestJson() {
             !general.wheel,
         "default trigger is general with the reason as source");
 }
+
+// Prefilled tester report.txt written into each package folder.
+void TestPackageReport() {
+  PackageReportFacts facts;
+  facts.package = "live-20261029T120000Z-4242-3";
+  facts.kind = "live";
+  facts.created_utc = "20261029T120001Z";
+  facts.mcla_version = "0.9.0";
+  facts.category = "wheel";
+  facts.source = "wheel-l2";
+  facts.window = "2560x1440 fullscreen";
+
+  WheelState wheel;
+  wheel.trigger_device = 7;
+  JoystickState pad;
+  pad.instance_id = 3;
+  pad.name = "Xbox Controller";
+  pad.guid = "0300aaaa";
+  pad.vendor_id = 0x045E;
+  pad.product_id = 0x028E;
+  pad.is_gamepad = true;
+  JoystickState t300;
+  t300.instance_id = 7;
+  t300.name = "Thrustmaster T300RS Racing wheel";
+  t300.guid = "030000004f04000066b6000000000000";
+  t300.vendor_id = 0x044F;
+  t300.product_id = 0xB66E;
+  t300.is_wheel = true;
+  wheel.devices = {pad, t300};
+  facts.wheel = WheelReportLine(wheel);
+  Check(facts.wheel == "Thrustmaster T300RS Racing wheel | VID 0x044F PID "
+                       "0xB66E | GUID 030000004f04000066b6000000000000",
+        "wheel line names the trigger device model, VID/PID and GUID");
+
+  const auto text = BuildPackageReportText(facts);
+  Check(text.starts_with("MCLA-R TEST REPORT\n\n"), "report header");
+  Check(text.find("\npackage live-20261029T120000Z-4242-3\nkind live\n"
+                  "created_utc 20261029T120001Z\nmcla_version 0.9.0\n"
+                  "category wheel\nsource wheel-l2\nwheel Thrustmaster T300RS") !=
+            std::string::npos,
+        "report carries package, time, version, category and source");
+  Check(text.find("\nwindow 2560x1440 fullscreen\n" +
+                  std::string(kPackageReportPendingLine) + "\n\n1. What were you doing?\n") !=
+            std::string::npos,
+        "pending launcher line precedes the questions");
+  for (const char *question :
+       {"1. What were you doing?", "2. Steps to make it happen again",
+        "3. What went wrong?", "4. What did you expect instead?"}) {
+    Check(text.find(question) != std::string::npos, "four questions present");
+  }
+  Check(text.find('\r') == std::string::npos, "LF only");
+
+  WheelState no_trigger;
+  no_trigger.devices = {pad, t300};
+  Check(WheelReportLine(no_trigger).starts_with("Thrustmaster T300RS"),
+        "without a trigger device the first SDL wheel is named");
+  WheelState only_pad;
+  only_pad.devices = {pad};
+  Check(WheelReportLine(only_pad) == "unknown", "no wheel connected: unknown");
+  Check(WheelReportLine(std::nullopt).starts_with("not-recorded"),
+        "packages without wheel capture say not-recorded");
+  JoystickState odd = t300;
+  odd.name = std::string("Wheel\n\x01\xC3\xA9") + std::string(200, 'x');
+  odd.guid.clear();
+  WheelState odd_state;
+  odd_state.devices = {odd};
+  const auto odd_line = WheelReportLine(odd_state);
+  Check(odd_line.starts_with("Wheel???? ") || odd_line.starts_with("Wheel????x"),
+        "control and non-ASCII bytes are replaced");
+  Check(odd_line.find('\n') == std::string::npos &&
+            odd_line.ends_with("| GUID unknown") &&
+            odd_line.size() < kMaxReportFieldBytes + 64,
+        "fields are bounded and empty GUID is unknown");
+
+  PackageReportFacts crash;
+  crash.package = "crash-20261029T120500Z-4242";
+  crash.kind = "crash";
+  crash.category = "crash";
+  crash.source = "crash";
+  crash.wheel = "not-recorded (crash)";
+  const auto crash_text = BuildPackageReportText(crash);
+  Check(crash_text.find("\nkind crash\ncreated_utc unknown\nmcla_version unknown\n"
+                        "category crash\nsource crash\nwheel not-recorded (crash)\n"
+                        "window unknown\n") != std::string::npos,
+        "crash report never guesses unknown facts");
+}
 } // namespace
 
 int main() {
@@ -274,5 +360,6 @@ int main() {
   TestTracker();
   TestSdkLogClassification();
   TestJson();
+  TestPackageReport();
   std::printf("PASS: %d diagnostic trigger checks\n", checks);
 }

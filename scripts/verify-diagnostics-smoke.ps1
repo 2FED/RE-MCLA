@@ -186,7 +186,8 @@ function Assert-TopLevel([string]$PackageRoot, [string[]]$ArtifactNames, [string
     if (@($expectedFiles | Group-Object | Where-Object Count -ne 1).Count) { throw "$Label package contains duplicate artifact names." }
     $children = @(Get-ChildItem -LiteralPath $PackageRoot -Force)
     if (@($children | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw "$Label package contains a top-level reparse point." }
-    $actualFiles = @($children | Where-Object { -not $_.PSIsContainer } | ForEach-Object Name | Sort-Object)
+    # report.txt is the tester's prefilled answers file: not a manifest artifact.
+    $actualFiles = @($children | Where-Object { -not $_.PSIsContainer -and $_.Name -cne 'report.txt' } | ForEach-Object Name | Sort-Object)
     $expectedFiles = @($expectedFiles | Sort-Object)
     if (($actualFiles -join "`n") -cne ($expectedFiles -join "`n")) { throw "$Label package top-level file topology is invalid." }
     $directories = @($children | Where-Object PSIsContainer | ForEach-Object Name)

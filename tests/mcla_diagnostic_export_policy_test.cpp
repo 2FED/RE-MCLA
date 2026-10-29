@@ -158,6 +158,35 @@ int RunTests() {
     auto untested = unlocked; untested.Field("build",kHash);
     Reject(untested,"unlocked capability record of an untested build is rejected");
   }
+  {
+    // KI-045: an owner-admitted 2160p session exports; its record carries the
+    // admission key and still has to be the canonical plan.
+    Fixture owner; owner.Target(720,false);
+    const auto *target = FindRenderTarget(2160);
+    owner.Field("scale",std::to_string(target->scale));
+    owner.Field("render_target",std::to_string(target->width) + "x" + std::to_string(target->height));
+    owner.Field("guest_mode",std::to_string(target->guest_width) + "x" + std::to_string(target->guest_height));
+    owner.Field("build",kHash);
+    owner.Field("capability_policy","1"); owner.Field("capability_record","capabilities.txt");
+    const auto plan = ResolveCapabilities({kHash,kGame,TimingMode::Stock,2160,true,true});
+    owner.capabilities = plan ? *SerializeCapabilities(*plan) : std::string();
+    Check(owner.capabilities.ends_with("\nadmission owner-allowlist\n"),"owner record names the admission");
+    Accept(owner,"owner-admitted 2160p session metadata accepted");
+    auto stripped = owner;
+    stripped.capabilities.erase(stripped.capabilities.size() - std::string("admission owner-allowlist\n").size());
+    Reject(stripped,"2160p record of an unlisted build without admission is rejected");
+    auto stock = owner;
+    const auto stock_plan = ResolveCapabilities({kHash,kGame,TimingMode::Stock,720,true});
+    stock.Target(720,false); stock.Field("build",kHash);
+    stock.capabilities = stock_plan ? *SerializeCapabilities(*stock_plan) + "admission owner-allowlist\n" : std::string();
+    Reject(stock,"an ungated record cannot claim owner admission");
+  }
+  {
+    // The tester's report.txt is a plain text file in the package folder, not
+    // a manifest artifact; a manifest that lists it is not exported.
+    Fixture listed; listed.manifest["artifacts"].push_back({{"name","report.txt"}});
+    Reject(listed,"report.txt is never an exported package artifact");
+  }
   const auto baseline = Accept(Fixture{},"minimum historical live metadata accepted");
   const auto &record = baseline.at("session_recorded");
   Check(record.at("capabilities") == "unavailable-legacy" && !record.contains("guest_refresh_hz") &&

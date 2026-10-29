@@ -1,4 +1,5 @@
 #include "mcla_session_report.h"
+#include "mcla_diagnostic_trigger.h"
 
 #include <iostream>
 
@@ -89,6 +90,40 @@ int main() {
     Check(text.find(question) != std::string::npos, "report asks the four questions");
   Check(text.find('\r') == std::string::npos && text.find(":\\") == std::string::npos,
         "LF only, no absolute paths");
+
+  // Per-package report.txt: the game writes it with a pending line, the
+  // launcher fills only that line; tester text without the line is kept.
+  Check(prompt.find(L"Each report folder") != std::wstring::npos &&
+        prompt.find(L"has its own report.txt") != std::wstring::npos,
+        "prompt says each report folder has its own report.txt");
+  Check(text.find("its own report.txt") != std::string::npos, "session index points to the per-package files");
+  Check(kPendingSessionLine == mcla::diagnostics::kPackageReportPendingLine,
+        "launcher and game agree on the pending line");
+  mcla::diagnostics::PackageReportFacts facts;
+  facts.package = "live-20261029T120000Z-1-1"; facts.kind = "live"; facts.category = "wheel";
+  facts.source = "wheel-l2"; facts.wheel = "unknown";
+  const auto host = mcla::diagnostics::BuildPackageReportText(facts);
+  const auto filled = FillPackageReport(host, context);
+  Check(filled && filled->find(std::string(kPendingSessionLine)) == std::string::npos &&
+        filled->find("\nwindow unknown\nbuild " + std::string(64, 'A') +
+                     "\nmode unlocked\nrender_target 1280x720\nsession_started_utc 1793200000\n"
+                     "session_ended_utc 1793200600\nexit_code 0\n\n1. What were you doing?\n") != std::string::npos,
+        "launcher replaces only the pending line with the session facts");
+  const auto pending_at = host.find(std::string(kPendingSessionLine));
+  Check(filled && pending_at != std::string::npos && filled->starts_with(host.substr(0, pending_at)) &&
+        filled->ends_with(host.substr(pending_at + kPendingSessionLine.size())),
+        "text around the pending line is unchanged");
+  Check(!FillPackageReport(*filled, context), "a filled report is never filled twice");
+  Check(!FillPackageReport("MCLA-R TEST REPORT\n\n1. What were you doing?\nDriving\n", context),
+        "tester text without the pending line is left alone");
+  const std::string twice = "\n" + std::string(kPendingSessionLine) + "\n" + std::string(kPendingSessionLine) + "\n";
+  Check(!FillPackageReport(twice, context), "an ambiguous file is left alone");
+  const auto fallback = PackageReportText(context, Package{L"crash-20261029T1-9", true});
+  Check(fallback.starts_with("MCLA-R TEST REPORT\n") &&
+        fallback.find("\npackage crash-20261029T1-9\nkind crash\ncategory crash\nbuild ") != std::string::npos &&
+        fallback.find("4. What did you expect instead?") != std::string::npos &&
+        !FillPackageReport(fallback, context),
+        "fallback package report carries facts and the questions");
   std::cout << "Session report: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

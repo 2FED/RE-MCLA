@@ -611,6 +611,37 @@ void AcceptCheck(WindowState &state, const UiRequest &request) {
   }
 }
 
+bool SameSavedSetup(const UiState &saved, const UiRequest &request) {
+  return saved.build_root == request.build_root && saved.game_root == request.game_root &&
+      saved.gpu_name == request.gpu_name && saved.render_target == request.render_target &&
+      saved.vsync == request.vsync && saved.fullscreen == request.fullscreen &&
+      saved.timing == request.timing;
+}
+
+// KI-044: a current, successful check also saves exactly the checked setup, so
+// a newly chosen Build/Game folder survives closing and reopening the launcher.
+// Called only for a result whose request still matches the form; a stale
+// result (setup edited while checking) is discarded before this and saves
+// nothing. Runs on the GUI thread after the worker has finished.
+void PersistCheckedSetup(WindowState &state, const UiRequest &request) {
+  if (state.readiness != LaunchReadiness::Ready || !state.callback || state.model.running ||
+      SameSavedSetup(state.model, request))
+    return;
+  const auto checked_status = state.model.status;
+  state.dispatching = true;
+  try {
+    UiState saved = state.callback(UiAction::SaveSettings, request);
+    const bool persisted = SameSavedSetup(saved, request);
+    const auto detail = saved.status;
+    state.model = std::move(saved);
+    state.model.status = checked_status + (persisted ? std::wstring(L" Setup saved.")
+        : L" Setup was NOT saved: " + detail);
+  } catch (...) {
+    state.model.status = checked_status + L" Setup could not be saved; use Save settings.";
+  }
+  state.dispatching = false;
+}
+
 void StartCheck(HWND window, WindowState &state, bool automatic) {
   if (state.check_worker.valid() || state.dispatching || state.operation || state.closing || state.model.running)
     return;
@@ -652,9 +683,10 @@ bool PollCheck(HWND window, WindowState &state) {
       if (!state.closing && current) {
         state.model = std::move(result);
         if (SelectedManagedRoot(state, state.pending_request) == state.pending_profile_root &&
-            state.model.gpu_names == state.pending_inventory)
+            state.model.gpu_names == state.pending_inventory) {
           AcceptCheck(state, state.pending_request);
-        else
+          PersistCheckedSetup(state, state.pending_request);
+        } else
           InvalidateReadiness(state, L"Profile or GPU inventory changed while checking. CHECK SETUP again.");
       }
     } catch (...) {

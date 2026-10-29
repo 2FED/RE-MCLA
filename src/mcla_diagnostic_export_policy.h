@@ -278,7 +278,11 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
       Require(target && receipt.at("capability_policy") == "1" && receipt.at("capability_record") == "capabilities.txt" &&
               input.capabilities.size() <= kMaximumExportReceiptBytes);
       const auto timing = receipt.at("timing") == kUnlockedTimingKey ? TimingMode::Unlocked : TimingMode::Stock;
-      const auto plan = ResolveCapabilities({receipt.at("build"), receipt.at("game"), timing, target->id, true});
+      // An owner-admitted session (KI-045) carries the admission key; the
+      // canonical re-serialization below still has to match byte for byte.
+      const bool owner = input.capabilities.ends_with(
+          "\nadmission " + std::string(kOwnerAdmissionKey) + "\n");
+      const auto plan = ResolveCapabilities({receipt.at("build"), receipt.at("game"), timing, target->id, true, owner});
       Require(plan.has_value());
       const auto canonical = SerializeCapabilities(*plan);
       Require(canonical && *canonical == input.capabilities);

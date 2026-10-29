@@ -240,6 +240,69 @@ int main() {
   Check(CheckedSettingsDescription(1440, TimingMode::Stock) == CheckedStockSettingsDescription(1440) &&
         CheckedSettingsDescription(1440, TimingMode::Unlocked).find("guest vblank 240 Hz") != std::string::npos &&
         CheckedSettingsDescription(999, TimingMode::Unlocked).empty(),
-        "checked description follows the selected mode");  std::cout << "Capabilities: " << checks << " checks, " << failures << " failures\n";
+        "checked description follows the selected mode");
+  // KI-045 owner admission: an exact listed build gains the gated options;
+  // records show the admission only when it was actually used.
+  {
+    const std::string owner_build(64, 'D');
+    const std::string header(kOwnerAdmissionHeader);
+    const std::string file = header + owner_build + " l41-internal\n" + other_build + "\n";
+    Check(ParseOwnerAdmission(file) && ParseOwnerAdmission(file)->size() == 2, "owner list parses labels and bare rows");
+    Check(OwnerAdmissionListed(file, owner_build) && OwnerAdmissionListed(file, other_build) &&
+          !OwnerAdmissionListed(file, std::string(64, 'E')), "only exact listed fingerprints are admitted");
+    for (const auto &bad : {std::string(), header, header.substr(0, header.size() - 1),
+                            header + owner_build, header + owner_build + "\r\n",
+                            header + owner_build + " \n", header + owner_build + " bad label\n",
+                            header + owner_build + " " + std::string(33, 'x') + "\n",
+                            header + std::string(64, 'd') + "\n", header + owner_build + "\n" + owner_build + "\n",
+                            header + "\n", "MCLA-OWNER-ADMITTED-BUILDS-V2\n" + owner_build + "\n",
+                            header + owner_build + "X\n"})
+      if (bad != header) Check(!OwnerAdmissionListed(bad, owner_build), "malformed owner list admits nothing");
+    Check(ParseOwnerAdmission(header) && ParseOwnerAdmission(header)->empty() &&
+          !OwnerAdmissionListed(header, owner_build), "empty owner list is valid and admits nothing");
+    std::string many = header;
+    for (int i = 0; i < 65; ++i) {
+      std::string row(64, '0'); const auto digits = std::to_string(i);
+      row.replace(64 - digits.size(), digits.size(), digits); many += row + "\n";
+    }
+    Check(!ParseOwnerAdmission(many), "owner list is bounded to 64 entries");
+    Check(!ParseOwnerAdmission(header + std::string(kOwnerAdmissionMaximumBytes, 'A') + "\n"), "owner list is size bounded");
+
+    Reject({owner_build, game, TimingMode::Stock, 2160, true}, CapabilityError::UntestedTargetBuild);
+    Reject({owner_build, game, TimingMode::Unlocked, 720, true}, CapabilityError::UntestedUnlockedBuild);
+    const auto stock = ResolveCapabilities({owner_build, game, TimingMode::Stock, 1440, true, true});
+    Check(stock && !stock->owner_admitted && stock->guest_vblank_hz == 0,
+          "owner admission is not recorded for an ungated stock request");
+    if (stock) {
+      const auto text = SerializeCapabilities(*stock);
+      Check(text && Fields(*text).size() == 17 && text->find("admission") == std::string::npos,
+            "ungated record stays byte-compatible");
+      auto forged = *stock; forged.owner_admitted = true;
+      const auto refused = SerializeCapabilities(forged);
+      Check(!refused && refused.error() == CapabilityError::InconsistentPlan,
+            "an unneeded admission claim cannot be serialized");
+    }
+    for (const auto &[timing, target] : {std::pair{TimingMode::Stock, 2160u}, std::pair{TimingMode::Stock, 1080u},
+                                         std::pair{TimingMode::Unlocked, 720u}, std::pair{TimingMode::Unlocked, 2160u}}) {
+      const auto plan = ResolveCapabilities({owner_build, game, timing, target, true, true});
+      Check(plan && plan->owner_admitted && plan->target.id == target &&
+            plan->guest_vblank_hz == (timing == TimingMode::Unlocked ? 240u : 0u),
+            "owner-admitted build gains 1080p/2160p and Unlocked");
+      if (!plan) continue;
+      const auto text = SerializeCapabilities(*plan);
+      Check(text && text->ends_with("\nadmission owner-allowlist\n") &&
+            Fields(*text).size() == (timing == TimingMode::Unlocked ? 19u : 18u),
+            "owner-admitted record names the admission as its last key");
+      auto stripped = *plan; stripped.owner_admitted = false;
+      Check(!SerializeCapabilities(stripped), "admitted plan cannot drop its admission key");
+    }
+    auto no_vsync = CapabilityRequest{owner_build, game, TimingMode::Unlocked, 720, false, true};
+    Reject(no_vsync, CapabilityError::UnsupportedVsync);
+    Reject({owner_build, game, TimingMode::Fixed60, 720, true, true}, CapabilityError::UnverifiedTiming);
+    Reject({owner_build, game, TimingMode::Stock, 999, true, true}, CapabilityError::UnknownRenderTarget);
+    const auto tested = ResolveCapabilities({std::string(kRenderTargetTestedBuild), game, TimingMode::Stock, 2160, true, true});
+    Check(tested && !tested->owner_admitted, "tested builds never record owner admission");
+  }
+  std::cout << "Capabilities: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

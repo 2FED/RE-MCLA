@@ -2,6 +2,8 @@
 #include "mcla_launcher_build_win.h"
 #include "mcla_launcher_capabilities.h"
 #include "mcla_managed_config_policy.h"
+#include "mcla_diagnostic_trigger.h"
+#include "mcla_session_report.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -166,6 +168,14 @@ int FakeChild(int argc, wchar_t **argv) {
       !NewFile(live / L"live-fixture-3" / L"manifest.json",
                "{\n  \"kind\": \"live\",\n  \"reason\": \"wheel-l2\",\n"
                "  \"trigger\": {\"category\": \"wheel\", \"source\": \"wheel-l2\"}\n}\n")) return finish(96);
+  // Per-package report.txt: package 3 as the game writes it (pending line),
+  // package 4 already answered by the tester, package 1 without one.
+  mcla::diagnostics::PackageReportFacts facts;
+  facts.package = "live-fixture-3"; facts.kind = "live"; facts.category = "wheel";
+  facts.source = "wheel-l2"; facts.wheel = "unknown";
+  if (!NewFile(live / L"live-fixture-3" / L"report.txt", mcla::diagnostics::BuildPackageReportText(facts)) ||
+      !CreateDirectoryW((live / L"live-fixture-4").c_str(), nullptr) ||
+      !NewFile(live / L"live-fixture-4" / L"report.txt", "TESTER ANSWERS KEPT\n")) return finish(97);
   if (!NewFile(path(L"user_data_root") / L"fixture-save.bin", "FIXTURE_SAVE_ONLY\n") ||
       !NewFile(cwd / L"fixture-ready.txt", "ROOTS_ENV_SETTINGS_SENTINEL_PASS\n")) return finish(90);
   const auto started = GetTickCount64();
@@ -551,6 +561,29 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
           stopped.status.find(L"render-target-tested build")!=std::wstring::npos,
           "Play independently rejects unproven target before profile or session writes");
   }
+  {
+    // KI-045: the owner admission file in the local settings directory admits
+    // the exact listed build for 2160p and Unlocked; nothing else changes.
+    const auto fingerprint=HashFile(build/L"mcla-build.manifest"); if(!fingerprint) return false;
+    const auto list=matrix/L"store"/L"owner-admitted-builds.txt";
+    if(!NewFile(list,"MCLA-OWNER-ADMITTED-BUILDS-V1\n"+std::string(64,'D')+" other\n"+*fingerprint+" fixture\n")) return false;
+    auto owner=request; owner.render_target=2160;
+    const auto admitted=run_check(owner,LaunchReadiness::Ready,"owner-listed build admits 2160p in the read-only check");
+    Check(admitted.status.find(L"Owner-admitted build")!=std::wstring::npos,"check names the owner admission");
+    owner=request; owner.timing=TimingMode::Unlocked;
+    run_check(owner,LaunchReadiness::Ready,"owner-listed build admits Unlocked");
+    const auto stock=run_check(request,LaunchReadiness::Ready,"stock on an owner-listed build is unchanged");
+    Check(stock.status.find(L"Owner-admitted")==std::wstring::npos,"ungated stock check does not claim owner admission");
+    if(!MoveFileExW(list.c_str(),(matrix/L"preserved-owner-list.txt").c_str(),MOVEFILE_WRITE_THROUGH) ||
+       !NewFile(list,"MCLA-OWNER-ADMITTED-BUILDS-V1\n"+*fingerprint+"\r\n")) return false;
+    owner=request; owner.render_target=2160;
+    run_check(owner,LaunchReadiness::Blocked,"malformed owner list admits nothing");
+    if(!MoveFileExW(list.c_str(),(matrix/L"rejected-owner-list.txt").c_str(),MOVEFILE_WRITE_THROUGH) ||
+       !NewFile(list,"MCLA-OWNER-ADMITTED-BUILDS-V1\n"+std::string(64,'D')+"\n")) return false;
+    run_check(owner,LaunchReadiness::Blocked,"owner list without this build admits nothing");
+    if(!MoveFileExW(list.c_str(),(matrix/L"other-owner-list.txt").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+    run_check(owner,LaunchReadiness::Blocked,"without the owner list 2160p is refused again");
+  }
   controller.Dispatch(UiAction::SaveSettings,Settings(p));
   invalid=request; invalid.build_root=bad_build.wstring();
   run_check(invalid,LaunchReadiness::Blocked,"malformed build inventory is Blocked");
@@ -756,6 +789,59 @@ bool ExportControllerMatrix(const std::filesystem::path &root, LauncherControlle
   Check(!repeated.export_result.complete && Children(destination).size()==1 && unchanged(),
         "completed export token cannot publish another directory");
   controller.Dispatch(UiAction::ExportCancel,request);
+  return true;
+}
+
+// KI-044: Check stays read-only; the UI saves the checked setup with
+// SaveSettings only for a current Ready result. A late check of the previous
+// folder never reverts the saved new folder, and a reopened store keeps it.
+bool FolderChoiceMatrix(const std::filesystem::path &root,
+                        const std::filesystem::path &build_a,
+                        const std::filesystem::path &game) {
+  const auto matrix=root/L"folder-choice";
+  const auto build_b=matrix/L"build-b";
+  for(const auto &path:{matrix,build_b,matrix/L"store",matrix/L"profiles"})
+    if(!CreateDirectoryW(path.c_str(),nullptr)) return false;
+  if(!CopyFileW((build_a/L"mcla.exe").c_str(),(build_b/L"mcla.exe").c_str(),TRUE) ||
+     !NewFile(build_b/L"mcla_crash_handler.exe","folder choice build B\n")) return false;
+  const auto host=HashFile(build_b/L"mcla.exe"), helper=HashFile(build_b/L"mcla_crash_handler.exe");
+  if(!host || !helper) return false;
+  if(!NewFile(build_b/L"mcla-build.manifest","MCLA-DEV-BUILD-V1\n"+*host+" "+
+      std::to_string(std::filesystem::file_size(build_b/L"mcla.exe"))+" mcla.exe\n"+*helper+" "+
+      std::to_string(std::filesystem::file_size(build_b/L"mcla_crash_handler.exe"))+" mcla_crash_handler.exe\n")) return false;
+  const auto preferences=matrix/L"store/preferences.dat";
+  Preferences p; p.build_root=U16(build_a); p.game_root=U16(game); p.gpu_name=u"Fixture"; p.render_target=1440;
+  {
+    auto store=OpenPreferenceStore((matrix/L"store").wstring()); if(!store) return false;
+    auto profile=CreateManagedProfile(p,(matrix/L"profiles").wstring(),u"Choice",store->directory());
+    if(!profile) return false;
+    p.library.entries.push_back(*profile); p.library.selected_id=profile->id;
+    if(!store->Save(p)) return false;
+    LauncherController controller(std::move(*store));
+    const auto request_a=Settings(p);
+    auto request_b=request_a; request_b.build_root=build_b.wstring();
+    const auto saved_a=Read(preferences);
+    const auto checked_b=controller.Dispatch(UiAction::CheckLaunch,request_b);
+    Check(checked_b.readiness==LaunchReadiness::Ready && Read(preferences)==saved_a &&
+          checked_b.build_root==build_a.wstring(),
+          "Check of a newly chosen folder is read-only and reports the saved folder");
+    const auto saved=controller.Dispatch(UiAction::SaveSettings,request_b);
+    Check(saved.build_root==build_b.wstring() && Read(preferences)!=saved_a,
+          "saving the checked setup persists the new folder");
+    const auto saved_b=Read(preferences);
+    const auto late=controller.Dispatch(UiAction::CheckLaunch,request_a);
+    Check(late.readiness==LaunchReadiness::Ready && Read(preferences)==saved_b && late.build_root==build_b.wstring(),
+          "a late check of the previous folder never reverts the saved new folder");
+    const auto again=controller.Dispatch(UiAction::CheckLaunch,request_b);
+    Check(again.readiness==LaunchReadiness::Ready && Read(preferences)==saved_b,
+          "a second check of the new folder keeps it saved");
+  }
+  auto reopened=OpenPreferenceStore((matrix/L"store").wstring()); if(!reopened) return false;
+  Check(std::filesystem::path(reopened->preferences().build_root)==build_b,
+        "reopening the launcher keeps the newly chosen folder");
+  LauncherController restarted(std::move(*reopened));
+  Check(restarted.Dispatch(UiAction::Refresh,{}).build_root==build_b.wstring(),
+        "restarted launcher shows the newly chosen folder");
   return true;
 }
 
@@ -979,18 +1065,35 @@ int wmain(int argc, wchar_t **argv) {
     Check(!final.report_folder.empty() &&
           std::filesystem::equivalent(std::filesystem::path(final.report_folder), diagnostics),
           "finished session with a package offers its own diagnostics folder");
-    Check(final.report_prompt.starts_with(L"2 reports were recorded in this session (1 wheel report)."),
+    Check(final.report_prompt.starts_with(L"3 reports were recorded in this session (1 wheel report).") &&
+          final.report_prompt.find(L"has its own report.txt") != std::wstring::npos,
           "prompt counts only the completed packages and the wheel report");
     Check(report.starts_with("MCLA-R TEST REPORT\n") && report.find("\nmode stock\n") != report.npos &&
           report.find("\nrender_target 2560x1440\n") != report.npos &&
-          report.find("  live/live-fixture-1  general\n  live/live-fixture-3  wheel\n") != report.npos &&
+          report.find("  live/live-fixture-1  general\n  live/live-fixture-3  wheel\n"
+                      "  live/live-fixture-4  general\n") != report.npos &&
           report.find(".partial") == report.npos &&
           report.find("\nexit_code 0\n") != report.npos,
           "report.txt is prefilled with build facts and the package list");
+    const auto receipt_build = RecordFields(Read(session / L"launch-receipt.txt"), "MCLA-MANAGED-SESSION-V1\n");
+    const std::string facts = "build " + (receipt_build.contains("build") ? receipt_build.at("build") : std::string("?")) +
+        "\nmode stock\nrender_target 2560x1440\n";
+    const auto created = Read(diagnostics / L"live/live-fixture-1/report.txt");
+    const auto filled = Read(diagnostics / L"live/live-fixture-3/report.txt");
+    Check(created.starts_with("MCLA-R TEST REPORT\n") && created.find("\npackage live-fixture-1\nkind live\ncategory general\n" +
+          facts) != created.npos && created.find("\nexit_code 0\n") != created.npos,
+          "launcher creates a per-package report.txt where the game wrote none");
+    Check(filled.find("\nsource wheel-l2\n") != filled.npos && filled.find("\nwindow unknown\n" + facts) != filled.npos &&
+          filled.find(std::string(report::kPendingSessionLine)) == filled.npos,
+          "launcher fills the game's pending line with the session facts");
+    Check(Read(diagnostics / L"live/live-fixture-4/report.txt") == "TESTER ANSWERS KEPT\n" &&
+          !std::filesystem::exists(diagnostics / L"live/live-fixture-2.partial/report.txt"),
+          "tester text is never overwritten and unfinished packages get no report");
     const auto opened = first.Dispatch(UiAction::OpenReportFolder, {});
     Check(opened.report_folder.empty() && opened.report_prompt.empty(), "opening the folder clears the prompt");
     first.Dispatch(UiAction::OpenReportFolder, {});
-    Check(Read(diagnostics / L"report.txt") == report, "a second open neither rewrites nor duplicates the report");
+    Check(Read(diagnostics / L"report.txt") == report && Read(diagnostics / L"live/live-fixture-3/report.txt") == filled,
+          "a second open neither rewrites nor duplicates the reports");
   }
   Check(Read(session / L"before-snapshot.txt") == "MCLA-SAVE-SNAPSHOT-V1\n" &&
       Read(session / L"after-snapshot.txt").find("F ") != std::string::npos,
@@ -1176,6 +1279,7 @@ int wmain(int argc, wchar_t **argv) {
   Check(ReadOnlyPreflightMatrix(root, build, game, bad_build), "read-only launch preflight matrix completed");
   Check(SupportDirectoryMatrix(root,build,game,bad_build),"support directory repair matrix completed");
   Check(CollectionParentMatrix(root,build,game),"optional collection parent hint matrix completed");
+  Check(FolderChoiceMatrix(root,build,game),"folder choice persistence matrix completed");
   std::cout << "Launcher controller: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

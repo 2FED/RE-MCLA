@@ -27,11 +27,14 @@ contains no game files.
      times. (Start+Back may also open the pause menu; that is fine.)
    - Wheel or force-feedback bug (for example the wheel stops centering):
      press wheel L2. This also records the wheel state.
-   - report.txt marks each report as "general", "wheel" or "crash".
+   - Each report folder contains report.txt; fill it in. It already names the
+     game version, the time and the kind of report ("general", "wheel" or
+     "crash"); a wheel report also names your wheel.
    - The game may also save a report by itself if it crashes.
    - After you close the game, the launcher tells you how many reports were
-     recorded and offers to open the folder. Open report.txt there, answer the
-     four questions, save it, and send the whole folder to the owner.
+     recorded and offers to open the folder. Open each report folder, answer
+     the four questions in its report.txt, save it, and send that whole report
+     folder to the owner. The report.txt next to the report folders lists them.
    - Nothing is uploaded automatically. Reports contain your save file copy and
      a screenshot, so send them only to the owner.
 
@@ -77,11 +80,14 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      може також відкрити меню паузи; це нормально.)
    - Баг керма чи віддачі (force feedback), наприклад кермо перестало
      центруватися: натисніть L2 на кермі. Так записується ще й стан керма.
-   - У report.txt кожен звіт позначено як "general", "wheel" або "crash".
+   - У кожній папці звіту є report.txt; заповніть його. У ньому вже вказано
+     версію гри, час і тип звіту ("general", "wheel" або "crash"); у звіті
+     керма вказано й ваше кермо.
    - Якщо гра впаде, звіт може зберегтися сам.
    - Коли закриєте гру, лаунчер скаже, скільки звітів записано, і запропонує
-     відкрити папку. Відкрийте там report.txt, дайте відповіді на чотири
-     питання, збережіть і надішліть усю папку власнику.
+     відкрити папку. Відкрийте кожну папку звіту, дайте відповіді на чотири
+     питання в її report.txt, збережіть і надішліть усю цю папку звіту
+     власнику. report.txt поруч із папками звітів містить їх перелік.
    - Нічого не відправляється автоматично. У звітах є копія вашого сейву і
      знімок екрана, тож надсилайте їх лише власнику.
 

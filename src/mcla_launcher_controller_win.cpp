@@ -65,6 +65,36 @@ std::string LiveCategory(const std::wstring &root,const std::wstring &name) {
 std::expected<void,std::wstring> Text(const fs::DirectoryGuard &dir, std::wstring_view name, std::string_view value) {
   return fs::AtomicWrite(dir,name,{reinterpret_cast<const uint8_t *>(value.data()),value.size()});
 }
+// Per-package report.txt: the game writes it with the package; fill its single
+// pending line with the session facts, or create one when it is missing. A
+// file without the pending line (the tester's text) is never rewritten.
+// Returns false if any package report could not be completed.
+bool CompletePackageReports(const std::wstring &root,const std::vector<report::Package> &packages,
+                            const report::Context &context) {
+  bool all=true;
+  for(const auto &package:packages) {
+    auto folder=fs::OpenDirectory(root+(package.crash?L"\\crash\\":L"\\live\\")+package.name);
+    if(!folder) { all=false; continue; }
+    const auto path=Native(folder->path()+L"\\"+std::wstring(report::kReportFile));
+    if(GetFileAttributesW(path.c_str())!=INVALID_FILE_ATTRIBUTES) {
+      auto bytes=fs::ReadFile(*folder,report::kReportFile,64*1024);
+      if(!bytes) { all=false; continue; }
+      auto filled=report::FillPackageReport({reinterpret_cast<const char*>(bytes->data()),bytes->size()},context);
+      if(filled && !Text(*folder,report::kReportFile,*filled)) all=false;
+      continue;
+    }
+    if(GetLastError()!=ERROR_FILE_NOT_FOUND) { all=false; continue; }
+    // CREATE_NEW: a report.txt that appears meanwhile is never replaced.
+    const auto text=report::PackageReportText(context,package);
+    HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(file==INVALID_HANDLE_VALUE) { all=false; continue; }
+    DWORD written=0;
+    all&=WriteFile(file,text.data(),static_cast<DWORD>(text.size()),&written,nullptr) &&
+        written==text.size() && FlushFileBuffers(file);
+    CloseHandle(file);
+  }
+  return all;
+}
 std::expected<std::wstring,std::wstring> UniqueId() {
   std::array<unsigned char,16> bytes{};
   if (BCryptGenRandom(nullptr,bytes.data(),static_cast<ULONG>(bytes.size()),BCRYPT_USE_SYSTEM_PREFERRED_RNG)<0)
@@ -175,10 +205,20 @@ const ProfileEntry *Selected(const Preferences &p) {
   for(const auto &e:p.library.entries) if(e.id==p.library.selected_id) return &e;
   return nullptr;
 }
+// Owner admission (KI-045): an optional, strictly parsed list of exact build
+// fingerprints in the local settings directory. Never read from a build or
+// package folder; a missing/unreadable/malformed file admits nothing.
+bool OwnerAdmitted(const fs::DirectoryGuard &store,std::string_view fingerprint) {
+  auto bytes=fs::ReadFile(store,kOwnerAdmissionFile,kOwnerAdmissionMaximumBytes);
+  if(!bytes) return false;
+  return OwnerAdmissionListed({reinterpret_cast<const char*>(bytes->data()),bytes->size()},fingerprint);
+}
 std::expected<CapabilityPlan,std::wstring> AdmitCapabilities(
-    const Preferences &preferences,const VerifiedBuild &build,const VerifiedGame &game) {
+    const Preferences &preferences,const VerifiedBuild &build,const VerifiedGame &game,
+    const fs::DirectoryGuard &store) {
   auto plan=ResolveCapabilities({build.fingerprint(),game.fingerprint(),preferences.timing,
-                                preferences.render_target,preferences.vsync});
+                                preferences.render_target,preferences.vsync,
+                                OwnerAdmitted(store,build.fingerprint())});
   if(!plan) {
     const auto error=CapabilityErrorDescription(plan.error());
     return std::unexpected(std::wstring(error.begin(),error.end()));
@@ -433,8 +473,9 @@ struct LauncherController::State {
         if(!existing_cache) return std::unexpected(existing_cache.error());
       }
       auto verified_game=VerifySelectedGame(*game); if(!verified_game) return std::unexpected(verified_game.error());
-      auto capability=AdmitCapabilities(p,*build,*verified_game);
+      auto capability=AdmitCapabilities(p,*build,*verified_game,store.directory());
       if(!capability) return std::unexpected(capability.error());
+      if(capability->owner_admitted) support_notice+=L" Owner-admitted build (owner list), not a tested build.";
       uint64_t expires=0;
 #ifndef MCLA_LAUNCHER_CONTROLLER_TESTING
       // Synthetic controller builds use their existing fake-host exemption.
@@ -715,7 +756,7 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
 #endif
   auto verified_game=VerifySelectedGame(*game);
   if(!verified_game) return std::unexpected(verified_game.error());
-  auto capability=AdmitCapabilities(p,*build,*verified_game);
+  auto capability=AdmitCapabilities(p,*build,*verified_game,store.directory());
   if(!capability) return std::unexpected(capability.error());
   const auto &target=capability->target;
   auto capability_record=SerializeCapabilities(*capability);
@@ -850,6 +891,8 @@ std::expected<void,std::wstring> LauncherController::State::Poll() {
     if(folder && Text(*folder,report::kReportFile,report::ReportText(context,packages)))
       pending_report=PendingReport{folder->path(),report::PromptText(packages)};
     else status+=L" Reports were recorded, but report.txt could not be written; use Open diagnostics.";
+    if(!CompletePackageReports(session->diagnostics_path,packages,context))
+      status+=L" Some report folders have no completed report.txt; answer in the session report.txt instead.";
   }
   session.reset();
   return result;

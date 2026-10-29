@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,6 +14,11 @@
 namespace mcla::launcher::report {
 
 inline constexpr std::wstring_view kReportFile = L"report.txt";
+// The game writes report.txt into each package folder with this line; the
+// launcher replaces only this line with the session facts after the game
+// closes (same text as mcla::diagnostics::kPackageReportPendingLine).
+inline constexpr std::string_view kPendingSessionLine =
+    "launcher_session pending: the launcher adds build, mode and resolution after the game closes";
 inline constexpr size_t kMaximumPackages = 64;
 
 struct Package {
@@ -82,8 +88,9 @@ inline std::wstring PromptText(const std::vector<Package> &packages) {
     if (wheels) text += std::to_wstring(wheels) + (wheels == 1 ? L" wheel report" : L" wheel reports");
     text += L")";
   }
-  text += L".\n\nOpen the folder now? Fill in report.txt there, then send the whole folder "
-          L"to the owner by hand. Nothing is uploaded automatically.";
+  text += L".\n\nOpen the folder now? Each report folder (live\\... or crash\\...) has its own "
+          L"report.txt: fill it in, then send that whole report folder to the owner by hand. "
+          L"report.txt next to them lists all reports of this session. Nothing is uploaded automatically.";
   return text;
 }
 
@@ -97,10 +104,46 @@ struct Context {
   int64_t exit_code = 0;
 };
 
+inline std::string SessionFacts(const Context &context) {
+  return "build " + context.build + "\nmode " + context.timing + "\nrender_target " + context.render_target +
+      "\nsession_started_utc " + std::to_string(context.started_utc) +
+      "\nsession_ended_utc " + std::to_string(context.ended_utc) +
+      "\nexit_code " + std::to_string(context.exit_code) + "\n";
+}
+
+inline constexpr std::string_view kReportQuestions =
+    "\n1. What were you doing?\n\n\n"
+    "2. Steps to make it happen again (if you know):\n\n\n"
+    "3. What went wrong?\n\n\n"
+    "4. What did you expect instead?\n\n";
+
+// A package report.txt written by the game: replace its single pending line
+// with the session facts. nullopt (leave the file alone) when the line is not
+// present exactly once, for example after the tester edited it.
+inline std::optional<std::string> FillPackageReport(std::string_view existing, const Context &context) {
+  const std::string line = "\n" + std::string(kPendingSessionLine) + "\n";
+  const auto at = existing.find(line);
+  if (at == std::string_view::npos || existing.find(line, at + 1) != std::string_view::npos) return std::nullopt;
+  return std::string(existing.substr(0, at + 1)) + SessionFacts(context) +
+      std::string(existing.substr(at + line.size()));
+}
+
+// Fallback for a package without report.txt (an older game build or a failed
+// write): the launcher creates one. Never used to replace an existing file.
+inline std::string PackageReportText(const Context &context, const Package &package) {
+  return "MCLA-R TEST REPORT\n\n"
+      "Written by the launcher after the session. Please answer the four questions below,\n"
+      "save this file, and send this whole folder to the owner. Nothing is uploaded.\n\n"
+      "package " + std::string(package.name.begin(), package.name.end()) +
+      "\nkind " + (package.crash ? "crash" : "live") + "\ncategory " + PackageCategory(package) + "\n" +
+      SessionFacts(context) + std::string(kReportQuestions);
+}
+
 inline std::string ReportText(const Context &context, const std::vector<Package> &packages) {
   std::string text = "MCLA-R TEST REPORT\n\n"
-      "Written by the launcher after the session. Please answer the questions below,\n"
-      "save this file, and send the whole folder to the owner. Nothing is uploaded.\n\n"
+      "Written by the launcher after the session. Each report folder listed below has\n"
+      "its own report.txt: answer the questions there and send that folder. You may\n"
+      "also answer here for the whole session. Nothing is uploaded.\n\n"
       "build " + context.build + "\nmode " + context.timing + "\nrender_target " + context.render_target +
       "\nsession_started_utc " + std::to_string(context.started_utc) +
       "\nsession_ended_utc " + std::to_string(context.ended_utc) +
@@ -109,10 +152,7 @@ inline std::string ReportText(const Context &context, const std::vector<Package>
   for (const auto &package : packages)
     text += std::string(package.crash ? "  crash/" : "  live/") +
             std::string(package.name.begin(), package.name.end()) + "  " + PackageCategory(package) + "\n";
-  text += "\n1. What were you doing?\n\n\n"
-          "2. Steps to make it happen again (if you know):\n\n\n"
-          "3. What went wrong?\n\n\n"
-          "4. What did you expect instead?\n\n";
+  text += kReportQuestions;
   return text;
 }
 

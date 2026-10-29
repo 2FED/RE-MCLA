@@ -9,7 +9,8 @@
 //  - one-package-per-press edge trigger with release re-arm;
 //  - the gamepad Start+Back hold combo;
 //  - a small ring buffer of host-observed active-device transitions;
-//  - the "wheel" section written into state.json for wheel snapshots.
+//  - the "wheel" section written into state.json for wheel snapshots;
+//  - the prefilled tester report.txt written into each package folder.
 // The SDL adapter is mcla_diagnostic_triggers_sdl.cpp.
 
 #include <array>
@@ -495,6 +496,86 @@ inline std::string BuildWheelStateJson(const WheelState &wheel) {
          detail::JsonStringArray(wheel.sdk_device_log, "    ") + "\n";
   out += "  }";
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Prefilled tester report.txt in each live/crash package folder. A plain text
+// file for the tester's answers: it is not a manifest artifact (no hash), and
+// the metadata export never reads it. The launcher later replaces only the
+// pending line with session facts (build, mode, resolution, exit code).
+
+inline constexpr std::string_view kPackageReportFile = "report.txt";
+inline constexpr std::string_view kPackageReportPendingLine =
+    "launcher_session pending: the launcher adds build, mode and resolution after the game closes";
+inline constexpr size_t kMaxReportFieldBytes = 128;
+
+// Printable ASCII only (other bytes become '?'), bounded; "unknown" if empty.
+inline std::string ReportField(std::string_view value) {
+  std::string out;
+  for (const unsigned char c : value.substr(0, kMaxReportFieldBytes)) {
+    out.push_back(c >= 0x20 && c < 0x7f ? static_cast<char>(c) : '?');
+  }
+  return out.empty() ? std::string("unknown") : out;
+}
+
+// The connected wheel from the wheel-state capture: the trigger device, else
+// the first device SDL reports as a wheel. Never guessed.
+inline std::string WheelReportLine(const std::optional<WheelState> &wheel) {
+  if (!wheel) {
+    return "not-recorded (wheel L2 records the wheel)";
+  }
+  const JoystickState *device = nullptr;
+  if (wheel->trigger_device) {
+    for (const auto &d : wheel->devices) {
+      if (d.instance_id == *wheel->trigger_device) {
+        device = &d;
+      }
+    }
+  }
+  if (!device) {
+    for (const auto &d : wheel->devices) {
+      if (d.is_wheel && !device) {
+        device = &d;
+      }
+    }
+  }
+  if (!device) {
+    return "unknown";
+  }
+  return ReportField(device->name) + " | VID " + detail::Hex16(device->vendor_id) +
+         " PID " + detail::Hex16(device->product_id) + " | GUID " +
+         ReportField(device->guid);
+}
+
+struct PackageReportFacts {
+  std::string package;      // package folder name
+  std::string kind;         // "live" or "crash"
+  std::string created_utc;  // e.g. 20261029T120000Z
+  std::string mcla_version;
+  std::string category;     // general / wheel / crash
+  std::string source;       // f10 / wheel-r2 / wheel-l2 / pad / crash / reason
+  std::string window;       // e.g. "2560x1440 fullscreen"; empty = unknown
+  std::string wheel;        // WheelReportLine()
+};
+
+inline std::string BuildPackageReportText(const PackageReportFacts &facts) {
+  return "MCLA-R TEST REPORT\n\n"
+         "Written by the game when this report was recorded. Please answer the four\n"
+         "questions below, save this file, and send this whole folder to the owner by\n"
+         "hand. Nothing is uploaded automatically.\n\n"
+         "package " + ReportField(facts.package) +
+         "\nkind " + ReportField(facts.kind) +
+         "\ncreated_utc " + ReportField(facts.created_utc) +
+         "\nmcla_version " + ReportField(facts.mcla_version) +
+         "\ncategory " + ReportField(facts.category) +
+         "\nsource " + ReportField(facts.source) +
+         "\nwheel " + (facts.wheel.empty() ? std::string("unknown") : facts.wheel) +
+         "\nwindow " + ReportField(facts.window) + "\n" +
+         std::string(kPackageReportPendingLine) +
+         "\n\n1. What were you doing?\n\n\n"
+         "2. Steps to make it happen again (if you know):\n\n\n"
+         "3. What went wrong?\n\n\n"
+         "4. What did you expect instead?\n\n";
 }
 
 } // namespace mcla::diagnostics
