@@ -1,0 +1,363 @@
+diff --git a/third_party/rexglue-sdk/include/rex/input/sdl/slot_mapping.h b/third_party/rexglue-sdk/include/rex/input/sdl/slot_mapping.h
+index 3128899..28cc69b 100644
+--- a/third_party/rexglue-sdk/include/rex/input/sdl/slot_mapping.h
++++ b/third_party/rexglue-sdk/include/rex/input/sdl/slot_mapping.h
+@@ -12,6 +12,7 @@
+ #include <array>
+ #include <cstdint>
+ #include <optional>
++#include <string_view>
+ 
+ namespace rex::input::sdl {
+ 
+@@ -86,4 +87,45 @@ constexpr bool IsInputSlotAuditChallengeButton(uint32_t sdl_button) {
+   return sdl_button == 0;
+ }
+ 
++// SDL backend that enumerated a joystick, from the driver signature SDL stores
++// in byte 14 of the joystick GUID. DirectInput and other backends store 0.
++constexpr std::string_view SdlJoystickBackendName(uint8_t guid_driver_signature) {
++  switch (guid_driver_signature) {
++    case 'x':
++      return "xinput";
++    case 'w':
++      return "wgi";
++    case 'g':
++      return "gameinput";
++    case 'h':
++      return "hidapi";
++    case 'm':
++      return "mfi";
++    case 'r':
++      return "rawinput";
++    case 'v':
++      return "virtual";
++    case 0:
++      return "dinput-or-other";
++    default:
++      return "unknown";
++  }
++}
++
++// SDL's XInput backend reports "XInput#<user index>", which is safe and useful
++// in diagnostics. Other backends report OS device-interface paths that can
++// carry serial numbers or Bluetooth addresses, so they are withheld.
++constexpr std::string_view PrivacySafeSdlDevicePath(std::string_view path) {
++  constexpr std::string_view kXInputPrefix = "XInput#";
++  if (path.size() > kXInputPrefix.size() && path.size() <= kXInputPrefix.size() + 3 &&
++      path.substr(0, kXInputPrefix.size()) == kXInputPrefix) {
++    for (const char c : path.substr(kXInputPrefix.size())) {
++      if (c < '0' || c > '9')
++        return "withheld";
++    }
++    return path;
++  }
++  return path.empty() ? std::string_view("none") : std::string_view("withheld");
++}
++
+ }  // namespace rex::input::sdl
+diff --git a/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp b/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp
+index 2bf69ea..a653f46 100644
+--- a/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp
++++ b/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp
+@@ -29,6 +29,11 @@
+ 
+ REXCVAR_DEFINE_STRING(hid_mappings_file, "gamecontrollerdb.txt", "Input",
+                       "Path to SDL gamecontroller mappings file");
++// KI-040 opt-in: let SDL see XInput-class pads that Windows could not give one
++// of the four XInput user indices (extra or virtual pads). Off by default:
++// RawInput without XInput correlation merges triggers and loses rumble.
++REXCVAR_DEFINE_BOOL(hid_sdl_rawinput, false, "Input",
++                    "Experimental: enumerate gamepads through SDL's Windows RawInput backend");
+ REXCVAR_DEFINE_INT32(wheel_steering_axis, 0, "Input/Wheel", "Raw steering axis (-1 disables)")
+     .range(-1, 31);
+ REXCVAR_DEFINE_INT32(wheel_brake_axis, 1, "Input/Wheel", "Raw brake axis (-1 disables)")
+@@ -222,6 +227,12 @@ void SDLInputDriver::OnWindowAvailable(rex::ui::Window* window) {
+           },
+           this);
+ 
++      // Hints must be set before the joystick subsystem starts.
++      if (REXCVAR_GET(hid_sdl_rawinput)) {
++        SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "1");
++        REXLOG_INFO("SDL: RawInput joystick backend enabled (hid_sdl_rawinput).");
++      }
++
+       // Initialize game controller subsystem
+       if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
+         REXLOG_ERROR("SDL: Failed to init gamecontroller subsystem: {}", SDL_GetError());
+@@ -957,11 +968,17 @@ void SDLInputDriver::OnControllerDeviceAddedLocked(const SDL_Event& event) {
+       "JoystickType({}), "
+       "GameControllerType({}), "
+       "VendorID(0x{:04X}), "
+-      "ProductID(0x{:04X})",
++      "ProductID(0x{:04X}), "
++      "Instance({}), "
++      "Backend({}), "
++      "Path(\"{}\")",
+       SDL_GetGamepadName(controller),
+       static_cast<int>(SDL_GetJoystickType(SDL_GetGamepadJoystick(controller))),
+       static_cast<int>(SDL_GetGamepadType(controller)), SDL_GetGamepadVendor(controller),
+-      SDL_GetGamepadProduct(controller));
++      SDL_GetGamepadProduct(controller), static_cast<uint32_t>(event.gdevice.which),
++      SdlJoystickBackendName(SDL_GetJoystickGUIDForID(event.gdevice.which).data[14]),
++      PrivacySafeSdlDevicePath(SDL_GetGamepadPath(controller) ? SDL_GetGamepadPath(controller)
++                                                              : ""));
+   uint32_t occupied_slot_mask = 0;
+   for (uint32_t slot = 0; slot < controllers_.size(); ++slot) {
+     if (IsControllerConnected(controllers_.at(slot)))
+diff --git a/third_party/rexglue-sdk/tests/unit/input/sdl_slot_mapping_test.cpp b/third_party/rexglue-sdk/tests/unit/input/sdl_slot_mapping_test.cpp
+index 46ed2c6..f25897a 100644
+--- a/third_party/rexglue-sdk/tests/unit/input/sdl_slot_mapping_test.cpp
++++ b/third_party/rexglue-sdk/tests/unit/input/sdl_slot_mapping_test.cpp
+@@ -79,3 +79,84 @@ TEST_CASE("Latest meaningful input alternates guest slot zero between wheel and
+ 
+   CHECK(ChooseMostRecentlyActiveController(0x4, activity) == 2);
+ }
++
++TEST_CASE("Hot remove and re-add with a new SDL instance re-binds guest slot zero",
++          "[input][sdl][slot][hotplug]") {
++  // KI-040: one pad, removed and re-added by SDL under a new instance id.
++  // Connect: the first device owns physical slot 0 and guest slot 0.
++  uint32_t connected = 0;
++  std::array<uint64_t, rex::input::sdl::kControllerSlotCount> activity = {};
++  auto slot = ChooseControllerSlot(0, connected);
++  REQUIRE(slot == 0);
++  connected |= uint32_t(1) << *slot;
++  std::optional<uint32_t> active = slot;
++  CHECK(ResolveLogicalControllerSlot(0, active, connected) == 0);
++
++  // Remove: the slot is freed and the fallback finds nothing, so guest slot 0
++  // reports not-connected instead of a stale device.
++  connected &= ~(uint32_t(1) << *slot);
++  active = ChooseMostRecentlyActiveController(connected, activity);
++  CHECK_FALSE(active.has_value());
++  CHECK_FALSE(ResolveLogicalControllerSlot(0, active, connected).has_value());
++  for (uint32_t logical = 1; logical < rex::input::sdl::kControllerSlotCount; ++logical) {
++    CHECK_FALSE(ResolveLogicalControllerSlot(logical, active, connected).has_value());
++  }
++
++  // Re-add: SDL may report any player index (XInput user index can change);
++  // the empty map still gives physical slot 0 and guest slot 0 follows it.
++  for (const int32_t reported : {-1, 0, 1, 3, 7}) {
++    CHECK(ChooseControllerSlot(reported, connected) == 0);
++  }
++  slot = ChooseControllerSlot(1, connected);
++  REQUIRE(slot == 0);
++  connected |= uint32_t(1) << *slot;
++  active = slot;
++  CHECK(ResolveLogicalControllerSlot(0, active, connected) == 0);
++  CHECK_FALSE(ResolveLogicalControllerSlot(1, active, connected).has_value());
++
++  // A second remove/re-add cycle behaves identically.
++  connected = 0;
++  active = ChooseMostRecentlyActiveController(connected, activity);
++  CHECK_FALSE(ResolveLogicalControllerSlot(0, active, connected).has_value());
++  CHECK(ChooseControllerSlot(2, connected) == 0);
++}
++
++TEST_CASE("Removing one of two pads hands guest slot zero to the remaining pad",
++          "[input][sdl][slot][hotplug]") {
++  std::array<uint64_t, rex::input::sdl::kControllerSlotCount> activity = {5, 9, 0, 0};
++  uint32_t connected = 0x3;
++  CHECK(ResolveLogicalControllerSlot(0, 1, connected) == 1);
++
++  connected &= ~uint32_t(0x2);  // the active pad in physical slot 1 drops
++  const auto active = ChooseMostRecentlyActiveController(connected, activity);
++  CHECK(active == 0);
++  CHECK(ResolveLogicalControllerSlot(0, active, connected) == 0);
++
++  // It comes back with a new instance id; slot 0 is still taken, so the
++  // reported player index (or the lowest free slot) is used and slot zero
++  // stays on the pad that kept working until new input selects the other.
++  CHECK(ChooseControllerSlot(1, connected) == 1);
++  CHECK(ChooseControllerSlot(-1, connected) == 1);
++  CHECK(ResolveLogicalControllerSlot(0, active, connected | 0x2) == 0);
++}
++
++TEST_CASE("SDL device log fields name the backend and withhold OS device paths",
++          "[input][sdl][hotplug]") {
++  using rex::input::sdl::PrivacySafeSdlDevicePath;
++  using rex::input::sdl::SdlJoystickBackendName;
++
++  CHECK(SdlJoystickBackendName('x') == "xinput");
++  CHECK(SdlJoystickBackendName('r') == "rawinput");
++  CHECK(SdlJoystickBackendName('h') == "hidapi");
++  CHECK(SdlJoystickBackendName('v') == "virtual");
++  CHECK(SdlJoystickBackendName(0) == "dinput-or-other");
++  CHECK(SdlJoystickBackendName('?') == "unknown");
++
++  CHECK(PrivacySafeSdlDevicePath("XInput#0") == "XInput#0");
++  CHECK(PrivacySafeSdlDevicePath("XInput#3") == "XInput#3");
++  CHECK(PrivacySafeSdlDevicePath("") == "none");
++  CHECK(PrivacySafeSdlDevicePath("XInput#") == "withheld");
++  CHECK(PrivacySafeSdlDevicePath("XInput#0&serial") == "withheld");
++  CHECK(PrivacySafeSdlDevicePath(R"(\?\HID#VID_2DC8&PID_310B#7&1a2b3c4d&0&0000#{guid})") ==
++        "withheld");
++}
+diff --git a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c
+index a7ed293a9..30205ec85 100644
+--- a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c
++++ b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c
+@@ -384,11 +384,67 @@ static int WINDOWS_JoystickGetCount(void)
+     return nJoysticks;
+ }
+ 
++#ifdef SDL_JOYSTICK_XINPUT
++/* ReXGlue KI-040: XInput user-index changes do not always produce a HID
++   device-interface notification (e.g. a 2.4 GHz dongle that stays enumerated
++   while its controller re-pairs, or a pad that finishes pairing after the
++   300 ms / 2 s retry timers). Upstream only polls XInput when device
++   notifications are unavailable, so such a controller is never re-scanned.
++   At most once per second, compare the XInput connected-user mask with the
++   mask the last enumeration saw and force a normal re-enumeration when they
++   differ. Skipped while XInput is disabled/unloaded and while RawInput owns
++   XInput-class pads (RawInput has its own hotplug, and XInput calls can upset
++   wireless adapters held by RawInput, see SDL_xinputjoystick.c). */
++#define SDL_XINPUT_HOTPLUG_POLL_MS 1000
++static Uint64 s_lastXInputHotplugPoll = 0;
++static bool s_xinputHotplugPollArmed = false;
++
++static void WINDOWS_PollXInputHotplug(void)
++{
++    Uint64 now;
++    Uint8 mask = 0;
++    Uint8 userId;
++
++    if (!s_xinputHotplugPollArmed || !SDL_XINPUT_Enabled() || !XINPUTGETCAPABILITIES) {
++        return;
++    }
++#ifdef SDL_JOYSTICK_RAWINPUT
++    if (RAWINPUT_IsEnabled()) {
++        return;
++    }
++#endif
++    now = SDL_GetTicks();
++    if ((now - s_lastXInputHotplugPoll) < SDL_XINPUT_HOTPLUG_POLL_MS) {
++        return;
++    }
++    s_lastXInputHotplugPoll = now;
++    for (userId = 0; userId < XUSER_MAX_COUNT; userId++) {
++        XINPUT_CAPABILITIES capabilities;
++        if (XINPUTGETCAPABILITIES(userId, XINPUT_FLAG_GAMEPAD, &capabilities) == ERROR_SUCCESS) {
++            mask |= (Uint8)(1u << userId);
++        }
++    }
++    if (mask != SDL_XINPUT_GetDetectedUserMask()) {
++        SetWindowsDeviceChanged();
++    }
++}
++
++static void WINDOWS_ResetXInputHotplugPoll(void)
++{
++    s_lastXInputHotplugPoll = 0;
++    s_xinputHotplugPollArmed = false;
++}
++#endif // SDL_JOYSTICK_XINPUT
++
+ // detect any new joysticks being inserted into the system
+ void WINDOWS_JoystickDetect(void)
+ {
+     JoyStick_DeviceData *pCurList = NULL;
+ 
++#ifdef SDL_JOYSTICK_XINPUT
++    WINDOWS_PollXInputHotplug();
++#endif
++
+     // only enum the devices if the joystick thread told us something changed
+     if (!WindowsDeviceChanged()) {
+         return; // thread hasn't signaled, nothing to do right now.
+@@ -408,6 +464,11 @@ void WINDOWS_JoystickDetect(void)
+ 
+     // Look for XInput devices. Do this last, so they're first in the final list.
+     SDL_XINPUT_JoystickDetect(&pCurList);
++#ifdef SDL_JOYSTICK_XINPUT
++    // ReXGlue KI-040: the detected mask is now current; start (or restart) polling.
++    s_lastXInputHotplugPoll = SDL_GetTicks();
++    s_xinputHotplugPollArmed = true;
++#endif
+ 
+     if (s_mutexJoyStickEnum) {
+         SDL_UnlockMutex(s_mutexJoyStickEnum);
+@@ -671,6 +732,9 @@ void WINDOWS_JoystickQuit(void)
+ 
+     SDL_DINPUT_JoystickQuit();
+     SDL_XINPUT_JoystickQuit();
++#ifdef SDL_JOYSTICK_XINPUT
++    WINDOWS_ResetXInputHotplugPoll();
++#endif
+ 
+     WIN_QuitDeviceNotification();
+ }
+diff --git a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick.c b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick.c
+index 8f26bcd7d..a6a1ab6d4 100644
+--- a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick.c
++++ b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick.c
+@@ -38,6 +38,8 @@ extern "C" {
+  * Internal stuff.
+  */
+ static bool s_bXInputEnabled = false;
++// ReXGlue KI-040: XInput users reported connected by the last SDL_XINPUT_JoystickDetect().
++static Uint8 s_XInputDetectedUserMask = 0;
+ 
+ bool SDL_XINPUT_Enabled(void)
+ {
+@@ -214,8 +216,10 @@ static void AddXInputDevice(Uint8 userid, BYTE SubType, JoyStick_DeviceData **pC
+ void SDL_XINPUT_JoystickDetect(JoyStick_DeviceData **pContext)
+ {
+     int iuserid;
++    Uint8 detected_mask = 0;
+ 
+     if (!s_bXInputEnabled) {
++        s_XInputDetectedUserMask = 0;
+         return;
+     }
+ 
+@@ -224,9 +228,16 @@ void SDL_XINPUT_JoystickDetect(JoyStick_DeviceData **pContext)
+         const Uint8 userid = (Uint8)iuserid;
+         XINPUT_CAPABILITIES capabilities;
+         if (XINPUTGETCAPABILITIES(userid, XINPUT_FLAG_GAMEPAD, &capabilities) == ERROR_SUCCESS) {
++            detected_mask |= (Uint8)(1u << userid);
+             AddXInputDevice(userid, capabilities.SubType, pContext);
+         }
+     }
++    s_XInputDetectedUserMask = detected_mask;
++}
++
++Uint8 SDL_XINPUT_GetDetectedUserMask(void)
++{
++    return s_XInputDetectedUserMask;
+ }
+ 
+ bool SDL_XINPUT_JoystickPresent(Uint16 vendor, Uint16 product, Uint16 version)
+@@ -418,6 +429,7 @@ void SDL_XINPUT_JoystickQuit(void)
+         s_bXInputEnabled = false;
+         WIN_UnloadXInputDLL();
+     }
++    s_XInputDetectedUserMask = 0;
+ }
+ 
+ // Ends C function definitions when using C++
+@@ -443,6 +455,11 @@ void SDL_XINPUT_JoystickDetect(JoyStick_DeviceData **pContext)
+ {
+ }
+ 
++Uint8 SDL_XINPUT_GetDetectedUserMask(void)
++{
++    return 0;
++}
++
+ bool SDL_XINPUT_JoystickPresent(Uint16 vendor, Uint16 product, Uint16 version)
+ {
+     return false;
+diff --git a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick_c.h b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick_c.h
+index 9ac122450..33b12335f 100644
+--- a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick_c.h
++++ b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_xinputjoystick_c.h
+@@ -30,6 +30,7 @@ extern "C" {
+ extern bool SDL_XINPUT_Enabled(void);
+ extern bool SDL_XINPUT_JoystickInit(void);
+ extern void SDL_XINPUT_JoystickDetect(JoyStick_DeviceData **pContext);
++extern Uint8 SDL_XINPUT_GetDetectedUserMask(void); // ReXGlue KI-040
+ extern bool SDL_XINPUT_JoystickPresent(Uint16 vendor, Uint16 product, Uint16 version);
+ extern bool SDL_XINPUT_JoystickOpen(SDL_Joystick *joystick, JoyStick_DeviceData *joystickdevice);
+ extern bool SDL_XINPUT_JoystickRumble(SDL_Joystick *joystick, Uint16 low_frequency_rumble, Uint16 high_frequency_rumble);
