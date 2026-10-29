@@ -59,6 +59,7 @@
 
 #include "generated/default/mcla_init.h"
 #include "mcla_cursor_autohide_sdl.h"
+#include "mcla_diagnostic_triggers_sdl.h"
 #include "mcla_diagnostics.h"
 #include "mcla_logging.h"
 #include "mcla_managed_config_policy.h"
@@ -96,7 +97,9 @@ public:
     SetVisible(false);
   }
 
-  void ShowCapture() {
+  // label: the trigger shown in the status text ("F10", "WHEEL R2", ...).
+  void ShowCapture(const char *label) {
+    label_ = label ? label : "F10";
     busy_until_ = {};
     result_until_ = {};
     // A fast completed request still needs a fresh READY interval.
@@ -104,7 +107,8 @@ public:
     SetVisible(true);
   }
 
-  void ShowBusy() {
+  void ShowBusy(const char *label) {
+    label_ = label ? label : "F10";
     busy_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(1);
     SetVisible(true);
   }
@@ -125,18 +129,18 @@ protected:
     const char *text = nullptr;
     ImVec4 color(1.0f, 1.0f, 1.0f, 1.0f);
     if (now < busy_until_) {
-      text = "F10: BUSY";
+      text = "BUSY";
       color = ImVec4(1.0f, 0.78f, 0.24f, 1.0f);
     } else if (status == mcla::diagnostics::SnapshotStatus::kCapturing) {
-      text = "F10: RECORDING...";
+      text = "RECORDING...";
       color = ImVec4(0.30f, 0.86f, 1.0f, 1.0f);
     } else if (now < result_until_ &&
                status == mcla::diagnostics::SnapshotStatus::kComplete) {
-      text = "F10: PACKAGE READY (IMAGE UNVERIFIED)";
+      text = "PACKAGE READY (IMAGE UNVERIFIED)";
       color = ImVec4(0.35f, 1.0f, 0.45f, 1.0f);
     } else if (now < result_until_ &&
                status == mcla::diagnostics::SnapshotStatus::kFailed) {
-      text = "F10: FAILED";
+      text = "FAILED";
       color = ImVec4(1.0f, 0.35f, 0.30f, 1.0f);
     }
     if (!text) {
@@ -155,7 +159,7 @@ protected:
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, color);
     if (ImGui::Begin("##mcla_f10_status", nullptr, flags)) {
-      ImGui::TextUnformatted(text);
+      ImGui::Text("%s: %s", label_, text);
     }
     ImGui::End();
     ImGui::PopStyleColor();
@@ -164,6 +168,7 @@ protected:
 
 private:
   mcla::diagnostics::Manager *manager_ = nullptr;
+  const char *label_ = "F10"; // Always a string literal.
   mcla::diagnostics::SnapshotStatus last_status_ =
       mcla::diagnostics::SnapshotStatus::kIdle;
   std::chrono::steady_clock::time_point busy_until_{};
@@ -865,6 +870,30 @@ REXCVAR_DEFINE_BOOL(
     "Enable F10 live snapshots and automatic native crash packages")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(
+    mcla_controller_diagnostic_triggers, true, "MCLA Diagnostics",
+    "Wheel R2 / gamepad Start+Back hold = bug snapshot, wheel L2 = wheel "
+    "snapshot (observe only; guest input is unchanged)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_STRING(
+    mcla_wheel_diagnostic_buttons, "8,9", "MCLA Diagnostics",
+    "Raw SDL joystick button indices of the wheel's L2,R2 (-1 disables one; "
+    "T300 defaults, unverified)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_wheel_button_probe, false, "MCLA Diagnostics",
+    "Log every raw joystick button press (instance, wheel flag, index, name) "
+    "to find L2/R2 on other wheels")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_INT32(
+    mcla_pad_diagnostic_hold_ms, 1000, "MCLA Diagnostics",
+    "Gamepad Start+Back hold time before a bug snapshot")
+    .range(500, 5000)
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_STRING(
     mcla_diagnostics_root, "", "MCLA Diagnostics",
     "Override diagnostics package path (empty = <user-data>/diagnostics)")
@@ -1167,24 +1196,9 @@ void MclaApp::OnPostInitLogging() {
       rex::ui::RegisterBind(
           "bind_mcla_debug_snapshot", "F10",
           "Capture an MCLA-R live diagnostic package", [this]() {
-            const auto request = diagnostic_hotkey_.Request(
-                [this]() { return QueueDiagnosticSnapshot("f10"); },
-                []() { return rex::perf::ArmFrameAuditForDiagnostics(); });
-            if (request.audit_attempted) {
-              MCLA_APP_INFO("MCLA diagnostics: F10 performance audit "
-                            "armed={}",
-                            request.audit_armed ? 1 : 0);
-            }
-            const bool queued = request.queued;
-            if (diagnostic_status_dialog_) {
-              auto *dialog = static_cast<DiagnosticStatusDialog *>(
-                  diagnostic_status_dialog_.get());
-              if (queued) {
-                dialog->ShowCapture();
-              } else {
-                dialog->ShowBusy();
-              }
-            }
+            mcla::diagnostics::SnapshotTrigger trigger;
+            trigger.source = std::string(mcla::diagnostics::kSourceF10);
+            RequestLiveSnapshot(std::move(trigger), "F10");
           });
       diagnostic_keybind_registered_ = true;
     } else {
@@ -1267,6 +1281,7 @@ void MclaApp::OnPostSetup() {
     rex::FlushLogging();
     mcla::diagnostics::native::TriggerCrashProbe();
   }
+  InstallDiagnosticTriggers();
   if (REXCVAR_GET(mcla_cursor_autohide) && window() && !cursor_autohide_) {
     cursor_autohide_ = mcla::cursor::InstallSdlAutoHide(window());
     if (cursor_autohide_) {
@@ -3544,9 +3559,106 @@ mcla::diagnostics::UiState MclaApp::CaptureDiagnosticUiState() const {
   return state;
 }
 
-bool MclaApp::QueueDiagnosticSnapshot(const char *reason) {
+bool MclaApp::QueueDiagnosticSnapshot(
+    const char *reason, mcla::diagnostics::SnapshotTrigger trigger) {
   return diagnostics_ &&
-         diagnostics_->RequestSnapshot(reason, CaptureDiagnosticUiState());
+         diagnostics_->RequestSnapshot(reason, CaptureDiagnosticUiState(),
+                                       std::move(trigger));
+}
+
+void MclaApp::RequestLiveSnapshot(mcla::diagnostics::SnapshotTrigger trigger,
+                                  const char *label) {
+  // Same admission, audit arming, busy handling and status text as F10. The
+  // reason stays the source so F10 packages are unchanged.
+  const std::string reason = trigger.source;
+  const auto request = diagnostic_hotkey_.Request(
+      [&]() { return QueueDiagnosticSnapshot(reason.c_str(), std::move(trigger)); },
+      []() { return rex::perf::ArmFrameAuditForDiagnostics(); });
+  if (request.audit_attempted) {
+    MCLA_APP_INFO("MCLA diagnostics: {} performance audit armed={}", reason,
+                  request.audit_armed ? 1 : 0);
+  }
+  if (diagnostic_status_dialog_) {
+    auto *dialog =
+        static_cast<DiagnosticStatusDialog *>(diagnostic_status_dialog_.get());
+    if (request.queued) {
+      dialog->ShowCapture(label);
+    } else {
+      dialog->ShowBusy(label);
+    }
+  }
+}
+
+void MclaApp::OnDiagnosticTrigger(
+    const mcla::diagnostics::TriggerEvent &event) {
+  using mcla::diagnostics::TriggerKind;
+  mcla::diagnostics::SnapshotTrigger trigger;
+  const char *label = "WHEEL R2";
+  switch (event.kind) {
+  case TriggerKind::kWheelR2:
+    trigger.source = std::string(mcla::diagnostics::kSourceWheelR2);
+    break;
+  case TriggerKind::kWheelL2:
+    label = "WHEEL L2 (WHEEL BUG)";
+    trigger.category = std::string(mcla::diagnostics::kCategoryWheel);
+    trigger.source = std::string(mcla::diagnostics::kSourceWheelL2);
+    if (diagnostic_triggers_) {
+      trigger.wheel =
+          mcla::diagnostics::CaptureWheelState(*diagnostic_triggers_, event.device);
+    }
+    break;
+  case TriggerKind::kPad:
+    label = "PAD START+BACK";
+    trigger.source = std::string(mcla::diagnostics::kSourcePad);
+    break;
+  }
+  MCLA_INPUT_INFO("MCLA diagnostics: controller trigger source={} "
+                  "category={} instance={}",
+                  trigger.source, trigger.category, event.device);
+  RequestLiveSnapshot(std::move(trigger), label);
+}
+
+void MclaApp::InstallDiagnosticTriggers() {
+  if (!diagnostics_ || !window() || diagnostic_triggers_ ||
+      !REXCVAR_GET(mcla_controller_diagnostic_triggers)) {
+    return;
+  }
+  mcla::diagnostics::TriggerConfig config;
+  const auto buttons =
+      mcla::diagnostics::ParseWheelButtons(REXCVAR_GET(mcla_wheel_diagnostic_buttons));
+  if (buttons) {
+    config.wheel_buttons = *buttons;
+  } else {
+    config.wheel_buttons = *mcla::diagnostics::ParseWheelButtons(
+        mcla::diagnostics::kDefaultWheelButtons);
+    MCLA_INPUT_INFO("MCLA diagnostics: invalid mcla_wheel_diagnostic_buttons "
+                    "'{}'; using {}",
+                    REXCVAR_GET(mcla_wheel_diagnostic_buttons),
+                    mcla::diagnostics::kDefaultWheelButtons);
+  }
+  config.wheel_button_probe = REXCVAR_GET(mcla_wheel_button_probe);
+  config.pad_hold_ms =
+      static_cast<uint32_t>(REXCVAR_GET(mcla_pad_diagnostic_hold_ms));
+  diagnostic_triggers_ = mcla::diagnostics::InstallSdlDiagnosticTriggers(
+      window(), config, [this](const mcla::diagnostics::TriggerEvent &event) {
+        OnDiagnosticTrigger(event);
+      });
+  if (diagnostic_triggers_) {
+    MCLA_INPUT_INFO("MCLA diagnostics: controller triggers enabled "
+                    "wheel_l2={} wheel_r2={} pad_hold_ms={} probe={}",
+                    config.wheel_buttons.l2, config.wheel_buttons.r2,
+                    config.pad_hold_ms, config.wheel_button_probe ? 1 : 0);
+  } else {
+    MCLA_INPUT_INFO("MCLA diagnostics: controller triggers unavailable "
+                    "(SDK event observer)");
+  }
+}
+
+void MclaApp::ShutdownDiagnosticTriggers() {
+  if (diagnostic_triggers_) {
+    mcla::diagnostics::Shutdown(*diagnostic_triggers_);
+    diagnostic_triggers_.reset();
+  }
 }
 
 void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
@@ -3560,6 +3672,7 @@ void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
 
 bool MclaApp::OnWindowCloseRequested() {
   readback_probe_lifetime_.reset();
+  ShutdownDiagnosticTriggers();
   if (diagnostic_keybind_registered_) {
     rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
     diagnostic_keybind_registered_ = false;
@@ -3569,6 +3682,7 @@ bool MclaApp::OnWindowCloseRequested() {
 }
 
 void MclaApp::OnShutdown() {
+  ShutdownDiagnosticTriggers();
   if (cursor_autohide_) {
     mcla::cursor::Shutdown(*cursor_autohide_);
     cursor_autohide_.reset();

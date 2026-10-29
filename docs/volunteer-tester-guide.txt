@@ -22,8 +22,12 @@ contains no game files.
      flicker at night or after a race.
 
 3. WHEN SOMETHING GOES WRONG
-   - Press F10 on the keyboard at the moment it happens. You can press it
-     several times.
+   - Bug: press F10 on the keyboard, wheel R2, or hold Start+Back on the
+     gamepad for 1 second, at the moment it happens. You can do it several
+     times. (Start+Back may also open the pause menu; that is fine.)
+   - Wheel or force-feedback bug (for example the wheel stops centering):
+     press wheel L2. This also records the wheel state.
+   - report.txt marks each report as "general", "wheel" or "crash".
    - The game may also save a report by itself if it crashes.
    - After you close the game, the launcher tells you how many reports were
      recorded and offers to open the folder. Open report.txt there, answer the
@@ -68,7 +72,12 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      світло мерехтить уночі або після гонки.
 
 3. ЯКЩО ЩОСЬ НЕ ТАК
-   - Натисніть F10 на клавіатурі саме в цей момент. Можна кілька разів.
+   - Баг: натисніть F10 на клавіатурі, R2 на кермі або утримуйте Start+Back
+     на геймпаді 1 секунду саме в цей момент. Можна кілька разів. (Start+Back
+     може також відкрити меню паузи; це нормально.)
+   - Баг керма чи віддачі (force feedback), наприклад кермо перестало
+     центруватися: натисніть L2 на кермі. Так записується ще й стан керма.
+   - У report.txt кожен звіт позначено як "general", "wheel" або "crash".
    - Якщо гра впаде, звіт може зберегтися сам.
    - Коли закриєте гру, лаунчер скаже, скільки звітів записано, і запропонує
      відкрити папку. Відкрийте там report.txt, дайте відповіді на чотири

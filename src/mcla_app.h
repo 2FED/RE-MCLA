@@ -21,7 +21,10 @@ class SdlAutoHide;
 
 namespace mcla::diagnostics {
 class Manager;
+class SdlDiagnosticTriggers;
 struct RuntimeState;
+struct SnapshotTrigger;
+struct TriggerEvent;
 struct UiState;
 } // namespace mcla::diagnostics
 
@@ -60,7 +63,14 @@ private:
   void StopFirstFrameProbe();
   mcla::diagnostics::RuntimeState CaptureDiagnosticState();
   mcla::diagnostics::UiState CaptureDiagnosticUiState() const;
-  bool QueueDiagnosticSnapshot(const char *reason);
+  bool QueueDiagnosticSnapshot(const char *reason,
+                               mcla::diagnostics::SnapshotTrigger trigger);
+  // UI thread: the shared F10 / wheel / pad live-snapshot path (M9-010).
+  void RequestLiveSnapshot(mcla::diagnostics::SnapshotTrigger trigger,
+                           const char *label);
+  void OnDiagnosticTrigger(const mcla::diagnostics::TriggerEvent &event);
+  void InstallDiagnosticTriggers();
+  void ShutdownDiagnosticTriggers();
   [[noreturn]] void HardExitCrashProbeFromUIThread();
 
   size_t function_mapping_count_ = 0;
@@ -78,4 +88,6 @@ private:
   rex::PathConfig managed_paths_;
   // M9-009 cursor autohide on pad/wheel input; UI thread only.
   std::shared_ptr<mcla::cursor::SdlAutoHide> cursor_autohide_;
+  // M9-010 wheel L2/R2 and pad Start+Back snapshot triggers; UI thread only.
+  std::shared_ptr<mcla::diagnostics::SdlDiagnosticTriggers> diagnostic_triggers_;
 };

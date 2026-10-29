@@ -855,7 +855,8 @@ bool AddArtifact(std::vector<Artifact> &artifacts,
 }
 
 std::string
-BuildStateJson(std::string_view reason, const UiState &ui,
+BuildStateJson(std::string_view reason, const SnapshotTrigger &trigger,
+               const UiState &ui,
                const RuntimeState &runtime, uint64_t working_set,
                uint32_t handles, uint64_t creation_time_100ns,
                const std::vector<NativeThreadSample> &native_threads) {
@@ -863,6 +864,7 @@ BuildStateJson(std::string_view reason, const UiState &ui,
   out << "{\n"
       << "  \"schema\": \"mcla-diagnostic-state-v1\",\n"
       << "  \"reason\": \"" << JsonEscape(reason) << "\",\n"
+      << "  \"trigger\": " << BuildTriggerJson(trigger) << ",\n"
       << "  \"process\": {\"pid\": " << ProcessId()
       << ", \"creation_time_100ns\": " << creation_time_100ns
       << ", \"working_set_bytes\": " << working_set
@@ -956,8 +958,11 @@ BuildStateJson(std::string_view reason, const UiState &ui,
         << ", \"user_time_100ns\": " << thread.user_time_100ns
         << ", \"name\": \"" << JsonEscape(thread.name) << "\"}";
   }
-  out << "]\n"
-      << "}\n";
+  out << "]";
+  if (trigger.wheel) {
+    out << ",\n  \"wheel\": " << BuildWheelStateJson(*trigger.wheel);
+  }
+  out << "\n}\n";
   return out.str();
 }
 
@@ -1028,7 +1033,8 @@ public:
     return guest_frame_provider_;
   }
 
-  bool RequestSnapshot(std::string reason, const UiState &ui_state) {
+  bool RequestSnapshot(std::string reason, const UiState &ui_state,
+                       SnapshotTrigger trigger) {
     if (!started_.load(std::memory_order_acquire) ||
         stopping_.load(std::memory_order_acquire)) {
       return false;
@@ -1044,6 +1050,7 @@ public:
       std::lock_guard lock(request_mutex_);
       requested_reason_ = std::move(reason);
       requested_ui_state_ = ui_state;
+      requested_trigger_ = std::move(trigger);
       request_pending_ = true;
     }
     snapshot_status_.store(SnapshotStatus::kCapturing,
@@ -1091,6 +1098,7 @@ public:
     while (!token.stop_requested()) {
       std::string reason;
       UiState ui;
+      SnapshotTrigger trigger;
       {
         std::unique_lock lock(request_mutex_);
         request_cv_.wait(lock, token, [this]() { return request_pending_; });
@@ -1099,11 +1107,13 @@ public:
         }
         reason = std::move(requested_reason_);
         ui = requested_ui_state_;
+        trigger = std::move(requested_trigger_);
+        requested_trigger_ = {};
         request_pending_ = false;
       }
       bool captured = false;
       try {
-        captured = Capture(reason, ui, token);
+        captured = Capture(reason, std::move(trigger), ui, token);
       } catch (const std::exception &e) {
         REXLOG_ERROR("MCLA diagnostics: snapshot worker failed: {}", e.what());
       } catch (...) {
@@ -1118,8 +1128,15 @@ public:
     }
   }
 
-  bool Capture(std::string_view reason, const UiState &ui, std::stop_token token) {
+  bool Capture(std::string_view reason, SnapshotTrigger trigger,
+               const UiState &ui, std::stop_token token) {
     if (token.stop_requested()) return false;
+    if (trigger.category.empty()) {
+      trigger.category = std::string(kCategoryGeneral);
+    }
+    if (trigger.source.empty()) {
+      trigger.source = std::string(reason);
+    }
     const uint64_t sequence = sequence_.fetch_add(1) + 1;
     const std::string name = "live-" + UtcStamp() + "-" +
                              std::to_string(ProcessId()) + "-" +
@@ -1225,17 +1242,28 @@ public:
                 return a.id < b.id;
               });
 #endif
-    if (!WriteText(partial / "state.json",
-                   BuildStateJson(reason, ui, runtime_state, working_set,
-                                  handles, creation_time_100ns, native_threads))) {
-      REXLOG_ERROR("MCLA diagnostics: state write failed");
-      return false;
-    }
-
     std::vector<rex::LogEntry> entries;
     if (capture_sink_) {
       capture_sink_->CopyEntries(entries);
     }
+    if (trigger.wheel) {
+      // The SDK keeps its active-controller and force-feedback state private;
+      // its own SDL input telemetry lines are the observable record (KI-022).
+      for (const auto &entry : entries) {
+        if (ClassifySdkInputLogLine(entry.text) != SdkInputLogKind::kNone) {
+          AddSdkInputLogLine(*trigger.wheel,
+                             Sanitize(entry.text, user_data_root_));
+        }
+      }
+    }
+    if (!WriteText(partial / "state.json",
+                   BuildStateJson(reason, trigger, ui, runtime_state,
+                                  working_set, handles, creation_time_100ns,
+                                  native_threads))) {
+      REXLOG_ERROR("MCLA diagnostics: state write failed");
+      return false;
+    }
+
     const size_t begin =
         entries.size() > kMaxLogEntries ? entries.size() - kMaxLogEntries : 0;
     std::string log_tail;
@@ -1323,6 +1351,7 @@ public:
              << "  \"schema\": \"mcla-diagnostic-package-v1\",\n"
              << "  \"kind\": \"live\",\n"
              << "  \"reason\": \"" << JsonEscape(reason) << "\",\n"
+             << "  \"trigger\": " << BuildTriggerJson(trigger) << ",\n"
              << "  \"created_utc\": \"" << UtcStamp() << "\",\n"
              << "  \"mcla_version\": \"" << MCLA_VERSION << "\",\n"
              << "  \"platform\": \""
@@ -1385,8 +1414,8 @@ public:
     PruneDirectories(live_root_, kLiveRetentionCount, kLiveRetentionBytes);
     if (pointer_written) {
       REXLOG_INFO("MCLA diagnostics: snapshot complete: "
-                  "<user-data>/diagnostics/live/{}",
-                  name);
+                  "<user-data>/diagnostics/live/{} category={} source={}",
+                  name, trigger.category, trigger.source);
     } else {
       REXLOG_ERROR("MCLA diagnostics: snapshot package completed but latest "
                    "pointer update failed");
@@ -1409,6 +1438,7 @@ public:
   std::condition_variable_any request_cv_;
   std::string requested_reason_;
   UiState requested_ui_state_;
+  SnapshotTrigger requested_trigger_;
   bool request_pending_ = false;
   std::mutex idle_mutex_;
   std::condition_variable idle_cv_;
@@ -1430,8 +1460,9 @@ bool Manager::Start(const std::filesystem::path &user_data_root,
                       show_crash_reporter_dialog);
 }
 
-bool Manager::RequestSnapshot(std::string reason, const UiState &ui_state) {
-  return impl_->RequestSnapshot(std::move(reason), ui_state);
+bool Manager::RequestSnapshot(std::string reason, const UiState &ui_state,
+                              SnapshotTrigger trigger) {
+  return impl_->RequestSnapshot(std::move(reason), ui_state, std::move(trigger));
 }
 
 void Manager::SetGuestFrameProvider(GuestFrameProvider provider) {

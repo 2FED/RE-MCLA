@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "mcla_diagnostic_trigger.h"
+
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -116,7 +118,10 @@ public:
   bool Start(const std::filesystem::path &user_data_root,
              const std::filesystem::path &diagnostics_root,
              CaptureProvider provider, bool show_crash_reporter_dialog);
-  bool RequestSnapshot(std::string reason, const UiState &ui_state);
+  // trigger records the category/source (M9-010) and, for wheel snapshots,
+  // the wheel state written into state.json.
+  bool RequestSnapshot(std::string reason, const UiState &ui_state,
+                       SnapshotTrigger trigger = {});
   // Optional; without it F10 keeps the window capture with staleness checks.
   void SetGuestFrameProvider(GuestFrameProvider provider);
   SnapshotStatus snapshot_status() const;

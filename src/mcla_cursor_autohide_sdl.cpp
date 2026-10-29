@@ -4,10 +4,10 @@
 
 #include "mcla_cursor_autohide.h"
 
+#include <rex/ui/sdl_event_observer.h>
 #include <rex/ui/window.h>
 #include <rex/ui/windowed_app_context.h>
 
-#include <SDL3/SDL_events.h>
 
 #include <atomic>
 #include <cstdint>
@@ -24,8 +24,8 @@ public:
 
   ~SdlAutoHide() {
     // Safety net only; Stop() is the normal path and also restores the cursor.
-    if (watch_installed_) {
-      SDL_RemoveEventWatch(&SdlAutoHide::Watch, this);
+    if (observer_token_ != 0) {
+      rex::ui::RemoveSdlEventObserver(observer_token_);
     }
   }
 
@@ -33,7 +33,11 @@ public:
   SdlAutoHide &operator=(const SdlAutoHide &) = delete;
 
   bool Install() {
-    watch_installed_ = SDL_AddEventWatch(&SdlAutoHide::Watch, this);
+    // The observer runs on the SDK's own SDL instance (inside rexruntime);
+    // the host links no SDL code of its own.
+    observer_token_ = rex::ui::AddSdlEventObserver(
+        [this](const SDL_Event &event) { Observe(event); });
+    watch_installed_ = observer_token_ != 0;
     return watch_installed_;
   }
 
@@ -60,9 +64,9 @@ public:
     if (!watch_installed_) {
       return;
     }
-    // SDL holds its watch-list lock while dispatching, so no callback is in
-    // flight once removal returns.
-    SDL_RemoveEventWatch(&SdlAutoHide::Watch, this);
+    // No observer call is in flight once removal returns.
+    rex::ui::RemoveSdlEventObserver(observer_token_);
+    observer_token_ = 0;
     watch_installed_ = false;
     if (controller_.OnShutdown() == AutoHideController::Action::kShow) {
       ShowIfStillHidden();
@@ -74,13 +78,6 @@ private:
   using Visibility = rex::ui::Window::CursorVisibility;
 
   // Any thread that pushes SDL events (UI thread or an SDL joystick thread).
-  static bool SDLCALL Watch(void *userdata, SDL_Event *event) {
-    if (userdata && event) {
-      static_cast<SdlAutoHide *>(userdata)->Observe(*event);
-    }
-    return true;
-  }
-
   void Observe(const SDL_Event &event) {
     const Activity activity = Classify(event);
     if (activity == Activity::kPad) {
@@ -192,6 +189,7 @@ private:
   rex::ui::Window *const window_;
   AutoHideController controller_;       // UI thread only.
   bool watch_installed_ = false;        // UI thread only.
+  rex::ui::SdlEventObserverToken observer_token_ = 0; // UI thread only.
   std::mutex filter_mutex_;
   PadActivityFilter filter_;            // Guarded by filter_mutex_ for axes.
   std::atomic<bool> focused_{false};    // Mirror of controller_ for Watch.

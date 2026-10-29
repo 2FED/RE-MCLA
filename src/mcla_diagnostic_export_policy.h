@@ -169,6 +169,10 @@ inline std::string_view Vendor(std::string_view gpu) {
 inline std::string_view Reason(std::string_view reason) {
   if (reason == "f10") return "f10";
   if (reason == "unexpected-guest-exit") return "unexpected-guest-exit";
+  // M9-010 controller triggers.
+  if (reason == "wheel-r2") return "wheel-r2";
+  if (reason == "wheel-l2") return "wheel-l2";
+  if (reason == "pad") return "pad";
   return "other";
 }
 // Number after `key` within `line`, or nullopt. Digits and one '.' only; the

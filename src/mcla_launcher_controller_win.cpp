@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 
 namespace mcla::launcher {
@@ -51,6 +52,15 @@ std::vector<std::wstring> PackageNames(const std::wstring &root,std::wstring_vie
   for(std::filesystem::directory_iterator it(std::filesystem::path(root)/kind,ec),end; !ec && it!=end; it.increment(ec))
     if(it->is_directory(ec) && !it->is_symlink(ec)) names.push_back(it->path().filename().wstring());
   return names;
+}
+// Category of a completed live package (M9-010), from its bounded manifest.
+std::string LiveCategory(const std::wstring &root,const std::wstring &name) {
+  std::ifstream in(std::filesystem::path(root)/L"live"/name/L"manifest.json",std::ios::binary);
+  std::string text(64*1024,'\0');
+  if(!in) return report::ManifestCategory({});
+  in.read(text.data(),static_cast<std::streamsize>(text.size()));
+  text.resize(static_cast<size_t>(in.gcount()));
+  return report::ManifestCategory(text);
 }
 std::expected<void,std::wstring> Text(const fs::DirectoryGuard &dir, std::wstring_view name, std::string_view value) {
   return fs::AtomicWrite(dir,name,{reinterpret_cast<const uint8_t *>(value.data()),value.size()});
@@ -830,8 +840,9 @@ std::expected<void,std::wstring> LauncherController::State::Poll() {
   completion_failed=!result || *polled->exit_code!=0;
   // Post-session report prompt (M9-005): only this session's completed packages.
   pending_report.reset();
-  const auto packages=report::SessionPackages(PackageNames(session->diagnostics_path,L"live"),
-                                              PackageNames(session->diagnostics_path,L"crash"));
+  auto packages=report::SessionPackages(PackageNames(session->diagnostics_path,L"live"),
+                                        PackageNames(session->diagnostics_path,L"crash"));
+  for(auto &package:packages) if(!package.crash) package.category=LiveCategory(session->diagnostics_path,package.name);
   if(!packages.empty()) {
     auto context=session->report_context;
     context.ended_utc=UtcSeconds(); context.exit_code=static_cast<int64_t>(*polled->exit_code);

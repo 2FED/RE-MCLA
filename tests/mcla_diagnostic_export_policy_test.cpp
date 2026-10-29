@@ -225,6 +225,7 @@ int RunTests() {
     Check(Accept(f,"vendor classification").at("session_recorded").at("gpu_vendor") == vendor,"vendor prefix bounded");
   }
   for (const auto &[reason,expected] : {std::pair{"f10","f10"},{"unexpected-guest-exit","unexpected-guest-exit"},
+       {"wheel-r2","wheel-r2"},{"wheel-l2","wheel-l2"},{"pad","pad"},{"wheel-l3","other"},
        {"PRIVATE_SENTINEL_NEVER_EXPORT","other"}}) {
     Fixture f; f.state["reason"] = reason; f.manifest["reason"] = reason;
     Check(Accept(f,"live reason enum").at("reason") == expected,"unknown reason is enum other, never a crash claim");
