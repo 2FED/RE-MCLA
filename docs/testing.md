@@ -1096,13 +1096,38 @@ automated runner.
 
 During ordinary play, press `F10` immediately when a softlock or transient defect
 is visible and wait for the top-right `F10: READY` status before closing the game.
-`RECORDING...` remains visible while capture is active; `BUSY` rejects overlap
+(Since M9-010/KI-042 the exact text is `<trigger>: PACKAGE READY (IMAGE UNVERIFIED)`,
+shown for about one second; `<trigger>` is `F10`, `WHEEL R2`, `WHEEL L2 (WHEEL BUG)`
+or `PAD START+BACK`.) `RECORDING...` remains visible while capture is active; `BUSY` rejects overlap
 and `FAILED` reports an unsuccessful publication. A native
 crash requires no keypress: the helper finishes the package and displays its
 folder. Use `show-latest-diagnostic.ps1` (and `-UserDataRoot` for isolated test
 roots) to retrieve the latest exact path. Packages are local-only and unsafe to
 share wholesale; provide the folder path first, then review requested dump,
 log, screenshot, or save artifacts before sending them.
+
+M9-010 controller triggers (init-only cvars, section `MCLA Diagnostics`): wheel R2
+and gamepad Start+Back held `mcla_pad_diagnostic_hold_ms` (default 1000, range
+500-5000) queue the same `general` package as F10; wheel L2 queues a `wheel`
+package with the `mcla-wheel-state-v1` section in `state.json`. One package per
+press, re-armed on release; Start/Back still reach the game, so the pause menu may
+open. `mcla_controller_diagnostic_triggers` (default `true`) disables both.
+`mcla_wheel_diagnostic_buttons` holds the raw SDL joystick indices `L2,R2`
+(default `"8,9"`, unverified T300 values; `-1` disables one). For another wheel,
+run with `--mcla_wheel_button_probe=true`, press L2 and R2, read the indices from
+the `MCLA_WHEEL_BUTTON_PROBE v=1 ... button=` log lines, then pass
+`--mcla_wheel_diagnostic_buttons=<L2>,<R2>`. The managed launcher passes neither
+flag and has no pass-through, so these settings apply only to direct owner runs;
+volunteers on another wheel use F10 and name the wheel in `report.txt`.
+
+Every live and crash package carries its own prefilled `report.txt` (package,
+kind, created time, version, category, source, wheel model line for wheel-L2
+packages, window, four empty questions); the launcher fills only the pending
+session line, never overwrites tester text, and writes a session `report.txt`
+listing each package as `general`, `wheel` or `crash`. Nothing is uploaded. The
+volunteer-facing wording is `docs/volunteer-tester-guide.txt` (staged as
+`TESTER-GUIDE.txt`); its 2026-10-29 review is
+[M9-005 tester guide review](evidence/M9-005-tester-guide-review-20261029.md).
 
 ## M6-014 current one-hour mixed-gameplay gate
 

@@ -9,45 +9,61 @@ contains no game files.
    - Unpack the folder anywhere. Run MCLA-Launcher.exe.
    - Setup: choose the "build" folder from this package and your game-data folder.
    - Profiles: create an empty profile (or import your saves).
-   - Play: choose your graphics card and resolution (720p-1440p recommended),
-     then CHECK SETUP, then START GAME.
-   - Be online for the first start. The build checks once that it is still
-     active. Offline it starts for 3 days after it was built, or 24 hours after
-     the last online check.
+   - Play: choose your graphics card, resolution 720p or 1440p and frame rate
+     "30 FPS (recommended)", then CHECK SETUP (it shows "Setup saved."), then
+     START GAME.
+   - Be online when you start: the build checks a signed list on the internet.
+     Offline it starts for 3 days after it was built, or for 24 hours after
+     the last successful online check. A running game is never stopped.
 
-2. FRAME RATE
-   - "30 FPS (recommended)": the original pacing. Use this for normal play.
-   - "Unlocked FPS (experimental)": smoother driving (often 60+), but menus over
-     the city can run fast, busy junctions drop to 30-40 FPS, and some lights
-     flicker at night or after a race.
+2. SETTINGS ON THIS BUILD
+   - Use 720p or 1440p at 30 FPS. 1080p, 2160p and "Unlocked FPS
+     (experimental)" are not offered on volunteer builds; CHECK SETUP refuses
+     them. 2160p also needs more video memory than an 8 GB graphics card has.
+   - If a later build offers Unlocked, its known limits: menus over the city
+     (pause, map, Arcade, meet spot) stay at 30; busy junctions drop to 30-40
+     FPS; lights flicker at night; the race victory screen can be lit wrongly;
+     one graphics reset was seen in testing.
 
 3. WHEN SOMETHING GOES WRONG
-   - Bug: press F10 on the keyboard, wheel R2, or hold Start+Back on the
-     gamepad for 1 second, at the moment it happens. You can do it several
-     times. (Start+Back may also open the pause menu; that is fine.)
+   - Bug: at the moment it happens press F10 on the keyboard, or R2 on the
+     wheel, or hold Start+Back on the gamepad for about 1 second (the pause
+     menu may open as well; that is fine).
    - Wheel or force-feedback bug (for example the wheel stops centering):
-     press wheel L2. This also records the wheel state.
-   - Each report folder contains report.txt; fill it in. It already names the
-     game version, the time and the kind of report ("general", "wheel" or
-     "crash"); a wheel report also names your wheel.
-   - The game may also save a report by itself if it crashes.
-   - After you close the game, the launcher tells you how many reports were
-     recorded and offers to open the folder. Open each report folder, answer
-     the four questions in its report.txt, save it, and send that whole report
-     folder to the owner. The report.txt next to the report folders lists them.
-   - Nothing is uploaded automatically. Reports contain your save file copy and
-     a screenshot, so send them only to the owner.
+     press L2 on the wheel. This also records the wheel state.
+   - One press = one report. The top right corner shows RECORDING..., then
+     briefly PACKAGE READY (IMAGE UNVERIFIED). Wait for READY before the next
+     press. BUSY means the previous report is still being made; FAILED means
+     no report was made, so press again.
+   - L2/R2 are set for a Thrustmaster T300 (not yet confirmed on a real
+     wheel). If they do nothing on yours, use F10 and write your wheel model
+     in report.txt.
+   - If the game crashes, it saves a report by itself.
+   - Every report folder has its own report.txt, prefilled by the game
+     (version, time, kind "general", "wheel" or "crash"; an L2 report also
+     names your wheel). Answer its four questions and save it. The picture in
+     a report can be from a moment earlier, so describe what you saw.
+   - After you close the game, the launcher lists the reports and offers to
+     open the folder. Send each whole report folder to the owner by hand.
+     Nothing is uploaded automatically. Reports contain a copy of your save
+     and a screenshot, so send them only to the owner.
 
-4. KNOWN PROBLEMS (no need to report again)
-   - The first photo in Photo Mode can be broken; take it again.
-   - Traffic lights make car paint glow at night.
-   - Entering a garage can freeze; close the game, the save is safe.
-   - Some signs show a plain colour block, mostly above 1440p.
-   - A gamepad on a USB 2.4 GHz dongle can stop working after it drops.
+4. KNOWN PROBLEMS
+   - Entering a garage can freeze: press F10, wait 15 seconds, press F10
+     again, wait 15 seconds more, then close the game. Do not close it at once.
+   - After losing a Red Light Driver race and choosing Race Back, the camera
+     can stay in the air: press F10, wait for READY, then restart the game
+     and continue from the last autosave.
+   - The wheel can lose its centering force: press wheel L2 when it happens.
+   - Some signs show plain coloured blocks or stripes; F10 is welcome.
+   - Traffic lights make car paint glow at night; no need to report it.
+   - Should be fixed, please report if you see it: a broken first photo in
+     Photo Mode; a gamepad that stops working after it disconnects.
 
 5. IF THE LAUNCHER SAYS
    - "This test build was withdrawn": get the current build from the owner.
    - "BUILD CHECK NEEDED": connect to the internet once and start again.
+   - Something about the "clock": set the correct date and time in Windows.
    Your saves are never touched by these checks.
 
 -------------------------------------------------------------------------------
@@ -62,43 +78,65 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
    - Розпакуйте папку будь-куди. Запустіть MCLA-Launcher.exe.
    - Setup: вкажіть папку "build" з цього пакета і папку з даними гри.
    - Profiles: створіть порожній профіль (або імпортуйте свої сейви).
-   - Play: виберіть відеокарту й роздільність (рекомендовано 720p-1440p),
-     потім CHECK SETUP, потім START GAME.
-   - Під час першого запуску будьте онлайн: збірка один раз перевіряє, що вона
-     ще активна. Без інтернету вона запускається 3 дні після збирання або
-     24 години після останньої онлайн-перевірки.
+   - Play: виберіть відеокарту, роздільність 720p або 1440p і частоту кадрів
+     "30 FPS (recommended)", потім CHECK SETUP (з'явиться "Setup saved."),
+     потім START GAME.
+   - Під час запуску будьте онлайн: збірка перевіряє підписаний список в
+     інтернеті. Без інтернету вона запускається 3 дні після збирання або
+     24 години після останньої успішної онлайн-перевірки. Запущену гру
+     перевірка ніколи не зупиняє.
 
-2. ЧАСТОТА КАДРІВ (Frame rate)
-   - "30 FPS (recommended)": оригінальний темп. Для звичайної гри.
-   - "Unlocked FPS (experimental)": плавніша їзда (часто 60+), але меню поверх
-     міста можуть бігти швидко, на завантажених перехрестях 30-40 FPS, деяке
-     світло мерехтить уночі або після гонки.
+2. НАЛАШТУВАННЯ В ЦІЙ ЗБІРЦІ
+   - Грайте в 720p або 1440p при 30 FPS. 1080p, 2160p і "Unlocked FPS
+     (experimental)" у збірках для волонтерів недоступні: CHECK SETUP їх
+     відхиляє. До того ж 2160p потребує більше відеопам'яті, ніж є на
+     відеокарті з 8 ГБ.
+   - Якщо пізніша збірка дасть Unlocked, його відомі обмеження: меню поверх
+     міста (пауза, мапа, Arcade, місце зустрічі) лишаються на 30; на
+     завантажених перехрестях 30-40 FPS; уночі мерехтить світло; екран
+     перемоги після гонки може бути неправильно освітлений; у тестах був
+     один збій (скидання) відеокарти.
 
 3. ЯКЩО ЩОСЬ НЕ ТАК
-   - Баг: натисніть F10 на клавіатурі, R2 на кермі або утримуйте Start+Back
-     на геймпаді 1 секунду саме в цей момент. Можна кілька разів. (Start+Back
-     може також відкрити меню паузи; це нормально.)
+   - Баг: саме в цей момент натисніть F10 на клавіатурі, або R2 на кермі,
+     або утримуйте Start+Back на геймпаді приблизно 1 секунду (може також
+     відкритися меню паузи; це нормально).
    - Баг керма чи віддачі (force feedback), наприклад кермо перестало
      центруватися: натисніть L2 на кермі. Так записується ще й стан керма.
-   - У кожній папці звіту є report.txt; заповніть його. У ньому вже вказано
-     версію гри, час і тип звіту ("general", "wheel" або "crash"); у звіті
-     керма вказано й ваше кермо.
-   - Якщо гра впаде, звіт може зберегтися сам.
-   - Коли закриєте гру, лаунчер скаже, скільки звітів записано, і запропонує
-     відкрити папку. Відкрийте кожну папку звіту, дайте відповіді на чотири
-     питання в її report.txt, збережіть і надішліть усю цю папку звіту
-     власнику. report.txt поруч із папками звітів містить їх перелік.
-   - Нічого не відправляється автоматично. У звітах є копія вашого сейву і
-     знімок екрана, тож надсилайте їх лише власнику.
+   - Одне натискання = один звіт. У правому верхньому куті з'явиться
+     RECORDING..., потім на мить PACKAGE READY (IMAGE UNVERIFIED).
+     Дочекайтеся READY перед наступним натисканням. BUSY означає, що
+     попередній звіт ще записується; FAILED означає, що звіт не записано,
+     тож натисніть ще раз.
+   - L2/R2 налаштовані під Thrustmaster T300 (на справжньому кермі ще не
+     перевірено). Якщо на вашому кермі вони нічого не роблять, натискайте
+     F10 і вкажіть модель керма в report.txt.
+   - Якщо гра впаде, звіт збережеться сам.
+   - У кожній папці звіту є свій report.txt, частково заповнений грою
+     (версія, час, тип "general", "wheel" або "crash"; у звіті з L2 вказано
+     й ваше кермо). Дайте відповіді на чотири питання в ньому і збережіть.
+     Знімок у звіті може бути з трохи ранішого моменту, тож опишіть, що
+     бачили.
+   - Коли закриєте гру, лаунчер покаже перелік звітів і запропонує відкрити
+     папку. Надішліть кожну папку звіту цілком власнику вручну. Нічого не
+     відправляється автоматично. У звітах є копія вашого сейву і знімок
+     екрана, тож надсилайте їх лише власнику.
 
-4. ВІДОМІ ПРОБЛЕМИ (повторно повідомляти не треба)
-   - Перше фото у Photo Mode може бути зіпсоване; зробіть ще раз.
-   - Світлофори вночі підсвічують фарбу авто.
-   - Вхід у гараж може зависнути; закрийте гру, сейв у безпеці.
-   - Деякі вивіски показують однотонний прямокутник, переважно вище 1440p.
-   - Геймпад через USB-донгл 2.4 ГГц може перестати працювати після обриву.
+4. ВІДОМІ ПРОБЛЕМИ
+   - Вхід у гараж може зависнути: натисніть F10, зачекайте 15 секунд,
+     натисніть F10 ще раз, зачекайте ще 15 секунд і лише тоді закрийте гру.
+     Не закривайте її одразу.
+   - Після програшу в Red Light Driver і вибору Race Back камера може
+     зависнути в повітрі: натисніть F10, дочекайтеся READY, перезапустіть
+     гру і продовжте з останнього автосейву.
+   - Кермо може втратити силу центрування: натисніть L2 на кермі саме тоді.
+   - Деякі вивіски показують однотонні прямокутники або смуги; F10 вітається.
+   - Світлофори вночі підсвічують фарбу авто; повідомляти не треба.
+   - Мало б бути виправлено, повідомте, якщо побачите: зіпсоване перше фото
+     у Photo Mode; геймпад, що перестав працювати після відключення.
 
 5. ЯКЩО ЛАУНЧЕР ПИШЕ
    - "This test build was withdrawn": візьміть актуальну збірку у власника.
    - "BUILD CHECK NEEDED": один раз підключіться до інтернету й запустіть знову.
+   - Щось про "clock" (годинник): виставте правильні дату й час у Windows.
    Ці перевірки ніколи не чіпають ваші сейви.

@@ -70,6 +70,28 @@ Publishing: every volunteer host hash must be listed in `active-builds.txt` on
 `DebugBundle` before testers go online, or the build is refused. Publishing that
 file needs the owner's explicit approval each time; nothing is pushed from
 the agent without it.
+
+## Owner-internal versus volunteer tickets (owner rule 2026-10-29)
+
+- **Owner-internal candidates use plain V1 tickets:** signed without
+  `-KillSwitch`, 14 days from the signed creation time, no kill switch and no
+  online requirement: the launcher still asks for the signed list, but only a
+  listed grant can extend the 14 days; being offline or unlisted never refuses
+  the build inside them. They carry no tester guide and nothing is published
+  for them. Their owner-only prepare script signs the V1 ticket with
+  `New-MclaTestBuildTicket.ps1`, asserts the first line `MCLA-TEST-BUILD-V1`
+  and stages with `Stage-MclaInternalLauncher.ps1`.
+- **Volunteer candidates use V2 (kill-switch) tickets** and the rules above.
+  Their prepare script signs with `-KillSwitch`, signs the new list with
+  `New-MclaTestBuildLeases.ps1`, stages with `-TesterGuide` (the guide becomes
+  `TESTER-GUIDE.txt`), verifies the list with the lease probe and runs
+  `Test-MclaVolunteerStaging.ps1 -RequireVolunteer`. Publishing the list stays
+  a separate step that needs the owner's explicit approval.
+- The prepare scripts live in the ignored owner workspace, are run by the
+  owner in PowerShell 7 and are not part of any staged folder. Volunteer
+  packages never carry owner-only launcher settings: the gated launcher
+  options are not offered on volunteer builds.
+
 ## Maintainer procedure
 
 Signing scripts require Windows PowerShell 7.1 or later with .NET 5 or later.
