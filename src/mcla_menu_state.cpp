@@ -25,6 +25,21 @@
 // saved threshold is restored and the unchanged draw-count hysteresis (8 heavy
 // frames) releases the cap, so the heuristic stays the fallback for everything
 // else. The transition logic is in mcla_menu_state.h.
+//
+// Hangout / meet spot (owner l41, 2026-10-29): the wager / pink-slip menu at
+// a hangout does not pause the simulation (G+4 = G+6 = 0; the crowd keeps
+// animating). It deactivates the local racer instead: Racer_Deactivate
+// (sub_822AB258, script native sub_822AD200) sets byte racer+908 = 1 and
+// turns the racer's input off; the reset/teleport and activate paths clear
+// it. racer = *(*(be32*)0x82874374 + 8), +656 == 3 for an active racer. Both
+// owner hangout packages showed +908 = 1 with the simulation running; a
+// free-roam driving package showed 0. The camera input (sub_822B35E8) runs
+// only while +908 == 0, so it cannot be set while the player drives. Other
+// setters (nav-map BeginWarp sub_8221A440, race-over UI, network player
+// handlers) are non-interactive screens where stock also ran at 30.
+// The racer pointers are followed only through checked reads (guest heap
+// bounds and page protection) and not at all after ShutdownMenuStateCap;
+// --mcla_ui_cap_racer_inactive=false turns this signal off.
 
 #include "mcla_menu_state.h"
 
@@ -32,7 +47,10 @@
 #include "mcla_logging.h"
 
 #include <rex/cvar.h>
+#include <rex/system/kernel_state.h>
+#include <rex/system/xmemory.h>
 
+#include <atomic>
 #include <mutex>
 #include <string>
 
@@ -41,9 +59,17 @@ REXCVAR_DEFINE_BOOL(mcla_ui_cap_guest_pause, true, "MCLA",
     "simulation pause is set (pause, map, Arcade and race setup menus)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_ui_cap_racer_inactive, true, "MCLA",
+    "Unlocked mode: also keep the stock vblank rate while the local racer is "
+    "deactivated by the game (hangout / meet-spot race menus, warps)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 namespace {
 
 constexpr uint32_t kGameStatePointer = 0x828CCEA0u;
+constexpr uint32_t kPlayerManagerPointer = 0x82874374u;  // +8 -> local racer
+constexpr uint32_t kRacerState = 656;                   // 3 = active
+constexpr uint32_t kRacerInputOff = 908;                // Racer_Deactivate
 constexpr const char *kLowCvar = "mcla_ui_cap_draws_low";
 
 // The hook runs on the guest thread that updates the game; shutdown runs on
@@ -54,6 +80,63 @@ mcla::menu_state::Controller controller;
 bool GuestPauseWanted() {
   static const bool wanted = REXCVAR_GET(mcla_ui_cap_guest_pause);
   return wanted;
+}
+
+bool RacerInactiveWanted() {
+  static const bool wanted = REXCVAR_GET(mcla_ui_cap_racer_inactive);
+  return wanted;
+}
+
+// Set by ShutdownMenuStateCap: the racer is no longer read, so a player
+// manager torn down with the host cannot be followed.
+std::atomic<bool> racer_reads_stopped{false};
+
+// The racer pointers are followed only when the address lies inside a guest
+// heap and the page is readable (the KI-026 probe's check: heap bounds before
+// QueryProtect, both ends of the span). Spans are at most 4 bytes, so both
+// ends cover every page they touch. Check and read are not atomic; a page
+// decommitted in between remains a residual risk.
+bool GuestReadable(rex::memory::Memory *memory, uint32_t address,
+                   uint32_t size) {
+  if (!memory || !address || address > UINT32_MAX - (size - 1)) {
+    return false;
+  }
+  for (const uint32_t probe : {address, address + size - 1}) {
+    auto *heap = memory->LookupHeap(probe);
+    uint32_t protect = 0;
+    if (!heap || probe < heap->heap_base() ||
+        probe - heap->heap_base() >= heap->heap_size() ||
+        !heap->QueryProtect(probe, &protect) ||
+        !(protect & rex::memory::kMemoryProtectRead)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Byte racer+908 of the local racer, or 0 when there is no active racer or a
+// read is refused.
+uint8_t ReadRacerInputOff(uint8_t *base) {
+  if (!RacerInactiveWanted() ||
+      racer_reads_stopped.load(std::memory_order_acquire)) {
+    return 0;
+  }
+  auto *kernel = rex::system::kernel_state();
+  rex::memory::Memory *memory = kernel ? kernel->memory() : nullptr;
+  if (!GuestReadable(memory, kPlayerManagerPointer, 4)) {
+    return 0;
+  }
+  const uint32_t players = REX_LOAD_U32(kPlayerManagerPointer);
+  if (!players || !GuestReadable(memory, players + 8, 4)) {
+    return 0;
+  }
+  const uint32_t racer = REX_LOAD_U32(players + 8);
+  const bool racer_read = racer != 0 &&
+                          GuestReadable(memory, racer + kRacerState, 4) &&
+                          GuestReadable(memory, racer + kRacerInputOff, 1);
+  return mcla::menu_state::RacerInputOff(
+      racer_read, racer_read ? REX_LOAD_U32(racer + kRacerState) : 0,
+      racer_read ? REX_LOAD_U8(racer + kRacerInputOff) : 0);
 }
 
 void WriteLow(int32_t value) {
@@ -69,6 +152,7 @@ void WriteLow(int32_t value) {
 namespace mcla::menu_state {
 
 void ShutdownMenuStateCap() {
+  racer_reads_stopped.store(true, std::memory_order_release);
   std::lock_guard lock(controller_mutex);
   if (controller.stopped()) {
     return;
@@ -93,7 +177,8 @@ REX_EXTERN(sub_822D29E8) {
   }
   const uint8_t simulation = REX_LOAD_U8(state + 4);
   const uint8_t local = REX_LOAD_U8(state + 6);
-  const bool paused = simulation != 0 || local != 0;
+  const uint8_t racer_off = ReadRacerInputOff(base);
+  const bool paused = mcla::menu_state::CapPaused(simulation, local, racer_off);
   std::lock_guard lock(controller_mutex);
   if (!controller.NeedsInputs(paused)) {
     return;
@@ -106,8 +191,9 @@ REX_EXTERN(sub_822D29E8) {
     WriteLow(*decision.write_low);
   }
   if (decision.log) {
-    MCLA_APP_INFO("MCLA menu state: game {} (sim {} local {}), UI cap {}, {} {}",
-                  paused ? "paused" : "running", simulation, local,
+    MCLA_APP_INFO("MCLA menu state: game {} (sim {} local {} racer-off {}), "
+                  "UI cap {}, {} {}",
+                  paused ? "paused" : "running", simulation, local, racer_off,
                   controller.forcing() ? "forced" : "draw-count", kLowCvar,
                   decision.write_low ? *decision.write_low : inputs.current_low);
   }

@@ -23,6 +23,24 @@ inline constexpr int32_t kForcedLow = 100000;
 // At most this many transitions are logged per process.
 inline constexpr int kMaxLoggedTransitions = 200;
 
+// Local racer state (racer+656) of a racer that is in the world.
+inline constexpr uint32_t kRacerStateActive = 3;
+
+// Racer_Deactivate flag (racer+908) as the cap sees it: counted only for a
+// racer that was read successfully and is active; anything else is 0.
+inline constexpr uint8_t RacerInputOff(bool racer_read, uint32_t racer_state,
+                                       uint8_t input_off) {
+  return racer_read && racer_state == kRacerStateActive ? input_off : 0;
+}
+
+// The pause state the controller observes: the game's simulation pause
+// (G+4), its local pause (G+6) or a deactivated local racer (hangout /
+// meet-spot menus, warps).
+inline constexpr bool CapPaused(uint8_t simulation, uint8_t local,
+                                uint8_t racer_off) {
+  return simulation != 0 || local != 0 || racer_off != 0;
+}
+
 struct Inputs {
   // mcla_guest_vblank_hz; > 0 means the unlocked mode is configured.
   int32_t guest_vblank_hz = 0;
