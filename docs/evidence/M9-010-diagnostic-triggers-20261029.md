@@ -296,3 +296,55 @@ Use a non-MAIN profile with a build that ships the l39 SDK `rexruntime.dll`.
 - The host-observed transition ring counts the host's own activity rule; it can
   differ from the SDK's routing (that is why both are recorded).
 - The SDK API is a new local SDK patch on top of KI-040 and is not upstream.
+
+## Merged tree verification (dd08b21)
+
+Tree: `dd08b21` (merge of M9-010 with M9-007 menu state, KI-035 guest sampler
+and KI-026 probe); the worktree HEAD `2be3b5c` adds only documentation on top.
+No source change was needed. The inja/nlohmann include directory was copied
+from `private/l34-src` as an untracked build input, as in the M9-010 worktree.
+
+Review of the merge resolution in `src/mcla_app.cpp`:
+
+- `RequestLiveSnapshot` is called only from the F10 bind callback and from
+  `OnDiagnosticTrigger`, which the trigger adapter runs through
+  `CallInUIThreadDeferred`; both are on the UI thread, where `runtime()` is
+  read the same way as in `CaptureDiagnosticState`. `guest_sampler::Start` runs
+  only for an accepted request (`audit_attempted` implies `queued`) and joins a
+  previous sampler under its own mutex, so repeated triggers cannot stack.
+- `OnWindowCloseRequested` and `OnShutdown` both call `guest_sampler::Stop` and
+  `ShutdownDiagnosticTriggers`; both are idempotent. After close no trigger can
+  reach `RequestLiveSnapshot` (adapter stopped, F10 unbound in the same UI-thread
+  call). `InstallDiagnosticTriggers` runs once from `OnPostSetup` and refuses a
+  second install; the F10 bind is registered once. No double registration.
+
+Build: new directory `private/l39-merge-build`, configured like
+`private/l39-triggers-build` (SDK `private/l39-sdk-install`, `REXSDK_VERSION`
+empty, `MCLA_BUILD_DIAGNOSTIC_TESTS=ON`, prefix maps for this worktree).
+`mcla`, `mcla_crash_handler`, `mcla_internal_launcher` and 32 test targets:
+207 build steps, rc 0, **0 compiler warnings**.
+
+| Artifact | Bytes | SHA-256 |
+|---|---|---|
+| `mcla.exe` | 53,038,592 | `CE88A11ACC9B1131A783D1130DD73EF548368964A8D9ED45C0906E736585C8C8` |
+| `MCLA-Launcher.exe` | 1,303,552 | `EC869F4521A0DF7565324B2CCD9C37E358C3998C95BF57C55A895C3EFBA6D985` |
+| `mcla_crash_handler.exe` | 194,560 | `E1AED0AD8C4BFDDABA9595A23AB54693F7F0BC48A6F7EBC0656FA47E95DBEE5F` |
+| `rexruntime.dll` (copied from the SDK install) | 10,964,480 | `F761FB6BD5ECDAD4E0518915AC2FA31838B1F7443A7C1616BD3934AB9606F045` |
+
+`mcla.exe` contains neither `SDL.app.metadata` nor `SDL_VIDEO_DRIVER` and
+imports `AddSdlEventObserver`, `RemoveSdlEventObserver`, `CaptureSdlJoysticks`
+and `QuerySdlJoystick` from `rexruntime.dll`.
+
+Tests: 32/32 executables rc 0, 0 failures: diagnostic_trigger 87, menu_state
+447, guest_sampler 9, diagnostic_hotkey 8, cursor_autohide 266, frame_signal
+24, diagnostic_image_protocol 119, readback_cost_sample 133,
+portable_path_policy 52, launcher_profile_policy 118, launcher_library_codec
+315, launcher_preferences 2088, managed_config_policy 50,
+portable_adapter_policy 78, session_report 30, diagnostic_export_policy 573,
+diagnostic_export_win 105 (1 skip), diagnostic_export_ui_win 249,
+launcher_controller_win 343, launcher_import_win 31, launcher_fs_win 76,
+launcher_ui_win 971, launcher_process_win 41, launcher_store_win 125 (1 skip),
+launcher_build_win 109, launcher_snapshot_win 26, launcher_game_win 70,
+launcher_import_policy 72, launcher_capabilities 200, build_lease_policy 1438,
+build_lease_network_win 26 (no network request), build_lease_runtime_win 69.
+`ast-grep scan` clean, `ast-grep test` 3/3. Nothing was launched.
