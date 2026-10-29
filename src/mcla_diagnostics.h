@@ -84,6 +84,8 @@ struct RuntimeState {
   uint64_t race_back_sequence = 0;
   uint64_t race_back_handler_calls = 0;
   uint64_t race_back_apply_calls = 0;
+  // KI-026 guest warp/camera-pause snapshot (JSON object; empty if unavailable).
+  std::string guest_ki026_json;
 };
 
 using CaptureProvider = std::function<RuntimeState()>;

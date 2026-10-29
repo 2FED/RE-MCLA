@@ -60,6 +60,11 @@
 #include "generated/default/mcla_init.h"
 #include "mcla_cursor_autohide_sdl.h"
 #include "mcla_diagnostics.h"
+// M9 host hooks (M9-007 menu-state cap, KI-035 sampler, KI-026 state block).
+#include "mcla_guest_sampler.h"
+#include "mcla_ki026_probe.h"
+#include "mcla_menu_state.h"
+// End M9 host hooks.
 #include "mcla_logging.h"
 #include "mcla_managed_config_policy.h"
 #include "mcla_native_crash.h"
@@ -1174,6 +1179,9 @@ void MclaApp::OnPostInitLogging() {
               MCLA_APP_INFO("MCLA diagnostics: F10 performance audit "
                             "armed={}",
                             request.audit_armed ? 1 : 0);
+              // KI-035: 10 s guest-thread sampler for each accepted F10.
+              mcla::guest_sampler::Start(
+                  runtime() ? runtime()->kernel_state() : nullptr);
             }
             const bool queued = request.queued;
             if (diagnostic_status_dialog_) {
@@ -3526,6 +3534,11 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
   state.race_back_sequence = race_back_probe_sequence.load();
   state.race_back_handler_calls = race_back_camera_handler_calls.load();
   state.race_back_apply_calls = race_back_camera_apply_calls.load();
+  // KI-026: read-only guest warp/camera-pause snapshot.
+  if (active_runtime) {
+    state.guest_ki026_json = MclaKi026StateJson(active_runtime->memory(),
+                                                active_runtime->virtual_membase());
+  }
   return state;
 }
 
@@ -3559,6 +3572,7 @@ void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
 }
 
 bool MclaApp::OnWindowCloseRequested() {
+  mcla::guest_sampler::Stop();  // KI-035
   readback_probe_lifetime_.reset();
   if (diagnostic_keybind_registered_) {
     rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
@@ -3569,6 +3583,8 @@ bool MclaApp::OnWindowCloseRequested() {
 }
 
 void MclaApp::OnShutdown() {
+  mcla::guest_sampler::Stop();                 // KI-035
+  mcla::menu_state::ShutdownMenuStateCap();    // M9-007
   if (cursor_autohide_) {
     mcla::cursor::Shutdown(*cursor_autohide_);
     cursor_autohide_.reset();

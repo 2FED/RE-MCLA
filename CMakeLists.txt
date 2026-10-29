@@ -56,6 +56,13 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_cursor_autohide_test.cpp)
     target_include_directories(mcla_cursor_autohide_test PRIVATE src)
     target_compile_features(mcla_cursor_autohide_test PRIVATE cxx_std_23)
+    # M9 host hooks: pure logic of the M9-007 cap and the KI-035 sampler.
+    foreach(m9_hook_test IN ITEMS menu_state guest_sampler)
+        add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
+            tests/mcla_${m9_hook_test}_test.cpp)
+        target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
+        target_compile_features(mcla_${m9_hook_test}_test PRIVATE cxx_std_23)
+    endforeach()
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -171,6 +178,13 @@ set(MCLA_SOURCES
     src/mcla_diagnostics.cpp
     src/mcla_logging.cpp
 )
+
+# M9 host hooks: M9-007 menu-state cap (overrides sub_822D29E8), KI-035 F10
+# guest sampler, KI-026 F10 state block and default-off probe/watchdog.
+list(APPEND MCLA_SOURCES
+    src/mcla_guest_sampler.cpp
+    src/mcla_ki026_probe.cpp
+    src/mcla_menu_state.cpp)
 
 # Measured-time game timer (docs/evidence/M8-001-timebox-20261025.md). It
 # overrides sub_822D2478, so it stays out of builds where the diagnostic timer

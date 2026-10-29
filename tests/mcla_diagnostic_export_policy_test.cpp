@@ -241,6 +241,17 @@ int RunTests() {
     f.state["window"]["fullscreen"] = 1; Reject(f,"window fullscreen strictly boolean");
   }
   {
+    // KI-026: the F10 state block guest_ki026 is diagnostic-only and has no
+    // export authority; the projection is identical with and without it.
+    Fixture f;
+    f.state["guest_ki026"] = {{"ui_logic","8286D8D4"},{"camera_paused",1},
+        {"warper",{{"state",29},{"queue",0},{"flags272",{0,1,0,0,0,0,0,0,0}}}},
+        {"timer_scale",nullptr},{"complete",false},{"note",kPrivate}};
+    const auto with_block = Accept(f,"extra guest_ki026 state block accepted");
+    Check(with_block == Accept(Fixture{},"baseline without guest_ki026"),
+          "guest_ki026 never reaches the exported metadata");
+  }
+  {
     Fixture f; f.manifest["capture"]["frame"] = true;
     f.manifest["artifacts"].push_back({{"name","frame.bmp"},{"sha256",kPrivate},{"safe_to_share",true}});
     f.manifest["artifacts"].push_back({{"name","process-private.dmp"},{"bytes",kPrivate}});

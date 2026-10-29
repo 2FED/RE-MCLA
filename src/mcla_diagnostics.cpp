@@ -943,8 +943,11 @@ BuildStateJson(std::string_view reason, const UiState &ui,
       << "},\n"
       << "  \"race_back_trace\": {\"sequence\": " << runtime.race_back_sequence
       << ", \"handler_calls\": " << runtime.race_back_handler_calls
-      << ", \"apply_calls\": " << runtime.race_back_apply_calls << "},\n"
-      << "  \"native_threads\": [";
+      << ", \"apply_calls\": " << runtime.race_back_apply_calls << "},\n";
+  if (!runtime.guest_ki026_json.empty()) {
+    out << "  \"guest_ki026\": " << runtime.guest_ki026_json << ",\n";
+  }
+  out << "  \"native_threads\": [";
   for (size_t i = 0; i < native_threads.size(); ++i) {
     const auto &thread = native_threads[i];
     if (i) {
