@@ -193,3 +193,18 @@ owner's explicit yes. The volunteer `mcla.exe` must also be built with
   which needs the owner's explicit yes.
 - Pending: the in-game smoke test (F10 freshness, report prompt, kill switch), the
   publication decision, and one tester smoke.
+
+## Clean test copy of l38 (2026-10-29)
+
+- Owner request: a clean copy of the 18 receipt files only (no
+  `candidate-receipt.json`) at `C:\BDU\MCLA-Test\MCLA-R-l38`, hashes checked,
+  package audit run, no game launch, no push.
+- Source and copy were both compared with the receipt: 18 of 18 SHA-256 and
+  byte sizes match; 18 files on disk, one `build` directory.
+- `Test-MclaVolunteerStaging.ps1 -RequireVolunteer` on the copy: 183 checks,
+  0 findings, exit 0 (193 on the staged folder minus one file times ten checks
+  for the absent receipt). A separate ASCII+UTF-16 sweep for `C:\BDU`,
+  `C:/BDU` and the profile path in both slash forms: 0 hits. Ticket header
+  `MCLA-TEST-BUILD-V2` for host `9777D5BE...`; expiry marker present.
+- Spark routing: none; the work is deterministic hashing and an existing audit
+  script, which the policy prefers to run directly.

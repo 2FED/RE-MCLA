@@ -1,10 +1,16 @@
 # Current state and handoff
 
-Updated October 28, 2026 Kyiv. README-AI owns the milestone ledger and checkpoint history.
+Updated October 29, 2026 Kyiv. README-AI owns the milestone ledger and checkpoint history.
 
 ## Active outcome
 
-**M9-001 done (2026-10-28).** The SDK pin is `a239b83` (package 0.20.0.2). A fresh clone built the SDK and `mcla.exe` into `private/l34-build/out-s30` and `out-sunc`. The unlocked build uses the CMake option `MCLA_UNLOCKED_VBLANK_HZ=240`, not an SDK edit. Codegen is byte-identical, SDK tests pass 1864/1864, and the sources match l31-s30/l33-sunc. Staged 2026-10-28 as `private/l34-s30` and `private/l34-sunc`; the owner signed the tickets with portable PowerShell 7 in `private/tools/pwsh`. Automated 170 s title checks on the RTX 5060 pass on both and match the l31/l33 baselines. The owner's manual drive at 2K passed on both. KI-041 (night flicker, sunc only) awaits a 720p check and an l33-sunc comparison. Next: M9-002 after the owner's 720p result. New task M9-009: hide the mouse cursor on pad or wheel input. Direct `mcla.exe` launches must pass `--d3d12_adapter=1`: the RTX 5060 is no longer the first DXGI adapter while it drives the 4K display. [Evidence](evidence/M9-001-reproducible-build-20261028.md).
+**M9 at 2026-10-29: M9-001/002/003 closed, M9-004 deferred to REL-019, M9-005 staged and waiting on the owner, M9-006 and M9-009 in progress.** Ledger: README-AI section 17; plan: [M9 priorities](M9-priorities.md).
+
+- **M9-005 volunteer candidate l38** (`private/l38-volunteer`, host `9777D5BE...`, launcher `009BC3B1...`, V2 kill-switch ticket created 2026-10-28 19:19 Kyiv) is staged and audited. 2026-10-29: a clean 18-file copy was made at `C:\BDU\MCLA-Test\MCLA-R-l38` (all receipt hashes and sizes match; volunteer audit 183 checks, 0 findings; no `C:\BDU` or profile path strings). Offline window ends 2026-10-31 19:19 Kyiv; online start is refused until `l38-active-builds.txt` is published to `DebugBundle` (owner yes required). **Owner-only next steps:** in-game smoke (two F10 presses in different scenes for KI-042 freshness, report prompt, kill switch), the publication decision, one tester smoke. [Evidence](evidence/M9-005-volunteer-build-20261028.md).
+- **M9-009 (hide cursor on pad/wheel input)**: implementation delegated 2026-10-29 to an Opus subagent (host-only change preferred, unit test, compile check in `private/l39-cursor-build`); result pending primary review.
+- **M9-006 KI triage**: read-only analyses of KI-040 (pad re-acquire), KI-035 (garage freeze F10 dumps) and KI-026 (camera softlock) delegated 2026-10-29 to Opus subagents; proposals go to primary review before any code change. No fix is claimed.
+- Working rule from the owner (2026-10-29): the primary (Fable) coordinates; Opus subagents execute tasks; Fable executes only when an Opus attempt visibly fails.
+- Direct `mcla.exe` launches must pass `--d3d12_adapter=1` (RTX 5060 is not the first DXGI adapter at 4K). No game run in this continuation.
 
 M8 is closed by owner decisions and the bounded M8-012 regression (2026-10-28): 10 complete, 9 deferred, 19 total, GREEN. M8-006, M8-007 and M8-018 move to the start of M9. Details are in the [closure record](evidence/M8-closure-readiness-20261028.md) and the [performance and timing timebox](evidence/M8-001-timebox-20261025.md).
 
