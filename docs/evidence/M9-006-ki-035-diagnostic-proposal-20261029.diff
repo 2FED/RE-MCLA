@@ -1,0 +1,184 @@
+# KI-035 DIAGNOSTIC proposal (not a fix; do not apply blindly). Two parts:
+# Part 1 applies to the rexglue SDK root (third_party/rexglue-sdk): log guest allocation failures.
+# Part 2 applies to the MCLA-R repo root: 10 s guest-function/import sampler started by F10.
+# Uncompiled and untested; build and review before any use.
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_memory.cpp b/src/kernel/xboxkrnl/xboxkrnl_memory.cpp
+index 8684eda..1fb6929 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_memory.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_memory.cpp
+@@ -12,6 +12,7 @@
+ // Disable warnings about unused parameters for kernel functions
+ #pragma GCC diagnostic ignored "-Wunused-parameter"
+ 
++#include <atomic>
+ #include <cstring>
+ 
+ #include <rex/assert.h>
+@@ -26,6 +27,16 @@
+ namespace rex::kernel::xboxkrnl {
+ using namespace rex::system;
+ 
++namespace {
++// KI-035: guest allocation failures were silent. Log the first 32 and then
++// every 256th so a never-ending load can be tied to heap exhaustion.
++std::atomic<uint32_t> g_guest_alloc_failures{0};
++bool ShouldLogGuestAllocFailure(uint32_t* ordinal) {
++  *ordinal = g_guest_alloc_failures.fetch_add(1, std::memory_order_relaxed) + 1;
++  return *ordinal <= 32 || (*ordinal % 256) == 0;
++}
++}  // namespace
++
+ uint32_t ToXdkProtectFlags(uint32_t protect) {
+   uint32_t result = 0;
+   if (!(protect & memory::kMemoryProtectRead) && !(protect & memory::kMemoryProtectWrite)) {
+@@ -173,6 +184,13 @@ u32 NtAllocateVirtualMemory_entry(mapped_u32 base_addr_ptr, mapped_u32 region_si
+   }
+   if (!address) {
+     // Failed - assume no memory available.
++    uint32_t ordinal = 0;
++    if (ShouldLogGuestAllocFailure(&ordinal)) {
++      REXKRNL_IMPORT_FAIL("NtAllocateVirtualMemory",
++                          "#{} base={:#x} size={:#x} page={:#x} type={:#x} protect={:#x}",
++                          ordinal, adjusted_base, adjusted_size, page_size, (uint32_t)alloc_type,
++                          (uint32_t)protect_bits);
++    }
+     return X_STATUS_NO_MEMORY;
+   }
+ 
+@@ -400,6 +418,13 @@ u32 MmAllocatePhysicalMemoryEx_entry(u32 flags, u32 region_size, u32 protect_bit
+   if (!heap->AllocRange(heap_min_addr, heap_max_addr, adjusted_size, adjusted_alignment,
+                         allocation_type, protect, top_down, &base_address)) {
+     // Failed - assume no memory available.
++    uint32_t ordinal = 0;
++    if (ShouldLogGuestAllocFailure(&ordinal)) {
++      REXKRNL_IMPORT_FAIL("MmAllocatePhysicalMemoryEx",
++                          "#{} size={:#x} page={:#x} align={:#x} min={:#x} max={:#x} protect={:#x}",
++                          ordinal, adjusted_size, page_size, adjusted_alignment, (uint32_t)min_addr_range,
++                          (uint32_t)max_addr_range, (uint32_t)protect_bits);
++    }
+     return 0;
+   }
+   REXKRNL_IMPORT_RESULT("MmAllocatePhysicalMemoryEx", "addr={:#x}", base_address);
+diff --git a/src/mcla_app.cpp b/src/mcla_app.cpp
+index dd18c28..a487793 100644
+--- a/src/mcla_app.cpp
++++ b/src/mcla_app.cpp
+@@ -33,6 +33,7 @@
+ #include <rex/system/kernel_state.h>
+ #include <rex/system/thread_state.h>
+ #include <rex/system/user_module.h>
++#include <rex/system/xthread.h>
+ #include <rex/ui/keybinds.h>
+ #include <rex/ui/presenter.h>
+ #include <rex/ui/window.h>
+@@ -54,6 +55,7 @@
+ #include <fstream>
+ #include <limits>
+ #include <thread>
++#include <unordered_map>
+ #include <utility>
+ #include <vector>
+ 
+@@ -269,6 +271,86 @@ std::atomic_uint64_t race_back_camera_apply_calls = 0;
+ PPCFunc *race_back_command_original = nullptr;
+ PPCFunc *apply_game_camera_handler_original = nullptr;
+ 
++// KI-035: F10 guest sampler. For 10 s after an F10 it reads every guest
++// thread's innermost guest function and last kernel import at ~500 Hz and logs
++// the top entries per thread. A freeze whose frames still advance shows which
++// guest code polls; compare with an F10 taken during normal driving.
++std::mutex guest_sampler_mutex;
++std::jthread guest_sampler_thread;
++
++void RunGuestSampler(std::stop_token stop, rex::system::KernelState *kernel) {
++  using rex::system::XThread;
++  auto threads = kernel->object_table()->GetObjectsByType<XThread>();
++  struct Hist {
++    std::string name;
++    uint32_t samples = 0;
++    std::unordered_map<uint32_t, uint32_t> functions;
++    std::unordered_map<const char *, uint32_t> imports;
++  };
++  std::vector<Hist> hists(threads.size());
++  for (size_t i = 0; i < threads.size(); ++i) {
++    hists[i].name = threads[i]->name();
++  }
++  const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
++  while (!stop.stop_requested() && std::chrono::steady_clock::now() < end) {
++    for (size_t i = 0; i < threads.size(); ++i) {
++      auto *state = threads[i]->is_guest_thread() ? threads[i]->thread_state()
++                                                  : nullptr;
++      const PPCContext *ctx = state ? state->context() : nullptr;
++      if (!ctx) continue;
++      // Racy diagnostic reads of aligned scalars written by the guest thread.
++      const uint32_t function =
++          *static_cast<const volatile uint32_t *>(&ctx->current_function);
++      const char *import = *static_cast<const char *const volatile *>(
++          &ctx->last_import);
++      ++hists[i].samples;
++      ++hists[i].functions[function];
++      ++hists[i].imports[import];
++    }
++    std::this_thread::sleep_for(std::chrono::milliseconds(2));
++  }
++  for (const auto &hist : hists) {
++    if (!hist.samples) continue;
++    std::vector<std::pair<uint32_t, uint32_t>> top(hist.functions.begin(),
++                                                   hist.functions.end());
++    std::sort(top.begin(), top.end(),
++              [](const auto &a, const auto &b) { return a.second > b.second; });
++    std::string line;
++    for (size_t k = 0; k < top.size() && k < 12; ++k) {
++      char item[32];
++      std::snprintf(item, sizeof(item), " %08X:%u", top[k].first, top[k].second);
++      line += item;
++    }
++    std::string imports;
++    for (const auto &[name, count] : hist.imports) {
++      imports += ' ';
++      imports += name ? name : "none";
++      imports += ':' + std::to_string(count);
++    }
++    MCLA_APP_INFO("MCLA_GUEST_SAMPLE v=1 thread='{}' samples={} fn={} last_import={}",
++                  hist.name, hist.samples, line, imports);
++  }
++}
++
++void StartGuestSampler(rex::system::KernelState *kernel) {
++  if (!kernel) return;
++  std::lock_guard lock(guest_sampler_mutex);
++  if (guest_sampler_thread.joinable()) {
++    guest_sampler_thread.request_stop();
++    guest_sampler_thread.join();
++  }
++  guest_sampler_thread = std::jthread(
++      [kernel](std::stop_token stop) { RunGuestSampler(stop, kernel); });
++}
++
++void StopGuestSampler() {
++  std::lock_guard lock(guest_sampler_mutex);
++  if (guest_sampler_thread.joinable()) {
++    guest_sampler_thread.request_stop();
++    guest_sampler_thread.join();
++  }
++}
++
+ void RaceBackCommandProbe(PPCContext &ctx, uint8_t *base) {
+   const uint64_t sequence = race_back_probe_sequence.fetch_add(1) + 1;
+   race_back_camera_handler_calls = 0;
+@@ -1174,6 +1256,7 @@ void MclaApp::OnPostInitLogging() {
+               MCLA_APP_INFO("MCLA diagnostics: F10 performance audit "
+                             "armed={}",
+                             request.audit_armed ? 1 : 0);
++              StartGuestSampler(runtime() ? runtime()->kernel_state() : nullptr);
+             }
+             const bool queued = request.queued;
+             if (diagnostic_status_dialog_) {
+@@ -3559,6 +3642,7 @@ void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
+ }
+ 
+ bool MclaApp::OnWindowCloseRequested() {
++  StopGuestSampler();
+   readback_probe_lifetime_.reset();
+   if (diagnostic_keybind_registered_) {
+     rex::ui::UnregisterBind("bind_mcla_debug_snapshot");
