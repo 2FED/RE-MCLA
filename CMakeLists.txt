@@ -52,6 +52,11 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_diagnostic_hotkey_test.cpp)
     target_include_directories(mcla_diagnostic_hotkey_test PRIVATE src)
     target_compile_features(mcla_diagnostic_hotkey_test PRIVATE cxx_std_23)
+    add_executable(mcla_diagnostic_trigger_test EXCLUDE_FROM_ALL
+        tests/mcla_diagnostic_trigger_test.cpp)
+    target_include_directories(mcla_diagnostic_trigger_test PRIVATE src
+        third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+    target_compile_features(mcla_diagnostic_trigger_test PRIVATE cxx_std_23)
     add_executable(mcla_cursor_autohide_test EXCLUDE_FROM_ALL
         tests/mcla_cursor_autohide_test.cpp)
     target_include_directories(mcla_cursor_autohide_test PRIVATE src)
@@ -175,6 +180,7 @@ set(MCLA_SOURCES
     src/main.cpp
     src/mcla_app.cpp
     src/mcla_cursor_autohide_sdl.cpp
+    src/mcla_diagnostic_triggers_sdl.cpp
     src/mcla_diagnostics.cpp
     src/mcla_logging.cpp
 )

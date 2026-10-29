@@ -40,8 +40,50 @@ int main() {
         "report carries build, mode and resolution");
   Check(text.find("\nsession_started_utc 1793200000\nsession_ended_utc 1793200600\nexit_code 0\n") != std::string::npos,
         "report carries session times and exit code");
-  Check(text.find("  crash/crash-20261028T154000Z-29484-1\n  live/live-20261028T153436Z-29484-1\n") != std::string::npos,
-        "report lists packages, crash first");
+  Check(text.find("  crash/crash-20261028T154000Z-29484-1  crash\n  live/live-20261028T153436Z-29484-1  general\n") !=
+            std::string::npos,
+        "report lists packages with their category, crash first");
+  Check(text.find("\npackages (general = bug report, wheel = wheel/force-feedback bug, crash = crash)\n") !=
+            std::string::npos,
+        "report explains the categories");
+
+  // M9-010: category from the live package manifest.
+  const std::string f10_manifest =
+      "{\n  \"schema\": \"mcla-diagnostic-package-v1\",\n  \"kind\": \"live\",\n  \"reason\": \"f10\",\n"
+      "  \"trigger\": {\"category\": \"general\", \"source\": \"f10\"},\n  \"capture\": {\"frame\": true}\n}\n";
+  const std::string wheel_manifest =
+      "{\n  \"kind\": \"live\",\n  \"reason\": \"wheel-l2\",\n"
+      "  \"trigger\": {\"category\": \"wheel\", \"source\": \"wheel-l2\"},\n  \"artifacts\": []\n}\n";
+  Check(ManifestCategory(f10_manifest) == "general", "general manifest category");
+  Check(ManifestCategory(wheel_manifest) == "wheel", "wheel manifest category");
+  Check(ManifestCategory("{\"kind\": \"live\", \"reason\": \"f10\"}") == "general",
+        "pre-M9-010 package without trigger is general");
+  Check(ManifestCategory("") == "general", "unreadable manifest is general");
+  Check(ManifestCategory("{\"trigger\": {\"category\": \"crash\", \"source\": \"x\"}}") == "general",
+        "unknown category is not trusted");
+  Check(ManifestCategory("{\"trigger\": {\"source\": \"x\"}, \"other\": {\"category\": \"wheel\"}}") == "general",
+        "category outside the trigger object is ignored");
+  Check(ManifestCategory("{\"trigger\": {\"category\":\"wheel\"}}") == "wheel", "compact spacing accepted");
+
+  auto mixed = SessionPackages({L"live-20261029T100000Z-1-1", L"live-20261029T100100Z-1-2",
+                                L"live-20261029T100200Z-1-3"},
+                               {});
+  Check(mixed.size() == 3, "launcher still counts every completed live package");
+  mixed[0].category = ManifestCategory(f10_manifest);
+  mixed[1].category = ManifestCategory(wheel_manifest);
+  const auto mixed_text = ReportText(context, mixed);
+  Check(mixed_text.find("  live/live-20261029T100000Z-1-1  general\n"
+                        "  live/live-20261029T100100Z-1-2  wheel\n"
+                        "  live/live-20261029T100200Z-1-3  general\n") != std::string::npos,
+        "report marks the wheel package");
+  Check(PromptText(mixed).starts_with(L"3 reports were recorded in this session (1 wheel report)."),
+        "prompt counts wheel reports");
+  auto with_crash = packages;
+  with_crash[1].category = "wheel";
+  Check(PromptText(with_crash).starts_with(L"3 reports were recorded in this session (1 crash, 1 wheel report)."),
+        "prompt counts crashes and wheel reports");
+  Package odd{L"crash-1", true, "wheel"};
+  Check(PackageCategory(odd) == "crash", "crash package is always crash");
   for (const auto *question : {"1. What were you doing?", "2. Steps to make it happen again", "3. What went wrong?",
                                "4. What did you expect instead?"})
     Check(text.find(question) != std::string::npos, "report asks the four questions");

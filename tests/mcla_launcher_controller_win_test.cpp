@@ -156,11 +156,16 @@ int FakeChild(int argc, wchar_t **argv) {
       !field("fps_measured","false") || !field("settings_scope","resolved-launch-arguments") ||
       !receipt.contains("build") || !receipt.contains("game") ||
       !field("build",receipt.at("build")) || !field("game",receipt.at("game"))) return finish(94);
-  // One completed and one unfinished F10-style package for the report prompt.
+  // One completed F10-style package without a manifest (pre-M9-010), one
+  // completed wheel-L2 package (M9-010) and one unfinished package.
   const auto live = path(L"mcla_diagnostics_root") / L"live";
   if (!CreateDirectoryW(live.c_str(), nullptr) ||
       !CreateDirectoryW((live / L"live-fixture-1").c_str(), nullptr) ||
-      !CreateDirectoryW((live / L"live-fixture-2.partial").c_str(), nullptr)) return finish(96);
+      !CreateDirectoryW((live / L"live-fixture-2.partial").c_str(), nullptr) ||
+      !CreateDirectoryW((live / L"live-fixture-3").c_str(), nullptr) ||
+      !NewFile(live / L"live-fixture-3" / L"manifest.json",
+               "{\n  \"kind\": \"live\",\n  \"reason\": \"wheel-l2\",\n"
+               "  \"trigger\": {\"category\": \"wheel\", \"source\": \"wheel-l2\"}\n}\n")) return finish(96);
   if (!NewFile(path(L"user_data_root") / L"fixture-save.bin", "FIXTURE_SAVE_ONLY\n") ||
       !NewFile(cwd / L"fixture-ready.txt", "ROOTS_ENV_SETTINGS_SENTINEL_PASS\n")) return finish(90);
   const auto started = GetTickCount64();
@@ -974,11 +979,12 @@ int wmain(int argc, wchar_t **argv) {
     Check(!final.report_folder.empty() &&
           std::filesystem::equivalent(std::filesystem::path(final.report_folder), diagnostics),
           "finished session with a package offers its own diagnostics folder");
-    Check(final.report_prompt.starts_with(L"1 report was recorded in this session."),
-          "prompt counts only the completed package");
+    Check(final.report_prompt.starts_with(L"2 reports were recorded in this session (1 wheel report)."),
+          "prompt counts only the completed packages and the wheel report");
     Check(report.starts_with("MCLA-R TEST REPORT\n") && report.find("\nmode stock\n") != report.npos &&
           report.find("\nrender_target 2560x1440\n") != report.npos &&
-          report.find("  live/live-fixture-1\n") != report.npos && report.find(".partial") == report.npos &&
+          report.find("  live/live-fixture-1  general\n  live/live-fixture-3  wheel\n") != report.npos &&
+          report.find(".partial") == report.npos &&
           report.find("\nexit_code 0\n") != report.npos,
           "report.txt is prefilled with build facts and the package list");
     const auto opened = first.Dispatch(UiAction::OpenReportFolder, {});
