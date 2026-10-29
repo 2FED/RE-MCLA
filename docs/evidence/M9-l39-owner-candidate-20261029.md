@@ -150,3 +150,5 @@ Search the session log under `user\diagnostics\runtime\` for these lines.
   by heap exhaustion will show none.
 - The SDK commit `d968f59` exists only on the local isolated branch. It is not
   in the project's pinned SDK.
+
+- Owner result 2026-10-29: prepare OK; offline start OK; refused at date +4 days as designed; KI-040 reconnect worked for pad power-cycle, dongle unplug and Bluetooth switch; cursor hide and pad combo did not work. Follow-up: the game sessions ran `private\l38-volunteer\build` (launcher Build folder preference, build fingerprint `460EE32F...`), not l39, so these feature results (including KI-040) are l38 results; see [M9-sdl-observer-fix-20261029.md](M9-sdl-observer-fix-20261029.md).
