@@ -6,6 +6,8 @@ Updated October 29, 2026 Kyiv (end of the coordinator continuation). README-AI o
 
 **Owner results on l39 (2026-10-29):** prepare OK, offline start OK, refused at +4 days (V2 as designed); KI-040 pad reconnect OK (pad off, dongle, Bluetooth); M9-009 cursor FAIL (does not hide); M9-010 pad Start+Back FAIL (no package; menu opens); wheel/photo/sign tests not done yet. Owner decisions: V1 14-day tickets for owner builds; SDK deltas may be pinned and pushed; agents may write under `private/` via shell. **In progress:** Opus subagent diagnosing the SDK SDL event observer (no gamepad events reach it) from the owner log, fixing, rebuilding and preparing l40 with a V1 ticket.
 
+**Owner decisions 2026-10-29 (later):** wait with publishing `l38-active-builds.txt` until a refreshed volunteer package exists; SDL goes through a fork (option A): `2FED/SDL` created and `mcla/xinput-hotplug-poll` = `422c186` pushed with explicit approval. The SDK branch push, submodule retarget and pin bump follow the observer fix. l40 is the single owner candidate for photo (KI-037), signs (KI-038/032), paused-menu cap (M9-007), cursor (M9-009) and pad combo (M9-010) checks.
+
 **Owner-only next actions (everything agent-side is done and committed):**
 1. l38 volunteer candidate: in-game smoke (two F10 in different scenes, report prompt, kill switch), publication decision for `l38-active-builds.txt`, one tester smoke.
 2. l39 owner candidate: run `private\l39-internal-prepare.ps1` (PowerShell 7), point the launcher at `private\l39-internal`, check M9-009 cursor, KI-040 pad reconnect, M9-007 paused-menu cap, M9-010 wheel/pad triggers, KI-035/KI-026 diagnostics; A/B tests for KI-037 (Test A/B) and KI-038/032 (scale 3 vs 2 at 2160p).
