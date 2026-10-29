@@ -1897,7 +1897,7 @@ honest dispositions for the issues testers will meet first.
 - [ ] **M9-006** Known-issue triage and fix attempts: KI-035, KI-026, KI-040 first, then KI-037, KI-038/032; dispositions for the rest.
 - [ ] **M9-007** Menu state from the game via hook, time-boxed 2 days; otherwise keep the accepted limit.
 - [ ] **M9-008** Bounded regression in both modes plus volunteer smoke, closure and push.
-- [ ] **M9-009** Hide the mouse cursor while the game window is active and receiving gamepad or wheel input; show it again on mouse movement (owner request 2026-10-28).
+- [-] **M9-009** Hide the mouse cursor while the game window is active and receiving gamepad or wheel input; show it again on mouse movement (owner request 2026-10-28). 2026-10-29: implemented host-only (SDL event watch classifies pad/wheel/mouse input; the SDK window cursor API and focus hook apply it on the UI thread; CVar `mcla_cursor_autohide`, default on). Pure state machine unit test 266 checks; `mcla.exe` compiled in `private/l39-cursor-build` (`f4d568e6...`), 0 warnings, ast-grep clean. Not staged, not launched; owner physical check pending. [Evidence](docs/evidence/M9-009-cursor-hide-20261029.md).
 
 ### Exit criteria
 
@@ -1911,6 +1911,8 @@ honest dispositions for the issues testers will meet first.
 - 2026-10-28 — M9-001 build from published SDK `a239b83` done (`private/l34-build`); equivalence to l31-s30/l33-sunc shown at source, codegen and binary-switch level. Not a physical PASS. Blocker: test-build ticket signing needs PowerShell 7 (owner decision). Health: `GREEN`. Next: M9-001 owner check, then M9-002.
 - 2026-10-28 — M9-001 closed: owner manual drive at 2K on l34-s30 and l34-sunc passed; automated title checks match l31/l33. New: KI-041 (night light/bush flicker under headlights, l34-sunc only, 720p and l33-sunc comparison pending) and task M9-009 (hide mouse cursor on pad/wheel input, owner request). Completed 1 of 9. Health: `GREEN`. Next: M9-002 after the owner's 720p result, then M9-003.
 - 2026-10-28 — M9-002 closed: the l12 launcher now builds from repository source (`.text` identical to l12); owner smoke on `l35-s30` passed. M9-003 implemented and staged as `private/l36`, owner check pending. Completed 2 of 9; two-task checkpoint: scope unchanged, KI-041/042/043 added for M9-005/M9-006, estimate unchanged. Health: `GREEN`. Next: M9-003 owner check, then M9-004.
+
+- 2026-10-29 — M9-005 l38 candidate staged and audited; a clean 18-file test copy was verified (audit 183/0). M9-009 implemented and compiled, owner check pending. M9-006 analyses (KI-040, KI-035, KI-026) and M9-007 research delegated to Opus subagents under the owner's coordinator rule; no fix claimed. Completed 3 of 9 (M9-004 deferred). Health: `GREEN`. Next: owner smoke/publication decision for l38, review of the delegated analyses.
 
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 

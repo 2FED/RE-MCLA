@@ -52,6 +52,10 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_diagnostic_hotkey_test.cpp)
     target_include_directories(mcla_diagnostic_hotkey_test PRIVATE src)
     target_compile_features(mcla_diagnostic_hotkey_test PRIVATE cxx_std_23)
+    add_executable(mcla_cursor_autohide_test EXCLUDE_FROM_ALL
+        tests/mcla_cursor_autohide_test.cpp)
+    target_include_directories(mcla_cursor_autohide_test PRIVATE src)
+    target_compile_features(mcla_cursor_autohide_test PRIVATE cxx_std_23)
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -163,6 +167,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 set(MCLA_SOURCES
     src/main.cpp
     src/mcla_app.cpp
+    src/mcla_cursor_autohide_sdl.cpp
     src/mcla_diagnostics.cpp
     src/mcla_logging.cpp
 )

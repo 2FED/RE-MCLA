@@ -58,6 +58,7 @@
 #include <vector>
 
 #include "generated/default/mcla_init.h"
+#include "mcla_cursor_autohide_sdl.h"
 #include "mcla_diagnostics.h"
 #include "mcla_logging.h"
 #include "mcla_managed_config_policy.h"
@@ -834,6 +835,12 @@ void MclaRaceBackCameraApply822B359C(PPCRegister &r3, PPCRegister &r4,
 }
 
 REXCVAR_DEFINE_BOOL(
+    mcla_cursor_autohide, true, "MCLA",
+    "Hide the mouse cursor on gamepad or wheel input while the game window "
+    "is focused; mouse activity shows it again")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
     mcla_lifecycle_probe, false, "MCLA",
     "Exercise the host lifecycle without constructing the guest runtime")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -1259,6 +1266,20 @@ void MclaApp::OnPostSetup() {
     MCLA_APP_INFO("MCLA_NATIVE_CRASH_POST_SETUP_PROBE v=1 status=TRIGGERING");
     rex::FlushLogging();
     mcla::diagnostics::native::TriggerCrashProbe();
+  }
+  if (REXCVAR_GET(mcla_cursor_autohide) && window() && !cursor_autohide_) {
+    cursor_autohide_ = mcla::cursor::InstallSdlAutoHide(window());
+    if (cursor_autohide_) {
+      MCLA_INPUT_INFO("MCLA cursor autohide: enabled");
+    } else {
+      MCLA_INPUT_INFO("MCLA cursor autohide: SDL event watch unavailable");
+    }
+  }
+}
+
+void MclaApp::OnWindowFocusChanged(bool focused) {
+  if (cursor_autohide_) {
+    mcla::cursor::NotifyFocusChanged(*cursor_autohide_, focused);
   }
 }
 
@@ -3548,6 +3569,10 @@ bool MclaApp::OnWindowCloseRequested() {
 }
 
 void MclaApp::OnShutdown() {
+  if (cursor_autohide_) {
+    mcla::cursor::Shutdown(*cursor_autohide_);
+    cursor_autohide_.reset();
+  }
   mcla::StopTextureCacheBudgetMonitor();
   readback_probe_lifetime_.reset();
   if (diagnostic_keybind_registered_) {

@@ -15,6 +15,10 @@ namespace rex::input {
 class InputDriver;
 }
 
+namespace mcla::cursor {
+class SdlAutoHide;
+}
+
 namespace mcla::diagnostics {
 class Manager;
 struct RuntimeState;
@@ -43,6 +47,7 @@ protected:
   void OnPostLaunchModule(rex::system::XThread *thread) override;
   void OnGuestThreadExit(rex::system::XThread *thread) override;
   bool OnWindowCloseRequested() override;
+  void OnWindowFocusChanged(bool focused) override;
   void OnShutdown() override;
 
 private:
@@ -71,4 +76,6 @@ private:
   // host is destroyed. It is never the launcher's persistent settings store.
   std::shared_ptr<void> managed_config_read_handle_;
   rex::PathConfig managed_paths_;
+  // M9-009 cursor autohide on pad/wheel input; UI thread only.
+  std::shared_ptr<mcla::cursor::SdlAutoHide> cursor_autohide_;
 };
