@@ -1919,6 +1919,8 @@ honest dispositions for the issues testers will meet first.
 
 - 2026-10-29 (end of continuation) — M9-010 implemented and merged with the SDK SDL event observer API and the M9-009 port; merged tree verified (0 warnings, 32 suites). KI-037 (first photo), KI-038/KI-032 (signs) analysed with owner A/B tests; dispositions recorded for KI-013/036/041/043. Owner candidate l39 prepared in `private/l39-int-input` with `private/l39-internal-prepare.ps1` (owner signs/stages). SDK deltas `259d0b2`/`9ad1c11`/`d968f59` remain local and unpinned. Completed 3 of 10 (M9-005/006/007/009/010 implemented, owner checks pending). Health: `GREEN`. Blocked on owner: l38 smoke/publication, l39 checks, SDK pin/publication decision, M9-008 regression.
 
+- 2026-10-29 (late) — Owner l40 checks: M9-009 cursor PASS, M9-010 pad combo PASS, KI-040 reconnect OK on the fixed SDK, KI-037 Test A supports the async-pipeline cause. Implemented and merged (`dd7cca7`): KI-037 pipeline-wait fix (SDK `8b10d62`), KI-044/KI-045 launcher fixes, per-package `report.txt` with wheel model. Owner candidate l41 built and prepared (V1 ticket, owner admission file). SDL fork `2FED/SDL` carries the KI-040 SDL commit; SDK branch push and pin bump still pending. Completed 3 of 10. Health: `GREEN`. Next: owner l41 checks (M9-007, KI-037, KI-038/032), then SDK pin/push and a refreshed volunteer candidate.
+
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 
 Moved out of M9 by owner decision 2026-10-28. Task IDs are renumbered REL-xxx and get
