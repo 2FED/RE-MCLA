@@ -47,9 +47,9 @@ if (-not $RenderDocPath) {
 
 $expected = [ordered]@{
     AstGrepVersion     = '0.45.0'
-    ReXGlueCommit      = 'a239b834194011ab6f5fa197cea4998899010062'
-    ReXGlueTag         = ''  # M9-001 pin a239b83 has no release tag; the commit is checked
-    ReXGlueVersion     = '0.20.0.2-dev.ga239b83'
+    ReXGlueCommit      = 'f519dd53fbabffca5492497cb42f782602aae9a1'
+    ReXGlueTag         = 'v0.20.0.3'  # M9 pin f519dd5; the tag makes the SDK report exactly 0.20.0.3
+    ReXGlueVersion     = '0.20.0.3'
     ExtractorSha256    = '7C7AF9C17E095C3C1E78E644DF5F0E72F01C4690B3117F038AAFE26EB5A8A2F4'
     XeniaSha256        = 'C51D73364180D5F09B29BC348732A5B79D3959D5639321BDA58D490B4ABCF06A'
     GhidraVersion      = '12.0.4'

@@ -6,13 +6,18 @@ Purpose: provide reproducible setup, codegen, build, test, and package commands 
 
 ## M9-001 build from the published SDK
 
-The submodule pins rexglue-sdk `a239b83` (package `0.20.0.2`), which already
-contains the 32bpp resolve fix and the M8 command-processor work. No SDK patch
-is applied at build time. Build the SDK from a clean recursive clone, then build
-`mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.2` (quote the
+The submodule pins rexglue-sdk `f519dd5` (package `0.20.0.3`, fork tag
+`v0.20.0.3`; pushed 2026-10-29, see [SDK pin](rexglue-sdk.md)). It contains the 32bpp
+resolve fix, the M8 command-processor work and the four M9 deltas, and its
+`thirdparty/sdl3` comes from the fork `https://github.com/2FED/SDL.git`. No SDK patch
+is applied at build time. Build the SDK from a clean recursive clone with tags (the
+package version is derived from `git describe`; without the tag the SDK reports
+`0.20.0.7-dev.gf519dd5`), then build
+`mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.3` (quote the
 argument in PowerShell). One host serves both modes: the launcher's Frame rate choice (M9-003) adds `--mcla_guest_vblank_hz=240` for Unlocked. The exact flags, the
 `libmspack` link materialization and the reference hashes are in the
-[M9-001 evidence](evidence/M9-001-reproducible-build-20261028.md). The older
+[M9-001 evidence](evidence/M9-001-reproducible-build-20261028.md) (`a239b83` /
+0.20.0.2 era; the flags are unchanged for `f519dd5`). The older
 sections below describe the `5dd58f8` / 0.20.0.0 era.
 
 ## M7 WGC and local profile candidate

@@ -8,6 +8,40 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
+**M9 (2026-10-29, pushed 2026-10-29): the submodule pin moves to
+`f519dd53fbabffca5492497cb42f782602aae9a1`** (`f519dd5`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
+`v0.20.0.3`, package version **0.20.0.3**. The SDK derives its version from
+`git describe` (`cmake/rex_version.cmake`): the exact tag yields `0.20.0.3`;
+the same commit without the tag reports `0.20.0.7-dev.gf519dd5`, so clean clones
+must fetch tags. Fast-forward on top of `a239b83`:
+
+- `259d0b2` input(sdl): KI-040 XInput re-scan on hotplug, state reset on joystick
+  quit, opt-in `hid_sdl_rawinput` (default off), instance/backend/path fields on the
+  controller-added log line; moves the `thirdparty/sdl3` gitlink to `422c186`.
+- `9ad1c11` ui(sdl): read-only host SDL event observer
+  (`rex/ui/sdl_event_observer.h`) and joystick snapshot queries (M9-009, M9-010).
+- `d968f59` kernel(memory): rate-limited `REXKRNL_IMPORT_FAIL` log of failed guest
+  allocations (KI-035 diagnostic, no behaviour change).
+- `8b10d62` gpu(d3d12): optional bounded wait for pipelines still being created
+  (KI-037).
+- `f519dd5` build: `.gitmodules` points `thirdparty/sdl3` at the SDL fork
+  `https://github.com/2FED/SDL.git`, branch `mcla/xinput-hotplug-poll`, which holds
+  the vendored-SDL commit `422c186c0a272bf6f255b2f4537a726f804e924b` (Windows
+  XInput user-mask poll for hotplug). No source change against `8b10d62`.
+
+SDK ctest at `8b10d62`: 1874/1874 ([KI-037 build](evidence/M9-006-ki-037-fix-build-20261029.md));
+`f519dd5` changes only `.gitmodules`. Every nested gitlink except `thirdparty/sdl3`
+is unchanged from the manifest below. Verify a fresh clone with:
+
+```powershell
+git -C third_party/rexglue-sdk rev-parse HEAD                  # f519dd53fbabffca5492497cb42f782602aae9a1
+git -C third_party/rexglue-sdk rev-list -n 1 v0.20.0.3         # same
+git -C third_party/rexglue-sdk ls-tree HEAD thirdparty/sdl3    # 422c186c0a272bf6f255b2f4537a726f804e924b
+git submodule status --recursive
+```
+
+The `a239b83` pin text that follows stays as history.
+
 **M9-001 (2026-10-28): the submodule pin is now
 `a239b834194011ab6f5fa197cea4998899010062`** on the published fork branch
 `mcla/mcla-r-hotfixes`. On top of `5dd58f8` it adds `678adc4` (the 32bpp
@@ -52,7 +86,7 @@ name/progress reload are accepted on l12; further vinyl sharpness is deferred.
 No submodule pin, default installation or release tag changes follow from this
 patch. [Acceptance and runnable regression](evidence/M8-vinyl-packing-acceptance-20261012.md).
 
-Pending, unpinned delta (2026-10-29, M9-006 KI-040): an isolated copy of the pinned SDK at `private/l39-sdk-src` carries SDK commit `259d0b2` on `a239b83` (branch `mcla/ki-040-xinput-rescan`) and vendored-SDL commit `422c186`: a once-per-second XInput connection poll that forces SDL's normal re-scan on change, state reset on joystick quit, an opt-in `hid_sdl_rawinput` driver setting (default off) and instance/backend/path fields on the controller-added log line. SDK tests 1867/1867 (three new hotplug cases). It reports version `0.20.0.3-dev.g259d0b2`. No submodule pin, fork publication or default-install change yet; publishing path decided by the owner 2026-10-29 (option A): the vendored-SDL commit `422c186` is published on the new fork `https://github.com/2FED/SDL`, branch `mcla/xinput-hotplug-poll` (pushed 2026-10-29 with explicit owner approval); the SDK `.gitmodules` for `thirdparty/sdl3` will point at that fork, the SDK branch will be pushed to `2FED/rexglue-sdk` `mcla/mcla-r-hotfixes` and the project pin bumped once the SDL event observer fix lands. The same branch adds SDK commit `9ad1c11`: a read-only host-facing SDL event observer (`rex/ui/sdl_event_observer.h`: `AddSdlEventObserver`/`RemoveSdlEventObserver` fan out one `SDL_AddEventWatch` inside `rexruntime.dll`) and joystick snapshot queries (`CaptureSdlJoysticks`/`QuerySdlJoystick`, never opening devices or touching haptics), used by M9-009 and M9-010; SDK tests 1869/1869 (two new cases). SDK commit `d968f59` adds the KI-035 diagnostic: a rate-limited `REXKRNL_IMPORT_FAIL` line on failed `NtAllocateVirtualMemory`/`MmAllocatePhysicalMemoryEx` (first 32, then every 256th), no behaviour change; ctest 1869/1869. `private/l39-sdk-install` now carries all three deltas (`rexruntime.dll` `9E7449DD...`). [Fix build](evidence/M9-006-ki-040-fix-build-20261029.md).
+Delta pinned in `f519dd5`, pushed 2026-10-29 (2026-10-29, M9-006 KI-040; see the M9 pin above): an isolated copy of the pinned SDK at `private/l39-sdk-src` carries SDK commit `259d0b2` on `a239b83` (branch `mcla/ki-040-xinput-rescan`) and vendored-SDL commit `422c186`: a once-per-second XInput connection poll that forces SDL's normal re-scan on change, state reset on joystick quit, an opt-in `hid_sdl_rawinput` driver setting (default off) and instance/backend/path fields on the controller-added log line. SDK tests 1867/1867 (three new hotplug cases). It reports version `0.20.0.3-dev.g259d0b2`. No submodule pin, fork publication or default-install change yet; publishing path decided by the owner 2026-10-29 (option A): the vendored-SDL commit `422c186` is published on the new fork `https://github.com/2FED/SDL`, branch `mcla/xinput-hotplug-poll` (pushed 2026-10-29 with explicit owner approval); the SDK `.gitmodules` for `thirdparty/sdl3` will point at that fork, the SDK branch will be pushed to `2FED/rexglue-sdk` `mcla/mcla-r-hotfixes` and the project pin bumped once the SDL event observer fix lands. The same branch adds SDK commit `9ad1c11`: a read-only host-facing SDL event observer (`rex/ui/sdl_event_observer.h`: `AddSdlEventObserver`/`RemoveSdlEventObserver` fan out one `SDL_AddEventWatch` inside `rexruntime.dll`) and joystick snapshot queries (`CaptureSdlJoysticks`/`QuerySdlJoystick`, never opening devices or touching haptics), used by M9-009 and M9-010; SDK tests 1869/1869 (two new cases). SDK commit `d968f59` adds the KI-035 diagnostic: a rate-limited `REXKRNL_IMPORT_FAIL` line on failed `NtAllocateVirtualMemory`/`MmAllocatePhysicalMemoryEx` (first 32, then every 256th), no behaviour change; ctest 1869/1869. `private/l39-sdk-install` now carries all three deltas (`rexruntime.dll` `9E7449DD...`). [Fix build](evidence/M9-006-ki-040-fix-build-20261029.md).
 
 The fork carries the previously reviewed fix groups plus bounded D3D12 guest-presentation and render-path observability. `FLOAT16_4` packing accepts mask 3 like mask 2 while retaining the upstream `shift <= 2` bound, with direct PPC regression coverage. ReXApp converts UTF-8 path CVars and logging filenames to native filesystem paths and safely opens non-ASCII Windows paths. It also destroys Runtime/input drivers before their attached Window, preventing a teardown use-after-free after a loaded-image probe. Read-only host VFS devices reject root traversal, write-intent opens, rename, and writable mappings instead of silently downgrading or reaching the host filesystem. The ten direct XONLINE/social/XHV imports selected by M3-007 return explicit offline states and emit once-only `[OFFLINE]` diagnostics instead of preserving stale caller `r3`. Guest threads retain Xenia's 10-ms compatibility grace period and use regression-tested raw/XAPI start plans, while the 50-MHz guest clock path has direct monotonicity coverage. Generated functions and import hooks maintain metadata-only breadcrumbs, and C++ guest exceptions crossing `XThread` emit bounded host-stack context without guest memory by default. The v0.9.0.9 delta assigns monotonic guest-output sequences, records successful guest-backed DXGI presents and actual success HRESULTs, holds mailbox ownership through capture readback, and accepts capture evidence only at or behind the published successful-present watermark. The v0.9.0.10 delta makes Tracy zones safe before manual profiler startup and adds an init-only privacy-safe Xenos render audit. The v0.9.0.11 delta adds Xenia's cooperative sign-in-state yield, deterministic local-profile tests, and bounded privacy-safe XAM identity/profile telemetry with distinct absent-slot masks. The v0.9.0.12 delta adds deterministic first-controller slot-zero selection and a bounded privacy-safe SDL-to-XAM input audit. The v0.9.0.13 delta adds full controller-matrix auditing, real disconnect/focus/rumble semantics, and an explicit MCLA-only critical-section compatibility option. The v0.9.0.14 delta adds bounded privacy-safe XMA/XAudio/SDL route and buffer-health auditing. The v0.9.0.15 delta makes unsupported XMP title playback fail explicitly while preserving idle state, guards empty playlist navigation/output capture, and adds bounded race-free XMP route evidence. The v0.9.0.16 delta classifies the MCLA XLiveBase message inventory into deterministic local-offline/unavailable results and adds a bounded init-only offline-service/socket audit. The v0.9.0.17 delta returns the configured Xbox language consistently, adds bounded locale telemetry, and makes all host path/log CVar conversions Unicode-safe. The v0.9.0.18 delta resolves mounted VFS roots without stripping the trailing-separator boundary before relative-path extraction and adds direct content-symlink-root coverage. The v0.9.0.19 delta adds nonvirtual, thread-safe presenter diagnostics for the latest active guest-output sequence and the guest-vblank count, without changing the graphics plugin ABI or renderer behavior. See the M2/M3 evidence listed below plus the complete M4 evidence through `docs/evidence/M4-closure-review.md`.
 
@@ -372,7 +406,7 @@ The first two commands must return `5dd58f894bf34b9ea85e59d3903c7f0e8044d853`. T
 
 ## Recursive SHA manifest
 
-The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10 and remain unchanged; the root line is the reviewed, locally tagged v0.20.0.0 project-fork commit:
+The nested dependency SHAs were captured from the clean upstream v0.9.0 checkout on 2026-08-10 and remain unchanged; the root line is the reviewed, locally tagged v0.20.0.0 project-fork commit. For the M9 pin `f519dd5` the root line is `f519dd53fbabffca5492497cb42f782602aae9a1` and the `thirdparty/sdl3` line is `422c186c0a272bf6f255b2f4537a726f804e924b` (fork `2FED/SDL`); all other lines are identical:
 
 ```text
 5dd58f894bf34b9ea85e59d3903c7f0e8044d853 third_party/rexglue-sdk
