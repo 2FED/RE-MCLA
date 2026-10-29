@@ -33,9 +33,13 @@ inline constexpr std::array<std::string_view, 1> kUnlockedTestedBuilds{{
 // launcher's local settings directory (never in a build or package folder)
 // lists exact build fingerprints the owner admits for the gated options
 // (1080p/2160p render targets and Unlocked FPS). Absent, unreadable or
-// malformed files admit nothing. Format: ASCII, LF only, final LF:
+// malformed files admit nothing. Format: ASCII, LF line endings:
 //   MCLA-OWNER-ADMITTED-BUILDS-V1
 //   <64 uppercase hex fingerprint>[ <label>]   (label: 1-32 of A-Z a-z 0-9 . _ -)
+// Hand-edited files are tolerated (owner incident 2026-10-29): a leading UTF-8
+// BOM, CRLF line endings and a missing final LF are normalised before the
+// strict row check; everything else malformed rejects the whole file, and the
+// launcher shows the reason instead of a silent refusal.
 inline constexpr std::wstring_view kOwnerAdmissionFile = L"owner-admitted-builds.txt";
 inline constexpr std::string_view kOwnerAdmissionHeader = "MCLA-OWNER-ADMITTED-BUILDS-V1\n";
 inline constexpr size_t kOwnerAdmissionMaximumBytes = 16 * 1024;
@@ -98,37 +102,74 @@ inline constexpr bool UnlockedBuildTested(std::string_view build) {
   return false;
 }
 
-// Strict parse of the owner admission file. nullopt for any malformed byte.
-inline std::optional<std::vector<std::string>> ParseOwnerAdmission(std::string_view text) {
-  if (text.size() > kOwnerAdmissionMaximumBytes || !text.starts_with(kOwnerAdmissionHeader) ||
-      text.back() != '\n')
-    return std::nullopt;
+// Why an existing owner admission file was ignored. line: 1-based line of
+// the offending row (1 = header), 0 for the whole file.
+struct OwnerAdmissionRejection {
+  std::string_view reason;
+  size_t line = 0;
+};
+
+// The size limit applies to the raw bytes. After the BOM / CRLF / final-LF
+// normalisation every row is checked strictly; any malformed row rejects the
+// whole file.
+inline std::expected<std::vector<std::string>, OwnerAdmissionRejection> CheckOwnerAdmission(
+    std::string_view raw) {
+  using Rejected = std::unexpected<OwnerAdmissionRejection>;
+  if (raw.size() > kOwnerAdmissionMaximumBytes) return Rejected({"file is over 16 KiB", 0});
+  if (raw.starts_with("\xEF\xBB\xBF")) raw.remove_prefix(3);
+  std::string normalised;
+  normalised.reserve(raw.size() + 1);
+  for (size_t i = 0; i < raw.size(); ++i)
+    if (!(raw[i] == '\r' && i + 1 < raw.size() && raw[i + 1] == '\n')) normalised.push_back(raw[i]);
+  if (!normalised.empty() && normalised.back() != '\n') normalised.push_back('\n');
+  std::string_view text = normalised;
+  if (!text.starts_with(kOwnerAdmissionHeader))
+    return Rejected({"first line is not MCLA-OWNER-ADMITTED-BUILDS-V1", 1});
   text.remove_prefix(kOwnerAdmissionHeader.size());
   std::vector<std::string> builds;
+  size_t line = 1;
   while (!text.empty()) {
-    const auto end = text.find('\n');
+    ++line;
+    const auto end = text.find('\n');  // never npos: the text ends with LF
     const auto row = text.substr(0, end);
     text.remove_prefix(end + 1);
-    if (builds.size() >= kOwnerAdmissionMaximumEntries || row.size() < 64) return std::nullopt;
+    if (builds.size() >= kOwnerAdmissionMaximumEntries) return Rejected({"more than 64 builds", line});
+    if (row.empty()) return Rejected({"empty line", line});
+    if (row.size() < 64 || !ValidCapabilityIdentity(row.substr(0, 64)))
+      return Rejected({"not a 64-character uppercase hex fingerprint", line});
     const auto build = row.substr(0, 64);
-    if (!ValidCapabilityIdentity(build)) return std::nullopt;
     if (row.size() > 64) {
       const auto label = row.substr(65);
-      if (row[64] != ' ' || label.empty() || label.size() > 32) return std::nullopt;
+      bool valid = row[64] == ' ' && !label.empty() && label.size() <= 32;
       for (const char c : label)
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-              c == '.' || c == '_' || c == '-'))
-          return std::nullopt;
+        valid = valid && ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                          (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-');
+      if (!valid) return Rejected({"label must be one space and 1-32 of A-Z a-z 0-9 . _ -", line});
     }
-    if (std::find(builds.begin(), builds.end(), build) != builds.end()) return std::nullopt;
+    if (std::find(builds.begin(), builds.end(), build) != builds.end())
+      return Rejected({"duplicate fingerprint", line});
     builds.emplace_back(build);
   }
   return builds;
 }
 
+// Parse of the owner admission file. nullopt when the file is rejected.
+inline std::optional<std::vector<std::string>> ParseOwnerAdmission(std::string_view text) {
+  auto builds = CheckOwnerAdmission(text);
+  if (!builds) return std::nullopt;
+  return std::move(*builds);
+}
+
 inline bool OwnerAdmissionListed(std::string_view file_text, std::string_view build) {
   const auto builds = ParseOwnerAdmission(file_text);
   return builds && std::find(builds->begin(), builds->end(), build) != builds->end();
+}
+
+// Status text for a rejected file; the file admits nothing.
+inline std::string OwnerAdmissionNotice(const OwnerAdmissionRejection &rejection) {
+  std::string notice = "Owner admission file ignored: " + std::string(rejection.reason);
+  if (rejection.line) notice += " (line " + std::to_string(rejection.line) + ")";
+  return notice + ".";
 }
 
 inline std::string StockTimingDescription() {

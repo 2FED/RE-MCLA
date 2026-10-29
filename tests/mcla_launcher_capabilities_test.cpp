@@ -250,8 +250,7 @@ int main() {
     Check(ParseOwnerAdmission(file) && ParseOwnerAdmission(file)->size() == 2, "owner list parses labels and bare rows");
     Check(OwnerAdmissionListed(file, owner_build) && OwnerAdmissionListed(file, other_build) &&
           !OwnerAdmissionListed(file, std::string(64, 'E')), "only exact listed fingerprints are admitted");
-    for (const auto &bad : {std::string(), header, header.substr(0, header.size() - 1),
-                            header + owner_build, header + owner_build + "\r\n",
+    for (const auto &bad : {std::string(), header,
                             header + owner_build + " \n", header + owner_build + " bad label\n",
                             header + owner_build + " " + std::string(33, 'x') + "\n",
                             header + std::string(64, 'd') + "\n", header + owner_build + "\n" + owner_build + "\n",
@@ -260,12 +259,63 @@ int main() {
       if (bad != header) Check(!OwnerAdmissionListed(bad, owner_build), "malformed owner list admits nothing");
     Check(ParseOwnerAdmission(header) && ParseOwnerAdmission(header)->empty() &&
           !OwnerAdmissionListed(header, owner_build), "empty owner list is valid and admits nothing");
+    // Owner incident 2026-10-29: hand-edited files (no final LF, CRLF, BOM).
+    const std::string crlf_header = "MCLA-OWNER-ADMITTED-BUILDS-V1\r\n";
+    const std::string bom = "\xEF\xBB\xBF";
+    for (const auto &edited : {file.substr(0, file.size() - 1),
+                               crlf_header + owner_build + " l41-internal\r\n" + other_build + "\r\n",
+                               crlf_header + owner_build + " l41-internal\r\n" + other_build,
+                               bom + file, bom + crlf_header + owner_build + " l41-internal\r\n" + other_build,
+                               header + owner_build + " l41-internal\r\n" + other_build + "\n"}) {
+      const auto parsed = CheckOwnerAdmission(edited);
+      Check(parsed && parsed->size() == 2 && (*parsed)[0] == owner_build && (*parsed)[1] == other_build,
+            "missing final LF, CRLF and a UTF-8 BOM are accepted");
+      Check(OwnerAdmissionListed(edited, owner_build), "hand-edited owner list admits its builds");
+    }
+    Check(ParseOwnerAdmission(header.substr(0, header.size() - 1)) &&
+          ParseOwnerAdmission(header.substr(0, header.size() - 1))->empty(),
+          "header without a final LF is an empty list");
+    const auto reason = [](const std::string &text) {
+      const auto parsed = CheckOwnerAdmission(text);
+      return parsed ? std::string("accepted") : OwnerAdmissionNotice(parsed.error());
+    };
+    Check(reason(header + owner_build + "\n" + std::string(63, 'A') + "G\n") ==
+              "Owner admission file ignored: not a 64-character uppercase hex fingerprint (line 3).",
+          "a non-hex row rejects the file and names its line");
+    Check(reason(crlf_header + owner_build + "\r\n" + std::string(64, 'a')) ==
+              "Owner admission file ignored: not a 64-character uppercase hex fingerprint (line 3).",
+          "lowercase hex still rejects a CRLF file without final LF");
+    Check(!OwnerAdmissionListed(header + owner_build + "\n" + std::string(63, 'A') + "G\n", owner_build),
+          "a rejected file admits nothing, not even its valid rows");
+    Check(reason("MCLA-OWNER-ADMITTED-BUILDS-V2\n") ==
+              "Owner admission file ignored: first line is not MCLA-OWNER-ADMITTED-BUILDS-V1 (line 1).",
+          "unknown header names line 1");
+    Check(reason(std::string()) ==
+              "Owner admission file ignored: first line is not MCLA-OWNER-ADMITTED-BUILDS-V1 (line 1).",
+          "empty file is rejected with a reason");
+    Check(reason(header + owner_build + "\n" + owner_build + "\n") ==
+              "Owner admission file ignored: duplicate fingerprint (line 3).", "duplicate row names its line");
+    Check(reason(header + owner_build + " bad label\n").find("label must be") != std::string::npos &&
+              reason(header + owner_build + " bad label\n").ends_with("(line 2)."), "bad label names its line");
+    Check(reason(header + "\n") == "Owner admission file ignored: empty line (line 2).", "empty row names its line");
+    Check(reason(header + owner_build + "\r\r\n").find("(line 2)") != std::string::npos,
+          "a stray CR is still malformed");
+    Check(reason(header + owner_build + "\r" + other_build + "\n").find("(line 2)") != std::string::npos,
+          "a CR-only line break is still malformed");
+    Check(reason(bom + bom + file).find("(line 1)") != std::string::npos, "only one BOM is stripped");
+    Check(reason(header + std::string(kOwnerAdmissionMaximumBytes, 'A') + "\n") ==
+              "Owner admission file ignored: file is over 16 KiB.", "oversized file reason has no line");
     std::string many = header;
     for (int i = 0; i < 65; ++i) {
       std::string row(64, '0'); const auto digits = std::to_string(i);
       row.replace(64 - digits.size(), digits.size(), digits); many += row + "\n";
     }
     Check(!ParseOwnerAdmission(many), "owner list is bounded to 64 entries");
+    Check(reason(many) == "Owner admission file ignored: more than 64 builds (line 66).",
+          "the 65th build names its line");
+    Check(ParseOwnerAdmission(many.substr(0, many.size() - 65)) &&
+              ParseOwnerAdmission(many.substr(0, many.size() - 65))->size() == 64,
+          "64 builds are accepted");
     Check(!ParseOwnerAdmission(header + std::string(kOwnerAdmissionMaximumBytes, 'A') + "\n"), "owner list is size bounded");
 
     Reject({owner_build, game, TimingMode::Stock, 2160, true}, CapabilityError::UntestedTargetBuild);

@@ -207,22 +207,41 @@ const ProfileEntry *Selected(const Preferences &p) {
 }
 // Owner admission (KI-045): an optional, strictly parsed list of exact build
 // fingerprints in the local settings directory. Never read from a build or
-// package folder; a missing/unreadable/malformed file admits nothing.
-bool OwnerAdmitted(const fs::DirectoryGuard &store,std::string_view fingerprint) {
+// package folder; a missing/unreadable/malformed file admits nothing. A file
+// that exists but is ignored yields a status notice with the reason.
+struct OwnerAdmission {
+  bool listed=false;
+  std::wstring notice;  // empty, or " Owner admission file ignored: ..."
+};
+OwnerAdmission ReadOwnerAdmission(const fs::DirectoryGuard &store,std::string_view fingerprint) {
+  const auto path=Native(store.path()+L"\\"+std::wstring(kOwnerAdmissionFile));
+  if(GetFileAttributesW(path.c_str())==INVALID_FILE_ATTRIBUTES) {
+    const DWORD error=GetLastError();
+    if(error==ERROR_FILE_NOT_FOUND || error==ERROR_PATH_NOT_FOUND) return {};
+  }
   auto bytes=fs::ReadFile(store,kOwnerAdmissionFile,kOwnerAdmissionMaximumBytes);
-  if(!bytes) return false;
-  return OwnerAdmissionListed({reinterpret_cast<const char*>(bytes->data()),bytes->size()},fingerprint);
+  if(!bytes) return {false,L" Owner admission file ignored: unreadable, not a regular file or over 16 KiB."};
+  const auto builds=CheckOwnerAdmission({reinterpret_cast<const char*>(bytes->data()),bytes->size()});
+  if(!builds) {
+    const auto notice=OwnerAdmissionNotice(builds.error());
+    return {false,L" "+std::wstring(notice.begin(),notice.end())};
+  }
+  return {std::find(builds->begin(),builds->end(),fingerprint)!=builds->end(),{}};
 }
+// admission_notice receives the ignored-file reason on success; on failure it
+// is part of the returned error text.
 std::expected<CapabilityPlan,std::wstring> AdmitCapabilities(
     const Preferences &preferences,const VerifiedBuild &build,const VerifiedGame &game,
-    const fs::DirectoryGuard &store) {
+    const fs::DirectoryGuard &store,std::wstring *admission_notice=nullptr) {
+  const auto admission=ReadOwnerAdmission(store,build.fingerprint());
   auto plan=ResolveCapabilities({build.fingerprint(),game.fingerprint(),preferences.timing,
                                 preferences.render_target,preferences.vsync,
-                                OwnerAdmitted(store,build.fingerprint())});
+                                admission.listed});
   if(!plan) {
     const auto error=CapabilityErrorDescription(plan.error());
-    return std::unexpected(std::wstring(error.begin(),error.end()));
+    return std::unexpected(std::wstring(error.begin(),error.end())+admission.notice);
   }
+  if(admission_notice) *admission_notice=admission.notice;
   return std::move(*plan);
 }
 std::expected<std::wstring,std::wstring> ReadDisplayName(const fs::DirectoryGuard &profile) {
@@ -473,7 +492,8 @@ struct LauncherController::State {
         if(!existing_cache) return std::unexpected(existing_cache.error());
       }
       auto verified_game=VerifySelectedGame(*game); if(!verified_game) return std::unexpected(verified_game.error());
-      auto capability=AdmitCapabilities(p,*build,*verified_game,store.directory());
+      std::wstring admission_notice;
+      auto capability=AdmitCapabilities(p,*build,*verified_game,store.directory(),&admission_notice);
       if(!capability) return std::unexpected(capability.error());
       if(capability->owner_admitted) support_notice+=L" Owner-admitted build (owner list), not a tested build.";
       uint64_t expires=0;
@@ -487,6 +507,7 @@ struct LauncherController::State {
       expires=lease->expires_utc;
 #endif
       if(support->missing()) support_notice=L" Missing support folders will be recreated on START GAME. Existing files are not restored or replaced.";
+      support_notice+=admission_notice;
       return expires;
     } catch(const std::exception &) {
       return std::unexpected(L"Read-only launch inspection failed; no launch or repair was attempted");

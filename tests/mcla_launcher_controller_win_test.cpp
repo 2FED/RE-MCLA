@@ -574,10 +574,24 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
     run_check(owner,LaunchReadiness::Ready,"owner-listed build admits Unlocked");
     const auto stock=run_check(request,LaunchReadiness::Ready,"stock on an owner-listed build is unchanged");
     Check(stock.status.find(L"Owner-admitted")==std::wstring::npos,"ungated stock check does not claim owner admission");
+    Check(stock.status.find(L"Owner admission file ignored")==std::wstring::npos,"valid list adds no ignored notice");
+    // Owner incident 2026-10-29: a hand-edited file (BOM, CRLF, no final LF)
+    // still admits; a malformed one admits nothing and says why.
     if(!MoveFileExW(list.c_str(),(matrix/L"preserved-owner-list.txt").c_str(),MOVEFILE_WRITE_THROUGH) ||
-       !NewFile(list,"MCLA-OWNER-ADMITTED-BUILDS-V1\n"+*fingerprint+"\r\n")) return false;
+       !NewFile(list,"\xEF\xBB\xBFMCLA-OWNER-ADMITTED-BUILDS-V1\r\n"+std::string(64,'D')+" other\r\n"+*fingerprint+" l33-sunc")) return false;
     owner=request; owner.render_target=2160;
-    run_check(owner,LaunchReadiness::Blocked,"malformed owner list admits nothing");
+    const auto edited=run_check(owner,LaunchReadiness::Ready,"hand-edited owner list (BOM, CRLF, no final LF) admits 2160p");
+    Check(edited.status.find(L"Owner-admitted build")!=std::wstring::npos &&
+          edited.status.find(L"ignored")==std::wstring::npos,"hand-edited list is not reported as ignored");
+    if(!MoveFileExW(list.c_str(),(matrix/L"edited-owner-list.txt").c_str(),MOVEFILE_WRITE_THROUGH) ||
+       !NewFile(list,"MCLA-OWNER-ADMITTED-BUILDS-V1\n"+*fingerprint+"\n"+std::string(63,'D')+"G\n")) return false;
+    const auto malformed=run_check(owner,LaunchReadiness::Blocked,"malformed owner list admits nothing");
+    Check(malformed.status.find(L"Owner admission file ignored: not a 64-character uppercase hex fingerprint (line 3).")!=std::wstring::npos &&
+          malformed.readiness_reason.find(L"(line 3)")!=std::wstring::npos,
+          "refused gated check names the ignored owner list and its line");
+    const auto malformed_stock=run_check(request,LaunchReadiness::Ready,"stock check with a malformed owner list stays Ready");
+    Check(malformed_stock.status.find(L"Owner admission file ignored")!=std::wstring::npos,
+          "stock check still reports the ignored owner list");
     if(!MoveFileExW(list.c_str(),(matrix/L"rejected-owner-list.txt").c_str(),MOVEFILE_WRITE_THROUGH) ||
        !NewFile(list,"MCLA-OWNER-ADMITTED-BUILDS-V1\n"+std::string(64,'D')+"\n")) return false;
     run_check(owner,LaunchReadiness::Blocked,"owner list without this build admits nothing");
