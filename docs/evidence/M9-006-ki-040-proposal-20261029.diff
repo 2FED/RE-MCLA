@@ -1,0 +1,103 @@
+diff --git a/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp b/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp
+--- a/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp
++++ b/third_party/rexglue-sdk/src/input/sdl/sdl_input_driver.cpp
+@@ -29,6 +29,11 @@
+ 
+ REXCVAR_DEFINE_STRING(hid_mappings_file, "gamecontrollerdb.txt", "Input",
+                       "Path to SDL gamecontroller mappings file");
++// KI-040 opt-in: let SDL see XInput-class pads that Windows could not give one
++// of the four XInput user indices (extra or virtual pads). Off by default:
++// RawInput without XInput correlation merges triggers and loses rumble.
++REXCVAR_DEFINE_BOOL(hid_sdl_rawinput, false, "Input",
++                    "Also enumerate gamepads through SDL's Windows RawInput backend");
+ REXCVAR_DEFINE_INT32(wheel_steering_axis, 0, "Input/Wheel", "Raw steering axis (-1 disables)")
+     .range(-1, 31);
+ REXCVAR_DEFINE_INT32(wheel_brake_axis, 1, "Input/Wheel", "Raw brake axis (-1 disables)")
+@@ -222,6 +227,12 @@
+           },
+           this);
+ 
++      // Hints must be set before the joystick subsystem starts.
++      if (REXCVAR_GET(hid_sdl_rawinput)) {
++        SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "1");
++        REXLOG_INFO("SDL: RawInput joystick backend enabled (hid_sdl_rawinput).");
++      }
++
+       // Initialize game controller subsystem
+       if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
+         REXLOG_ERROR("SDL: Failed to init gamecontroller subsystem: {}", SDL_GetError());
+@@ -957,11 +968,13 @@
+       "JoystickType({}), "
+       "GameControllerType({}), "
+       "VendorID(0x{:04X}), "
+-      "ProductID(0x{:04X})",
++      "ProductID(0x{:04X}), "
++      "Instance({}), Path(\"{}\")",
+       SDL_GetGamepadName(controller),
+       static_cast<int>(SDL_GetJoystickType(SDL_GetGamepadJoystick(controller))),
+       static_cast<int>(SDL_GetGamepadType(controller)), SDL_GetGamepadVendor(controller),
+-      SDL_GetGamepadProduct(controller));
++      SDL_GetGamepadProduct(controller), static_cast<uint32_t>(event.gdevice.which),
++      SDL_GetGamepadPath(controller) ? SDL_GetGamepadPath(controller) : "");
+   uint32_t occupied_slot_mask = 0;
+   for (uint32_t slot = 0; slot < controllers_.size(); ++slot) {
+     if (IsControllerConnected(controllers_.at(slot)))
+diff --git a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c
+--- a/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c
++++ b/third_party/rexglue-sdk/thirdparty/sdl3/src/joystick/windows/SDL_windowsjoystick.c
+@@ -384,11 +384,55 @@
+     return nJoysticks;
+ }
+ 
++#ifdef SDL_JOYSTICK_XINPUT
++/* ReXGlue KI-040: XInput user-index changes do not always produce a HID
++   device-interface notification (e.g. a 2.4 GHz dongle that stays enumerated
++   while its controller re-pairs, or a pad that finishes pairing after the
++   300 ms / 2 s retry timers). Upstream only polls XInput when device
++   notifications are unavailable, so such a controller is never re-scanned.
++   Poll the four XInput capability slots at most once per second and force a
++   normal re-enumeration when the connected mask changes. */
++#define SDL_XINPUT_HOTPLUG_POLL_MS 1000
++static Uint64 s_lastXInputHotplugPoll = 0;
++static Uint8 s_xinputConnectedMask = 0;
++static bool s_xinputConnectedMaskValid = false;
++
++static void WINDOWS_PollXInputHotplug(void)
++{
++    const Uint64 now = SDL_GetTicks();
++    Uint8 mask = 0;
++    Uint8 userId;
++
++    if (!SDL_XINPUT_Enabled() || !XINPUTGETCAPABILITIES) {
++        return;
++    }
++    if (s_xinputConnectedMaskValid && (now - s_lastXInputHotplugPoll) < SDL_XINPUT_HOTPLUG_POLL_MS) {
++        return;
++    }
++    s_lastXInputHotplugPoll = now;
++    for (userId = 0; userId < XUSER_MAX_COUNT; userId++) {
++        XINPUT_CAPABILITIES capabilities;
++        if (XINPUTGETCAPABILITIES(userId, XINPUT_FLAG_GAMEPAD, &capabilities) == ERROR_SUCCESS) {
++            mask |= (Uint8)(1u << userId);
++        }
++    }
++    if (s_xinputConnectedMaskValid && mask != s_xinputConnectedMask) {
++        SetWindowsDeviceChanged();
++    }
++    s_xinputConnectedMask = mask;
++    s_xinputConnectedMaskValid = true;
++}
++#endif // SDL_JOYSTICK_XINPUT
++
+ // detect any new joysticks being inserted into the system
+ void WINDOWS_JoystickDetect(void)
+ {
+     JoyStick_DeviceData *pCurList = NULL;
+ 
++#ifdef SDL_JOYSTICK_XINPUT
++    WINDOWS_PollXInputHotplug();
++#endif
++
+     // only enum the devices if the joystick thread told us something changed
+     if (!WindowsDeviceChanged()) {
+         return; // thread hasn't signaled, nothing to do right now.
