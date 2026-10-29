@@ -1,0 +1,189 @@
+KI-037 fix proposal (NOT APPLIED). Conditional: apply only after the owner's
+decisive test (see ki-037-analysis.md section 6) shows the first photo is
+correct with --async_shader_compilation=false or in a second session of the
+same build. SDK hunks are against the pinned l34 SDK tree (a239b83) and would
+ship like the other private SDK patches; paths are relative to the MCLA-R
+repository root.
+
+Idea: during the photo-capture window (guest freeze function sub_8263D120 ..
+unfreeze sub_8263D1E0) the command processor waits for a pending pipeline
+instead of silently dropping the draw. Normal gameplay keeps asynchronous
+creation. Simply flipping async_shader_compilation at runtime is NOT safe:
+draws for pipelines already queued on worker threads would be recorded with a
+null PSO and replayed with the previous pipeline (deferred_command_list.cpp
+kSetPipelineStateHandle ignores a null state).
+
+--- a/third_party/rexglue-sdk/include/rex/graphics/d3d12/pipeline_cache.h
++++ b/third_party/rexglue-sdk/include/rex/graphics/d3d12/pipeline_cache.h
+@@ -97,6 +97,11 @@
+   ID3D12PipelineState* GetD3D12PipelineByHandle(void* handle) const {
+     return reinterpret_cast<const Pipeline*>(handle)->state.load(std::memory_order_acquire);
+   }
++  // Blocks the calling (command processor) thread until the pipeline behind
++  // the handle has finished creation, creating queued pipelines on this
++  // thread meanwhile. Returns the pipeline state, nullptr if creation failed.
++  ID3D12PipelineState* AwaitPipeline(void* handle);
++
+   enum class PipelineAuditStatus { kPending, kReady, kFailed };
+   PipelineAuditStatus GetPipelineAuditStatus(void* handle) const {
+     const auto* pipeline = reinterpret_cast<const Pipeline*>(handle);
+--- a/third_party/rexglue-sdk/src/graphics/d3d12/pipeline_cache.cpp
++++ b/third_party/rexglue-sdk/src/graphics/d3d12/pipeline_cache.cpp
+@@ -19,6 +19,7 @@
+ #include <deque>
+ #include <mutex>
+ #include <set>
++#include <thread>
+ #include <utility>
+ #include <vector>
+
+@@ -826,6 +827,23 @@
+   return !creation_queue_.empty() || creation_threads_busy_ != 0;
+ }
+
++ID3D12PipelineState* PipelineCache::AwaitPipeline(void* handle) {
++  auto* pipeline = reinterpret_cast<Pipeline*>(handle);
++  if (pipeline == nullptr) {
++    return nullptr;
++  }
++  if (!pipeline->creation_complete.load(std::memory_order_acquire) &&
++      !creation_threads_.empty()) {
++    // Takes this pipeline too if no worker has picked it up yet.
++    CreateQueuedPipelinesOnProcessorThread();
++    // A worker that already took it always sets creation_complete.
++    while (!pipeline->creation_complete.load(std::memory_order_acquire)) {
++      std::this_thread::yield();
++    }
++  }
++  return pipeline->state.load(std::memory_order_acquire);
++}
++
+ bool PipelineCache::ConfigurePipeline(
+     D3D12Shader::D3D12Translation* vertex_shader, D3D12Shader::D3D12Translation* pixel_shader,
+     const PrimitiveProcessor::ProcessingResult& primitive_processing_result,
+--- a/third_party/rexglue-sdk/src/graphics/d3d12/command_processor.cpp
++++ b/third_party/rexglue-sdk/src/graphics/d3d12/command_processor.cpp
+@@ -51,4 +51,10 @@
+                     "Read render-to-texture results on the CPU")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+
++REXCVAR_DEFINE_BOOL(d3d12_async_pipeline_wait, false, "GPU/D3D12",
++                    "With async_shader_compilation, wait for a pipeline that is "
++                    "still being created instead of skipping the draw (used by "
++                    "titles around CPU-read captures such as photo modes)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ REXCVAR_DEFINE_BOOL(d3d12_submit_on_primary_buffer_end, true, "GPU/D3D12",
+@@ -2568,18 +2574,22 @@
+           &pipeline_handle, &root_signature)) {
+     return false;
+   }
+   if (REXCVAR_GET(async_shader_compilation) &&
+       pipeline_cache_->GetD3D12PipelineByHandle(pipeline_handle) == nullptr) {
+-    if (render_audit_enabled_) {
+-      PipelineCache::PipelineAuditStatus pipeline_status =
+-          pipeline_cache_->GetPipelineAuditStatus(pipeline_handle);
+-      if (pipeline_status == PipelineCache::PipelineAuditStatus::kFailed) {
+-        ++render_audit_pso_failed_skip_;
+-      } else {
+-        ++render_audit_pso_pending_skip_;
++    bool waited = REXCVAR_GET(d3d12_async_pipeline_wait) &&
++                  pipeline_cache_->AwaitPipeline(pipeline_handle) != nullptr;
++    if (!waited) {
++      if (render_audit_enabled_) {
++        PipelineCache::PipelineAuditStatus pipeline_status =
++            pipeline_cache_->GetPipelineAuditStatus(pipeline_handle);
++        if (pipeline_status == PipelineCache::PipelineAuditStatus::kFailed) {
++          ++render_audit_pso_failed_skip_;
++        } else {
++          ++render_audit_pso_pending_skip_;
++        }
+       }
++      return true;
+     }
+-    return true;
+   }
+
+   // Update the textures - this may bind pipelines.
+--- /dev/null
++++ b/src/mcla_photo_capture.cpp
+@@ -0,0 +1,60 @@
++// KI-037: complete first Photo Mode capture (M9-006).
++// See docs/evidence/M9-006-ki-037-photo-analysis-20261029.md.
++//
++// The photo album object (mcUIPhotoAlbum) captures the frame into a 1280x720
++// LIN_A8R8G8B8 texture backed by a 0x385000-byte physical allocation and
++// JPEG-encodes it on the CPU a few frames later. The capture window is
++// bracketed by two guest functions called from sub_8263EAA8:
++//   sub_8263D120  freeze for capture: sets the capture-active byte 0x8290622E,
++//                 saves and changes renderer masks (renderer+424/+428) and
++//                 requests a world pause (unverified)
++//   sub_8263D1E0  unfreeze: restores them and clears 0x8290622E
++// With asynchronous pipeline creation the GPU plugin skips draws whose
++// pipelines are not ready; in the capture frames that bakes missing geometry
++// and stale EDRAM into the photo. While the window is open the plugin waits
++// for such pipelines instead (d3d12_async_pipeline_wait). The game is frozen
++// then, so the one-off creation hitch is not visible in gameplay.
++
++#include "mcla_init.h"
++#include "mcla_logging.h"
++
++#include <rex/cvar.h>
++
++#include <atomic>
++
++REXCVAR_DEFINE_BOOL(mcla_photo_pipeline_wait, true, "MCLA",
++    "Photo Mode: wait for GPU pipelines still being created during the "
++    "capture window instead of dropping their draws (KI-037)")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++
++namespace {
++
++constexpr const char *kWaitCvar = "d3d12_async_pipeline_wait";
++std::atomic<bool> window_open{false};
++
++void SetWait(bool value) {
++  if (!rex::cvar::SetFlagByName(kWaitCvar, value ? "true" : "false")) {
++    MCLA_APP_ERROR("MCLA photo capture: could not set {}={}", kWaitCvar, value);
++  }
++}
++
++}  // namespace
++
++// Strong override of the generated weak capture-freeze function.
++REX_EXTERN(sub_8263D120) {
++  static const bool wanted = REXCVAR_GET(mcla_photo_pipeline_wait);
++  if (wanted && !window_open.exchange(true)) {
++    SetWait(true);
++    MCLA_APP_INFO("MCLA photo capture: window open, pipeline wait on");
++  }
++  __imp__sub_8263D120(ctx, base);
++}
++
++// Strong override of the generated weak capture-unfreeze function.
++REX_EXTERN(sub_8263D1E0) {
++  __imp__sub_8263D1E0(ctx, base);
++  if (window_open.exchange(false)) {
++    SetWait(false);
++    MCLA_APP_INFO("MCLA photo capture: window closed, pipeline wait off");
++  }
++}
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -185,12 +185,14 @@
+     src/mcla_logging.cpp
+ )
+
+ # M9 host hooks: M9-007 menu-state cap (overrides sub_822D29E8), KI-035 F10
+-# guest sampler, KI-026 F10 state block and default-off probe/watchdog.
++# guest sampler, KI-026 F10 state block and default-off probe/watchdog,
++# KI-037 photo-capture pipeline wait (overrides sub_8263D120/sub_8263D1E0).
+ list(APPEND MCLA_SOURCES
+     src/mcla_guest_sampler.cpp
+     src/mcla_ki026_probe.cpp
+-    src/mcla_menu_state.cpp)
++    src/mcla_menu_state.cpp
++    src/mcla_photo_capture.cpp)
+
+ # Measured-time game timer (docs/evidence/M8-001-timebox-20261025.md). It
+ # overrides sub_822D2478, so it stays out of builds where the diagnostic timer
