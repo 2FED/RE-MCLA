@@ -1,0 +1,36 @@
+Proposal only (not applied, not built). Scope: scaled (draw_resolution_scale > 1)
+readback-resolve path. The downscale reads from the start of the *current scaled
+range* (copy_dest_base * scale_area) but writes guest memory at written_address
+(= copy_dest_extent_start). When the two differ (resolve to a sub-rectangle /
+offset destination), the CPU-visible copy is shifted. The unscaled branch already
+copies from written_address. This does NOT by itself prove a KI-038/KI-032 fix;
+it removes one scale-only CPU-visible corruption source and should be tested
+with the A/B in ki-038-032-analysis.md.
+
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -3251,11 +3251,22 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
+       return true;
+     }
+ 
+-    uint32_t scaled_length = uint32_t(texture_cache_->GetCurrentScaledResolveRangeLengthScaled());
+-    uint64_t scaled_address = texture_cache_->GetCurrentScaledResolveRangeStartScaled();
+-    if (!scaled_length) {
++    // The current scaled range was made current from copy_dest_base, but the
++    // readback copies written_address (copy_dest_extent_start) onward. Read the
++    // scaled bytes of the same guest range that is written back below.
++    uint64_t range_start_scaled = texture_cache_->GetCurrentScaledResolveRangeStartScaled();
++    uint64_t range_length_scaled = texture_cache_->GetCurrentScaledResolveRangeLengthScaled();
++    uint64_t scale_area = uint64_t(texture_cache_->draw_resolution_scale_x()) *
++                          uint64_t(texture_cache_->draw_resolution_scale_y());
++    uint64_t scaled_address = uint64_t(written_address) * scale_area;
++    uint64_t scaled_length_64 = uint64_t(written_length) * scale_area;
++    if (!range_length_scaled || scaled_address < range_start_scaled ||
++        scaled_address + scaled_length_64 > range_start_scaled + range_length_scaled ||
++        scaled_length_64 > UINT32_MAX) {
+       return true;
+     }
++    uint32_t scaled_length = uint32_t(scaled_length_64);
+ 
+     uint32_t downscale_buffer_size = AlignReadbackBufferSize(written_length);
+     if (downscale_buffer_size > resolve_downscale_buffer_size_) {
