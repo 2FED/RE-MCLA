@@ -123,6 +123,10 @@ std::expected<std::string_view, std::wstring> AuthenticatedPayload(
     return std::unexpected(L"Build lease signature verification failed");
   return payload;
 }
+constexpr std::string_view kCapabilitiesPrefix = "capabilities ";
+struct CapabilityToken { std::string_view name; uint8_t bit; };
+constexpr std::array<CapabilityToken, 4> kCapabilityTokens{{
+    {"1080p", kGrant1080p}, {"1440p", kGrant1440p}, {"2160p", kGrant2160p}, {"unlocked", kGrantUnlocked}}};
 bool ModelValid(const Leases &leases) {
   if (!DateValid(leases.issued_utc) || leases.grants.size() > kMaximumGrants) return false;
   std::string_view previous;
@@ -143,6 +147,28 @@ std::expected<std::string, std::wstring> Sha256(std::span<const uint8_t> bytes) 
   for (auto byte : *digest) { result += "0123456789ABCDEF"[byte >> 4]; result += "0123456789ABCDEF"[byte & 15]; }
   return result;
 }
+std::expected<uint8_t, std::wstring> ParseTicketCapabilities(std::string_view tokens) {
+  uint8_t result = 0;
+  if (tokens.empty()) return std::unexpected(L"Malformed build ticket: empty capabilities list");
+  while (true) {
+    const auto comma = tokens.find(',');
+    const auto token = tokens.substr(0, comma);
+    uint8_t bit = 0;
+    for (const auto &known : kCapabilityTokens)
+      if (token == known.name) bit = known.bit;
+    if (!bit) return std::unexpected(L"Malformed build ticket: unknown or empty capability token");
+    if (result & bit) return std::unexpected(L"Malformed build ticket: duplicate capability token");
+    result |= bit;
+    if (comma == tokens.npos) return result;
+    tokens.remove_prefix(comma + 1);
+  }
+}
+std::string TicketCapabilitiesText(uint8_t capabilities) {
+  std::string text;
+  for (const auto &known : kCapabilityTokens)
+    if (capabilities & known.bit) { if (!text.empty()) text += ','; text += known.name; }
+  return text;
+}
 std::expected<Ticket, std::wstring> ParseTicket(
     std::string_view envelope, std::span<const uint8_t> public_key) {
   auto authenticated = AuthenticatedPayload(envelope, public_key);
@@ -153,10 +179,20 @@ std::expected<Ticket, std::wstring> ParseTicket(
     return std::unexpected(L"Malformed build ticket: unknown schema");
   payload.remove_prefix(kill_switch ? kKillSwitchTicketHeader.size() : kTicketHeader.size());
   auto line = Line(payload);
-  if (!line || !payload.empty()) return std::unexpected(L"Malformed build ticket: exactly one row required");
+  if (!line) return std::unexpected(L"Malformed build ticket: exactly one row required");
   auto row = Row(*line);
   if (!row) return std::unexpected(row.error());
-  return Ticket{std::move(row->host_sha256), row->valid_until, kill_switch};
+  // Optional signed capabilities line (M9-005); nothing else may follow.
+  uint8_t capabilities = 0;
+  if (!payload.empty()) {
+    auto extra = Line(payload);
+    if (!extra || !payload.empty() || !extra->starts_with(kCapabilitiesPrefix))
+      return std::unexpected(L"Malformed build ticket: only one optional capabilities line may follow the row");
+    auto granted = ParseTicketCapabilities(extra->substr(kCapabilitiesPrefix.size()));
+    if (!granted) return std::unexpected(granted.error());
+    capabilities = *granted;
+  }
+  return Ticket{std::move(row->host_sha256), row->valid_until, kill_switch, capabilities};
 }
 std::expected<Leases, std::wstring> ParseLeases(
     std::string_view envelope, std::span<const uint8_t> public_key) {

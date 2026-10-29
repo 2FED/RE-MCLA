@@ -69,9 +69,32 @@ foreach ($item in $items | Where-Object { -not $_.PSIsContainer }) {
 if ($RequireVolunteer) {
     $checks++
     $ticket = Join-Path $root 'build\mcla-test-build.ticket'
-    if (-not (Test-Path -LiteralPath $ticket) -or
-        -not ([IO.File]::ReadAllText($ticket)).StartsWith("MCLA-TEST-BUILD-V2`n")) {
+    $ticketText = if (Test-Path -LiteralPath $ticket) { [IO.File]::ReadAllText($ticket) } else { '' }
+    if (-not $ticketText.StartsWith("MCLA-TEST-BUILD-V2`n")) {
         $findings.Add('ticket is not a V2 (kill-switch) ticket')
+    }
+    # M9-005 signed launcher grant: shape only here (the launcher verifies the
+    # signature). The grant is informational; a ticket that does not parse fails.
+    $checks++
+    if ($ticketText -cnotmatch '\AMCLA-TEST-BUILD-V2\n[0-9A-F]{64} [1-9][0-9]{9}\n(?:capabilities ([0-9a-z,]+)\n)?--SIGNATURE--\n[0-9A-F]{512}\n\z') {
+        $findings.Add('ticket does not parse (row, optional capabilities line, signature)')
+    } else {
+        [string[]]$grant = @()
+        if ($Matches.ContainsKey(1)) { $grant = @($Matches[1].Split(',')) }
+        $unknown = @($grant | Where-Object { $_ -cnotin @('1080p', '1440p', '2160p', 'unlocked') })
+        if ($unknown.Count -or @($grant | Sort-Object -Unique).Count -ne $grant.Count) {
+            $findings.Add('ticket capabilities line has an unknown or repeated token')
+        }
+        "Ticket capabilities (informational): " + $(if ($grant.Count) { $grant -join ',' } else { 'none' })
+        $receiptPath = Join-Path $root 'candidate-receipt.json'
+        if (Test-Path -LiteralPath $receiptPath) {
+            $checks++
+            $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json
+            if (-not ($receipt.PSObject.Properties.Name -contains 'test_build_ticket_capabilities') -or
+                (@($receipt.test_build_ticket_capabilities) -join ',') -cne ($grant -join ',')) {
+                $findings.Add('candidate-receipt.json does not record the ticket capability grant')
+            }
+        }
     }
     $checks++
     $hostBytes = [IO.File]::ReadAllBytes((Join-Path $root 'build\mcla.exe'))

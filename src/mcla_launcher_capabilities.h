@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mcla_build_lease_policy.h"
 #include "mcla_launcher_profile_policy.h"
 #include "mcla_render_target_policy.h"
 
@@ -45,6 +46,10 @@ inline constexpr std::string_view kOwnerAdmissionHeader = "MCLA-OWNER-ADMITTED-B
 inline constexpr size_t kOwnerAdmissionMaximumBytes = 16 * 1024;
 inline constexpr size_t kOwnerAdmissionMaximumEntries = 64;
 inline constexpr std::string_view kOwnerAdmissionKey = "owner-allowlist";
+// Signed build ticket grant (M9-005): the ticket's optional `capabilities`
+// line admits the listed gated options for the build it is signed for.
+inline constexpr std::string_view kTicketGrantKey = "ticket-grant";
+inline constexpr std::string_view kTicketGrantNotice = "Admitted by the signed build ticket.";
 
 enum class CapabilityError {
   InvalidBuildIdentity,
@@ -67,6 +72,9 @@ struct CapabilityRequest {
   // The build is listed in the owner admission file. Used only when the
   // requested option is otherwise gated for this exact build.
   bool owner_admitted = false;
+  // mcla::lease::kGrant* bits from the authenticated ticket of this build.
+  // Used only for an option that neither the table nor the owner file admits.
+  uint8_t ticket_grant = 0;
 };
 
 // Resolved arguments to emit, NOT measured FPS or observed host state. Caller
@@ -83,6 +91,11 @@ struct CapabilityPlan {
   bool vsync = true;
   // True only when a gated option was admitted by the owner admission file.
   bool owner_admitted = false;
+  // True only when a gated option was admitted by the signed ticket grant
+  // (and not by the owner file, which takes precedence in the record).
+  bool ticket_granted = false;
+  // The grant the plan was resolved with; kept so serialization revalidates.
+  uint8_t ticket_grant = 0;
 };
 
 inline constexpr bool ValidCapabilityIdentity(std::string_view value) {
@@ -217,24 +230,35 @@ inline std::expected<CapabilityPlan, CapabilityError> ResolveCapabilities(
   if (!TimingPolicySupported(request.timing))
     return std::unexpected(CapabilityError::UnsupportedTiming);
   if (!request.vsync) return std::unexpected(CapabilityError::UnsupportedVsync);
-  const bool owner_unlocked =
+  const bool gated_unlocked =
       request.timing == TimingMode::Unlocked && !UnlockedBuildTested(request.build_fingerprint);
-  if (owner_unlocked && !request.owner_admitted)
+  const bool granted_unlocked = (request.ticket_grant & mcla::lease::kGrantUnlocked) != 0;
+  if (gated_unlocked && !request.owner_admitted && !granted_unlocked)
     return std::unexpected(CapabilityError::UntestedUnlockedBuild);
   const auto *target = FindRenderTarget(request.render_target);
   if (!target) return std::unexpected(CapabilityError::UnknownRenderTarget);
   // Retain historical records and rollback alongside the reviewed clean SDK
   // candidate. Exact admission is not a world-quality or gameplay certificate.
-  const bool owner_target = (target->id == 1080 || target->id == 2160) &&
+  const bool gated_target = (target->id == 1080 || target->id == 2160) &&
       request.build_fingerprint != kRenderTargetTestedBuild &&
       request.build_fingerprint != kCleanRenderTargetTestedBuild;
-  if (owner_target && !request.owner_admitted)
+  // A grant names each target: 1080p never implies 2160p (KI-048).
+  const uint8_t target_bit = target->id == 1080 ? mcla::lease::kGrant1080p :
+      target->id == 2160 ? mcla::lease::kGrant2160p : 0;
+  const bool granted_target = target_bit && (request.ticket_grant & target_bit) != 0;
+  if (gated_target && !request.owner_admitted && !granted_target)
     return std::unexpected(CapabilityError::UntestedTargetBuild);
   const bool unlocked = request.timing == TimingMode::Unlocked;
-  // Owner admission is recorded only when it actually admitted a gated option.
-  return CapabilityPlan{std::string(request.build_fingerprint), std::string(request.game_fingerprint),
-                        request.timing, *target, kStockGuestRefreshHz,
-                        unlocked ? kUnlockedGuestVblankHz : 0, true, owner_unlocked || owner_target};
+  // Admission is recorded only when it actually admitted a gated option. The
+  // owner file admits every gated option and takes precedence in the record.
+  const bool gated = gated_unlocked || gated_target;
+  const bool owner = gated && request.owner_admitted;
+  CapabilityPlan plan{std::string(request.build_fingerprint), std::string(request.game_fingerprint),
+                      request.timing, *target, kStockGuestRefreshHz,
+                      unlocked ? kUnlockedGuestVblankHz : 0, true, owner};
+  plan.ticket_granted = gated && !owner;
+  plan.ticket_grant = request.ticket_grant;
+  return plan;
 }
 
 // Host arguments added by the frame-rate choice. Stock adds none, so returning
@@ -272,10 +296,11 @@ inline constexpr std::string_view RenderTargetLimitation(uint32_t id) {
 inline std::expected<std::string, CapabilityError> SerializeCapabilities(const CapabilityPlan &plan) {
   const auto resolved = ResolveCapabilities({plan.build_fingerprint, plan.game_fingerprint,
                                              plan.timing, plan.target.id, plan.vsync,
-                                             plan.owner_admitted});
+                                             plan.owner_admitted, plan.ticket_grant});
   if (!resolved) return std::unexpected(resolved.error());
   const auto &expected = resolved->target;
   if (plan.owner_admitted != resolved->owner_admitted ||
+      plan.ticket_granted != resolved->ticket_granted ||
       plan.guest_refresh_hz != resolved->guest_refresh_hz ||
       plan.guest_vblank_hz != resolved->guest_vblank_hz ||
       plan.target.width != expected.width || plan.target.height != expected.height ||
@@ -296,8 +321,9 @@ inline std::expected<std::string, CapabilityError> SerializeCapabilities(const C
       "\nfixed60_available false\nfixed60_reason " + std::string(kFixed60UnavailableReason) +
       "\nhost_state_observed false\nfps_measured false\nworld_validation not-certified-by-policy\nrender_limitation " +
       std::string(RenderTargetLimitation(plan.target.id)) +
-      // Records without owner admission stay byte-identical to earlier ones.
-      (plan.owner_admitted ? "\nadmission " + std::string(kOwnerAdmissionKey) : std::string()) + "\n";
+      // Records without admission stay byte-identical to earlier ones.
+      (plan.owner_admitted ? "\nadmission " + std::string(kOwnerAdmissionKey) :
+       plan.ticket_granted ? "\nadmission " + std::string(kTicketGrantKey) : std::string()) + "\n";
 }
 
 } // namespace mcla::launcher

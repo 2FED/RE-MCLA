@@ -19,6 +19,8 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <string>
+#include <vector>
 
 #if !defined(MCLA_LAUNCHER_CONTROLLER_TESTING)
 #error This synthetic integration fixture requires the nonshipping controller test seam.
@@ -89,6 +91,46 @@ std::expected<std::string, std::wstring> HashFile(const std::filesystem::path &p
   return output;
 }
 
+// Ephemeral RSA-2048 fixture key for synthetic build tickets (M9-005). It
+// never reaches disk, the network or production; the real key is not used.
+struct FixtureSigner {
+  BCRYPT_ALG_HANDLE algorithm = nullptr;
+  BCRYPT_KEY_HANDLE key = nullptr;
+  std::vector<uint8_t> public_blob;
+  FixtureSigner() {
+    ULONG length = 0;
+    if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_RSA_ALGORITHM, nullptr, 0) < 0 ||
+        BCryptGenerateKeyPair(algorithm, &key, 2048, 0) < 0 || BCryptFinalizeKeyPair(key, 0) < 0 ||
+        BCryptExportKey(key, nullptr, BCRYPT_RSAPUBLIC_BLOB, nullptr, 0, &length, 0) < 0) return;
+    public_blob.resize(length);
+    if (BCryptExportKey(key, nullptr, BCRYPT_RSAPUBLIC_BLOB, public_blob.data(), length, &length, 0) < 0)
+      public_blob.clear();
+  }
+  ~FixtureSigner() {
+    if (key) BCryptDestroyKey(key);
+    if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
+  }
+  FixtureSigner(const FixtureSigner &) = delete;
+  FixtureSigner &operator=(const FixtureSigner &) = delete;
+  std::string Sign(std::string_view payload) const {
+    BCRYPT_ALG_HANDLE sha = nullptr;
+    std::array<unsigned char, 32> digest{};
+    if (BCryptOpenAlgorithmProvider(&sha, BCRYPT_SHA256_ALGORITHM, nullptr, 0) < 0) return {};
+    const bool hashed = BCryptHash(sha, nullptr, 0, reinterpret_cast<PUCHAR>(const_cast<char *>(payload.data())),
+        static_cast<ULONG>(payload.size()), digest.data(), static_cast<ULONG>(digest.size())) >= 0;
+    BCryptCloseAlgorithmProvider(sha, 0);
+    BCRYPT_PKCS1_PADDING_INFO padding{BCRYPT_SHA256_ALGORITHM};
+    std::array<unsigned char, 256> signature{};
+    ULONG length = 0;
+    if (!hashed || BCryptSignHash(key, &padding, digest.data(), static_cast<ULONG>(digest.size()), signature.data(),
+        static_cast<ULONG>(signature.size()), &length, BCRYPT_PAD_PKCS1) < 0 || length != signature.size()) return {};
+    std::string envelope(payload);
+    envelope += "--SIGNATURE--\n";
+    for (const auto byte : signature) { envelope += "0123456789ABCDEF"[byte >> 4]; envelope += "0123456789ABCDEF"[byte & 15]; }
+    return envelope + '\n';
+  }
+};
+
 // The copied fixture executable is not an MCLA host. It accepts only the
 // controller's nonshipping switch, validates routing, writes a harmless marker
 // in its synthetic user tree, then waits for an explicit fixture-owned signal.
@@ -145,13 +187,16 @@ int FakeChild(int argc, wchar_t **argv) {
       args[L"vsync"] != L"true" || args[L"fullscreen"] != L"false" ||
       args[L"gpu_backend"] != L"d3d12") return finish(89);
   // Stock (30 FPS) emits no vblank override: the exact stock command line.
-  if (args.contains(L"mcla_guest_vblank_hz")) return finish(95);
+  // Only the M9-005 ticket-grant fixture runs Unlocked; its record says so.
+  const bool unlocked = args.contains(L"mcla_guest_vblank_hz");
+  if (unlocked && args[L"mcla_guest_vblank_hz"] != L"240") return finish(95);
   const auto caps=RecordFields(Read(cwd/L"capabilities.txt"),"MCLA-LAUNCHER-CAPABILITIES-V1\n");
   const auto receipt=RecordFields(Read(cwd/L"launch-receipt.txt"),"MCLA-MANAGED-SESSION-V1\n");
   const auto field=[&](std::string key,std::string value) {
     const auto found=caps.find(key); return found!=caps.end() && found->second==value;
   };
-  if(caps.size()!=17 || !field("timing","stock") || !field("vsync","on") ||
+  if(caps.size()!=(unlocked?19u:17u) || !field("timing",unlocked?"unlocked":"stock") || !field("vsync","on") ||
+      (unlocked && (!field("guest_vblank_hz","240") || !field("admission","ticket-grant"))) ||
       !field("guest_refresh_hz","60") || args[L"video_mode_refresh_rate"]!=L"60" ||
       !field("render_target","2560x1440") || !field("guest_mode","1280x720") ||
       !field("draw_scale","2x2") || !field("host_state_observed","false") ||
@@ -859,6 +904,117 @@ bool FolderChoiceMatrix(const std::filesystem::path &root,
   return true;
 }
 
+// M9-005: a build whose signed ticket carries `capabilities unlocked,1440p`
+// offers Unlocked on CHECK SETUP and START GAME; ungranted gated options stay
+// refused with the unchanged texts, and an invalid ticket refuses admission.
+bool TicketGrantMatrix(const std::filesystem::path &root,
+                       const std::filesystem::path &build_a,
+                       const std::filesystem::path &game) {
+  const auto matrix=root/L"ticket-grant";
+  const auto granted=matrix/L"granted-build", forged=matrix/L"forged-build", unknown=matrix/L"unknown-token-build";
+  for(const auto &path:{matrix,granted,forged,unknown,matrix/L"store",matrix/L"profiles"})
+    if(!CreateDirectoryW(path.c_str(),nullptr)) return false;
+  FixtureSigner signer, other;
+  if(signer.public_blob.empty() || other.public_blob.empty()) return false;
+  const auto stage=[&](const std::filesystem::path &build,const std::string &ticket) {
+    if(ticket.empty() || !CopyFileW((build_a/L"mcla.exe").c_str(),(build/L"mcla.exe").c_str(),TRUE) ||
+       !NewFile(build/L"mcla_crash_handler.exe","ticket grant fixture\n") ||
+       !NewFile(build/L"mcla-test-build.ticket",ticket)) return false;
+    const auto host=HashFile(build/L"mcla.exe"), helper=HashFile(build/L"mcla_crash_handler.exe"),
+        signed_ticket=HashFile(build/L"mcla-test-build.ticket");
+    if(!host || !helper || !signed_ticket) return false;
+    // Basename order: '-' < '.' < '_'.
+    return NewFile(build/L"mcla-build.manifest","MCLA-DEV-BUILD-V1\n"+
+        *signed_ticket+" "+std::to_string(ticket.size())+" mcla-test-build.ticket\n"+
+        *host+" "+std::to_string(std::filesystem::file_size(build/L"mcla.exe"))+" mcla.exe\n"+
+        *helper+" "+std::to_string(std::filesystem::file_size(build/L"mcla_crash_handler.exe"))+" mcla_crash_handler.exe\n");
+  };
+  const auto host=HashFile(build_a/L"mcla.exe"); if(!host) return false;
+  const std::string row="MCLA-TEST-BUILD-V2\n"+*host+" 1893456000\n";
+  if(!stage(granted,signer.Sign(row+"capabilities unlocked,1440p\n")) ||
+     !stage(forged,other.Sign(row+"capabilities unlocked,1440p\n")) ||
+     !stage(unknown,signer.Sign(row+"capabilities unlocked,60fps\n"))) return false;
+  auto store=OpenPreferenceStore((matrix/L"store").wstring()); if(!store) return false;
+  Preferences p; p.build_root=U16(granted); p.game_root=U16(game); p.gpu_name=u"Fixture"; p.render_target=1440;
+  auto profile=CreateManagedProfile(p,(matrix/L"profiles").wstring(),u"Ticket grant",store->directory());
+  if(!profile) return false;
+  p.library.entries.push_back(*profile); p.library.selected_id=profile->id;
+  if(!store->Save(p)) return false;
+  const std::filesystem::path profile_root(profile->root);
+  LauncherController controller(std::move(*store));
+  // Without the fixture key the ticket does not authenticate: refused, not ignored.
+  {
+    const auto unkeyed=controller.Dispatch(UiAction::CheckLaunch,Settings(p));
+    Check(unkeyed.readiness==LaunchReadiness::Blocked && unkeyed.readiness_reason.find(L"Build ticket refused")!=std::wstring::npos,
+          "a ticket that does not authenticate refuses admission");
+  }
+  SetBuildTicketKeyForTest(signer.public_blob);
+  const std::wstring notice=L"Admitted by the signed build ticket.";
+  const auto check=[&](TimingMode timing,uint32_t target,LaunchReadiness expected,const char *label) {
+    auto request=Settings(p); request.timing=timing; request.render_target=target;
+    const auto view=controller.Dispatch(UiAction::CheckLaunch,request);
+    Check(view.readiness==expected && !controller.running(),label);
+    return view;
+  };
+  for(const auto target:{720u,1440u}) {
+    const auto stock=check(TimingMode::Stock,target,LaunchReadiness::Ready,"granted build: stock 720p/1440p Ready");
+    Check(stock.status.find(notice)==std::wstring::npos,"ungated stock check does not claim the ticket grant");
+  }
+  for(const auto target:{1080u,2160u}) {
+    const auto refused=check(TimingMode::Stock,target,LaunchReadiness::Blocked,"ungranted 1080p/2160p stay Blocked");
+    Check(refused.readiness_reason.find(L"1080p/2160p require the render-target-tested build")!=std::wstring::npos,
+          "ungranted target keeps the unchanged refusal text");
+  }
+  for(const auto target:{720u,1440u}) {
+    const auto unlocked=check(TimingMode::Unlocked,target,LaunchReadiness::Ready,"granted Unlocked is Ready at 720p/1440p");
+    Check(unlocked.status.find(notice)!=std::wstring::npos,"CHECK SETUP names the signed build ticket");
+    Check(unlocked.status.find(L"Owner-admitted")==std::wstring::npos,"grant is not reported as owner admission");
+  }
+  const auto unlocked_1080=check(TimingMode::Unlocked,1080,LaunchReadiness::Blocked,"Unlocked at ungranted 1080p is Blocked");
+  Check(unlocked_1080.readiness_reason.find(L"render-target-tested build")!=std::wstring::npos,
+        "Unlocked grant never implies a render target");
+  {
+    auto request=Settings(p); request.timing=TimingMode::Unlocked; request.build_root=forged.wstring();
+    const auto view=controller.Dispatch(UiAction::CheckLaunch,request);
+    Check(view.readiness==LaunchReadiness::Blocked && view.readiness_reason.find(L"Build ticket refused")!=std::wstring::npos,
+          "a ticket signed by another key refuses admission");
+    request.timing=TimingMode::Stock;
+    Check(controller.Dispatch(UiAction::CheckLaunch,request).readiness==LaunchReadiness::Blocked,
+          "an unauthenticated ticket refuses even stock instead of being ignored");
+    request.build_root=unknown.wstring();
+    const auto token=controller.Dispatch(UiAction::CheckLaunch,request);
+    Check(token.readiness==LaunchReadiness::Blocked && token.readiness_reason.find(L"capability token")!=std::wstring::npos,
+          "an unknown capability token makes the ticket invalid");
+  }
+  // START GAME on the granted build records the grant in capabilities.txt.
+  auto play=Settings(p); play.timing=TimingMode::Unlocked;
+  const auto started=controller.Dispatch(UiAction::Play,play);
+  Check(started.running && controller.running(),"granted Unlocked starts the synthetic child");
+  if(!controller.running()) { std::wcerr<<started.status<<L'\n'; SetBuildTicketKeyForTest({}); return false; }
+  const auto session=OnlySession(profile_root);
+  bool ready=false;
+  const auto began=GetTickCount64();
+  do {
+    if(Read(session/L"fixture-ready.txt")=="ROOTS_ENV_SETTINGS_SENTINEL_PASS\n") { ready=true; break; }
+    if(!controller.Dispatch(UiAction::Refresh,{}).running) break;
+    Sleep(5);
+  } while(GetTickCount64()-began<5000);
+  Check(ready,"child accepts the granted Unlocked arguments and record");
+  const auto record=Read(session/L"capabilities.txt");
+  const auto caps=RecordFields(record,"MCLA-LAUNCHER-CAPABILITIES-V1\n");
+  Check(caps.size()==19 && caps.at("timing")=="unlocked" && caps.at("guest_vblank_hz")=="240" &&
+        caps.at("admission")=="ticket-grant" && caps.at("render_target")=="2560x1440",
+        "capabilities.txt records admission ticket-grant");
+  Check(record.ends_with("\nadmission ticket-grant\n"),"grant is the record's last key");
+  if(!session.empty() && !NewFile(session/L"finish.signal","FINISH_FIXTURE\n")) return false;
+  const auto finishing=GetTickCount64();
+  while(controller.running() && GetTickCount64()-finishing<10000) { controller.Dispatch(UiAction::Refresh,{}); Sleep(5); }
+  Check(!controller.running() && !controller.completion_failed() && Read(session/L"state.txt")=="complete\nexit 0\n",
+        "ticket-granted session completes normally");
+  SetBuildTicketKeyForTest({});
+  return ready;
+}
+
 bool CollectionParentMatrix(const std::filesystem::path &root,
                             const std::filesystem::path &build,
                             const std::filesystem::path &game) {
@@ -1294,6 +1450,7 @@ int wmain(int argc, wchar_t **argv) {
   Check(SupportDirectoryMatrix(root,build,game,bad_build),"support directory repair matrix completed");
   Check(CollectionParentMatrix(root,build,game),"optional collection parent hint matrix completed");
   Check(FolderChoiceMatrix(root,build,game),"folder choice persistence matrix completed");
+  Check(TicketGrantMatrix(root,build,game),"signed ticket capability grant matrix completed");
   std::cout << "Launcher controller: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

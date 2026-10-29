@@ -278,11 +278,17 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
       Require(target && receipt.at("capability_policy") == "1" && receipt.at("capability_record") == "capabilities.txt" &&
               input.capabilities.size() <= kMaximumExportReceiptBytes);
       const auto timing = receipt.at("timing") == kUnlockedTimingKey ? TimingMode::Unlocked : TimingMode::Stock;
-      // An owner-admitted session (KI-045) carries the admission key; the
-      // canonical re-serialization below still has to match byte for byte.
+      // An owner-admitted session (KI-045) or a ticket-granted one (M9-005)
+      // carries its admission key; the canonical re-serialization below still
+      // has to match byte for byte. The export has no ticket to re-verify, so a
+      // ticket-grant record is rebuilt with every token granted: an ungated
+      // record claiming the grant does not re-serialize to the same bytes.
       const bool owner = input.capabilities.ends_with(
           "\nadmission " + std::string(kOwnerAdmissionKey) + "\n");
-      const auto plan = ResolveCapabilities({receipt.at("build"), receipt.at("game"), timing, target->id, true, owner});
+      const bool ticket = input.capabilities.ends_with(
+          "\nadmission " + std::string(kTicketGrantKey) + "\n");
+      const auto plan = ResolveCapabilities({receipt.at("build"), receipt.at("game"), timing, target->id, true, owner,
+                                             ticket ? mcla::lease::kGrantAll : uint8_t{0}});
       Require(plan.has_value());
       const auto canonical = SerializeCapabilities(*plan);
       Require(canonical && *canonical == input.capabilities);

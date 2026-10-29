@@ -17,13 +17,16 @@ contains no game files.
      the last successful online check. A running game is never stopped.
 
 2. SETTINGS ON THIS BUILD
-   - Use 720p or 1440p at 30 FPS. 1080p, 2160p and "Unlocked FPS
-     (experimental)" are not offered on volunteer builds; CHECK SETUP refuses
-     them. 2160p also needs more video memory than an 8 GB graphics card has.
-   - If a later build offers Unlocked, its known limits: menus over the city
-     (pause, map, Arcade, meet spot) stay at 30; busy junctions drop to 30-40
-     FPS; lights flicker at night; the race victory screen can be lit wrongly;
-     one graphics reset was seen in testing.
+   - 720p and 1440p at 30 FPS work on every build. 1080p and "Unlocked FPS
+     (experimental)" are offered only when this build's signed ticket allows
+     them: CHECK SETUP then shows "Admitted by the signed build ticket.",
+     otherwise it refuses them. 30 FPS stays the recommended setting.
+   - 2160p is not offered on volunteer builds: it needs more video memory
+     than an 8 GB graphics card has.
+   - Unlocked, known limits: menus over the city (pause, map, Arcade, meet
+     spot) stay at 30; busy junctions drop to 30-40 FPS; lights flicker at
+     night; the race victory screen can be lit wrongly; one graphics reset
+     was seen in testing.
 
 3. WHEN SOMETHING GOES WRONG
    - Bug: at the moment it happens press F10 on the keyboard, or R2 on the
@@ -87,15 +90,16 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      перевірка ніколи не зупиняє.
 
 2. НАЛАШТУВАННЯ В ЦІЙ ЗБІРЦІ
-   - Грайте в 720p або 1440p при 30 FPS. 1080p, 2160p і "Unlocked FPS
-     (experimental)" у збірках для волонтерів недоступні: CHECK SETUP їх
-     відхиляє. До того ж 2160p потребує більше відеопам'яті, ніж є на
-     відеокарті з 8 ГБ.
-   - Якщо пізніша збірка дасть Unlocked, його відомі обмеження: меню поверх
-     міста (пауза, мапа, Arcade, місце зустрічі) лишаються на 30; на
-     завантажених перехрестях 30-40 FPS; уночі мерехтить світло; екран
-     перемоги після гонки може бути неправильно освітлений; у тестах був
-     один збій (скидання) відеокарти.
+   - 720p і 1440p при 30 FPS працюють у кожній збірці. 1080p і "Unlocked FPS
+     (experimental)" доступні лише тоді, коли їх дозволяє підписаний квиток
+     (ticket) цієї збірки: тоді CHECK SETUP показує "Admitted by the signed
+     build ticket.", інакше їх відхиляє. Рекомендовано й далі 30 FPS.
+   - 2160p у збірках для волонтерів недоступна: вона потребує більше
+     відеопам'яті, ніж є на відеокарті з 8 ГБ.
+   - Unlocked, відомі обмеження: меню поверх міста (пауза, мапа, Arcade,
+     місце зустрічі) лишаються на 30; на завантажених перехрестях 30-40 FPS;
+     уночі мерехтить світло; екран перемоги після гонки може бути неправильно
+     освітлений; у тестах був один збій (скидання) відеокарти.
 
 3. ЯКЩО ЩОСЬ НЕ ТАК
    - Баг: саме в цей момент натисніть F10 на клавіатурі, або R2 на кермі,

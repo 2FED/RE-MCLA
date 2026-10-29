@@ -303,6 +303,18 @@ int main() {
       auto cache = NewCache(root, L"killswitch");
       auto r = CheckLeaseForTest(ks, hash_a, signer.public_blob, created, &cache, ks_offline);
       Check(r && r->expires_utc == offline_end && !r->extended, "V2 offline start admitted for exactly 3 days");
+      {
+        // M9-005: the signed capabilities line does not change host admission.
+        const auto granted = signer.Sign("MCLA-TEST-BUILD-V2\n" + hash_a + " " + std::to_string(created) +
+                                         "\ncapabilities unlocked,1080p,1440p\n");
+        auto granted_cache = NewCache(root, L"killswitch-granted");
+        const auto admitted = CheckLeaseForTest(granted, hash_a, signer.public_blob, created, &granted_cache, ks_offline);
+        Check(admitted && admitted->expires_utc == offline_end, "V2 ticket with a capabilities line is admitted like V2");
+        const auto bad = signer.Sign("MCLA-TEST-BUILD-V2\n" + hash_a + " " + std::to_string(created) +
+                                     "\ncapabilities 4k\n");
+        Check(!CheckLeaseForTest(bad, hash_a, signer.public_blob, created, &granted_cache, ks_offline),
+              "an unknown capability token makes the host refuse the ticket");
+      }
       Check(ks_read(cache).empty(), "offline V2 attempt writes no cache record");
       r = CheckLeaseForTest(ks, hash_a, signer.public_blob, offline_end - 1, &cache, ks_offline);
       Check(r.has_value(), "last offline second admitted");

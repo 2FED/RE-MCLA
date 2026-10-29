@@ -353,6 +353,58 @@ int main() {
     const auto tested = ResolveCapabilities({std::string(kRenderTargetTestedBuild), game, TimingMode::Stock, 2160, true, true});
     Check(tested && !tested->owner_admitted, "tested builds never record owner admission");
   }
+  {
+    // M9-005: the signed ticket grant admits exactly its tokens for an
+    // untested build; nothing is implied (1080p never grants 2160p, KI-048).
+    namespace lease = mcla::lease;
+    const std::string build(64, 'C');
+    struct Option { TimingMode timing; uint32_t target; uint8_t bit; CapabilityError refused; };
+    const std::array<Option, 3> gated{{
+        {TimingMode::Stock, 1080, lease::kGrant1080p, CapabilityError::UntestedTargetBuild},
+        {TimingMode::Stock, 2160, lease::kGrant2160p, CapabilityError::UntestedTargetBuild},
+        {TimingMode::Unlocked, 720, lease::kGrantUnlocked, CapabilityError::UntestedUnlockedBuild}}};
+    for (const auto &option : gated) {
+      Reject({build, game, option.timing, option.target, true, false, 0}, option.refused);
+      Reject({build, game, option.timing, option.target, true, false,
+              static_cast<uint8_t>(lease::kGrantAll & ~option.bit)}, option.refused);
+      const auto plan = ResolveCapabilities({build, game, option.timing, option.target, true, false, option.bit});
+      Check(plan && plan->ticket_granted && !plan->owner_admitted && plan->target.id == option.target &&
+            plan->guest_vblank_hz == (option.timing == TimingMode::Unlocked ? 240u : 0u),
+            "each token admits exactly its gated option");
+      if (!plan) continue;
+      const auto text = SerializeCapabilities(*plan);
+      Check(text && text->ends_with("\nadmission ticket-grant\n") &&
+            Fields(*text).size() == (option.timing == TimingMode::Unlocked ? 19u : 18u),
+            "ticket-granted record names the grant as its last key");
+      auto stripped = *plan; stripped.ticket_granted = false;
+      Check(!SerializeCapabilities(stripped), "granted plan cannot drop its admission key");
+      auto revoked = *plan; revoked.ticket_grant = 0;
+      Check(!SerializeCapabilities(revoked), "a plan without the grant cannot serialize the granted option");
+      const auto both = ResolveCapabilities({build, game, option.timing, option.target, true, true, option.bit});
+      Check(both && both->owner_admitted && !both->ticket_granted && SerializeCapabilities(*both) &&
+            SerializeCapabilities(*both)->ends_with("\nadmission owner-allowlist\n"),
+            "the owner list keeps its record when the ticket also grants");
+    }
+    // 1440p is not gated today: its token changes nothing and records nothing.
+    for (const uint8_t grant : {uint8_t{0}, lease::kGrant1440p, lease::kGrantAll}) {
+      const auto plan = ResolveCapabilities({build, game, TimingMode::Stock, 1440, true, false, grant});
+      Check(plan && !plan->ticket_granted && SerializeCapabilities(*plan) &&
+            SerializeCapabilities(*plan)->find("admission") == std::string::npos,
+            "ungated 1440p and 720p stay unrecorded with any grant");
+      auto forged = *plan; forged.ticket_granted = true;
+      Check(!SerializeCapabilities(forged), "an unneeded grant claim cannot be serialized");
+    }
+    const auto unlocked_1440 = ResolveCapabilities({build, game, TimingMode::Unlocked, 1440, true, false,
+                                                    static_cast<uint8_t>(lease::kGrantUnlocked | lease::kGrant1440p)});
+    Check(unlocked_1440 && unlocked_1440->ticket_granted, "unlocked,1440p grant admits Unlocked at 1440p");
+    Reject({build, game, TimingMode::Unlocked, 2160, true, false,
+            static_cast<uint8_t>(lease::kGrantUnlocked | lease::kGrant1080p)}, CapabilityError::UntestedTargetBuild);
+    Reject({build, game, TimingMode::Unlocked, 1080, true, false, lease::kGrant1080p},
+           CapabilityError::UntestedUnlockedBuild);
+    const auto tested = ResolveCapabilities({std::string(kRenderTargetTestedBuild), game, TimingMode::Stock, 2160, true,
+                                             false, lease::kGrantAll});
+    Check(tested && !tested->ticket_granted, "table-admitted builds never record the ticket grant");
+  }
   std::cout << "Capabilities: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

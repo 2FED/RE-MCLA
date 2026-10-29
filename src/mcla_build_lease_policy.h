@@ -19,7 +19,22 @@ inline constexpr size_t kMaximumGrants = 256;
 // from creation, or for 24 hours after an online check that listed the host.
 inline constexpr uint64_t kKillSwitchOfflineSeconds = 259200;
 inline constexpr uint64_t kKillSwitchCheckSeconds = 86400;
-struct Ticket { std::string host_sha256; uint64_t created_utc; bool kill_switch = false; };
+// Optional signed launcher grant (M9-005): the payload line
+//   capabilities <token>[,<token>...]
+// after the host row, tokens from the fixed set below in any order, each at
+// most once. 720p and stock 30 FPS are always available and have no token.
+// An unknown, empty or duplicated token makes the whole ticket invalid.
+inline constexpr uint8_t kGrant1080p = 1;
+inline constexpr uint8_t kGrant1440p = 2;
+inline constexpr uint8_t kGrant2160p = 4;
+inline constexpr uint8_t kGrantUnlocked = 8;
+inline constexpr uint8_t kGrantAll = kGrant1080p | kGrant1440p | kGrant2160p | kGrantUnlocked;
+struct Ticket {
+  std::string host_sha256;
+  uint64_t created_utc;
+  bool kill_switch = false;
+  uint8_t capabilities = 0;  // kGrant* bits; 0 when the line is absent
+};
 struct Grant { std::string host_sha256; uint64_t valid_until; };
 struct Leases { uint64_t issued_utc; std::vector<Grant> grants; };
 
@@ -31,6 +46,11 @@ std::expected<Ticket, std::wstring> ParseTicket(
 std::expected<Leases, std::wstring> ParseLeases(
     std::string_view envelope, std::span<const uint8_t> public_key);
 std::expected<std::string, std::wstring> Sha256(std::span<const uint8_t> bytes);
+// Token list of the ticket capabilities line (text after "capabilities ").
+// Pure, no signature check: ParseTicket authenticates before calling it.
+std::expected<uint8_t, std::wstring> ParseTicketCapabilities(std::string_view tokens);
+// Canonical token list for a grant (fixed order), empty for 0. For audits.
+std::string TicketCapabilitiesText(uint8_t capabilities);
 
 // Call with authenticated Parse* results and the freshly measured host hash.
 // Public model fields are revalidated, but Evaluate does not reauthenticate

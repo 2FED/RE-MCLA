@@ -58,6 +58,24 @@ try {
     foreach ($invalid in @(('a' * 64), ('A' * 63), ('G' * 64), (($hashA) + "`n"))) {
         Assert-Rejected { New-MclaTestBuildTicketEnvelope $rsa $invalid '1577836800' } 'invalid hash rejected'
     }
+    # M9-005 signed capabilities line: canonical order, strict tokens.
+    $granted = New-MclaTestBuildTicketEnvelope $rsa $hashA '1577836800' -KillSwitch -Capabilities @('unlocked', '1080p', '1440p')
+    Assert-Envelope $verifier $granted ("MCLA-TEST-BUILD-V2`n" + $hashA + " 1577836800`ncapabilities 1080p,1440p,unlocked`n")
+    Assert-Test ((New-MclaTestBuildTicketEnvelope $rsa $hashA '1577836800' -KillSwitch -Capabilities @('1440p', 'unlocked', '1080p')) -ceq $granted) 'capability input order does not change the signed line'
+    Assert-Test ((New-MclaTestBuildTicketEnvelope $rsa $hashA '1577836800' -Capabilities @()) -ceq $ticket) 'no capabilities writes no line'
+    Assert-Envelope $verifier (New-MclaTestBuildTicketEnvelope $rsa $hashA '1577836800' -Capabilities @('2160p', '1080p', '1440p', 'unlocked')) ("MCLA-TEST-BUILD-V1`n" + $hashA + " 1577836800`ncapabilities 1080p,1440p,2160p,unlocked`n")
+    foreach ($invalid in @(@('720p'), @('Unlocked'), @('unlocked', 'unlocked'), @(''), @('1080p,1440p'), @('4k'))) {
+        Assert-Rejected { New-MclaTestBuildTicketEnvelope $rsa $hashA '1577836800' -Capabilities $invalid } "unknown/duplicate capability token rejected [$($invalid -join '|')]"
+    }
+    foreach ($invalid in @(("MCLA-TEST-BUILD-V2`n" + $hashA + " 1800000000`ncapabilities unlocked,1080p`n"),
+        ("MCLA-TEST-BUILD-V2`n" + $hashA + " 1800000000`ncapabilities 1080p,1080p`n"),
+        ("MCLA-TEST-BUILD-V2`n" + $hashA + " 1800000000`ncapabilities 4k`n"),
+        ("MCLA-TEST-BUILD-V2`n" + $hashA + " 1800000000`ncapabilities `n"),
+        ("MCLA-TEST-BUILD-V2`n" + $hashA + " 1800000000`ncapabilities 1080p,`n"),
+        ("MCLA-TEST-BUILD-V2`n" + $hashA + " 1800000000`nextra 1080p`n"),
+        ("MCLA-TEST-BUILD-V2`n" + $hashA + " 1800000000`ncapabilities 1080p`ncapabilities 1440p`n"))) {
+        Assert-Rejected { New-MclaTestBuildSignedEnvelope $rsa $invalid } 'direct signing primitive rejects a noncanonical capabilities line'
+    }
     $entries = '[{"host_sha256":"' + $hashB + '","valid_until":4102444800},{"host_sha256":"' + $hashA + '","valid_until":1577836800}]'
     $leases = New-MclaTestBuildLeaseEnvelope $rsa $entries '1800000000'
     Assert-Envelope $verifier $leases ("MCLA-TEST-LEASES-V1`n1800000000`n" + $hashA + " 1577836800`n" + $hashB + " 4102444800`n")

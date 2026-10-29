@@ -6,6 +6,9 @@ Set-StrictMode -Version Latest
 $script:MclaTestBuildKeyName = 'MCLA-R-TestBuild-Leases-v1'
 $script:MclaTestBuildMinimumUtc = [long]1577836800
 $script:MclaTestBuildMaximumUtc = [long]4102444800
+# Launcher capability tokens a ticket may grant (M9-005), in canonical order.
+# 720p and stock 30 FPS are always available and have no token.
+$script:MclaTestBuildCapabilityTokens = @('1080p', '1440p', '2160p', 'unlocked')
 
 function Assert-MclaTestBuildWindows {
     if (-not $IsWindows) { throw 'Test-build signing requires PowerShell 7 on Windows.' }
@@ -19,6 +22,20 @@ function ConvertTo-MclaTestBuildUtc([string]$Value) {
         throw 'UTC is outside the inclusive 2020-01-01 to 2100-01-01 range.'
     }
     return $parsed.ToString([Globalization.CultureInfo]::InvariantCulture)
+}
+
+# Returns the canonical comma-separated token list (fixed order) or '' for none.
+# Unknown, empty or repeated tokens are refused rather than dropped.
+function ConvertTo-MclaTestBuildCapabilities([string[]]$Capabilities) {
+    if ($null -eq $Capabilities -or $Capabilities.Count -eq 0) { return '' }
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($token in $Capabilities) {
+        if ($token -cnotin $script:MclaTestBuildCapabilityTokens) {
+            throw "Unknown capability token '$token'; allowed: 1080p, 1440p, 2160p, unlocked."
+        }
+        if (-not $seen.Add($token)) { throw "Duplicate capability token '$token'." }
+    }
+    return (@($script:MclaTestBuildCapabilityTokens | Where-Object { $seen.Contains($_) }) -join ',')
 }
 
 function Assert-MclaTestBuildHash([string]$Hash) {
@@ -73,10 +90,18 @@ function New-MclaTestBuildSignedEnvelope([Security.Cryptography.RSA]$Signer, [st
     }
     $lines = $Payload.Split([char]10)
     if ($lines[0] -ceq 'MCLA-TEST-BUILD-V1' -or $lines[0] -ceq 'MCLA-TEST-BUILD-V2') {
-        if ($lines.Count -ne 3 -or $lines[1] -cnotmatch '\A([0-9A-F]{64}) ([1-9][0-9]{9})\z') {
+        # Optional fourth line: the signed launcher capabilities grant (M9-005).
+        if (($lines.Count -ne 3 -and $lines.Count -ne 4) -or $lines[1] -cnotmatch '\A([0-9A-F]{64}) ([1-9][0-9]{9})\z') {
             throw 'Noncanonical ticket signing payload.'
         }
         $null = ConvertTo-MclaTestBuildUtc $Matches[2]
+        if ($lines.Count -eq 4) {
+            if ($lines[2] -cnotmatch '\Acapabilities ([0-9a-z,]+)\z') { throw 'Noncanonical ticket capabilities line.' }
+            $tokens = $Matches[1]
+            if ((ConvertTo-MclaTestBuildCapabilities $tokens.Split(',')) -cne $tokens) {
+                throw 'Ticket capabilities must be known, unique and in canonical order.'
+            }
+        }
     } elseif ($lines[0] -ceq 'MCLA-TEST-LEASES-V1') {
         if ($lines.Count -lt 3 -or $lines.Count -gt 259) { throw 'Noncanonical lease payload entry count.' }
         $null = ConvertTo-MclaTestBuildUtc $lines[1]
@@ -100,11 +125,17 @@ function New-MclaTestBuildSignedEnvelope([Security.Cryptography.RSA]$Signer, [st
 }
 
 # -KillSwitch issues a V2 ticket: 3-day offline start, online list authoritative (M9-005).
-function New-MclaTestBuildTicketEnvelope([Security.Cryptography.RSA]$Signer, [string]$HostSha256, [string]$CreatedUtc, [switch]$KillSwitch) {
+# -Capabilities adds the signed `capabilities` line that admits the listed
+# gated launcher options for this exact host; omitted, no line is written.
+function New-MclaTestBuildTicketEnvelope([Security.Cryptography.RSA]$Signer, [string]$HostSha256, [string]$CreatedUtc,
+        [switch]$KillSwitch, [string[]]$Capabilities = @()) {
     Assert-MclaTestBuildHash $HostSha256
     $created = ConvertTo-MclaTestBuildUtc $CreatedUtc
     $schema = if ($KillSwitch) { 'MCLA-TEST-BUILD-V2' } else { 'MCLA-TEST-BUILD-V1' }
-    return New-MclaTestBuildSignedEnvelope $Signer ($schema + "`n" + $HostSha256 + ' ' + $created + "`n")
+    $grant = ConvertTo-MclaTestBuildCapabilities $Capabilities
+    $payload = $schema + "`n" + $HostSha256 + ' ' + $created + "`n"
+    if ($grant) { $payload += 'capabilities ' + $grant + "`n" }
+    return New-MclaTestBuildSignedEnvelope $Signer $payload
 }
 
 function New-MclaTestBuildLeaseEnvelope([Security.Cryptography.RSA]$Signer, [string]$EntriesJson, [string]$IssuedUtc) {

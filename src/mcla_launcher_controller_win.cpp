@@ -9,6 +9,8 @@
 #include "mcla_launcher_import_policy.h"
 #include "mcla_managed_config_policy.h"
 #include "mcla_build_lease_runtime_win.h"
+#include "mcla_build_lease_policy.h"
+#include "mcla_build_lease_public_key.h"
 #include "mcla_portable_adapter_policy.h"
 #include "mcla_session_report.h"
 #include <windows.h>
@@ -22,6 +24,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <span>
 
 namespace mcla::launcher {
 namespace {
@@ -228,15 +231,47 @@ OwnerAdmission ReadOwnerAdmission(const fs::DirectoryGuard &store,std::string_vi
   }
   return {std::find(builds->begin(),builds->end(),fingerprint)!=builds->end(),{}};
 }
+#ifdef MCLA_LAUNCHER_CONTROLLER_TESTING
+std::vector<uint8_t> &TicketKeyForTest() { static std::vector<uint8_t> key; return key; }
+#endif
+std::span<const uint8_t> TicketKey() {
+#ifdef MCLA_LAUNCHER_CONTROLLER_TESTING
+  // Synthetic fixtures sign with an ephemeral key; production keeps the real one.
+  return TicketKeyForTest();
+#else
+  return mcla::lease::kPublicKey;
+#endif
+}
+// Signed capability grant (M9-005) of the verified build. The ticket must be
+// the exact inventory entry, authenticate under the build-ticket key and name
+// the inventory's host. No ticket in the inventory grants nothing; a present
+// but invalid ticket refuses admission instead of being ignored.
+std::expected<uint8_t,std::wstring> ReadTicketGrant(const fs::DirectoryGuard &build_root,const VerifiedBuild &build) {
+  const auto &files=build.files();
+  const auto ticket=std::find_if(files.begin(),files.end(),[](const auto &file) { return file.name==mcla::lease::kTicketFile; });
+  if(ticket==files.end()) return uint8_t{0};
+  const auto host=std::find_if(files.begin(),files.end(),[](const auto &file) { return file.name==L"mcla.exe"; });
+  if(host==files.end()) return std::unexpected(L"Verified build has no host");
+  auto bytes=fs::ReadFile(build_root,mcla::lease::kTicketFile,mcla::lease::kMaximumEnvelopeBytes);
+  if(!bytes) return std::unexpected(L"Build ticket unreadable: "+bytes.error());
+  auto digest=mcla::lease::Sha256(*bytes);
+  if(!digest || *digest!=ticket->sha256) return std::unexpected(L"Build ticket differs from the verified build inventory");
+  auto parsed=mcla::lease::ParseTicket({reinterpret_cast<const char*>(bytes->data()),bytes->size()},TicketKey());
+  if(!parsed) return std::unexpected(L"Build ticket refused: "+parsed.error());
+  if(parsed->host_sha256!=host->sha256) return std::unexpected(L"Build ticket does not match the verified host");
+  return parsed->capabilities;
+}
 // admission_notice receives the ignored-file reason on success; on failure it
 // is part of the returned error text.
 std::expected<CapabilityPlan,std::wstring> AdmitCapabilities(
-    const Preferences &preferences,const VerifiedBuild &build,const VerifiedGame &game,
-    const fs::DirectoryGuard &store,std::wstring *admission_notice=nullptr) {
+    const Preferences &preferences,const fs::DirectoryGuard &build_root,const VerifiedBuild &build,
+    const VerifiedGame &game,const fs::DirectoryGuard &store,std::wstring *admission_notice=nullptr) {
+  auto grant=ReadTicketGrant(build_root,build);
+  if(!grant) return std::unexpected(grant.error());
   const auto admission=ReadOwnerAdmission(store,build.fingerprint());
   auto plan=ResolveCapabilities({build.fingerprint(),game.fingerprint(),preferences.timing,
                                 preferences.render_target,preferences.vsync,
-                                admission.listed});
+                                admission.listed,*grant});
   if(!plan) {
     const auto error=CapabilityErrorDescription(plan.error());
     return std::unexpected(std::wstring(error.begin(),error.end())+admission.notice);
@@ -493,9 +528,11 @@ struct LauncherController::State {
       }
       auto verified_game=VerifySelectedGame(*game); if(!verified_game) return std::unexpected(verified_game.error());
       std::wstring admission_notice;
-      auto capability=AdmitCapabilities(p,*build,*verified_game,store.directory(),&admission_notice);
+      auto capability=AdmitCapabilities(p,*build_root,*build,*verified_game,store.directory(),&admission_notice);
       if(!capability) return std::unexpected(capability.error());
       if(capability->owner_admitted) support_notice+=L" Owner-admitted build (owner list), not a tested build.";
+      if(capability->ticket_granted)
+        support_notice+=L" "+std::wstring(kTicketGrantNotice.begin(),kTicketGrantNotice.end());
       uint64_t expires=0;
 #ifndef MCLA_LAUNCHER_CONTROLLER_TESTING
       // Synthetic controller builds use their existing fake-host exemption.
@@ -777,7 +814,7 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
 #endif
   auto verified_game=VerifySelectedGame(*game);
   if(!verified_game) return std::unexpected(verified_game.error());
-  auto capability=AdmitCapabilities(p,*build,*verified_game,store.directory());
+  auto capability=AdmitCapabilities(p,*build_root,*build,*verified_game,store.directory());
   if(!capability) return std::unexpected(capability.error());
   const auto &target=capability->target;
   auto capability_record=SerializeCapabilities(*capability);
@@ -919,6 +956,9 @@ std::expected<void,std::wstring> LauncherController::State::Poll() {
   return result;
 }
 
+#ifdef MCLA_LAUNCHER_CONTROLLER_TESTING
+void SetBuildTicketKeyForTest(std::vector<uint8_t> key) { TicketKeyForTest()=std::move(key); }
+#endif
 LauncherController::LauncherController(PreferenceStore store):state_(std::make_unique<State>(std::move(store))) {}
 LauncherController::~LauncherController()=default;
 bool LauncherController::running() const { return state_->session.has_value(); }

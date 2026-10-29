@@ -71,6 +71,41 @@ Publishing: every volunteer host hash must be listed in `active-builds.txt` on
 file needs the owner's explicit approval each time; nothing is pushed from
 the agent without it.
 
+## Signed launcher capabilities (ticket line, M9-005)
+
+A V1 or V2 ticket may carry one optional payload line after the host row:
+
+    capabilities <token>[,<token>...]
+
+Tokens come from the fixed set `1080p`, `1440p`, `2160p`, `unlocked`; 720p and
+stock 30 FPS are always available and have no token. The line is part of the
+signed payload, so it cannot be added or edited after signing. The native
+parser (`ParseTicketCapabilities` in `src/mcla_build_lease_policy.cpp`)
+accepts the tokens in any order, each once. An empty list, an unknown token
+(including different case) or a repeated token makes the whole ticket
+invalid, so the host and the launcher refuse it; it is never silently
+ignored. A ticket without the line grants nothing and behaves as before.
+
+The launcher reads the ticket listed in the verified build inventory, checks
+its bytes against the inventory hash, its signature and its host row, and
+admits a gated option when the fingerprint table, the owner admission file
+(KI-045) or the ticket grant admits it. Each token admits only its own option:
+`1080p` never implies `2160p`, and `unlocked` never implies a target.
+`1440p` is accepted for forward compatibility; 1440p is not gated today, so
+the token changes nothing. When the grant (not the table and not the owner
+file) admitted an option, CHECK SETUP adds "Admitted by the signed build
+ticket." and `capabilities.txt` ends with `admission ticket-grant`; the owner
+file keeps `admission owner-allowlist` and takes precedence. Refusal texts for
+ungranted options are unchanged. The diagnostic export rebuilds such a record
+byte for byte.
+
+`New-MclaTestBuildTicket.ps1 -Capabilities <tokens>` writes the line in the
+canonical order `1080p,1440p,2160p,unlocked`; the signing boundary refuses
+unknown, repeated or out-of-order tokens. Staging prints the grant, records
+it as `test_build_ticket_capabilities` in `candidate-receipt.json` and refuses
+a malformed line; `Test-MclaVolunteerStaging.ps1 -RequireVolunteer` prints it
+and fails when the ticket does not parse or the receipt disagrees.
+
 ## Owner-internal versus volunteer tickets (owner rule 2026-10-29)
 
 - **Owner-internal candidates use plain V1 tickets:** signed without
@@ -87,10 +122,17 @@ the agent without it.
   `TESTER-GUIDE.txt`), verifies the list with the lease probe and runs
   `Test-MclaVolunteerStaging.ps1 -RequireVolunteer`. Publishing the list stays
   a separate step that needs the owner's explicit approval.
+- **Volunteer V2 tickets carry the launcher grant by default** (primary
+  decision 2026-10-29): sign with `-KillSwitch -Capabilities unlocked,1080p,1440p`,
+  which writes `capabilities 1080p,1440p,unlocked`. `2160p` is added only on the
+  owner's explicit request for that build (KI-048: over the 8 GB video-memory
+  budget); nothing implies it. Owner-internal V1 tickets may carry a grant
+  too, but the owner admission file remains the owner-only route.
 - The prepare scripts live in the ignored owner workspace, are run by the
   owner in PowerShell 7 and are not part of any staged folder. Volunteer
-  packages never carry owner-only launcher settings: the gated launcher
-  options are not offered on volunteer builds.
+  packages never carry owner-only launcher settings: the owner admission file
+  is never staged, and gated options reach volunteers only through the signed
+  ticket grant above.
 
 ## Maintainer procedure
 
@@ -105,7 +147,8 @@ key and newly built hosts; the repository is not a private-key backup.
 1. Build the final Windows host with `MCLA_TEST_BUILD_EXPIRY=ON`. The option is
    OFF for ordinary developer builds; a signed ticket alone cannot enable it.
 2. Run `scripts/New-MclaTestBuildTicket.ps1 -HostPath <final-mcla.exe>
-   -OutputPath <new-ticket-path>`. Place the resulting ticket beside the final
+   -OutputPath <new-ticket-path>` (volunteer: add `-KillSwitch -Capabilities
+   unlocked,1080p,1440p`). Place the resulting ticket beside the final
    host before staging. Outputs use create-new semantics. Keep old signed
    artifacts immutable; never refresh a ticket merely to restage the same build.
 3. Stage a fresh destination with `scripts/Stage-MclaInternalLauncher.ps1`.
@@ -128,7 +171,8 @@ key and newly built hosts; the repository is not a private-key backup.
 
 The file envelope uses canonical ASCII with LF, a versioned payload, the literal
 `--SIGNATURE--` line and a 512-character uppercase hexadecimal signature. Ticket
-payloads contain host hash and creation seconds. Lease payloads contain issue
+payloads contain host hash and creation seconds, optionally followed by the
+signed `capabilities` line. Lease payloads contain issue
 seconds followed by up to 256 unique, sorted hash/expiry records. The signing
 tools enforce the canonical format; manual edits invalidate the signature.
 

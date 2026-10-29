@@ -143,8 +143,21 @@ try {
     if ($ticketStream.Read($ticketBytes,0,$ticketBytes.Length) -ne $ticketBytes.Length) { throw 'Ticket truncated.' }
     $ticketStream.Position=0
     $ticketText=[Text.Encoding]::ASCII.GetString($ticketBytes)
-    if ($ticketText -cnotmatch '\AMCLA-TEST-BUILD-V[12]\n([0-9A-F]{64}) ([1-9][0-9]{9})\n--SIGNATURE--\n[0-9A-F]{512}\n\z' -or
+    # Optional signed launcher grant line (M9-005); the native parser accepts
+    # these tokens in any order, each once. Unknown or repeated tokens refuse.
+    if ($ticketText -cnotmatch '\AMCLA-TEST-BUILD-V[12]\n([0-9A-F]{64}) ([1-9][0-9]{9})\n(?:capabilities ([0-9a-z,]+)\n)?--SIGNATURE--\n[0-9A-F]{512}\n\z' -or
         $Matches[1] -cne $pinned['mcla.exe'].Sha256) { throw 'Test-build ticket does not match the staged host.' }
+    [string[]]$ticketCapabilities = @()
+    if ($Matches.ContainsKey(3)) {
+        $ticketCapabilities = @($Matches[3].Split(','))
+        foreach ($token in $ticketCapabilities) {
+            if ($token -cnotin @('1080p','1440p','2160p','unlocked')) { throw "Test-build ticket has an unknown capability token '$token'." }
+        }
+        if (@($ticketCapabilities | Sort-Object -Unique).Count -ne $ticketCapabilities.Count) {
+            throw 'Test-build ticket repeats a capability token.'
+        }
+    }
+    Write-Host ('Ticket capabilities: ' + $(if ($ticketCapabilities.Count) { $ticketCapabilities -join ',' } else { 'none' }))
     New-Item -ItemType Directory -Path $target -ErrorAction Stop | Out-Null
     $bin = Join-Path $target 'build'
     New-Item -ItemType Directory -Path $bin -ErrorAction Stop | Out-Null
@@ -196,6 +209,8 @@ try {
         build_manifest_sha256=$manifestHash
         launcher_sha256=$pinned['MCLA-Launcher.exe'].Sha256
         test_build_ticket_sha256=$pinned['mcla-test-build.ticket'].Sha256
+        # Signed launcher grant as written in the ticket (M9-005); [] for none.
+        test_build_ticket_capabilities=[string[]]$ticketCapabilities
         files=$orderedFiles
     }
     $pending = Join-Path $target 'candidate-receipt.pending.json'

@@ -231,7 +231,54 @@ int main() {
       Check(d && d->allowed && d->cache == KillSwitchCache::Refresh, "a later listing restores a revoked build");
       Check(!EvaluateKillSwitch(ks, hash_b, created, std::nullopt, std::nullopt, false), "wrong host rejected");
       Check(!EvaluateKillSwitch(ks, hash_a, created - 1, std::nullopt, std::nullopt, false), "clock before creation rejected");
-    }    std::cout << "Build lease policy: " << checks << " checks, " << failures << " failures\n";
+    }
+    {
+      // M9-005 signed capabilities line: optional, order-insensitive, strict.
+      const auto row = hash_a + " 1893456000\n";
+      const auto ticket = [&](std::string_view schema, std::string_view extra) {
+        return ParseTicket(signer.Sign(std::string(schema) + row + std::string(extra)), signer.public_blob);
+      };
+      for (const auto *schema : {"MCLA-TEST-BUILD-V1\n", "MCLA-TEST-BUILD-V2\n"}) {
+        const auto none = ticket(schema, "");
+        Check(none && none->capabilities == 0, "missing capabilities line grants nothing");
+        const auto granted = ticket(schema, "capabilities unlocked,1440p\n");
+        Check(granted && granted->capabilities == (kGrantUnlocked | kGrant1440p) &&
+              granted->host_sha256 == hash_a && granted->created_utc == created,
+              "signed capabilities line parses with the row unchanged");
+        const auto reordered = ticket(schema, "capabilities 1440p,unlocked\n");
+        Check(reordered && reordered->capabilities == granted->capabilities, "token order does not matter");
+        const auto all = ticket(schema, "capabilities 2160p,unlocked,1080p,1440p\n");
+        Check(all && all->capabilities == kGrantAll, "all four tokens parse");
+        const auto single = ticket(schema, "capabilities 1080p\n");
+        Check(single && single->capabilities == kGrant1080p, "single token grants only itself");
+        for (const auto *bad : {"capabilities\n", "capabilities \n", "capabilities unlocked,unlocked\n",
+                                "capabilities 1080p,1440p,1080p\n", "capabilities 720p\n", "capabilities 60fps\n",
+                                "capabilities Unlocked\n", "capabilities 1080P,1440p\n", "capabilities unlocked,\n",
+                                "capabilities ,unlocked\n", "capabilities unlocked,,1440p\n", "capabilities unlocked 1440p\n",
+                                "capabilities unlocked;1440p\n", "capabilities  unlocked\n", "capabilities unlocked \n",
+                                "capability unlocked\n", "Capabilities unlocked\n", "capabilities unlocked",
+                                "capabilities unlocked\n\n", "capabilities unlocked\ncapabilities 1440p\n",
+                                "extra line\n", "\n"})
+          Check(!ticket(schema, bad), "malformed, unknown or duplicate capability token rejects the ticket");
+        // The line is signed: appending or editing it after signing fails.
+        const auto signed_plain = signer.Sign(std::string(schema) + row);
+        const auto marker = signed_plain.find("--SIGNATURE--\n");
+        Check(!ParseTicket(signed_plain.substr(0, marker) + "capabilities unlocked\n" + signed_plain.substr(marker),
+                           signer.public_blob), "a capabilities line added after signing is rejected");
+        auto edited = signer.Sign(std::string(schema) + row + "capabilities 1080p\n");
+        edited.replace(edited.find("1080p"), 5, "2160p");
+        Check(!ParseTicket(edited, signer.public_blob), "a capabilities line edited after signing is rejected");
+      }
+      const auto v2 = ticket("MCLA-TEST-BUILD-V2\n", "capabilities unlocked,1080p,1440p\n");
+      Check(v2 && v2->kill_switch && v2->capabilities == (kGrantUnlocked | kGrant1080p | kGrant1440p),
+            "volunteer default grant parses on a V2 ticket");
+      Check(ParseTicketCapabilities("unlocked,1080p,1440p") == (kGrantUnlocked | kGrant1080p | kGrant1440p) &&
+            !ParseTicketCapabilities("") && !ParseTicketCapabilities("2160p,2160p"),
+            "token parser is exposed and strict");
+      Check(TicketCapabilitiesText(0).empty() && TicketCapabilitiesText(kGrantAll) == "1080p,1440p,2160p,unlocked" &&
+            TicketCapabilitiesText(kGrantUnlocked | kGrant1440p) == "1440p,unlocked", "canonical grant text");
+    }
+    std::cout << "Build lease policy: " << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
   } catch (const std::exception &error) {
     std::cerr << "In-memory lease fixture error: " << error.what() << '\n';

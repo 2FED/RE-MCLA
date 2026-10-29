@@ -180,6 +180,26 @@ int RunTests() {
     stock.Target(720,false); stock.Field("build",kHash);
     stock.capabilities = stock_plan ? *SerializeCapabilities(*stock_plan) + "admission owner-allowlist\n" : std::string();
     Reject(stock,"an ungated record cannot claim owner admission");
+    // M9-005: a ticket-granted Unlocked session exports; the record names the
+    // grant and must re-serialize byte for byte.
+    Fixture granted; granted.Field("timing","unlocked");
+    granted.Field("scale","1"); granted.Field("render_target","1280x720"); granted.Field("guest_mode","1280x720");
+    granted.Field("build",kHash);
+    granted.Field("capability_policy","1"); granted.Field("capability_record","capabilities.txt");
+    const auto granted_plan = ResolveCapabilities({kHash,kGame,TimingMode::Unlocked,720,true,false,
+                                                   mcla::lease::kGrantUnlocked});
+    granted.capabilities = granted_plan ? *SerializeCapabilities(*granted_plan) : std::string();
+    Check(granted.capabilities.ends_with("\nadmission ticket-grant\n"),"granted record names the ticket grant");
+    Accept(granted,"ticket-granted Unlocked session metadata accepted");
+    auto ungranted = granted;
+    ungranted.capabilities.erase(ungranted.capabilities.size() - std::string("admission ticket-grant\n").size());
+    Reject(ungranted,"unlocked record of an untested build without the grant is rejected");
+    auto claimed = stock;
+    claimed.capabilities = stock_plan ? *SerializeCapabilities(*stock_plan) + "admission ticket-grant\n" : std::string();
+    Reject(claimed,"an ungated record cannot claim the ticket grant");
+    auto both = granted;
+    both.capabilities += "admission owner-allowlist\n";
+    Reject(both,"a record cannot carry two admission keys");
   }
   {
     // The tester's report.txt is a plain text file in the package folder, not

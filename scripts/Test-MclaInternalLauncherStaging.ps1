@@ -81,6 +81,13 @@ Check ($receipt.external_delivery_approved -eq $false -and $receipt.game_assets_
        $receipt.personal_data_included -eq $false) 'private-only receipt does not approve redistribution'
 Check ($receipt.crt_policy -ceq $policy.policy -and $receipt.crt_version -ceq $policy.version) 'receipt identifies pinned CRT policy'
 Check (@($receipt.files).Count -eq 17) 'receipt covers all 17 nonreceipt artifacts including signed ticket'
+# M9-005: the receipt records the ticket's signed launcher grant (informational).
+$sourceTicket = [IO.File]::ReadAllText((Join-Path $source 'mcla-test-build.ticket'))
+[string[]]$sourceGrant = @()
+if ($sourceTicket -cmatch '\A[^\n]+\n[^\n]+\ncapabilities ([0-9a-z,]+)\n--SIGNATURE--\n') { $sourceGrant = @($Matches[1].Split(',')) }
+Check (($receipt.PSObject.Properties.Name -contains 'test_build_ticket_capabilities') -and
+       ((@($receipt.test_build_ticket_capabilities) -join ',') -ceq ($sourceGrant -join ','))) 'receipt records the exact ticket capability grant'
+Write-Output ('Ticket capabilities (informational): ' + $(if ($sourceGrant.Count) { $sourceGrant -join ',' } else { 'none' }))
 $expected = [Collections.Generic.List[string]]::new()
 $expected.Add('MCLA-Launcher.exe')
 $expected.Add('candidate-receipt.json')
@@ -121,6 +128,31 @@ try {
     Expect-Failure { & $stageScript -BuildDirectory $build -Destination $lockedTarget -CrtDirectory $crt } 'unreadable locked source fails copy admission'
 } finally { $locked.Dispose() }
 Check (-not (Test-Path -LiteralPath $lockedTarget)) 'all-source pinning completes before candidate creation'
+# Shape-only synthetic tickets (staging checks shape and host binding, never
+# the signature): the source row plus a capabilities line and a zero signature.
+$ticketRow = ($sourceTicket -split "`n")[0..1] -join "`n"
+function New-GrantSource([string]$Name, [string]$Line) {
+    $directory = Join-Path $fixture $Name
+    New-Item -ItemType Directory -Path $directory | Out-Null
+    foreach ($name in @($runtime) + @('MCLA-Launcher.exe')) {
+        if ($name -cne 'mcla-test-build.ticket') { Copy-FixtureFile (Join-Path $build $name) (Join-Path $directory $name) }
+    }
+    New-FixtureText (Join-Path $directory 'mcla-test-build.ticket') ($ticketRow + "`n" + $Line + "--SIGNATURE--`n" + ('0' * 512) + "`n")
+    return $directory
+}
+$grantSource = New-GrantSource 'source-granted' "capabilities unlocked,1080p,1440p`n"
+$grantTarget = Join-Path $fixture 'candidate-granted'
+$grantResult = & $stageScript -BuildDirectory $grantSource -Destination $grantTarget -CrtDirectory $crt
+Check ($grantResult -ceq $grantTarget) 'ticket with a capabilities line stages'
+$grantReceipt = [IO.File]::ReadAllText((Join-Path $grantTarget 'candidate-receipt.json')) | ConvertFrom-Json
+Check ((@($grantReceipt.test_build_ticket_capabilities) -join ',') -ceq 'unlocked,1080p,1440p') 'receipt lists the granted tokens as signed'
+foreach ($case in @(@('source-unknown-token', "capabilities unlocked,4k`n"), @('source-repeated-token', "capabilities 1080p,1080p`n"),
+                    @('source-empty-token', "capabilities 1080p,`n"), @('source-extra-line', "extra 1080p`n"))) {
+    $badSource = New-GrantSource $case[0] $case[1]
+    $badGrantTarget = Join-Path $fixture ('rejected-' + $case[0])
+    Expect-Failure { & $stageScript -BuildDirectory $badSource -Destination $badGrantTarget -CrtDirectory $crt } "malformed ticket capabilities refuse staging [$($case[0])]" 'ticket'
+    Check (-not (Test-Path -LiteralPath $badGrantTarget)) 'malformed ticket grant fails before candidate writes'
+}
 $badCrt = Join-Path $fixture 'bad-crt'
 New-Item -ItemType Directory -Path $badCrt | Out-Null
 foreach ($entry in $policy.files) {
