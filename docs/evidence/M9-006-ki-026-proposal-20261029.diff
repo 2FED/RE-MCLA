@@ -1,0 +1,508 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -169,6 +169,7 @@
+     src/mcla_app.cpp
+     src/mcla_cursor_autohide_sdl.cpp
+     src/mcla_diagnostics.cpp
++    src/mcla_ki026_probe.cpp
+     src/mcla_logging.cpp
+ )
+ 
+--- a/src/mcla_app.cpp
++++ b/src/mcla_app.cpp
+@@ -60,6 +60,7 @@
+ #include "generated/default/mcla_init.h"
+ #include "mcla_cursor_autohide_sdl.h"
+ #include "mcla_diagnostics.h"
++#include "mcla_ki026_probe.h"
+ #include "mcla_logging.h"
+ #include "mcla_managed_config_policy.h"
+ #include "mcla_native_crash.h"
+@@ -3526,6 +3527,10 @@
+   state.race_back_sequence = race_back_probe_sequence.load();
+   state.race_back_handler_calls = race_back_camera_handler_calls.load();
+   state.race_back_apply_calls = race_back_camera_apply_calls.load();
++  if (active_runtime) {
++    state.guest_ki026_json = MclaKi026StateJson(active_runtime->memory(),
++                                                active_runtime->virtual_membase());
++  }
+   return state;
+ }
+ 
+--- a/src/mcla_diagnostics.h
++++ b/src/mcla_diagnostics.h
+@@ -84,6 +84,8 @@
+   uint64_t race_back_sequence = 0;
+   uint64_t race_back_handler_calls = 0;
+   uint64_t race_back_apply_calls = 0;
++  // KI-026 guest warp/camera-pause snapshot (JSON object; empty if unavailable).
++  std::string guest_ki026_json;
+ };
+ 
+ using CaptureProvider = std::function<RuntimeState()>;
+--- a/src/mcla_diagnostics.cpp
++++ b/src/mcla_diagnostics.cpp
+@@ -943,8 +943,13 @@
+       << "},\n"
+       << "  \"race_back_trace\": {\"sequence\": " << runtime.race_back_sequence
+       << ", \"handler_calls\": " << runtime.race_back_handler_calls
+-      << ", \"apply_calls\": " << runtime.race_back_apply_calls << "},\n"
+-      << "  \"native_threads\": [";
++      << ", \"apply_calls\": " << runtime.race_back_apply_calls << "},
++";
++  if (!runtime.guest_ki026_json.empty()) {
++    out << "  \"guest_ki026\": " << runtime.guest_ki026_json << ",
++";
++  }
++  out << "  \"native_threads\": [";
+   for (size_t i = 0; i < native_threads.size(); ++i) {
+     const auto &thread = native_threads[i];
+     if (i) {
+--- /dev/null
++++ b/src/mcla_ki026_probe.h
+@@ -0,0 +1,16 @@
++#pragma once
++
++// KI-026 race-transition camera softlock: default-off diagnostics, F10 state
++// block and an opt-in watchdog. See docs/evidence/KI-026-race-back-camera-softlock.md.
++
++#include <cstdint>
++#include <string>
++
++namespace rex::memory {
++class Memory;
++}
++
++// Returns a JSON object describing the guest warp/camera-pause/pause-manager
++// state, or an empty string when the guest is not available. Every guest
++// pointer is validated against the guest heaps before it is dereferenced.
++std::string MclaKi026StateJson(rex::memory::Memory *memory, uint8_t *base);
+--- /dev/null
++++ b/src/mcla_ki026_probe.cpp
+@@ -0,0 +1,426 @@
++// KI-026: after a lost Red Light event + Race Back (or at a Red Light race
++// start) the aerial warp camera can stay on screen while the car still drives;
++// pause and the change-camera button do nothing.
++//
++// Static analysis (docs/evidence/KI-026-race-back-camera-softlock.md):
++// - The warp is mcWarper (UILogic + 0x51240, UILogic = *(0x8286D8D4)); its
++//   per-frame update is sub_8221BE98 (state at +288, 29 = idle).
++// - "RECORD WARP CAM MATRIX" and Warper_OnCameraFinished freeze the camera via
++//   UILogic + 0x51382 (sub_82204480 / sub_82204558). It is released only by
++//   sub_82204468 (warp states 12/17 after the cutscene starts, the zoom-in
++//   camera setup) or by the script call UILogic_UnPauseCamera (sub_822079E8).
++// - While +0x51382 is set, sub_82209150 makes the player-camera input update
++//   (sub_822B35E8) return early, so RB/R1 does nothing; vehicle input is not
++//   affected.
++//
++// Everything here is default OFF. mcla_ki026_probe only logs; it never changes
++// guest state. mcla_ki026_watchdog releases a camera pause only for the two
++// stuck signatures below, after they persist, and logs what it did.
++
++#include "mcla_ki026_probe.h"
++
++#include "mcla_init.h"
++#include "mcla_logging.h"
++
++#include <rex/cvar.h>
++#include <rex/system/xmemory.h>
++
++#include <atomic>
++#include <chrono>
++#include <cstdio>
++#include <cstring>
++#include <sstream>
++#include <string>
++
++REXCVAR_DEFINE_BOOL(mcla_ki026_probe, false, "MCLA",
++    "Log KI-026 warp, camera-pause and pause-request transitions")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++
++REXCVAR_DEFINE_BOOL(mcla_ki026_watchdog, false, "MCLA",
++    "Release a camera pause left behind by a finished or stalled warp (KI-026)")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++
++namespace {
++
++constexpr uint32_t kUiLogicPtr = 0x8286D8D4u;       // UILogic object
++constexpr uint32_t kUiManagerPtr = 0x8286D804u;     // +48 -> UILogic (pause writers)
++constexpr uint32_t kPauseManagerPtr = 0x828CCEA0u;  // simulation pause requests
++constexpr uint32_t kCutscenePtr = 0x8286D8E8u;      // cutscene player
++constexpr uint32_t kPlayerManagerPtr = 0x82874374u; // +8 -> local racer
++constexpr uint32_t kMainTimer = 0x827D7500u;        // +84 scale, +92 step
++constexpr uint32_t kGameTimeScale = 0x827E1C34u;
++constexpr uint32_t kPauseOverrideByte = 0x8286E800u;
++
++constexpr uint32_t kWarperOffset = 0x51240u;
++constexpr uint32_t kGpsJumping = 0x51381u;
++constexpr uint32_t kCameraPaused = 0x51382u;
++constexpr uint32_t kCameraPauseRequested = 0x51383u;
++constexpr uint32_t kCameraPauseId = 0x51384u;
++
++constexpr uint32_t kWarperQueueCount = 64;
++constexpr uint32_t kWarperRequest = 68;
++constexpr uint32_t kWarperPrestreamTimer = 264;
++constexpr uint32_t kWarperPrestreamFrames = 268;
++constexpr uint32_t kWarperFlagsFirst = 272;  // 272..280 bytes
++constexpr uint32_t kWarperCutsceneWait = 274;
++constexpr uint32_t kWarperState = 288;
++constexpr uint32_t kWarperCamera = 296;
++constexpr uint32_t kWarperIdle = 29;
++
++constexpr uint32_t kRacerCamera = 0x370;  // mcPlayerCamera
++constexpr uint32_t kRacerState = 656;     // 3 = active (racer reset path)
++constexpr uint32_t kRacerCameraInputOff = 908;
++
++bool ProbeOn() {
++  static const bool on = REXCVAR_GET(mcla_ki026_probe);
++  return on;
++}
++
++bool WatchdogOn() {
++  static const bool on = REXCVAR_GET(mcla_ki026_watchdog);
++  return on;
++}
++
++float LoadF32(uint8_t *base, uint32_t address) {
++  const uint32_t bits = REX_LOAD_U32(address);
++  float value = 0.0f;
++  std::memcpy(&value, &bits, sizeof(value));
++  return value;
++}
++
++std::string GuestText(uint8_t *base, uint32_t address) {
++  // Only static-image strings (formats and names) are read here.
++  if (address < 0x82000000u || address >= 0x829E0000u) {
++    return {};
++  }
++  std::string text;
++  for (uint32_t i = 0; i < 96; ++i) {
++    const char c = static_cast<char>(REX_LOAD_U8(address + i));
++    if (c == 0) {
++      break;
++    }
++    text.push_back(c >= 32 && c < 127 ? c : '?');
++  }
++  return text;
++}
++
++// --- probe: stripped debug printf -------------------------------------------
++// sub_82130000 is a bare blr with about 2100 call sites (the title's stripped
++// debug printf). Only exact formats of interest are logged; behavior is kept.
++constexpr uint32_t kWarperTextFirst = 0x8201F980u;  // mcWarper messages
++constexpr uint32_t kWarperTextLast = 0x8201FCC4u;
++constexpr uint32_t kPauseRequestFormat = 0x82039E34u;  // r4; r5 = request name
++constexpr uint32_t kGameCameraFormat = 0x820374F8u;    // r3; r4 = camera name
++
++}  // namespace
++
++REX_EXTERN(sub_82130000) {
++  if (!ProbeOn()) {
++    return;
++  }
++  static std::atomic<uint32_t> last_warper_format{0};
++  static std::atomic<uint32_t> repeats{0};
++  const uint32_t r3 = ctx.r3.u32;
++  const uint32_t r4 = ctx.r4.u32;
++  if (r3 >= kWarperTextFirst && r3 <= kWarperTextLast) {
++    // Waits print every frame: log on change, then every 600th repeat.
++    const uint32_t previous = last_warper_format.exchange(r3);
++    uint32_t count = 0;
++    if (previous == r3) {
++      count = repeats.fetch_add(1) + 1;
++    } else {
++      repeats = 0;
++    }
++    if (previous != r3 || count % 600 == 0) {
++      MCLA_APP_INFO("MCLA_KI026_WARPER_TEXT v=1 fmt={:08X} repeat={} lr={:08X} text=\"{}\"",
++                    r3, count, static_cast<uint32_t>(ctx.lr), GuestText(base, r3));
++    }
++  } else if (r4 == kPauseRequestFormat) {
++    MCLA_APP_INFO("MCLA_KI026_PAUSE_REQUEST v=1 name=\"{}\" lr={:08X}",
++                  GuestText(base, ctx.r5.u32), static_cast<uint32_t>(ctx.lr));
++  } else if (r3 == kGameCameraFormat) {
++    MCLA_APP_INFO("MCLA_KI026_GAME_CAMERA v=1 name=\"{}\" lr={:08X}",
++                  GuestText(base, r4), static_cast<uint32_t>(ctx.lr));
++  }
++}
++
++// --- probe: transition edges (every stock call still runs) -----------------
++#define MCLA_KI026_EDGE(fn, label)                                              \
++  REX_EXTERN(fn) {                                                              \
++    if (ProbeOn()) {                                                            \
++      MCLA_APP_INFO("MCLA_KI026_EDGE v=1 fn=" label                             \
++                    " r3={:08X} r4={:08X} r5={:08X} f1={} lr={:08X}",           \
++                    ctx.r3.u32, ctx.r4.u32, ctx.r5.u32, ctx.f1.f64,             \
++                    static_cast<uint32_t>(ctx.lr));                            \
++    }                                                                           \
++    __imp__##fn(ctx, base);                                                     \
++  }
++
++MCLA_KI026_EDGE(sub_82204480, "CameraPauseAtCurrent")
++MCLA_KI026_EDGE(sub_82204558, "CameraPauseAtMatrix")
++MCLA_KI026_EDGE(sub_82204468, "CameraUnpause")
++MCLA_KI026_EDGE(sub_822079C8, "Script_UILogic_PauseCamera")
++MCLA_KI026_EDGE(sub_822079E8, "Script_UILogic_UnPauseCamera")
++MCLA_KI026_EDGE(sub_82207A48, "Script_Warper_SetPauseCameraAtEndOfWarp")
++MCLA_KI026_EDGE(sub_8221A440, "Warper_BeginWarp")
++MCLA_KI026_EDGE(sub_8221B790, "Warper_Finish")
++MCLA_KI026_EDGE(sub_8221BB90, "Warper_Abort")
++MCLA_KI026_EDGE(sub_8221B8C8, "Warper_OnCameraFinished")
++// All 17 direct callers of the camera-apply function (the v2 race-back probe
++// covered six); lr identifies the call site, r4 the camera mode.
++MCLA_KI026_EDGE(sub_822B0F10, "PlayerCamera_Apply")
++MCLA_KI026_EDGE(sub_822B34B0, "PlayerCamera_Reset")
++MCLA_KI026_EDGE(sub_822B33F0, "PlayerCamera_Restore")
++
++#undef MCLA_KI026_EDGE
++
++// --- warper update: state log + optional watchdog ----------------------------
++namespace {
++
++struct StuckTracker {
++  uint32_t signature = 0;  // 0 none, 1 idle warper + paused camera, 2 cutscene wait
++  std::chrono::steady_clock::time_point since{};
++  bool fired = false;
++};
++StuckTracker tracker;  // the warper update runs on one guest thread
++
++void Ki026Watchdog(PPCContext &ctx, uint8_t *base, uint32_t warper, uint32_t state) {
++  const uint32_t ui_logic = warper - kWarperOffset;
++  const bool camera_paused = REX_LOAD_U8(ui_logic + kCameraPaused) != 0;
++  const uint32_t pause_manager = REX_LOAD_U32(kPauseManagerPtr);
++  const bool simulation_paused = pause_manager && REX_LOAD_U8(pause_manager + 4) &&
++                                 !REX_LOAD_U8(pause_manager + 10);
++  const bool pause_override = REX_LOAD_U8(kPauseOverrideByte) != 0;
++
++  bool cutscene_playing = false;
++  float cutscene_time = -1.0f;
++  if (const uint32_t cutscene = REX_LOAD_U32(kCutscenePtr)) {
++    if (const uint32_t inner = REX_LOAD_U32(cutscene + 8)) {
++      cutscene_time = LoadF32(base, inner + 120);
++      cutscene_playing = REX_LOAD_U8(cutscene + 20) == 0 &&
++                         REX_LOAD_U32(cutscene + 12) != 3 && cutscene_time >= 0.0f;
++    }
++  }
++
++  bool racer_active = false;
++  if (const uint32_t players = REX_LOAD_U32(kPlayerManagerPtr)) {
++    if (const uint32_t racer = REX_LOAD_U32(players + 8)) {
++      racer_active = REX_LOAD_U32(racer + kRacerState) == 3 &&
++                     REX_LOAD_U8(racer + kRacerCameraInputOff) == 0;
++    }
++  }
++
++  uint32_t signature = 0;
++  if (camera_paused && !simulation_paused && !pause_override && !cutscene_playing &&
++      racer_active) {
++    if (state == kWarperIdle && REX_LOAD_U32(warper + kWarperQueueCount) == 0 &&
++        REX_LOAD_U32(warper + kWarperRequest) == 0) {
++      signature = 1;  // warp finished, camera left paused (script never unpaused)
++    } else if ((state == 12 || state == 17) && REX_LOAD_U8(warper + kWarperCutsceneWait) &&
++               cutscene_time < 0.0f) {
++      signature = 2;  // warp-to-cutscene waits for a cutscene that never starts
++    }
++  }
++
++  const auto now = std::chrono::steady_clock::now();
++  if (signature != tracker.signature) {
++    tracker = {signature, now, false};
++    return;
++  }
++  if (!signature || tracker.fired) {
++    return;
++  }
++  const auto limit = signature == 1 ? std::chrono::seconds(20) : std::chrono::seconds(15);
++  if (now - tracker.since < limit) {
++    return;
++  }
++  tracker.fired = true;
++  MCLA_APP_INFO("MCLA_KI026_WATCHDOG v=1 signature={} warper_state={} cutscene_time={} "
++                "action=release-camera-pause",
++                signature, state, cutscene_time);
++  if (signature == 2) {
++    // Same exit as the stock success branch at 0x8221C8C8 except that the
++    // Career_Loading movie calls are skipped: clear the wait and finish.
++    REX_STORE_U8(warper + kWarperCutsceneWait, 0);
++    ctx.r3.u64 = warper;
++    sub_8221B790(ctx, base);
++  }
++  // The stock code releases the pause through UIManager + 48.
++  uint32_t pause_owner = ui_logic;
++  if (const uint32_t manager = REX_LOAD_U32(kUiManagerPtr)) {
++    if (const uint32_t via_manager = REX_LOAD_U32(manager + 48)) {
++      pause_owner = via_manager;
++    }
++  }
++  ctx.r3.u64 = pause_owner;
++  sub_82204468(ctx, base);
++}
++
++}  // namespace
++
++REX_EXTERN(sub_8221BE98) {
++  const uint32_t warper = ctx.r3.u32;
++  const uint32_t state_before = REX_LOAD_U32(warper + kWarperState);
++  __imp__sub_8221BE98(ctx, base);
++  if (!ProbeOn() && !WatchdogOn()) {
++    return;
++  }
++  const uint32_t state = REX_LOAD_U32(warper + kWarperState);
++  if (ProbeOn() && state != state_before) {
++    const uint32_t request = REX_LOAD_U32(warper + kWarperRequest);
++    const uint32_t ui_logic = warper - kWarperOffset;
++    MCLA_APP_INFO("MCLA_KI026_WARPER_STATE v=1 from={} to={} request={:08X} type={} "
++                  "flags272={:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X} "
++                  "camera_paused={} queue={}",
++                  state_before, state, request, request ? REX_LOAD_U32(request + 12) : 0,
++                  REX_LOAD_U8(warper + 272), REX_LOAD_U8(warper + 273),
++                  REX_LOAD_U8(warper + 274), REX_LOAD_U8(warper + 275),
++                  REX_LOAD_U8(warper + 276), REX_LOAD_U8(warper + 277),
++                  REX_LOAD_U8(warper + 278), REX_LOAD_U8(warper + 279),
++                  REX_LOAD_U8(warper + 280), REX_LOAD_U8(ui_logic + kCameraPaused),
++                  REX_LOAD_U32(warper + kWarperQueueCount));
++  }
++  if (WatchdogOn()) {
++    Ki026Watchdog(ctx, base, warper, state);
++  }
++}
++
++// --- F10 state block ----------------------------------------------------------
++namespace {
++
++class GuestReader {
++ public:
++  GuestReader(rex::memory::Memory *memory, uint8_t *base) : memory_(memory), base_(base) {}
++
++  bool Readable(uint32_t address, uint32_t size) const {
++    if (!memory_ || !base_ || !address) {
++      return false;
++    }
++    for (uint32_t probe : {address, address + size - 1}) {
++      auto *heap = memory_->LookupHeap(probe);
++      uint32_t protect = 0;
++      if (!heap || !heap->QueryProtect(probe, &protect) ||
++          !(protect & rex::memory::kMemoryProtectRead)) {
++        return false;
++      }
++    }
++    return true;
++  }
++  uint32_t U32(uint32_t address, bool &ok) const {
++    if (!Readable(address, 4)) {
++      ok = false;
++      return 0;
++    }
++    uint8_t *base = base_;
++    return REX_LOAD_U32(address);
++  }
++  uint32_t U8(uint32_t address, bool &ok) const {
++    if (!Readable(address, 1)) {
++      ok = false;
++      return 0;
++    }
++    uint8_t *base = base_;
++    return REX_LOAD_U8(address);
++  }
++  float F32(uint32_t address, bool &ok) const {
++    const uint32_t bits = U32(address, ok);
++    float value = 0.0f;
++    std::memcpy(&value, &bits, sizeof(value));
++    return value;
++  }
++
++ private:
++  rex::memory::Memory *memory_;
++  uint8_t *base_;
++};
++
++std::string Hex(uint32_t value) {
++  char text[16];
++  std::snprintf(text, sizeof(text), "\"%08X\"", value);
++  return text;
++}
++
++}  // namespace
++
++std::string MclaKi026StateJson(rex::memory::Memory *memory, uint8_t *base) {
++  GuestReader read(memory, base);
++  bool ok = true;
++  std::ostringstream out;
++  const uint32_t ui = read.U32(kUiLogicPtr, ok);
++  const uint32_t manager = read.U32(kUiManagerPtr, ok);
++  const uint32_t ui_via_manager = manager ? read.U32(manager + 48, ok) : 0;
++  out << "{\"ui_logic\": " << Hex(ui) << ", \"ui_logic_via_manager\": " << Hex(ui_via_manager)
++      << ", \"pause_override\": " << read.U8(kPauseOverrideByte, ok);
++  if (ui) {
++    const uint32_t w = ui + kWarperOffset;
++    const uint32_t request = read.U32(w + kWarperRequest, ok);
++    out << ", \"gps_jumping\": " << read.U8(ui + kGpsJumping, ok)
++        << ", \"camera_paused\": " << read.U8(ui + kCameraPaused, ok)
++        << ", \"camera_pause_requested\": " << read.U8(ui + kCameraPauseRequested, ok)
++        << ", \"camera_pause_id\": " << Hex(read.U32(ui + kCameraPauseId, ok))
++        << ", \"warper\": {\"state\": " << read.U32(w + kWarperState, ok)
++        << ", \"queue\": " << read.U32(w + kWarperQueueCount, ok)
++        << ", \"request\": " << Hex(request)
++        << ", \"request_type\": " << (request ? read.U32(request + 12, ok) : 0)
++        << ", \"request_flags\": [";
++    for (uint32_t i = 0; i <= 10; ++i) {
++      out << (i ? "," : "") << (request ? read.U8(request + i, ok) : 0);
++    }
++    out << "], \"flags272\": [";
++    for (uint32_t i = 0; i <= 8; ++i) {
++      out << (i ? "," : "") << read.U8(w + kWarperFlagsFirst + i, ok);
++    }
++    out << "], \"prestream_frames\": " << read.U32(w + kWarperPrestreamFrames, ok)
++        << ", \"prestream_timer\": " << read.F32(w + kWarperPrestreamTimer, ok)
++        << ", \"camera\": " << Hex(read.U32(w + kWarperCamera, ok)) << "}";
++  }
++  if (const uint32_t pm = read.U32(kPauseManagerPtr, ok)) {
++    out << ", \"pause_manager\": {\"paused\": " << read.U8(pm + 4, ok)
++        << ", \"paused_locally\": " << read.U8(pm + 6, ok)
++        << ", \"fast_forward\": " << read.U8(pm + 8, ok)
++        << ", \"frame_advance\": " << read.U8(pm + 10, ok)
++        << ", \"queue_count\": " << read.U32(pm + 68, ok) << ", \"queue\": [";
++    for (uint32_t i = 0; i < 10; ++i) {
++      out << (i ? "," : "") << read.U32(pm + 20 + 4 * i, ok);
++    }
++    out << "]}";
++  }
++  out << ", \"timer_scale\": " << read.F32(kMainTimer + 84, ok)
++      << ", \"timer_step\": " << read.F32(kMainTimer + 92, ok)
++      << ", \"game_time_scale\": " << read.F32(kGameTimeScale, ok);
++  if (const uint32_t cutscene = read.U32(kCutscenePtr, ok)) {
++    const uint32_t inner = read.U32(cutscene + 8, ok);
++    out << ", \"cutscene\": {\"state12\": " << read.U32(cutscene + 12, ok)
++        << ", \"flag20\": " << read.U8(cutscene + 20, ok)
++        << ", \"time\": " << (inner ? read.F32(inner + 120, ok) : -1.0f) << "}";
++  }
++  if (const uint32_t players = read.U32(kPlayerManagerPtr, ok)) {
++    const uint32_t racer = read.U32(players + 8, ok);
++    if (racer) {
++      const uint32_t camera = read.U32(racer + kRacerCamera, ok);
++      out << ", \"racer\": {\"ptr\": " << Hex(racer)
++          << ", \"state656\": " << read.U32(racer + kRacerState, ok)
++          << ", \"camera_input_off908\": " << read.U8(racer + kRacerCameraInputOff, ok)
++          << ", \"pad904\": " << Hex(read.U32(racer + 904, ok)) << "}";
++      if (camera) {
++        const uint32_t view = read.U32(camera + 16, ok);
++        const uint32_t current = view ? read.U32(view + 48, ok) : 0;
++        int slot = -1;  // which mcPlayerCamera member is on screen
++        for (uint32_t offset = 44; offset <= 96; offset += 4) {
++          if (current && read.U32(camera + offset, ok) == current) {
++            slot = static_cast<int>(offset);
++            break;
++          }
++        }
++        out << ", \"player_camera\": {\"index80\": " << read.U32(camera + 80, ok)
++            << ", \"spin100\": " << read.U8(camera + 100, ok)
++            << ", \"view_current\": " << Hex(current)
++            << ", \"view_current_vtable\": " << Hex(current ? read.U32(current, ok) : 0)
++            << ", \"view_current_slot\": " << slot
++            << ", \"view_transition\": " << Hex(view ? read.U32(view + 56, ok) : 0) << "}";
++      }
++    }
++  }
++  out << ", \"complete\": " << (ok ? "true" : "false") << "}";
++  return out.str();
++}
