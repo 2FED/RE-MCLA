@@ -1,0 +1,450 @@
+diff --git a/third_party/rexglue-sdk/include/rex/graphics/d3d12/command_processor.h b/third_party/rexglue-sdk/include/rex/graphics/d3d12/command_processor.h
+index 8ee0d8f..3a479a1 100644
+--- a/third_party/rexglue-sdk/include/rex/graphics/d3d12/command_processor.h
++++ b/third_party/rexglue-sdk/include/rex/graphics/d3d12/command_processor.h
+@@ -234,6 +234,10 @@ class D3D12CommandProcessor : public CommandProcessor {
+  private:
+   static constexpr uint32_t kQueueFrames = 3;
+ 
++  // With d3d12_async_pipeline_wait on, waits (bounded) for a pipeline that is
++  // still being created. Returns true if the pipeline is now usable.
++  bool WaitForPendingPipeline(void* pipeline_handle);
++
+   void EmitRenderAuditSummary(const char* phase);
+ 
+   enum RootParameter : UINT {
+@@ -605,6 +609,8 @@ class D3D12CommandProcessor : public CommandProcessor {
+   std::unique_ptr<D3D12PrimitiveProcessor> primitive_processor_;
+ 
+   std::unique_ptr<PipelineCache> pipeline_cache_;
++  // d3d12_async_pipeline_wait episode bookkeeping (command processor thread).
++  PendingWaitEpisode async_pipeline_wait_episode_;
+ 
+   std::unique_ptr<D3D12TextureCache> texture_cache_;
+ 
+diff --git a/third_party/rexglue-sdk/include/rex/graphics/d3d12/pipeline_cache.h b/third_party/rexglue-sdk/include/rex/graphics/d3d12/pipeline_cache.h
+index c0a631e..96c8cf8 100644
+--- a/third_party/rexglue-sdk/include/rex/graphics/d3d12/pipeline_cache.h
++++ b/third_party/rexglue-sdk/include/rex/graphics/d3d12/pipeline_cache.h
+@@ -33,6 +33,7 @@
+ #include <rex/graphics/primitive_processor.h>
+ #include <rex/graphics/register_file.h>
+ #include <rex/graphics/registers.h>
++#include <rex/graphics/util/pending_pipeline_wait.h>
+ #include <rex/graphics/xenos.h>
+ #include <rex/hash.h>
+ #include <rex/platform.h>
+@@ -97,6 +98,12 @@ class PipelineCache {
+   ID3D12PipelineState* GetD3D12PipelineByHandle(void* handle) const {
+     return reinterpret_cast<const Pipeline*>(handle)->state.load(std::memory_order_acquire);
+   }
++  // Waits, bounded by timeout_ms, for a pipeline that is still being created
++  // asynchronously, creating queued pipelines on the calling (command
++  // processor) thread meanwhile. kCompleted means creation has finished; the
++  // pipeline state may still be nullptr if creation failed.
++  PendingWaitResult AwaitPipeline(void* handle, uint64_t timeout_ms, uint64_t* elapsed_ms_out);
++
+   enum class PipelineAuditStatus { kPending, kReady, kFailed };
+   PipelineAuditStatus GetPipelineAuditStatus(void* handle) const {
+     const auto* pipeline = reinterpret_cast<const Pipeline*>(handle);
+@@ -422,6 +429,9 @@ class PipelineCache {
+   // Pipeline creation threads.
+   void CreationThread(size_t thread_index);
+   void CreateQueuedPipelinesOnProcessorThread();
++  // Creates the highest-priority queued pipeline on the calling thread.
++  // Returns false if the queue was empty.
++  bool CreateOneQueuedPipelineOnProcessorThread();
+   std::mutex creation_request_lock_;
+   std::condition_variable creation_request_cond_;
+   // Protected with creation_request_lock_, notify_one creation_request_cond_
+diff --git a/third_party/rexglue-sdk/include/rex/graphics/util/pending_pipeline_wait.h b/third_party/rexglue-sdk/include/rex/graphics/util/pending_pipeline_wait.h
+new file mode 100644
+index 0000000..a5db8d6
+--- /dev/null
++++ b/third_party/rexglue-sdk/include/rex/graphics/util/pending_pipeline_wait.h
+@@ -0,0 +1,112 @@
++#pragma once
++
++#include <cstdint>
++
++namespace rex::graphics {
++
++// Bounded wait for an asynchronously created pipeline, and the per-episode
++// bookkeeping of the d3d12_async_pipeline_wait mode. Pure logic: the caller
++// supplies the completion check, a "help" step (create one queued pipeline on
++// the calling thread; false when nothing was queued), an idle step and a
++// monotonic millisecond clock, so this is unit-tested without a GPU.
++
++enum class PendingWaitResult { kCompleted, kTimedOut };
++
++template <typename IsComplete, typename HelpOne, typename Idle, typename NowMs>
++PendingWaitResult AwaitPending(IsComplete&& is_complete, HelpOne&& help_one, Idle&& idle,
++                               NowMs&& now_ms, uint64_t timeout_ms, uint64_t* elapsed_ms_out) {
++  const uint64_t start = now_ms();
++  PendingWaitResult result = PendingWaitResult::kCompleted;
++  while (!is_complete()) {
++    if (now_ms() - start >= timeout_ms) {
++      result = PendingWaitResult::kTimedOut;
++      break;
++    }
++    if (!help_one()) {
++      idle();
++    }
++  }
++  if (elapsed_ms_out) {
++    *elapsed_ms_out = now_ms() - start;
++  }
++  return result;
++}
++
++// One episode is the span during which the wait mode is observed on. Waits
++// are bounded per draw (kPerWaitTimeoutMs) and per episode (kEpisodeBudgetMs);
++// after the budget is spent the remaining draws of the episode are skipped as
++// in the default asynchronous mode.
++class PendingWaitEpisode {
++ public:
++  static constexpr uint64_t kPerWaitTimeoutMs = 2000;
++  static constexpr uint64_t kEpisodeBudgetMs = 8000;
++  static constexpr uint64_t kSlowWaitMs = 500;
++
++  struct Stats {
++    uint64_t waits = 0;
++    uint64_t timeouts = 0;
++    uint64_t failed = 0;
++    uint64_t budget_skips = 0;
++    uint64_t total_ms = 0;
++    uint64_t max_ms = 0;
++  };
++
++  // Records the current mode. Returns true when an episode with at least one
++  // wait or skip has just ended (the caller logs Stats() once, then the next
++  // episode starts from zero on the next enabled observation).
++  bool Observe(bool enabled) {
++    if (enabled == enabled_) {
++      return false;
++    }
++    enabled_ = enabled;
++    if (enabled) {
++      stats_ = {};
++      slow_logged_ = false;
++      return false;
++    }
++    return stats_.waits != 0 || stats_.budget_skips != 0;
++  }
++
++  bool enabled() const { return enabled_; }
++
++  // Timeout for the next wait, 0 when the episode budget is spent (the draw
++  // is skipped and counted as a budget skip).
++  uint64_t NextTimeoutMs() {
++    if (stats_.total_ms >= kEpisodeBudgetMs) {
++      ++stats_.budget_skips;
++      return 0;
++    }
++    uint64_t left = kEpisodeBudgetMs - stats_.total_ms;
++    return left < kPerWaitTimeoutMs ? left : kPerWaitTimeoutMs;
++  }
++
++  // Records one finished wait. Returns true when this wait is the first slow
++  // one (>= kSlowWaitMs) or the first timeout of the episode, to be logged.
++  bool Record(uint64_t elapsed_ms, PendingWaitResult result, bool created) {
++    ++stats_.waits;
++    stats_.total_ms += elapsed_ms;
++    if (elapsed_ms > stats_.max_ms) {
++      stats_.max_ms = elapsed_ms;
++    }
++    bool timed_out = result == PendingWaitResult::kTimedOut;
++    if (timed_out) {
++      ++stats_.timeouts;
++    } else if (!created) {
++      ++stats_.failed;
++    }
++    if (!slow_logged_ && (timed_out || elapsed_ms >= kSlowWaitMs)) {
++      slow_logged_ = true;
++      return true;
++    }
++    return false;
++  }
++
++  const Stats& stats() const { return stats_; }
++
++ private:
++  bool enabled_ = false;
++  bool slow_logged_ = false;
++  Stats stats_;
++};
++
++}  // namespace rex::graphics
+diff --git a/third_party/rexglue-sdk/src/graphics/d3d12/command_processor.cpp b/third_party/rexglue-sdk/src/graphics/d3d12/command_processor.cpp
+index 320c26b..463589c 100644
+--- a/third_party/rexglue-sdk/src/graphics/d3d12/command_processor.cpp
++++ b/third_party/rexglue-sdk/src/graphics/d3d12/command_processor.cpp
+@@ -51,6 +51,12 @@ REXCVAR_DEFINE_BOOL(d3d12_readback_resolve, false, "GPU/D3D12",
+                     "Read render-to-texture results on the CPU")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
++REXCVAR_DEFINE_BOOL(d3d12_async_pipeline_wait, false, "GPU/D3D12",
++                    "With async_shader_compilation, wait (bounded) for a pipeline that is "
++                    "still being created instead of skipping its draw. Meant to be turned "
++                    "on by a title only around CPU-read captures such as photo modes")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ REXCVAR_DEFINE_BOOL(d3d12_submit_on_primary_buffer_end, true, "GPU/D3D12",
+                     "Submit command list when PM4 primary buffer ends")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+@@ -2437,6 +2443,27 @@ namespace {
+ uint32_t g_mcla_frame_draws = 0;
+ }  // namespace
+ 
++bool D3D12CommandProcessor::WaitForPendingPipeline(void* pipeline_handle) {
++  if (!async_pipeline_wait_episode_.enabled() ||
++      pipeline_cache_->GetPipelineAuditStatus(pipeline_handle) !=
++          PipelineCache::PipelineAuditStatus::kPending) {
++    return false;
++  }
++  uint64_t timeout_ms = async_pipeline_wait_episode_.NextTimeoutMs();
++  if (!timeout_ms) {
++    return false;
++  }
++  uint64_t elapsed_ms = 0;
++  PendingWaitResult result =
++      pipeline_cache_->AwaitPipeline(pipeline_handle, timeout_ms, &elapsed_ms);
++  bool created = pipeline_cache_->GetD3D12PipelineByHandle(pipeline_handle) != nullptr;
++  if (async_pipeline_wait_episode_.Record(elapsed_ms, result, created)) {
++    REXGPU_WARN("D3D12 async pipeline wait: a pipeline took {} ms{}", elapsed_ms,
++                result == PendingWaitResult::kTimedOut ? " (timed out, draw skipped)" : "");
++  }
++  return created;
++}
++
+ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint32_t index_count,
+                                       IndexBufferInfo* index_buffer_info,
+                                       bool major_mode_explicit) {
+@@ -2568,8 +2595,17 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint3
+           bound_depth_and_color_render_target_formats, &pipeline_handle, &root_signature)) {
+     return false;
+   }
++  if (async_pipeline_wait_episode_.Observe(REXCVAR_GET(d3d12_async_pipeline_wait))) {
++    const PendingWaitEpisode::Stats& stats = async_pipeline_wait_episode_.stats();
++    REXGPU_INFO(
++        "D3D12 async pipeline wait: episode ended, {} waits ({} ms total, {} ms max), "
++        "{} timed out, {} failed, {} skipped over budget",
++        stats.waits, stats.total_ms, stats.max_ms, stats.timeouts, stats.failed,
++        stats.budget_skips);
++  }
+   if (REXCVAR_GET(async_shader_compilation) &&
+-      pipeline_cache_->GetD3D12PipelineByHandle(pipeline_handle) == nullptr) {
++      pipeline_cache_->GetD3D12PipelineByHandle(pipeline_handle) == nullptr &&
++      !WaitForPendingPipeline(pipeline_handle)) {
+     if (render_audit_enabled_) {
+       PipelineCache::PipelineAuditStatus pipeline_status =
+           pipeline_cache_->GetPipelineAuditStatus(pipeline_handle);
+diff --git a/third_party/rexglue-sdk/src/graphics/d3d12/pipeline_cache.cpp b/third_party/rexglue-sdk/src/graphics/d3d12/pipeline_cache.cpp
+index a36dfbc..191c7ba 100644
+--- a/third_party/rexglue-sdk/src/graphics/d3d12/pipeline_cache.cpp
++++ b/third_party/rexglue-sdk/src/graphics/d3d12/pipeline_cache.cpp
+@@ -13,12 +13,14 @@
+ 
+ #include <algorithm>
+ #include <atomic>
++#include <chrono>
+ #include <cinttypes>
+ #include <cmath>
+ #include <cstring>
+ #include <deque>
+ #include <mutex>
+ #include <set>
++#include <thread>
+ #include <utility>
+ #include <vector>
+ 
+@@ -818,6 +820,24 @@ void PipelineCache::EndSubmission() {
+   }
+ }
+ 
++PendingWaitResult PipelineCache::AwaitPipeline(void* handle, uint64_t timeout_ms,
++                                               uint64_t* elapsed_ms_out) {
++  auto* pipeline = reinterpret_cast<Pipeline*>(handle);
++  auto now_ms = [] {
++    return uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(
++                        std::chrono::steady_clock::now().time_since_epoch())
++                        .count());
++  };
++  return AwaitPending(
++      [pipeline] { return pipeline->creation_complete.load(std::memory_order_acquire); },
++      [this] {
++        // Synchronous creation (no threads) always completes in
++        // ConfigurePipeline, so the queue only exists with threads.
++        return !creation_threads_.empty() && CreateOneQueuedPipelineOnProcessorThread();
++      },
++      [] { std::this_thread::yield(); }, now_ms, timeout_ms, elapsed_ms_out);
++}
++
+ bool PipelineCache::IsCreatingPipelines() {
+   if (creation_threads_.empty()) {
+     return false;
+@@ -3355,26 +3375,29 @@ void PipelineCache::CreationThread(size_t thread_index) {
+ 
+ void PipelineCache::CreateQueuedPipelinesOnProcessorThread() {
+   assert_false(creation_threads_.empty());
+-  while (true) {
+-    Pipeline* pipeline_to_create;
+-    {
+-      std::lock_guard<std::mutex> lock(creation_request_lock_);
+-      if (creation_queue_.empty()) {
+-        break;
+-      }
+-      pipeline_to_create = creation_queue_.top();
+-      creation_queue_.pop();
+-    }
+-    PipelineRuntimeDescription runtime_description;
+-    if (!PrepareRuntimeDescriptionForQueuedCreation(pipeline_to_create, runtime_description)) {
+-      pipeline_to_create->state.store(nullptr, std::memory_order_release);
+-      pipeline_to_create->creation_complete.store(true, std::memory_order_release);
+-      continue;
++  while (CreateOneQueuedPipelineOnProcessorThread()) {
++  }
++}
++
++bool PipelineCache::CreateOneQueuedPipelineOnProcessorThread() {
++  Pipeline* pipeline_to_create;
++  {
++    std::lock_guard<std::mutex> lock(creation_request_lock_);
++    if (creation_queue_.empty()) {
++      return false;
+     }
++    pipeline_to_create = creation_queue_.top();
++    creation_queue_.pop();
++  }
++  PipelineRuntimeDescription runtime_description;
++  if (!PrepareRuntimeDescriptionForQueuedCreation(pipeline_to_create, runtime_description)) {
++    pipeline_to_create->state.store(nullptr, std::memory_order_release);
++  } else {
+     pipeline_to_create->state.store(CreateD3D12Pipeline(runtime_description),
+                                     std::memory_order_release);
+-    pipeline_to_create->creation_complete.store(true, std::memory_order_release);
+   }
++  pipeline_to_create->creation_complete.store(true, std::memory_order_release);
++  return true;
+ }
+ 
+ }  // namespace rex::graphics::d3d12
+diff --git a/third_party/rexglue-sdk/tests/unit/CMakeLists.txt b/third_party/rexglue-sdk/tests/unit/CMakeLists.txt
+index 34f3ddc..31c4aa0 100644
+--- a/third_party/rexglue-sdk/tests/unit/CMakeLists.txt
++++ b/third_party/rexglue-sdk/tests/unit/CMakeLists.txt
+@@ -25,6 +25,7 @@ add_executable(unit_tests
+     core/graphics_performance_diagnostic_test.cpp
+     graphics/primitive_processor_cache_test.cpp
+     graphics/descriptor_binding_snapshot_test.cpp
++    graphics/pending_pipeline_wait_test.cpp
+     core/sha256_test.cpp
+     core/stream_test.cpp
+     core/byte_order_test.cpp
+diff --git a/third_party/rexglue-sdk/tests/unit/graphics/pending_pipeline_wait_test.cpp b/third_party/rexglue-sdk/tests/unit/graphics/pending_pipeline_wait_test.cpp
+new file mode 100644
+index 0000000..b906872
+--- /dev/null
++++ b/third_party/rexglue-sdk/tests/unit/graphics/pending_pipeline_wait_test.cpp
+@@ -0,0 +1,101 @@
++#include <catch2/catch_test_macros.hpp>
++#include <rex/graphics/util/pending_pipeline_wait.h>
++
++namespace rex::graphics::test {
++
++TEST_CASE("AwaitPending returns at once for a completed pipeline", "[graphics][pipeline-wait]") {
++  uint64_t clock = 100, elapsed = 99;
++  int helps = 0, idles = 0;
++  auto result = AwaitPending([] { return true; }, [&] { return ++helps, false; },
++                             [&] { ++idles; }, [&] { return clock; }, 2000, &elapsed);
++  CHECK(result == PendingWaitResult::kCompleted);
++  CHECK(elapsed == 0);
++  CHECK(helps == 0);
++  CHECK(idles == 0);
++}
++
++TEST_CASE("AwaitPending helps with queued work, then idles until completion",
++          "[graphics][pipeline-wait]") {
++  uint64_t clock = 0, elapsed = 0;
++  int queued = 3, idles = 0;
++  bool complete = false;
++  auto result = AwaitPending(
++      [&] { return complete; },
++      [&] {
++        if (!queued) return false;
++        --queued;
++        clock += 10;
++        return true;
++      },
++      [&] {
++        // A worker thread finishes the target after two idle steps.
++        if (++idles == 2) complete = true;
++        clock += 1;
++      },
++      [&] { return clock; }, 2000, &elapsed);
++  CHECK(result == PendingWaitResult::kCompleted);
++  CHECK(queued == 0);
++  CHECK(idles == 2);
++  CHECK(elapsed == 32);
++}
++
++TEST_CASE("AwaitPending times out", "[graphics][pipeline-wait]") {
++  uint64_t clock = 0, elapsed = 0;
++  auto result = AwaitPending([] { return false; }, [] { return false; }, [&] { clock += 7; },
++                             [&] { return clock; }, 100, &elapsed);
++  CHECK(result == PendingWaitResult::kTimedOut);
++  CHECK(elapsed >= 100);
++  CHECK(elapsed < 107);
++}
++
++TEST_CASE("Wait episodes start on enable and report only when something happened",
++          "[graphics][pipeline-wait]") {
++  PendingWaitEpisode episode;
++  CHECK_FALSE(episode.enabled());
++  CHECK_FALSE(episode.Observe(false));
++  CHECK_FALSE(episode.Observe(true));
++  CHECK(episode.enabled());
++  CHECK_FALSE(episode.Observe(true));
++  // Nothing waited: no report at the end.
++  CHECK_FALSE(episode.Observe(false));
++
++  CHECK_FALSE(episode.Observe(true));
++  CHECK(episode.NextTimeoutMs() == PendingWaitEpisode::kPerWaitTimeoutMs);
++  CHECK_FALSE(episode.Record(40, PendingWaitResult::kCompleted, true));
++  CHECK(episode.Record(600, PendingWaitResult::kCompleted, true));  // first slow wait
++  CHECK_FALSE(episode.Record(700, PendingWaitResult::kCompleted, true));
++  CHECK_FALSE(episode.Record(2000, PendingWaitResult::kTimedOut, false));
++  CHECK_FALSE(episode.Record(5, PendingWaitResult::kCompleted, false));
++  CHECK(episode.Observe(false));
++  const auto& stats = episode.stats();
++  CHECK(stats.waits == 5);
++  CHECK(stats.total_ms == 3345);
++  CHECK(stats.max_ms == 2000);
++  CHECK(stats.timeouts == 1);
++  CHECK(stats.failed == 1);
++  CHECK(stats.budget_skips == 0);
++
++  // A new episode starts from zero and may log a slow wait again.
++  CHECK_FALSE(episode.Observe(true));
++  CHECK(episode.stats().waits == 0);
++  CHECK(episode.Record(2000, PendingWaitResult::kTimedOut, false));
++}
++
++TEST_CASE("Wait episodes are bounded by a total budget", "[graphics][pipeline-wait]") {
++  PendingWaitEpisode episode;
++  episode.Observe(true);
++  for (int i = 0; i < 3; ++i) {
++    CHECK(episode.NextTimeoutMs() == PendingWaitEpisode::kPerWaitTimeoutMs);
++    episode.Record(PendingWaitEpisode::kPerWaitTimeoutMs, PendingWaitResult::kTimedOut, false);
++  }
++  CHECK(episode.NextTimeoutMs() ==
++        PendingWaitEpisode::kEpisodeBudgetMs - 3 * PendingWaitEpisode::kPerWaitTimeoutMs);
++  episode.Record(PendingWaitEpisode::kEpisodeBudgetMs - 3 * PendingWaitEpisode::kPerWaitTimeoutMs,
++                 PendingWaitResult::kTimedOut, false);
++  CHECK(episode.NextTimeoutMs() == 0);
++  CHECK(episode.NextTimeoutMs() == 0);
++  CHECK(episode.stats().budget_skips == 2);
++  CHECK(episode.Observe(false));
++}
++
++}  // namespace rex::graphics::test

@@ -65,6 +65,7 @@
 #include "mcla_guest_sampler.h"
 #include "mcla_ki026_probe.h"
 #include "mcla_menu_state.h"
+#include "mcla_photo_capture.h"
 // End M9 host hooks.
 #include "mcla_logging.h"
 #include "mcla_managed_config_policy.h"
@@ -3698,6 +3699,7 @@ bool MclaApp::OnWindowCloseRequested() {
 void MclaApp::OnShutdown() {
   mcla::guest_sampler::Stop();                 // KI-035
   mcla::menu_state::ShutdownMenuStateCap();    // M9-007
+  mcla::photo_capture::ShutdownPhotoCapture();  // KI-037
   ShutdownDiagnosticTriggers();
   if (cursor_autohide_) {
     mcla::cursor::Shutdown(*cursor_autohide_);
