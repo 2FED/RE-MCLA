@@ -1,0 +1,101 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index adfafff..f471878 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -184,6 +184,10 @@ if(NOT MCLA_TIMER_CONFIG_PROBE)
+     endif()
+ endif()
+ 
++# Unlocked-mode menu cap from the game's own pause state (M9-007). It
++# overrides the game-state update sub_822D29E8.
++list(APPEND MCLA_SOURCES src/mcla_menu_state.cpp)
++
+ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" MCLA_VERSION)
+ string(STRIP "${MCLA_VERSION}" MCLA_VERSION)
+ 
+diff --git a/src/mcla_menu_state.cpp b/src/mcla_menu_state.cpp
+new file mode 100644
+index 0000000..b8f15fe
+--- /dev/null
++++ b/src/mcla_menu_state.cpp
+@@ -0,0 +1,80 @@
++// Unlocked-mode menu cap from the game's own pause state (M9-007).
++//
++// The unlocked mode (mcla_guest_vblank_hz > 0) keeps menus at the stock rate
++// with a draw-count heuristic in the GPU plugin (mcla_ui_cap_draws_low). Menus
++// drawn over the world (pause, map/Arcade, race setup) keep a high draw count
++// and stay uncapped. The game itself pauses its simulation for those screens:
++//
++//   game-state object  G = *(be32*)0x828CCEA0   (allocated by sub_822D29A0,
++//                        constructed by sub_822D2818, base sub_8238A988)
++//   G+4  simulation paused  (requests 1 PauseSimulation / 7 PauseOnly set it,
++//                            2 ResumeSimulation / 8 ResumeOnly clear it)
++//   G+6  paused locally     (requests 3 / 4; online sessions)
++//   G+10 one-frame step     (request 6 FrameAdvance; cleared every update)
++//
++// Requests are queued by vtable slot 2 (sub_822D26D0) and applied by slot 3,
++// sub_822D29E8, which the per-frame game update sub_822C1FA8 calls first.
++// UILogic_PauseGame (sub_82215A60) requests 1 (or 3 when online) and is called
++// by the pause, map/nav, Arcade, prompt and tutorial screens. The script
++// binding Game_IsPaused (sub_822BF228) returns G+4 && !G+10.
++//
++// After each applied update this hook forces the existing UI cap while the
++// game is paused, by raising mcla_ui_cap_draws_low (hot-reload) so the next
++// presented frame counts as a UI frame. On resume the configured threshold is
++// restored and the unchanged draw-count hysteresis (8 heavy frames) releases
++// the cap, so the heuristic stays the fallback for everything else.
++
++#include "mcla_init.h"
++#include "mcla_logging.h"
++
++#include <rex/cvar.h>
++
++#include <string>
++
++// The two GPU cvars live in the GPU plugin, so they are read and written
++// through the registry (only on pause transitions).
++REXCVAR_DEFINE_BOOL(mcla_ui_cap_guest_pause, true, "MCLA",
++    "Unlocked mode: keep the stock vblank rate while the game's own "
++    "simulation pause is set (pause, map, Arcade and race setup menus)")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++
++namespace {
++
++constexpr uint32_t kGameStatePointer = 0x828CCEA0u;
++constexpr int32_t kForceUiFrame = 100000;  // upper bound of the cvar range
++
++bool forcing = false;
++int32_t saved_low = 0;
++int logged = 0;
++
++void SetLow(int32_t value) {
++  rex::cvar::SetFlagByName("mcla_ui_cap_draws_low", std::to_string(value));
++}
++
++}  // namespace
++
++// Strong override of the generated weak game-state update (vtable slot 3).
++REX_EXTERN(sub_822D29E8) {
++  const uint32_t state = ctx.r3.u32;
++  __imp__sub_822D29E8(ctx, base);
++  static const bool wanted = REXCVAR_GET(mcla_ui_cap_guest_pause);
++  if (!wanted || state != REX_LOAD_U32(kGameStatePointer)) return;
++  const bool paused = REX_LOAD_U8(state + 4) != 0 || REX_LOAD_U8(state + 6) != 0;
++  if (paused == forcing) return;
++  if (paused) {
++    // Stock mode, or UI cap disabled by the user: leave everything as is.
++    if (rex::cvar::Query<int32_t>("mcla_guest_vblank_hz") <= 0) return;
++    saved_low = rex::cvar::Query<int32_t>("mcla_ui_cap_draws_low");
++    if (saved_low <= 0) return;
++    SetLow(kForceUiFrame);
++  } else {
++    SetLow(saved_low);
++  }
++  forcing = paused;
++  if (logged < 200) {
++    ++logged;
++    MCLA_APP_INFO("MCLA menu state: game {} (sim {} local {}), UI cap {}",
++                  paused ? "paused" : "running", REX_LOAD_U8(state + 4),
++                  REX_LOAD_U8(state + 6), paused ? "forced" : "draw-count");
++  }
++}
