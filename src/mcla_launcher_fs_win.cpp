@@ -1,13 +1,20 @@
 #include "mcla_launcher_fs_win.h"
 #include "mcla_launcher_profile_policy.h"
+#include "mcla_wine_path_policy.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <bcrypt.h>
+#include <winioctl.h>
+
+#include "mcla_host_platform_win.h"
 
 #include <algorithm>
 #include <array>
+#include <cstring>
+#include <mutex>
+#include <optional>
 #include <utility>
 
 namespace mcla::launcher::fs {
@@ -76,11 +83,69 @@ std::expected<BY_HANDLE_FILE_INFORMATION, std::wstring> RegularFileInfo(HANDLE h
   BY_HANDLE_FILE_INFORMATION info{};
   if (GetFileType(handle) != FILE_TYPE_DISK || !GetFileInformationByHandle(handle, &info))
     return std::unexpected(Error(L"cannot inspect regular file"));
-  if ((info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_DEVICE)) || info.nNumberOfLinks != 1)
+  // Never relaxed under Wine: only ancestors may be accepted symlinks.
+  if (!platform::RegularFileAttributes(info.dwFileAttributes, info.nNumberOfLinks))
     return std::unexpected(L"file must be regular, non-reparse and single-link");
   const auto size = (static_cast<uint64_t>(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
   if (size > maximum) return std::unexpected(L"file exceeds byte bound");
   return info;
+}
+
+// KI-049: reparse tag of an object opened with FILE_FLAG_OPEN_REPARSE_POINT.
+// Wine may report 0 through FileAttributeTagInfo; FSCTL_GET_REPARSE_POINT is
+// the fallback. Absence of a tag is a fact for the policy, never an error.
+std::optional<uint32_t> ReparseTag(HANDLE handle) {
+  FILE_ATTRIBUTE_TAG_INFO tag_info{};
+  if (GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &tag_info, sizeof(tag_info)) &&
+      tag_info.ReparseTag != 0)
+    return tag_info.ReparseTag;
+  std::vector<uint8_t> buffer(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+  DWORD returned = 0;
+  if (DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, nullptr, 0, buffer.data(),
+                      static_cast<DWORD>(buffer.size()), &returned, nullptr) &&
+      returned >= sizeof(uint32_t)) {
+    uint32_t tag = 0;
+    std::memcpy(&tag, buffer.data(), sizeof(tag));
+    if (tag != 0) return tag;
+  }
+  return std::nullopt;
+}
+
+bool SameDriveLetter(std::wstring_view a, std::wstring_view b) {
+  return a.size() >= 2 && b.size() >= 2 && a[1] == L':' && b[1] == L':' &&
+         OrdinalEqual(a.substr(0, 1), b.substr(0, 1));
+}
+
+constexpr size_t kMaximumRecordedAcceptances = 256;
+std::mutex &AcceptanceMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+std::vector<std::wstring> &Acceptances() {
+  static std::vector<std::wstring> accepted;
+  return accepted;
+}
+// Once per path: every acceptance is visible in the debugger/Proton log and,
+// through WineAcceptedAncestors(), in the launcher status line.
+void RecordWineAcceptance(const std::wstring &path, platform::AncestorVerdict verdict,
+                          const platform::AncestorFacts &facts) {
+  std::lock_guard lock(AcceptanceMutex());
+  auto &accepted = Acceptances();
+  for (const auto &existing : accepted) {
+    if (OrdinalEqual(existing, path)) return;
+  }
+  if (accepted.size() >= kMaximumRecordedAcceptances) return;
+  accepted.push_back(path);
+  constexpr wchar_t hex[] = L"0123456789ABCDEF";
+  std::wstring tag = L"none";
+  if (facts.tag_known) {
+    tag = L"0x";
+    for (int shift = 28; shift >= 0; shift -= 4) tag += hex[(facts.tag >> shift) & 15];
+  }
+  const std::wstring line = L"MCLA launcher: Proton: accepted symlink ancestor " + path +
+      (verdict == platform::AncestorVerdict::kWineLinkSameDrive ? L" (same drive" : L" (Unix link tag") +
+      L", tag " + tag + L")\n";
+  OutputDebugStringW(line.c_str());
 }
 
 bool SimpleName(std::wstring_view name) {
@@ -126,7 +191,10 @@ std::expected<DirectoryGuard, std::wstring> OpenDirectory(std::wstring_view inpu
   // a filesystem object: NTFS directories may be configured case-sensitive.
   std::wstring path(input);
   std::replace(path.begin(), path.end(), L'/', L'\\');
-  if (GetDriveTypeW(path.substr(0, 3).c_str()) != DRIVE_FIXED)
+  // KI-049: under Wine/Proton reparse ancestors (Z:\ itself, mount points,
+  // Unix symlinks) may be accepted; never on real Windows.
+  const bool under_wine = platform::RunningUnderWine();
+  if (!platform::DriveTypeAllowed(under_wine, GetDriveTypeW(path.substr(0, 3).c_str())))
     return std::unexpected(L"directory must be on a local fixed drive");
   auto state = std::make_unique<DirectoryGuard::State>();
   const auto hold_chain = [&](const std::wstring &chain) -> std::expected<void, std::wstring> {
@@ -140,14 +208,51 @@ std::expected<DirectoryGuard, std::wstring> OpenDirectory(std::wstring_view inpu
     BY_HANDLE_FILE_INFORMATION info{};
     if (GetFileType(handle.value) != FILE_TYPE_DISK || !GetFileInformationByHandle(handle.value, &info))
       return std::unexpected(Error(L"cannot inspect directory ancestor"));
-    if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
-        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+    if (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+      platform::AncestorFacts facts{under_wine, info.dwFileAttributes};
+      Handle followed;
+      BY_HANDLE_FILE_INFORMATION target{};
+      if (under_wine) {
+        if (const auto tag = ReparseTag(handle.value)) {
+          facts.tag_known = true;
+          facts.tag = *tag;
+        }
+        followed = Handle(CreateFileW(NativePath(prefix).c_str(), FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+        if (followed && GetFileType(followed.value) == FILE_TYPE_DISK &&
+            GetFileInformationByHandle(followed.value, &target)) {
+          // A Wine mount point may still report the reparse bit when followed;
+          // only directory-ness of the followed object matters here.
+          facts.target_is_directory = (target.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+          const auto final_path = FinalPath(followed.value);
+          facts.target_same_drive = final_path && SameDriveLetter(*final_path, prefix);
+        }
+      }
+      const auto verdict = platform::DecideAncestor(facts);
+      if (!platform::Accepted(verdict)) {
+        return std::unexpected(under_wine
+            ? L"directory ancestor is a Wine reparse point whose target is not an accepted directory"
+            : L"directory ancestor is not a normal non-reparse directory");
+      }
+      RecordWineAcceptance(prefix, verdict, facts);
+      // Keep the link handle and continue with its directory target, whose
+      // identity is compared below and by CompareDisjoint. The link handle
+      // does not stop the link itself being renamed; the guard path is the
+      // canonical target chain, which is held by the re-walk below.
+      state->ancestors.push_back({info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow});
+      state->handles.push_back(std::move(handle));
+      handle = std::move(followed);
+      info = target;
+    } else if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
       return std::unexpected(L"directory ancestor is not a normal non-reparse directory");
+    }
     state->ancestors.push_back({info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow});
     if (length == chain.size()) {
       auto canonical = FinalPath(handle.value);
       if (!canonical) return std::unexpected(canonical.error());
-      if (!NormalizeRoot(Utf16(*canonical)) || GetDriveTypeW(canonical->substr(0, 3).c_str()) != DRIVE_FIXED)
+      if (!NormalizeRoot(Utf16(*canonical)) ||
+          !platform::DriveTypeAllowed(under_wine, GetDriveTypeW(canonical->substr(0, 3).c_str())))
         return std::unexpected(L"canonical directory violates local-drive path policy");
       state->canonical = std::move(*canonical);
     }
@@ -171,6 +276,11 @@ std::expected<DirectoryGuard, std::wstring> OpenDirectory(std::wstring_view inpu
       return std::unexpected(L"canonical directory identity changed during validation");
   }
   return DirectoryGuard(std::move(state));
+}
+
+std::vector<std::wstring> WineAcceptedAncestors() {
+  std::lock_guard lock(AcceptanceMutex());
+  return Acceptances();
 }
 
 std::expected<void, std::wstring> CompareDisjoint(const DirectoryGuard &a, const DirectoryGuard &b) {

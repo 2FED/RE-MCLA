@@ -231,6 +231,17 @@ OwnerAdmission ReadOwnerAdmission(const fs::DirectoryGuard &store,std::string_vi
   }
   return {std::find(builds->begin(),builds->end(),fingerprint)!=builds->end(),{}};
 }
+// KI-049: under Proton the filesystem guard may accept symlink/mount-point
+// ancestors on drive Z:. Name them in the launch status; empty on Windows.
+std::wstring WineAncestorNotice() {
+  const auto accepted=fs::WineAcceptedAncestors();
+  if(accepted.empty()) return {};
+  constexpr size_t kShown=3;
+  std::wstring notice=L" Proton: accepted symlink ancestor ";
+  for(size_t i=0;i<accepted.size() && i<kShown;++i) notice+=(i?L", ":L"")+accepted[i];
+  if(accepted.size()>kShown) notice+=L" (+"+std::to_wstring(accepted.size()-kShown)+L" more)";
+  return notice+L".";
+}
 #ifdef MCLA_LAUNCHER_CONTROLLER_TESTING
 std::vector<uint8_t> &TicketKeyForTest() { static std::vector<uint8_t> key; return key; }
 #endif
@@ -545,6 +556,7 @@ struct LauncherController::State {
 #endif
       if(support->missing()) support_notice=L" Missing support folders will be recreated on START GAME. Existing files are not restored or replaced.";
       support_notice+=admission_notice;
+      support_notice+=WineAncestorNotice();
       return expires;
     } catch(const std::exception &) {
       return std::unexpected(L"Read-only launch inspection failed; no launch or repair was attempted");

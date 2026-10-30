@@ -8,6 +8,9 @@ contains no game files.
 1. FIRST START
    - Unpack the folder anywhere. Run MCLA-Launcher.exe.
    - Setup: choose the "build" folder from this package and your game-data folder.
+   - Steam Deck (Proton): folders on drive Z: (for example Z:\home\deck\...) or
+     on the SD card can be chosen; CHECK SETUP names them as "Proton:
+     accepted symlink ancestor ...".
    - Profiles: create an empty profile (or import your saves).
    - Play: choose your graphics card, resolution 720p or 1440p and frame rate
      "30 FPS (recommended)", then CHECK SETUP (it shows "Setup saved."), then
@@ -80,6 +83,9 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
 1. ПЕРШИЙ ЗАПУСК
    - Розпакуйте папку будь-куди. Запустіть MCLA-Launcher.exe.
    - Setup: вкажіть папку "build" з цього пакета і папку з даними гри.
+   - Steam Deck (Proton): можна вибирати папки на диску Z: (наприклад
+     Z:\home\deck\...) або на SD-картці; CHECK SETUP називає їх
+     "Proton: accepted symlink ancestor ...".
    - Profiles: створіть порожній профіль (або імпортуйте свої сейви).
    - Play: виберіть відеокарту, роздільність 720p або 1440p і частоту кадрів
      "30 FPS (recommended)", потім CHECK SETUP (з'явиться "Setup saved."),

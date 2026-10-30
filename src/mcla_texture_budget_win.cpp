@@ -32,6 +32,8 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
+#include "mcla_host_platform_win.h"
+
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -56,10 +58,7 @@ constexpr uint64_t kHardMinMb = 768, kHardMaxMb = 8192;
 constexpr const char* kSoftName = "texture_cache_memory_limit_soft";
 constexpr const char* kHardName = "texture_cache_memory_limit_hard";
 
-bool RunningUnderWine() {
-  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
-  return ntdll && GetProcAddress(ntdll, "wine_get_version") != nullptr;
-}
+bool RunningUnderWine() { return platform::RunningUnderWine(); }
 
 int32_t ConfiguredAdapterIndex() {
   const auto* info = rex::cvar::GetFlagInfo("d3d12_adapter");

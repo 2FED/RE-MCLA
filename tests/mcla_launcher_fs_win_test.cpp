@@ -4,8 +4,12 @@
 #define NOMINMAX
 #include <windows.h>
 #include <bcrypt.h>
+#include <winioctl.h>
+
+#include "mcla_host_platform_win.h"
 
 #include <array>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -30,6 +34,39 @@ bool MakeFile(const std::wstring &path, std::span<const uint8_t> bytes) {
   const bool ok = ::WriteFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) && written == bytes.size();
   CloseHandle(handle);
   return ok;
+}
+// KI-049: an NTFS junction needs no privilege (unlike a symlink), so it is the
+// reparse-ancestor fixture that always runs. Layout of the documented
+// REPARSE_DATA_BUFFER mount-point form; the struct lives only in the DDK.
+bool MakeJunction(const std::wstring &link, const std::wstring &target) {
+  if (!CreateDirectoryW(link.c_str(), nullptr)) return false;
+  const std::wstring substitute = L"\\??\\" + target;
+  const auto sub_bytes = static_cast<WORD>(substitute.size() * sizeof(wchar_t));
+  const auto print_bytes = static_cast<WORD>(target.size() * sizeof(wchar_t));
+  const WORD path_bytes = static_cast<WORD>(sub_bytes + print_bytes + 2 * sizeof(wchar_t));
+  const WORD data_length = static_cast<WORD>(4 * sizeof(WORD) + path_bytes);
+  std::vector<uint8_t> buffer(8 + data_length, 0);
+  const DWORD tag = IO_REPARSE_TAG_MOUNT_POINT;
+  const WORD fields[] = {data_length, 0, 0, sub_bytes,
+                         static_cast<WORD>(sub_bytes + sizeof(wchar_t)), print_bytes};
+  std::memcpy(buffer.data(), &tag, sizeof(tag));
+  std::memcpy(buffer.data() + 4, fields, sizeof(fields));
+  std::memcpy(buffer.data() + 16, substitute.data(), sub_bytes);
+  std::memcpy(buffer.data() + 16 + sub_bytes + sizeof(wchar_t), target.data(), print_bytes);
+  const HANDLE handle = CreateFileW(link.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+  if (handle == INVALID_HANDLE_VALUE) return false;
+  DWORD returned = 0;
+  const bool ok = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, buffer.data(),
+      static_cast<DWORD>(buffer.size()), nullptr, 0, &returned, nullptr) != FALSE;
+  CloseHandle(handle);
+  return ok;
+}
+bool Accepted(const std::wstring &path) {
+  for (const auto &entry : mcla::launcher::fs::WineAcceptedAncestors()) {
+    if (_wcsicmp(entry.c_str(), path.c_str()) == 0) return true;
+  }
+  return false;
 }
 int ProbeChild(const std::wstring &root) {
   std::wstring executable(32768, L'\0');
@@ -205,6 +242,65 @@ int wmain(int argc, wchar_t **argv) {
     Check(!fs::AtomicWrite(*a, L"file-link.bin", second), "file reparse replacement rejected");
   } else {
     std::cout << "SKIP file symlink creation unavailable (Win32 " << GetLastError() << ")\n";
+  }
+  // KI-049: junction ancestor. Real Windows (detected, or forced) refuses it;
+  // only the forced Wine branch accepts it, through the followed target.
+  const auto junction = root + L"\\junction";
+  const bool made_junction = MakeJunction(junction, b_path);
+  Check(made_junction, "create owned junction fixture");
+  if (made_junction) {
+    Check(!mcla::platform::RunningUnderWine(), "test host is real Windows");
+    Check(!fs::OpenDirectory(junction), "Windows: junction root refused");
+    Check(!fs::OpenDirectory(junction + L"\\child"), "Windows: junction ancestor refused");
+    mcla::platform::SetWineOverrideForTesting(0);
+    Check(!fs::OpenDirectory(junction + L"\\child"), "forced Windows: junction ancestor refused");
+    Check(fs::WineAcceptedAncestors().empty(), "Windows records no Wine acceptance");
+    mcla::platform::SetWineOverrideForTesting(1);
+    {
+      auto through = fs::OpenDirectory(junction + L"\\child");
+      if (!through) std::wcerr << L"Wine-branch diagnostic: " << through.error() << L'\n';
+      Check(through.has_value(), "forced Wine: junction ancestor accepted");
+      Check(Accepted(junction), "forced Wine: acceptance recorded once per path");
+      if (through) {
+        Check(_wcsicmp(through->path().c_str(), (b_path + L"\\child").c_str()) == 0,
+              "forced Wine: guard path is the resolved target");
+        Check(!fs::CompareDisjoint(*through, *b), "forced Wine: resolved target overlaps its real parent");
+        Check(fs::CompareDisjoint(*through, *a).has_value(), "forced Wine: unrelated root stays disjoint");
+        // The guard holds the canonical (resolved) chain; a FILE_READ_ATTRIBUTES
+        // handle on the link object itself does not block renaming the link,
+        // and later operations never use the link spelling.
+        Check(!MoveFileExW(b_path.c_str(), (b_path + L"-renamed").c_str(), 0),
+              "forced Wine: resolved target chain is held against rename");
+        auto lock = fs::AcquireWriterLock(*through);
+        Check(lock.has_value(), "forced Wine: writer lock through accepted ancestor");
+        CheckWrite(fs::AtomicWrite(*through, L"proton.bin", first), "forced Wine: atomic write through accepted ancestor");
+        const auto read = fs::ReadFile(*through, L"proton.bin", 100);
+        Check(read && *read == first, "forced Wine: exact read through accepted ancestor");
+        if (hardlink) {
+          auto a_through = fs::OpenDirectory(a_path);
+          Check(a_through && !fs::ReadFile(*a_through, L"hard.bin", 100), "forced Wine: hardlinked file still refused");
+        }
+      }
+      auto root_through = fs::OpenDirectory(junction);
+      Check(root_through.has_value(), "forced Wine: junction as the final component accepted");
+      if (root_through)
+        Check(_wcsicmp(root_through->path().c_str(), b_path.c_str()) == 0, "forced Wine: final link resolves to target");
+      const auto file_junction = root + L"\\file-junction";
+      // A junction whose target is a file is not a directory when followed.
+      if (MakeJunction(file_junction, hard_source)) {
+        Check(!fs::OpenDirectory(file_junction), "forced Wine: junction to a file refused");
+      } else {
+        std::cout << "SKIP junction-to-file fixture (Win32 " << GetLastError() << ")\n";
+      }
+      const auto dangling = root + L"\\dangling-junction";
+      if (MakeJunction(dangling, root + L"\\never-created")) {
+        Check(!fs::OpenDirectory(dangling), "forced Wine: dangling junction refused");
+      } else {
+        std::cout << "SKIP dangling junction fixture (Win32 " << GetLastError() << ")\n";
+      }
+    }
+    mcla::platform::SetWineOverrideForTesting(-1);
+    Check(!fs::OpenDirectory(junction + L"\\child"), "restored detection: junction ancestor refused again");
   }
   std::cout << "Launcher filesystem guard: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;

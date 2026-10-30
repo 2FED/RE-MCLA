@@ -44,6 +44,12 @@ class WriterLock {
 };
 
 std::expected<DirectoryGuard, std::wstring> OpenDirectory(std::wstring_view path);
+// KI-049: under Wine/Proton only, OpenDirectory accepts a reparse ancestor
+// (Z:\ root, mount point, Unix symlink) whose followed target is a directory
+// on the same drive letter or carries a Unix link/mount tag. Real Windows never
+// relaxes. Each accepted ancestor path is recorded once per process; this
+// returns them in acceptance order (empty on Windows) for status and logs.
+std::vector<std::wstring> WineAcceptedAncestors();
 std::expected<void, std::wstring> CompareDisjoint(const DirectoryGuard &a, const DirectoryGuard &b);
 // Persistent zero-byte lock file: closing the exclusive handle releases the
 // lock. Never delete a lock to infer that an owner is stale.
