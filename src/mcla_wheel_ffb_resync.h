@@ -7,7 +7,7 @@
 //
 // The API exists only in the KI-022 dev SDK (branch mcla/ki-022-ffb-rearm,
 // header rex/input/sdl/wheel_force_feedback_resync.h). Against an SDK without
-// it (the pinned v0.20.0.3) the request compiles to a no-op that returns
+// it (an SDK older than v0.20.0.4) the request compiles to a no-op that returns
 // false, so the build cannot break on a missing symbol; the fix is then
 // simply absent.
 

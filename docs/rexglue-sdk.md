@@ -8,7 +8,43 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
-**M9 (2026-10-29, pushed 2026-10-29): the submodule pin moves to
+**M9-006 (2026-10-30, pushed 2026-10-30): the submodule pin moves to
+`daa1ae5f751a55461a5f57e7a42677b6210240ed`** (`daa1ae5`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
+`v0.20.0.4` (annotated), package version **0.20.0.4**. The exact tag yields `0.20.0.4`;
+the same commit without its tag reports a `-dev.gdaa1ae5` version (`0.20.0.4-dev.gdaa1ae5`
+when only `v0.20.0.3` is reachable), so clean clones must fetch tags. Fast-forward on top
+of `f519dd5`, four KI-022 wheel force-feedback deltas:
+
+- `28ac239` input(wheel): apply every XInputdFF start/stop entry of a batched operation
+  (one-time `XINPUTD_FF_AUDIT action=batch` line) and re-arm infinite effects the device
+  reports stopped (status re-arm, `action=rearm`, bounded 10 per slot per minute).
+- `9403b29` input(wheel): bounded unconditional resync of believed-running infinite effects
+  on a host request, the end of a finite-start burst and a 10 s periodic pass
+  (`action=resync`, 6 per slot per minute), plus `action=update-change` logging.
+- `610cc21` input(wheel): the resync is one global stop of the wheel's haptic device followed
+  by a run of every believed-running infinite effect, as on focus resume.
+- `daa1ae5` input(wheel): periodic and host-requested resyncs wait for a 1 s quiet window
+  without finite starts (host request up to its 2 s expiry, then it runs anyway).
+
+Host-facing API: `rex::input::sdl::RequestWheelEffectResync(const char* reason)` in
+`rex/input/sdl/wheel_force_feedback_resync.h` (feature macro
+`REX_INPUT_SDL_WHEEL_EFFECT_RESYNC`), exported from `rexruntime.dll`; thread-safe,
+coalesced, a no-op without a wheel or with force feedback disabled. The MCLA host calls it
+from the pause/slow-motion hook (KI-022). SDK ctest at `daa1ae5`: 1900/1900
+([KI-022 build](evidence/M9-006-ki-022-fix-build-20261030.md)). `thirdparty/sdl3` stays at
+`422c186` from `https://github.com/2FED/SDL.git`; every other nested gitlink is unchanged
+from the manifest below. Verify a fresh clone with:
+
+```powershell
+git -C third_party/rexglue-sdk rev-parse HEAD                  # daa1ae5f751a55461a5f57e7a42677b6210240ed
+git -C third_party/rexglue-sdk rev-list -n 1 v0.20.0.4         # same
+git -C third_party/rexglue-sdk ls-tree HEAD thirdparty/sdl3    # 422c186c0a272bf6f255b2f4537a726f804e924b
+git submodule status --recursive
+```
+
+The `f519dd5` pin text that follows stays as history.
+
+**M9 (2026-10-29, pushed 2026-10-29; superseded by `daa1ae5` on 2026-10-30): the submodule pin moved to
 `f519dd53fbabffca5492497cb42f782602aae9a1`** (`f519dd5`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
 `v0.20.0.3`, package version **0.20.0.3**. The SDK derives its version from
 `git describe` (`cmake/rex_version.cmake`): the exact tag yields `0.20.0.3`;
