@@ -1902,7 +1902,7 @@ honest dispositions for the issues testers will meet first.
 
 ### Exit criteria
 
-- A clean clone builds the volunteer artifacts; staging audit passes.
+- A clean clone builds the volunteer artifacts; staging audit passes. **Met 2026-10-29/30: clean clones at SDK `v0.20.0.3` (`f519dd5`) and `v0.20.0.4` (`daa1ae5`) build the SDK (ctest 1874 and 1900), byte-identical codegen (67 files) and the host/launcher with 0 warnings and all suites; the distributed l46 and the pending l48 both come from clean clones; the volunteer staging audit passed for l46 (owner run) and is part of the l48 prepare script. [v0.20.0.3](docs/evidence/M9-001-clean-clone-v0.20.0.3-20261029.md), [v0.20.0.4](docs/evidence/M9-001-clean-clone-v0.20.0.4-20261030.md).**
 - Kill switch and report prompt pass fixture tests and one real tester run.
 - No new progression blocker or save hazard; open KIs have owner-reviewed dispositions.
 
