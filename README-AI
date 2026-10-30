@@ -1927,6 +1927,8 @@ honest dispositions for the issues testers will meet first.
 
 - 2026-10-30 — KI-049 (Proton rejects every Z: path as a reparse ancestor; Steam Deck volunteer blocker) fixed in the launcher filesystem guard and the F10 image helper with a Wine-aware policy (208 + 97 + 57 checks), Windows behaviour unchanged, Deck check pending. Volunteer candidate rebuilt as l46 from a clean clone; l45 (signed, never distributed) superseded. Health: `GREEN`. Blocked on owner: l46 signing, smoke incl. Deck, publication decision, tester smoke, M9-008.
 
+- 2026-10-30 (afternoon) — Wheel tester packages (T300RS, l46) analysed: L2/R2 default swapped (now 9,8); KI-022 centering loss is a silent device stop with no log events, cured by the Alt-Tab sequence. SDK `v0.20.0.4` (`daa1ae5`) published to the fork with owner approval: batched FF operations, status re-arm, unconditional stop-all+run resync with quiet window (ctest 1900/1900); host signals from the pause hook committed (`521178b`). Next: pin bump, clean clone, volunteer candidate l48 for signing and distribution. Health: `GREEN`.
+
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 
 Moved out of M9 by owner decision 2026-10-28. Task IDs are renumbered REL-xxx and get
