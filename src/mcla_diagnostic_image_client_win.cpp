@@ -5,6 +5,7 @@
 #include <bcrypt.h>
 
 #include "mcla_diagnostic_image_client_win.h"
+#include "mcla_host_platform_win.h"
 #include <atomic>
 #include <array>
 #include <cstring>
@@ -85,7 +86,13 @@ bool SafeHelper(const std::filesystem::path &path) {
       path.extension() != L".exe") return false;
   for (auto cursor = path; !cursor.empty();) {
     const DWORD flags = GetFileAttributesW(cursor.c_str());
-    if (flags == INVALID_FILE_ATTRIBUTES || (flags & FILE_ATTRIBUTE_REPARSE_POINT)) return false;
+    if (flags == INVALID_FILE_ATTRIBUTES) return false;
+    // KI-049: the helper file itself is never a reparse point. Under Wine an
+    // ancestor directory reported as reparse (Z:\ root, mount point, Unix
+    // symlink) may pass the shared policy; real Windows refuses every one.
+    if ((flags & FILE_ATTRIBUTE_REPARSE_POINT) &&
+        (cursor == path || !platform::AncestorDirectoryAllowed(L"image client", cursor.wstring(), flags)))
+      return false;
     const auto parent = cursor.parent_path();
     if (parent == cursor) break;
     cursor = parent;
