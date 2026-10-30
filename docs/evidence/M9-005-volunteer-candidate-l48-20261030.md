@@ -150,3 +150,9 @@ it at signing). A second dry run into the same, now non-empty directory refused
   the owner decides retention at publication time.
 - The clone came from the local worktree's committed branch; the SDK and all
   submodules came from GitHub. Output is not bit-identical across checkout paths.
+
+## Owner signing and publication (2026-10-30)
+
+- The owner ran `private/l48-volunteer-prepare.ps1`: V2 kill-switch ticket with `capabilities 1080p,1440p,unlocked`, `l48-entries.json` (l2, l38, l39, l46 carried; l48 host `6FEC02D0...` added for 30 days), signed `l48-active-builds.txt` issued 1793365688, staged `private/l48-volunteer`, lease probe `SIGNED_LEASES_VERIFIED entries=5`, volunteer audit passed.
+- With the owner's explicit approval the primary agent published the list to branch `DebugBundle` of `2FED/RE-MCLA` (commit `c2069e7`, replacing the l46 list `ad386f4`); the raw URL returned HTTP 200 with bytes identical to the signed file.
+- Not done by agents: distribution, owner/tester smoke, wheel and Deck checks.
