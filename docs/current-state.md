@@ -1,12 +1,12 @@
 # Current state and handoff
 
-Updated October 29, 2026 Kyiv (end of the coordinator continuation). README-AI owns the milestone ledger and checkpoint history.
+Updated October 30, 2026 Kyiv (coordinator continuation). README-AI owns the milestone ledger and checkpoint history.
 
 ## Active outcome
 
 **M9 at the close of 2026-10-29 (coordinator continuation): everything agent-side is done and committed; all remaining steps need the owner.** Ledger: README-AI section 17; plan: [M9 priorities](M9-priorities.md). Branch `claude/admiring-jang-24d485` (local commits only, not pushed); SDK `v0.20.0.3` = `f519dd5` published on `2FED/rexglue-sdk` `mcla/mcla-r-hotfixes` with SDL fork `2FED/SDL` `mcla/xinput-hotplug-poll` = `422c186`, pinned in the project.
 
-**NEW 2026-10-30 (owner found on the Steam Deck): KI-049, Proton rejects all Z: paths ("directory ancestor is not a normal non-reparse directory"), blocking save/Build folder selection and launch outside the C: prefix. Fix in progress (Opus); the volunteer candidate will be rebuilt as l46 before signing, so do NOT run the l45 prepare script.**
+**2026-10-30:** KI-049 (Proton rejects Z: paths) fixed in the launcher and F10 helper (Deck check pending); **volunteer candidate is now l46** (`private/l46-vol-input`, `private/l46-volunteer-prepare.ps1`; l45 was signed by the owner but never distributed and is superseded). Replace "l45" with "l46" in step 1 below; add the Deck checks (folders under `Z:\home\deck` and the SD card, CHECK SETUP notice, START, F10 PACKAGE READY on Z:, Proton log lines, C: regression).
 
 **Owner-only next actions, in order:**
 1. **Volunteer candidate l45:** run `private\l45-volunteer-prepare.ps1` in PowerShell 7 (signs the V2 kill-switch ticket with `capabilities unlocked,1080p,1440p`, writes `l45-entries.json` carrying the l39 entries, signs `l45-active-builds.txt`, stages `private\l45-volunteer` with the tester guide, verifies the list, runs the volunteer audit). Then an in-game smoke on the staged build (two F10 in different scenes, wheel R2/L2 and pad Start+Back if available, report prompt and per-package `report.txt`, offline/online kill-switch behaviour), decide which carried entries to keep and publish `l45-active-builds.txt` to `DebugBundle`, hand the build to the closed group, one tester smoke. Offline window: 3 days from the ticket. [l45 evidence](evidence/M9-005-volunteer-candidate-l45-20261029.md).
