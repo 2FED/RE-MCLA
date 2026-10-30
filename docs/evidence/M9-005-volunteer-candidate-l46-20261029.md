@@ -170,3 +170,9 @@ sets the value at signing). The temporary directory was removed. No
   copy of the project. The SDK and all submodules came from GitHub.
 - Output is not bit-identical across checkout paths (anonymous-namespace names,
   link timestamps), as recorded for l43.
+
+## Owner signing and publication (2026-10-30)
+
+- The owner ran `private/l46-volunteer-prepare.ps1`: V2 kill-switch ticket with `capabilities 1080p,1440p,unlocked`, `l46-entries.json` (l2, l38, l39 carried; l46 host `FC1F0E2D...` valid until 1795936182), signed `l46-active-builds.txt` issued 1793344182, staged `private/l46-volunteer`, lease probe `SIGNED_LEASES_VERIFIED entries=4`, volunteer audit passed.
+- With the owner's explicit approval the primary agent published the list to branch `DebugBundle` of `2FED/RE-MCLA` (commit `ad386f4`, replacing the l38 list `7097aea`); `https://raw.githubusercontent.com/2FED/RE-MCLA/DebugBundle/active-builds.txt` returned HTTP 200 with bytes identical to the signed file.
+- Not done by agents: distribution to the closed group, the owner smoke, the Steam Deck checks (planned for the evening), the tester smoke.
