@@ -129,6 +129,50 @@ class Controller {
   int logged_ = 0;
 };
 
+// KI-022: the same hook asks the SDK to resync the wheel's infinite
+// force-feedback effects when the game leaves a pause / slow-motion state
+// (some wheel drivers drop them at these time-scale transitions while still
+// reporting them as playing). Independent of the UI cap and of the mode.
+enum class WheelResync { kNone, kResume, kRacerActive };
+
+inline constexpr const char *WheelResyncReason(WheelResync resync) {
+  switch (resync) {
+    case WheelResync::kResume:
+      return "host:resume";
+    case WheelResync::kRacerActive:
+      return "host:racer-active";
+    case WheelResync::kNone:
+      break;
+  }
+  return nullptr;
+}
+
+class WheelResyncEdges {
+ public:
+  // One observation per game-state update. Returns kResume on a paused ->
+  // running edge of CapPaused, otherwise kRacerActive when the racer-inactive
+  // flag clears (for example while the simulation pause is still set).
+  WheelResync Observe(bool paused, uint8_t racer_off) {
+    WheelResync resync = WheelResync::kNone;
+    if (seen_) {
+      if (paused_ && !paused) {
+        resync = WheelResync::kResume;
+      } else if (racer_off_ != 0 && racer_off == 0) {
+        resync = WheelResync::kRacerActive;
+      }
+    }
+    seen_ = true;
+    paused_ = paused;
+    racer_off_ = racer_off;
+    return resync;
+  }
+
+ private:
+  bool seen_ = false;
+  bool paused_ = false;
+  uint8_t racer_off_ = 0;
+};
+
 // Host shutdown hook (defined in mcla_menu_state.cpp): restores a forced
 // mcla_ui_cap_draws_low so a later settings save cannot persist it.
 void ShutdownMenuStateCap();

@@ -18,11 +18,17 @@
 // plugin waits (bounded) for such pipelines instead. The world is frozen then,
 // so the one-off creation hitch is not visible in gameplay. The window logic
 // is in mcla_photo_capture.h.
+//
+// KI-022: the capture freeze also changes the game's time scale, so after a
+// window that opened, the unfreeze asks the SDK to resync the wheel's
+// infinite force-feedback effects (reason host:photo-close). Follows the
+// init-only mcla_photo_pipeline_wait switch (the window must be enabled).
 
 #include "mcla_photo_capture.h"
 
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_wheel_ffb_resync.h"
 
 #include <rex/cvar.h>
 
@@ -50,6 +56,9 @@ uint64_t NowMs() {
 // on the UI thread. Frames outside the window take the lock and compare one
 // bool.
 std::mutex window_mutex;
+// KI-022: set when a capture window opened; consumed by the unfreeze, also
+// after a window that already ended by timeout. Guarded by window_mutex.
+bool wheel_resync_on_unfreeze = false;
 mcla::photo_capture::Window &GetWindow() {
   // Created at the first call, after the cvars are parsed. Disabled when the
   // option is off or the GPU plugin has no wait cvar (older SDK).
@@ -117,7 +126,12 @@ REX_EXTERN(sub_8263D120) {
   if (!window.enabled() || window.open()) {
     return;
   }
-  Apply(window.Open(NowMs(), rex::cvar::Query<bool>(kWaitCvar)));
+  const auto decision =
+      window.Open(NowMs(), rex::cvar::Query<bool>(kWaitCvar));
+  if (decision.transition) {
+    wheel_resync_on_unfreeze = true;
+  }
+  Apply(decision);
 }
 
 // Strong override of the generated weak capture-unfreeze function.
@@ -128,6 +142,10 @@ REX_EXTERN(sub_8263D1E0) {
   }
   std::lock_guard lock(window_mutex);
   Apply(GetWindow().Close(NowMs()));
+  if (wheel_resync_on_unfreeze) {
+    wheel_resync_on_unfreeze = false;
+    mcla::wheel_ffb::RequestEffectResync("host:photo-close");
+  }
 }
 
 // Strong override of the generated weak per-frame photo-album update that

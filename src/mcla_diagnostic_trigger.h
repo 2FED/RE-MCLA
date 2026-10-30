@@ -34,7 +34,10 @@ inline constexpr std::string_view kSourcePad = "pad";
 // ---------------------------------------------------------------------------
 // Raw wheel button configuration: "L2,R2" raw SDL joystick button indices of
 // the active wheel, each -1 (disabled) or 0..255. Whitespace around values is
-// allowed. T300 defaults are 8,9 (unverified, see the M9-010 evidence).
+// allowed. T300 defaults are 9,8: L2 = raw 9, R2 = raw 8, as in the M6-015
+// reference (config/wheel-input-reference.json: l2_unmapped 9, r2_unmapped 8)
+// and the 2026-10-30 tester packages (an R2 press recorded raw 8 under the
+// old 8,9 default). A direct button probe on the owner's T300 is pending.
 
 struct WheelButtons {
   int l2 = -1;
@@ -42,7 +45,7 @@ struct WheelButtons {
   bool operator==(const WheelButtons &) const = default;
 };
 
-inline constexpr std::string_view kDefaultWheelButtons = "8,9";
+inline constexpr std::string_view kDefaultWheelButtons = "9,8";
 
 inline std::optional<int> ParseButtonIndex(std::string_view text) {
   while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) {

@@ -40,11 +40,18 @@
 // The racer pointers are followed only through checked reads (guest heap
 // bounds and page protection) and not at all after ShutdownMenuStateCap;
 // --mcla_ui_cap_racer_inactive=false turns this signal off.
+//
+// KI-022 (wheel centering lost at race start / slow motion): on the
+// paused -> running edge and when the racer-inactive flag clears, the hook
+// also asks the SDK to resync the wheel's infinite force-feedback effects
+// (mcla_wheel_ffb_resync.h). Both signals follow the init-only switches
+// above; the request is a no-op against an SDK without the API.
 
 #include "mcla_menu_state.h"
 
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_wheel_ffb_resync.h"
 
 #include <rex/cvar.h>
 #include <rex/system/kernel_state.h>
@@ -76,6 +83,9 @@ constexpr const char *kLowCvar = "mcla_ui_cap_draws_low";
 // the UI thread. Steady frames take the lock once and compare one bool.
 std::mutex controller_mutex;
 mcla::menu_state::Controller controller;
+// KI-022: wheel FFB resync edges, guarded by controller_mutex.
+mcla::menu_state::WheelResyncEdges wheel_resync_edges;
+bool wheel_resync_unavailable_logged = false;
 
 bool GuestPauseWanted() {
   static const bool wanted = REXCVAR_GET(mcla_ui_cap_guest_pause);
@@ -180,6 +190,17 @@ REX_EXTERN(sub_822D29E8) {
   const uint8_t racer_off = ReadRacerInputOff(base);
   const bool paused = mcla::menu_state::CapPaused(simulation, local, racer_off);
   std::lock_guard lock(controller_mutex);
+  if (!controller.stopped()) {
+    const auto resync = wheel_resync_edges.Observe(paused, racer_off);
+    if (const char *reason = mcla::menu_state::WheelResyncReason(resync)) {
+      if (!mcla::wheel_ffb::RequestEffectResync(reason) &&
+          !wheel_resync_unavailable_logged) {
+        wheel_resync_unavailable_logged = true;
+        MCLA_APP_INFO("MCLA menu state: wheel FFB resync unavailable (SDK "
+                      "without RequestWheelEffectResync)");
+      }
+    }
+  }
   if (!controller.NeedsInputs(paused)) {
     return;
   }

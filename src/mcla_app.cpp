@@ -883,9 +883,9 @@ REXCVAR_DEFINE_BOOL(
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_STRING(
-    mcla_wheel_diagnostic_buttons, "8,9", "MCLA Diagnostics",
+    mcla_wheel_diagnostic_buttons, "9,8", "MCLA Diagnostics",
     "Raw SDL joystick button indices of the wheel's L2,R2 (-1 disables one; "
-    "T300 defaults, unverified)")
+    "T300 defaults: L2 = 9, R2 = 8)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(

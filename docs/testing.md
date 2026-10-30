@@ -1113,7 +1113,9 @@ package with the `mcla-wheel-state-v1` section in `state.json`. One package per
 press, re-armed on release; Start/Back still reach the game, so the pause menu may
 open. `mcla_controller_diagnostic_triggers` (default `true`) disables both.
 `mcla_wheel_diagnostic_buttons` holds the raw SDL joystick indices `L2,R2`
-(default `"8,9"`, unverified T300 values; `-1` disables one). For another wheel,
+(default `"9,8"`: on the T300 L2 = button 9 and R2 = button 8, from the M6-015
+reference and the 2026-10-30 tester packages; a direct probe on the owner's T300
+is pending; `-1` disables one). For another wheel,
 run with `--mcla_wheel_button_probe=true`, press L2 and R2, read the indices from
 the `MCLA_WHEEL_BUTTON_PROBE v=1 ... button=` log lines, then pass
 `--mcla_wheel_diagnostic_buttons=<L2>,<R2>`. The managed launcher passes neither

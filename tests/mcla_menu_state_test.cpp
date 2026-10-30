@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 namespace {
 int checks = 0;
@@ -20,6 +21,9 @@ using mcla::menu_state::kForcedLow;
 using mcla::menu_state::kMaxLoggedTransitions;
 using mcla::menu_state::kRacerStateActive;
 using mcla::menu_state::RacerInputOff;
+using mcla::menu_state::WheelResync;
+using mcla::menu_state::WheelResyncEdges;
+using mcla::menu_state::WheelResyncReason;
 
 constexpr Inputs kUnlocked{240, 250};
 
@@ -158,6 +162,41 @@ void TestHangoutCycleThroughController() {
   Check(leave.write_low && *leave.write_low == 250,
         "reactivated racer restores the threshold");
 }
+
+void TestWheelResyncEdges() {
+  WheelResyncEdges e;
+  Check(e.Observe(false, 0) == WheelResync::kNone,
+        "first observation never requests a resync");
+  Check(e.Observe(false, 0) == WheelResync::kNone, "steady running: none");
+  // Race start: sim pause, then running (12:33:59.8 -> 12:34:02.8).
+  Check(e.Observe(CapPaused(1, 0, 0), 0) == WheelResync::kNone,
+        "entering a pause requests nothing");
+  Check(e.Observe(CapPaused(1, 0, 0), 0) == WheelResync::kNone,
+        "steady pause: none");
+  Check(e.Observe(CapPaused(0, 0, 0), 0) == WheelResync::kResume,
+        "paused -> running requests host:resume");
+  Check(e.Observe(false, 0) == WheelResync::kNone, "only on the edge");
+  // Slow-motion transition with a deactivated racer while the sim is paused;
+  // the racer comes back before the sim resumes.
+  Check(e.Observe(CapPaused(1, 0, 1), 1) == WheelResync::kNone,
+        "pause with racer off: none");
+  Check(e.Observe(CapPaused(1, 0, 0), 0) == WheelResync::kRacerActive,
+        "racer-inactive clearing under a pause requests host:racer-active");
+  Check(e.Observe(CapPaused(0, 0, 0), 0) == WheelResync::kResume,
+        "the later resume requests again");
+  // Hangout: racer off alone, then both clear together: one resume.
+  Check(e.Observe(CapPaused(0, 0, 1), 1) == WheelResync::kNone,
+        "racer off alone: none");
+  Check(e.Observe(CapPaused(0, 0, 0), 0) == WheelResync::kResume,
+        "racer and pause clearing together request host:resume once");
+  Check(std::string(WheelResyncReason(WheelResync::kResume)) == "host:resume",
+        "resume reason text");
+  Check(std::string(WheelResyncReason(WheelResync::kRacerActive)) ==
+            "host:racer-active",
+        "racer-active reason text");
+  Check(WheelResyncReason(WheelResync::kNone) == nullptr,
+        "no reason without a resync");
+}
 }  // namespace
 
 int main() {
@@ -172,6 +211,7 @@ int main() {
   TestPauseSignals();
   TestRacerInputOff();
   TestHangoutCycleThroughController();
+  TestWheelResyncEdges();
   std::printf("mcla_menu_state_test: %d checks passed\n", checks);
   return 0;
 }

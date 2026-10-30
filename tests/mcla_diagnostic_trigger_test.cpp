@@ -20,8 +20,8 @@ using namespace mcla::diagnostics;
 using Button = HoldComboTrigger::Button;
 
 void TestWheelButtonParsing() {
-  Check(ParseWheelButtons(kDefaultWheelButtons) == WheelButtons{8, 9},
-        "T300 default L2,R2 = 8,9");
+  Check(ParseWheelButtons(kDefaultWheelButtons) == WheelButtons{9, 8},
+        "T300 default L2,R2 = 9,8");
   Check(ParseWheelButtons(" 10 , 11 ") == WheelButtons{10, 11},
         "whitespace around indices is accepted");
   Check(ParseWheelButtons("-1,9") == WheelButtons{-1, 9}, "L2 can be disabled");

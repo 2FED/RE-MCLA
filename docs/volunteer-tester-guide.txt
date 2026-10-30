@@ -41,9 +41,9 @@ contains no game files.
      briefly PACKAGE READY (IMAGE UNVERIFIED). Wait for READY before the next
      press. BUSY means the previous report is still being made; FAILED means
      no report was made, so press again.
-   - L2/R2 are set for a Thrustmaster T300 (not yet confirmed on a real
-     wheel). If they do nothing on yours, use F10 and write your wheel model
-     in report.txt.
+   - L2/R2 are set for the T300: L2 = button 9, R2 = button 8. If they do
+     nothing on your wheel, use F10 and write your wheel model in
+     report.txt.
    - If the game crashes, it saves a report by itself.
    - Every report folder has its own report.txt, prefilled by the game
      (version, time, kind "general", "wheel" or "crash"; an L2 report also
@@ -118,9 +118,9 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      Дочекайтеся READY перед наступним натисканням. BUSY означає, що
      попередній звіт ще записується; FAILED означає, що звіт не записано,
      тож натисніть ще раз.
-   - L2/R2 налаштовані під Thrustmaster T300 (на справжньому кермі ще не
-     перевірено). Якщо на вашому кермі вони нічого не роблять, натискайте
-     F10 і вкажіть модель керма в report.txt.
+   - L2/R2 налаштовані під T300: L2 = кнопка 9, R2 = кнопка 8. Якщо на
+     вашому кермі вони нічого не роблять, натискайте F10 і вкажіть модель
+     керма в report.txt.
    - Якщо гра впаде, звіт збережеться сам.
    - У кожній папці звіту є свій report.txt, частково заповнений грою
      (версія, час, тип "general", "wheel" або "crash"; у звіті з L2 вказано
