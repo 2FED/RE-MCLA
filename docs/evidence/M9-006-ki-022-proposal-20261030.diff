@@ -1,0 +1,175 @@
+diff -ru a/include/rex/input/sdl/sdl_input_driver.h b/include/rex/input/sdl/sdl_input_driver.h
+--- a/include/rex/input/sdl/sdl_input_driver.h
++++ b/include/rex/input/sdl/sdl_input_driver.h
+@@ -61,6 +61,7 @@
+     uint32_t duration_ms = 0;
+     bool running = false;
+     bool resume_pending = false;
++    bool start_suppressed_logged = false;
+   };
+ 
+   struct ControllerState {
+@@ -78,6 +79,7 @@
+     uint32_t force_feedback_total_update_count;
+     uint32_t force_feedback_total_start_count;
+     bool force_feedback_device_info_logged;
++    uint64_t force_feedback_rearm_check_ms;
+   };
+ 
+   enum class RepeatState {
+@@ -116,6 +118,9 @@
+   SDL_Joystick* GetControllerJoystick(const ControllerState& state) const;
+   void StopControllerFeedback(ControllerState& state, bool preserve_running = false);
+   void ResumeControllerFeedback(ControllerState& state, const char* reason);
++  // KI-022: re-run infinite effects that the host believes are running but
++  // the device reports as stopped (device reacquire, driver eviction).
++  void RearmStoppedWheelEffectsLocked(ControllerState& state, const char* reason);
+   void CloseController(ControllerState& state);
+   void UpdateWheelAxisLocked(ControllerState& state, uint8_t axis, int16_t value,
+                              bool record_activity);
+diff -ru a/src/input/sdl/sdl_input_driver.cpp b/src/input/sdl/sdl_input_driver.cpp
+--- a/src/input/sdl/sdl_input_driver.cpp
++++ b/src/input/sdl/sdl_input_driver.cpp
+@@ -372,6 +372,14 @@
+     return X_ERROR_DEVICE_NOT_CONNECTED;
+   }
+ 
++  if (controller->is_wheel && controller->haptic && is_active) {
++    const uint64_t now_ms = SDL_GetTicks();
++    if (now_ms - controller->force_feedback_rearm_check_ms >= 1000) {
++      controller->force_feedback_rearm_check_ms = now_ms;
++      RearmStoppedWheelEffectsLocked(*controller, "watchdog");
++    }
++  }
++
+   if (user_index == 0) {
+     const bool source_changed = slot_zero_state_source_ != active_controller_index_;
+     if (source_changed || is_active != slot_zero_is_active_ ||
+@@ -534,6 +542,11 @@
+       effect_state.effect_id = -1;
+       effect_state.running = false;
+     }
++    if (update && effect_state.type != effect.type) {
++      REXLOG_INFO("SDL_WHEEL_FFB_EFFECT v=2 action=retype slot={} from={} to={} restart={}",
++                  effect.effect_index, GetWheelEffectTypeName(effect_state.type),
++                  GetWheelEffectTypeName(effect.type), restart ? 1 : 0);
++    }
+     effect_state.effect_id = SDL_CreateHapticEffect(controller->haptic, &sdl_effect);
+     submitted = effect_state.effect_id >= 0;
+     recreated = true;
+@@ -554,6 +567,9 @@
+ 
+   effect_state.type = effect.type;
+   effect_state.duration_ms = effect.duration_ms;
++  if (update && !recreated) {
++    RearmStoppedWheelEffectsLocked(*controller, "update");
++  }
+   if (update) {
+     if (effect_state.update_count == 0) {
+       LogWheelEffectParameters(effect, sdl_effect, "first-update", gain);
+@@ -623,6 +639,12 @@
+                                                status_supported, status_playing)) {
+     // Avoid re-articulating a genuinely running infinite condition or engine
+     // effect. Finite event starts are never suppressed by status.
++    if (!effect_state.start_suppressed_logged) {
++      effect_state.start_suppressed_logged = true;
++      REXLOG_INFO(
++          "SDL_WHEEL_FFB_EFFECT v=2 action=start-suppressed slot={} type={} reason=status-playing",
++          effect_index, GetWheelEffectTypeName(effect_state.type));
++    }
+     return X_ERROR_SUCCESS;
+   }
+ 
+@@ -636,6 +658,7 @@
+   }
+   effect_state.running = running;
+   effect_state.resume_pending = false;
++  effect_state.start_suppressed_logged = false;
+   if (running) {
+     controller->force_feedback_total_start_count++;
+   }
+@@ -1354,6 +1377,38 @@
+   }
+ }
+ 
++void SDLInputDriver::RearmStoppedWheelEffectsLocked(ControllerState& state, const char* reason) {
++  if (!state.haptic || !has_focus_.load() || !REXCVAR_GET(wheel_force_feedback)) {
++    return;
++  }
++  const auto controller_index = static_cast<size_t>(&state - controllers_.data());
++  if (active_controller_index_ != controller_index) {
++    return;
++  }
++  if ((SDL_GetHapticFeatures(state.haptic) & SDL_HAPTIC_STATUS) == 0) {
++    return;
++  }
++  for (size_t effect_slot = 0; effect_slot < state.force_feedback_effects.size(); ++effect_slot) {
++    auto& effect = state.force_feedback_effects[effect_slot];
++    // Only infinite effects (centering spring/damper, continuous engine or
++    // road periodic) are owned across frames; finite events must expire.
++    if (!effect.running || effect.effect_id < 0 || effect.duration_ms != UINT32_MAX) {
++      continue;
++    }
++    if (SDL_GetHapticEffectStatus(state.haptic, effect.effect_id)) {
++      continue;
++    }
++    if (!SDL_RunHapticEffect(state.haptic, effect.effect_id, effect.iterations)) {
++      REXLOG_ERROR("SDL wheel FFB {} rearm failed for slot {}: {}", reason, effect_slot + 1,
++                   SDL_GetError());
++      continue;
++    }
++    state.force_feedback_total_start_count++;
++    REXLOG_INFO("SDL_WHEEL_FFB_EFFECT v=2 action=rearm slot={} type={} reason={}",
++                effect_slot + 1, GetWheelEffectTypeName(effect.type), reason);
++  }
++}
++
+ void SDLInputDriver::CloseController(ControllerState& state) {
+   StopControllerFeedback(state);
+   if (state.haptic) {
+diff -ru a/src/kernel/xboxkrnl/xboxkrnl_hid.cpp b/src/kernel/xboxkrnl/xboxkrnl_hid.cpp
+--- a/src/kernel/xboxkrnl/xboxkrnl_hid.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_hid.cpp
+@@ -12,6 +12,7 @@
+ // Disable warnings about unused parameters for kernel functions
+ #pragma GCC diagnostic ignored "-Wunused-parameter"
+ 
++#include <algorithm>
+ #include <atomic>
+ 
+ #include <rex/kernel/xboxkrnl/private.h>
+@@ -141,11 +142,29 @@
+   } else {
+     // MCLA passes an array of {effect_index, iterations} entries. r5 is the
+     // entry count, r6 is the start/stop operation, and r7 carries flags.
+-    const auto operation = rex::input::DecodeForceFeedbackOperationWords(
+-        rex::kernel::xboxkrnl::LoadForceFeedbackWord(base, ctx.r4.u32, 0),
+-        ctx.r6.u32 == 1 ? rex::kernel::xboxkrnl::LoadForceFeedbackWord(base, ctx.r4.u32, 1) : 1);
+-    ctx.r3.u64 = rex::kernel::xboxkrnl::input_system()->SetForceFeedbackEffectRunning(
+-        ctx.r3.u32, operation.effect_index, ctx.r6.u32 == 1, operation.iterations);
++    // KI-022: apply every entry; previously only entry 0 was applied, so a
++    // batched stop/start of centering + engine effects dropped the rest.
++    const uint32_t count = std::clamp<uint32_t>(ctx.r5.u32, 1u, 64u);
++    static std::atomic_bool batch_logged = false;
++    if (count > 1 && !batch_logged.exchange(true)) {
++      REXLOG_INFO("XINPUTD_FF_AUDIT v=1 export=EffectOperation action=batch count={} op={}",
++                  count, ctx.r6.u32);
++    }
++    X_RESULT result = X_ERROR_SUCCESS;
++    for (uint32_t entry = 0; entry < count; ++entry) {
++      const auto operation = rex::input::DecodeForceFeedbackOperationWords(
++          rex::kernel::xboxkrnl::LoadForceFeedbackWord(base, ctx.r4.u32, entry * 2),
++          ctx.r6.u32 == 1
++              ? rex::kernel::xboxkrnl::LoadForceFeedbackWord(base, ctx.r4.u32, entry * 2 + 1)
++              : 1);
++      const X_RESULT entry_result =
++          rex::kernel::xboxkrnl::input_system()->SetForceFeedbackEffectRunning(
++              ctx.r3.u32, operation.effect_index, ctx.r6.u32 == 1, operation.iterations);
++      if (result == X_ERROR_SUCCESS) {
++        result = entry_result;
++      }
++    }
++    ctx.r3.u64 = result;
+   }
+ }
+ static rex::ppc::detail::PPCFuncRegistrar _ppc_reg___imp__XInputdFFEffectOperation(
