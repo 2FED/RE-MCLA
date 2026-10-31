@@ -1939,7 +1939,7 @@ Plan drafted 2026-10-31 after the M9 closure and **approved by the owner the sam
 
 ### Tasks (draft)
 
-- [-] **M10-001** Measurement at one repeatable heavy intersection in unlocked mode (guest render thread, CP thread, real GPU busy, per-draw CP cost split) plus a Deck baseline with the same harness; names what limits each platform.
+- [-] **M10-001** Measurement at one repeatable heavy intersection in unlocked mode (guest render thread, CP thread, real GPU busy, per-draw CP cost split) plus a Deck baseline with the same harness; names what limits each platform. 2026-10-31: harness designed ([design](docs/evidence/M10-001-harness-design-20261031.md)): existing per-minute counters and two-F10 differencing cover GPU busy and thread CPU; the per-draw CP split, the render-thread spin share and a joined per-minute window need SDK instrumentation behind `d3d12_perf_split` (rdtsc phase chain, under 1% overhead); bench profiles are launcher copies of a never-played seed; a 720p arm joins 1440p; owner-internal build l53 in preparation.
 - [ ] **M10-002** Read-back path scoping: CPU read-back only for ranges not resolved every frame; before/after counters; photo mode, vinyl/livery and the album preview (KI-056) as named checks.
 - [ ] **M10-003** Shader/pipeline pre-warm before the first launch (owner request): store portability study, launcher pre-warm pass with progress UI, pipeline-key replay.
 - [ ] **M10-004** Vulkan-enabled SDK build and Deck A/B (KI-053); the launcher switches to Vulkan under Wine only if Vulkan wins or ties.
