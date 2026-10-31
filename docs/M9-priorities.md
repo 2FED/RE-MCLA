@@ -156,7 +156,7 @@ adds the prepare pipeline and is not estimated yet.
 
 ## M10 performance note (owner, 2026-10-30)
 
-The Steam Deck renders the l48 title screen at about 14 fps under Proton (D3D12 through vkd3d or Vulkan, to be confirmed). Reaching a stable 30 on the Deck is M10 work alongside the multi-threaded command processor; record Deck counters from the volunteer exports as M10 input. Owner Deck run of l49 (2026-10-31): 10-14 fps in play with audio tearing at that rate; the host still runs D3D12 through vkd3d because the SDK is built without Vulkan (KI-053); the first l50 diagnostic minute also shows about 65,000 read-back resolves per minute with 16,000 CPU copies, a readback-path cost to measure in M10.
+The Steam Deck renders the l48 title screen at about 14 fps under Proton (D3D12 through vkd3d or Vulkan, to be confirmed). Reaching a stable 30 on the Deck is M10 work alongside the multi-threaded command processor; record Deck counters from the volunteer exports as M10 input. Owner Deck run of l49 (2026-10-31): 10-14 fps in play with audio tearing at that rate; the host still runs D3D12 through vkd3d because the SDK is built without Vulkan (KI-053); the first l50 diagnostic minute also shows about 65,000 read-back resolves per minute with 16,000 CPU copies, a readback-path cost to measure in M10. The l50 analysis shows the read-back path handles every resolve (about 1,100-1,170 per second, scene tiles, shadows and HDR chain included, which the CPU never needs): about 270-290 CPU copies per second of up to 5 MB plus a GPU downscale and copy for every resolve even when deferred; restricting read-back to ranges that are not resolved every frame is an M10 candidate with a large expected gain.
 
 ## Deferred, not dropped
 
