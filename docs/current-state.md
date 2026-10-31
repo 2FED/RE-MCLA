@@ -51,6 +51,8 @@ KI-013, KI-026, KI-032, KI-033, KI-035, KI-036, KI-037 (first photo and save pre
 
 ## Next (M10, plan approved by the owner 2026-10-31; M10-001 in progress)
 
+**M10-001 status:** harness designed and built as owner-internal l53 (SDK `7892797` on v0.20.0.5, `d3d12_perf_split`; host default on for l53). Owner steps: pick the heavy intersection (candidates C1 downtown high-rises, C2 the big daily-route intersection, C3 title city as control), create BENCH-SEED/A/B/C profiles via the launcher copy, sign l53 (`private/l53-internal-prepare.ps1`), run the arms per [route protocol](M10-001-route-protocol.md) (1440p Unlocked cold/warm x2, 720p Unlocked warm x2, 30 FPS control, Deck title idle + one lap), send session text files and F10 packages. First log must confirm the `MCLA_PERF_SPLIT` line, `tsc_mhz`, plausible `packets_other_ms`, `render_tid` = the VdSwap thread, and `gpu_busy_ms` on the Deck.
+
 - Plan: [M10 priorities](M10-priorities.md). Order: M10-001 measurement at a heavy intersection plus a Deck baseline, M10-002 read-back path scoping, M10-003 shader/pipeline pre-warm, M10-004 Vulkan-enabled SDK and Deck A/B, M10-005 Deck performance to a stable 30, M10-006 multi-threaded CP (gated on M10-001), M10-007 video-memory budget, M10-008 KI triage round 2, M10-009 volunteer release cadence and closure regression.
 - M9 is closed; see README-AI section 17. Public release hardening stays the later milestone (section 17a).
 
