@@ -15,6 +15,8 @@ contains no game files.
    - Play: choose your graphics card, resolution 720p or 1440p and frame rate
      "30 FPS (recommended)", then CHECK SETUP (it shows "Setup saved."), then
      START GAME.
+   - On a first setup the graphics card is preselected (the only one, or the
+     one with the most video memory); you can change it.
    - Be online when you start: the build checks a signed list on the internet.
      Offline it starts for 3 days after it was built, or for 24 hours after
      the last successful online check. A running game is never stopped.
@@ -90,6 +92,8 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
    - Play: виберіть відеокарту, роздільність 720p або 1440p і частоту кадрів
      "30 FPS (recommended)", потім CHECK SETUP (з'явиться "Setup saved."),
      потім START GAME.
+   - Під час першого налаштування відеокарту вибрано заздалегідь (єдину або
+     ту, що має найбільше відеопам'яті); її можна змінити.
    - Під час запуску будьте онлайн: збірка перевіряє підписаний список в
      інтернеті. Без інтернету вона запускається 3 дні після збирання або
      24 години після останньої успішної онлайн-перевірки. Запущену гру

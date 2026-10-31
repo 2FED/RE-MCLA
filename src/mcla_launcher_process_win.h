@@ -20,11 +20,20 @@ std::wstring QuoteWindowsArgument(std::wstring_view argument);
 using EnvironmentEntry = std::pair<std::wstring, std::wstring>;
 // Pure filtering seam. Only documented personal/system directory variables
 // survive; PATH/SystemRoot/WINDIR come from the supplied trusted OS directories.
+// KI-050 (M9-006): under Wine/Proton (`under_wine`) a bounded, named list of
+// Steam/SDL variables (kProtonPassThrough) also survives when present, so SDL
+// admits the Steam Virtual Gamepad and the host recognises Proton. The same
+// NUL, duplicate and total-size rules apply; values are copied verbatim.
+// `passed_through`, when given, receives the number of those variables kept.
+std::span<const std::wstring_view> ProtonPassThroughNames();
 std::expected<std::vector<wchar_t>, std::wstring> MakeOwnedEnvironment(
     std::span<const EnvironmentEntry> source, std::wstring_view windows_directory,
-    std::wstring_view system_directory);
+    std::wstring_view system_directory, bool under_wine = false,
+    size_t *passed_through = nullptr);
 // Reads the allowed environment entries, never modifies the parent environment.
-std::expected<std::vector<wchar_t>, std::wstring> BuildOwnedEnvironment();
+// Under Wine (platform::RunningUnderWine) also reads ProtonPassThroughNames().
+std::expected<std::vector<wchar_t>, std::wstring> BuildOwnedEnvironment(
+    size_t *passed_through = nullptr);
 
 struct ProcessStatus {
   std::optional<uint32_t> exit_code;
@@ -44,6 +53,8 @@ public:
   OwnedProcess &operator=(const OwnedProcess &) = delete;
 
   [[nodiscard]] uint32_t ProcessId() const noexcept;
+  // Steam/SDL variables passed to the child under Proton (0 on Windows).
+  [[nodiscard]] size_t ProtonPassThroughCount() const noexcept;
   std::expected<ProcessStatus, std::wstring> Poll() const;
   std::expected<void, std::wstring> TerminateAndWait(uint32_t timeout_ms = 5000);
 #if defined(MCLA_LAUNCHER_PROCESS_TEST_SEAM)

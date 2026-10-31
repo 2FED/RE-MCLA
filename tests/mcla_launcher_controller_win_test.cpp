@@ -4,6 +4,9 @@
 #include "mcla_managed_config_policy.h"
 #include "mcla_diagnostic_trigger.h"
 #include "mcla_session_report.h"
+#include "mcla_host_platform_win.h"
+#include "mcla_launcher_gpu_policy.h"
+#include "mcla_launcher_process_win.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -169,6 +172,9 @@ int FakeChild(int argc, wchar_t **argv) {
       path(L"mcla_diagnostics_root").parent_path() != profile / L"diagnostics") return finish(92);
   const std::array<std::wstring_view, 11> allowed{L"APPDATA", L"HOMEDRIVE", L"HOMEPATH", L"LOCALAPPDATA",
       L"PATH", L"ProgramData", L"SystemRoot", L"TEMP", L"TMP", L"USERPROFILE", L"WINDIR"};
+  // KI-050/KI-053 fixture: SteamDeck reaches the child only through the
+  // launcher's Wine pass-through (the matrix forces Wine and sets it).
+  const bool proton = GetEnvironmentVariableW(L"SteamDeck", nullptr, 0) != 0;
   wchar_t *environment = GetEnvironmentStringsW();
   if (!environment) return finish(87);
   bool safe = true;
@@ -177,15 +183,35 @@ int FakeChild(int argc, wchar_t **argv) {
     const auto key = text.substr(0, text.find(L'='));
     bool known = false;
     for (const auto name : allowed) known |= name == key;
+    if (proton) for (const auto name : ProtonPassThroughNames()) known |= name == key;
     safe &= known;
   }
   FreeEnvironmentStringsW(environment);
   if (!safe) return finish(88);
+  if (proton) {
+    std::array<wchar_t, 256> value{};
+    const DWORD length = GetEnvironmentVariableW(L"SDL_GAMECONTROLLERCONFIG", value.data(), static_cast<DWORD>(value.size()));
+    if (std::wstring_view(value.data(), length) != L"fixture,Steam Virtual Gamepad,platform:Windows=x," ||
+        GetEnvironmentVariableW(L"SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", value.data(),
+                                static_cast<DWORD>(value.size())) != 1 || value[0] != L'1') return finish(98);
+  }
   if (args[L"d3d12_adapter"] != L"0" || args[L"resolution_scale"] != L"2" ||
       args[L"draw_resolution_scale_x"] != L"2" || args[L"draw_resolution_scale_y"] != L"2" ||
       args[L"video_mode_width"] != L"1280" || args[L"video_mode_height"] != L"720" ||
       args[L"vsync"] != L"true" || args[L"fullscreen"] != L"false" ||
-      args[L"gpu_backend"] != L"d3d12") return finish(89);
+      args[L"gpu_backend"] != (proton ? L"vulkan" : L"d3d12")) return finish(89);
+  // Exact ordered command line with session-specific root values masked, so
+  // the parent can compare a Windows and a Proton launch argument by argument.
+  std::string ordered;
+  for (int i = 1; i < argc; ++i) {
+    const std::wstring_view arg(argv[i]);
+    const auto key = arg.substr(2, arg.find(L'=') - 2);
+    const bool root = key.ends_with(L"_root") || key == L"log_file" || key == L"mcla_managed_launch_config";
+    const auto shown = root ? std::wstring(arg.substr(0, arg.find(L'=') + 1)) + L"<path>" : std::wstring(arg);
+    for (const wchar_t c : shown) ordered += c < 0x80 ? static_cast<char>(c) : '?';
+    ordered += '\n';
+  }
+  if (!NewFile(cwd / L"fixture-args.txt", ordered)) return finish(99);
   // Stock (30 FPS) emits no vblank override: the exact stock command line.
   // Only the M9-005 ticket-grant fixture runs Unlocked; its record says so.
   const bool unlocked = args.contains(L"mcla_guest_vblank_hz");
@@ -904,6 +930,84 @@ bool FolderChoiceMatrix(const std::filesystem::path &root,
   return true;
 }
 
+// KI-050/KI-053 (M9-006): the same stock launch with Steam/SDL variables in
+// the launcher environment. Forced Windows drops them and keeps D3D12; forced
+// Wine passes them through and changes only --gpu_backend to vulkan.
+bool ProtonLaunchMatrix(const std::filesystem::path &root,const std::filesystem::path &build,
+                        const std::filesystem::path &game,const std::string &windows_args) {
+  const auto matrix=root/L"proton-launch";
+  for(const auto &path:{matrix,matrix/L"store",matrix/L"profiles"}) if(!CreateDirectoryW(path.c_str(),nullptr)) return false;
+  auto store=OpenPreferenceStore((matrix/L"store").wstring()); if(!store) return false;
+  Preferences p; p.build_root=U16(build); p.game_root=U16(game); p.gpu_name=u"Fixture"; p.render_target=1440;
+  auto profile=CreateManagedProfile(p,(matrix/L"profiles").wstring(),u"Proton fixture",store->directory());
+  if(!profile) return false;
+  p.library.entries.push_back(*profile); p.library.selected_id=profile->id;
+  if(!store->Save(p)) return false;
+  const std::filesystem::path profile_root(profile->root);
+  std::optional<LauncherController> controller;
+  controller.emplace(std::move(*store));
+  const std::array<std::pair<const wchar_t*,const wchar_t*>,3> steam{{
+      {L"SteamDeck",L"1"},{L"SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD",L"1"},
+      {L"SDL_GAMECONTROLLERCONFIG",L"fixture,Steam Virtual Gamepad,platform:Windows=x,"}}};
+  for(const auto &[name,value]:steam) if(!SetEnvironmentVariableW(name,value)) return false;
+  std::set<std::filesystem::path> seen;
+  bool completed=true;
+  for(const bool wine:{false,true}) {
+    mcla::platform::SetWineOverrideForTesting(wine?1:0);
+    const auto started=controller->Dispatch(UiAction::Play,Settings(p));
+    std::filesystem::path session;
+    for(const auto &entry:std::filesystem::directory_iterator(profile_root/L"sessions"))
+      if(!seen.contains(entry.path())) session=entry.path();
+    seen.insert(session);
+    bool ready=false;
+    const auto began=GetTickCount64();
+    while(started.running && !session.empty() && GetTickCount64()-began<5000) {
+      if(Read(session/L"fixture-ready.txt")=="ROOTS_ENV_SETTINGS_SENTINEL_PASS\n") { ready=true; break; }
+      if(!controller->Dispatch(UiAction::Refresh,{}).running) break;
+      Sleep(5);
+    }
+    if(!ready) std::wcerr<<started.status<<L'\n';
+    const auto args=Read(session/L"fixture-args.txt");
+    if(!wine) {
+      Check(ready && args==windows_args && args.find("\n--gpu_backend=d3d12\n")!=args.npos,
+            "forced Windows: Steam/SDL variables dropped, stock command line unchanged (d3d12)");
+      Check(started.status.find(L"Proton:")==std::wstring::npos,"forced Windows: no Proton status notice");
+    } else {
+      auto expected=windows_args;
+      const auto at=expected.find("\n--gpu_backend=d3d12\n");
+      if(at!=expected.npos) expected.replace(at,21,"\n--gpu_backend=vulkan\n");
+      Check(ready && at!=std::string::npos && args==expected,
+            "forced Wine: Steam/SDL variables reach the child; only --gpu_backend becomes vulkan");
+      Check(started.status.find(L" Proton: Steam/SDL environment passed through: 3 variables.")!=std::wstring::npos,
+            "forced Wine: status names the pass-through count once");
+    }
+    if(!session.empty()) NewFile(session/L"finish.signal","FINISH_FIXTURE\n");
+    const auto finishing=GetTickCount64();
+    while(controller->running() && GetTickCount64()-finishing<10000) { controller->Dispatch(UiAction::Refresh,{}); Sleep(5); }
+    completed&=ready && !controller->running() && Read(session/L"state.txt")=="complete\nexit 0\n";
+    // The fake child creates this exact marker with CREATE_NEW; remove only it
+    // so the second launch of the same profile can write it again.
+    DeleteFileW((profile_root/L"user"/L"fixture-save.bin").c_str());
+  }
+  mcla::platform::SetWineOverrideForTesting(-1);
+  for(const auto &[name,value]:steam) SetEnvironmentVariableW(name,nullptr);
+  Check(completed,"both Proton-matrix sessions complete normally");
+  controller.reset();
+  // KI-051 through the real controller: an empty saved GPU shows the default
+  // adapter of the real inventory (or stays empty without one).
+  {
+    auto empty_store=OpenPreferenceStore((matrix/L"store").wstring()); if(!empty_store) return false;
+    auto prefs=empty_store->preferences(); prefs.gpu_name.clear();
+    if(!empty_store->Save(prefs)) return false;
+    LauncherController fresh(std::move(*empty_store));
+    const auto view=fresh.Dispatch(UiAction::Refresh,{});
+    const bool listed=std::find(view.gpu_names.begin(),view.gpu_names.end(),view.gpu_name)!=view.gpu_names.end();
+    Check(view.gpu_names.empty()?view.gpu_name.empty():listed,
+          "empty saved GPU defaults to an adapter of the real inventory");
+  }
+  return completed;
+}
+
 // M9-005: a build whose signed ticket carries `capabilities unlocked,1440p`
 // offers Unlocked on CHECK SETUP and START GAME; ungranted gated options stay
 // refused with the unchanged texts, and an invalid ticket refuses admission.
@@ -1188,6 +1292,9 @@ int wmain(int argc, wchar_t **argv) {
   } while (GetTickCount64() - began < 5000);
   Check(ready, "child independently verifies exact roots environment settings and comment sentinel");
   if (!ready) return 1;
+  const auto windows_args = Read(session / L"fixture-args.txt");
+  Check(windows_args.find("\n--gpu_backend=d3d12\n--xam_user_signin_state=1\n") != windows_args.npos,
+        "stock command line keeps --gpu_backend=d3d12 in place on Windows");
   const auto blocked = contender.Dispatch(UiAction::Play, request);
   Check(!blocked.running && !contender.running(), "second controller cannot write same profile");
   Check(OnlySession(main_root) == session, "lock rejection does not create another session");
@@ -1451,6 +1558,9 @@ int wmain(int argc, wchar_t **argv) {
   Check(CollectionParentMatrix(root,build,game),"optional collection parent hint matrix completed");
   Check(FolderChoiceMatrix(root,build,game),"folder choice persistence matrix completed");
   Check(TicketGrantMatrix(root,build,game),"signed ticket capability grant matrix completed");
+  Check(ProtonLaunchMatrix(root,build,game,windows_args),"Proton launch matrix completed");
+  Check(GpuBackendArgument(false)==L"--gpu_backend=d3d12" && GpuBackendArgument(true)==L"--gpu_backend=vulkan",
+        "backend argument: d3d12 on Windows, vulkan under Wine");
   std::cout << "Launcher controller: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

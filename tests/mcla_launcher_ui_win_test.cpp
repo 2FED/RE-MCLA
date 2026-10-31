@@ -1,5 +1,6 @@
 #include "mcla_launcher_ui_win.h"
 #include "mcla_launcher_capabilities.h"
+#include "mcla_launcher_gpu_policy.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -700,6 +701,41 @@ void TestDraftCallbackMatrix() {
   Click(window, UiVerifyRoots);
   Check(recorder.calls.back().request.gpu_name.empty(),
         "missing GPU remains explicit empty selection for backend validation");
+}
+
+// KI-051 (M9-006): default GPU when none was ever chosen.
+void TestDefaultAdapter() {
+  constexpr uint64_t kMiB = 1024ull * 1024ull;
+  const std::vector<AdapterInfo> none;
+  Check(!DefaultAdapterName(none), "no adapter: no default");
+  const std::vector<AdapterInfo> apu{{L"AMD Custom GPU 0932 (RADV VANGOGH)", 1024 * kMiB}};
+  Check(DefaultAdapterName(apu) == L"AMD Custom GPU 0932 (RADV VANGOGH)", "single adapter selected");
+  const std::vector<AdapterInfo> zero{{L"Zero-memory APU", 0}};
+  Check(DefaultAdapterName(zero) == L"Zero-memory APU", "single adapter selected even with no dedicated memory");
+  const std::vector<AdapterInfo> integrated_first{{L"Integrated", 512 * kMiB}, {L"Discrete", 8192 * kMiB}};
+  const std::vector<AdapterInfo> discrete_first{{L"Discrete", 8192 * kMiB}, {L"Integrated", 512 * kMiB}};
+  Check(DefaultAdapterName(integrated_first) == L"Discrete" && DefaultAdapterName(discrete_first) == L"Discrete",
+        "largest dedicated memory wins in either enumeration order");
+  const std::vector<AdapterInfo> tie{{L"First twin", 8192 * kMiB}, {L"Second twin", 8192 * kMiB}};
+  Check(DefaultAdapterName(tie) == L"First twin", "equal dedicated memory: first enumerated");
+  Check(InitialGpuName(L"", apu) == L"AMD Custom GPU 0932 (RADV VANGOGH)", "empty saved name takes the default");
+  Check(InitialGpuName(L"", none).empty(), "empty saved name without adapters stays empty");
+  Check(InitialGpuName(L"Removed old GPU", apu) == L"Removed old GPU",
+        "saved name kept even when its adapter vanished (UI shows explicit empty)");
+  Check(InitialGpuName(L"Integrated", integrated_first) == L"Integrated", "saved choice never replaced by the default");
+
+  Recorder recorder;
+  recorder.model.gpu_names = {L"AMD Custom GPU 0932 (RADV VANGOGH)"};
+  recorder.model.gpu_name = InitialGpuName(L"", apu);
+  InvisibleWindow window(recorder);
+  if (!window) return;
+  Check(SendDlgItemMessageW(window, UiGpu, CB_GETCURSEL, 0, 0) == 0 &&
+        Text(window, UiGpu) == L"AMD Custom GPU 0932 (RADV VANGOGH)",
+        "empty saved GPU with one adapter shows that adapter selected");
+  Click(window, UiCheckLaunch);
+  Check(!recorder.calls.empty() && recorder.calls.back().action == UiAction::CheckLaunch &&
+        recorder.calls.back().request.gpu_name == L"AMD Custom GPU 0932 (RADV VANGOGH)",
+        "CHECK SETUP carries the preselected adapter name");
 }
 
 void TestRenameValidation() {
@@ -1609,6 +1645,7 @@ int main() {
   TestSmallViewport();
   TestFixedWindowAndOverflow();
   TestRenameValidation();
+  TestDefaultAdapter();
   TestImportPreservesUnsavedSetup();
   TestSections();
   TestNavigationKeys();

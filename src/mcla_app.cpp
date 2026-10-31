@@ -77,9 +77,21 @@
 #define NOMINMAX
 #endif
 #include <Windows.h>
+
+#include "mcla_host_platform_win.h"
 #endif
 
 namespace {
+
+// Wine/Proton process (ntdll export), independent of the environment the
+// launcher passes. Never true on real Windows or other platforms.
+bool RunningUnderCompatibilityLayer() {
+#if defined(_WIN32)
+  return mcla::platform::RunningUnderWine();
+#else
+  return false;
+#endif
+}
 
 bool HasEnvironmentVariable(const char *name) {
 #if defined(_WIN32)
@@ -1229,8 +1241,19 @@ void MclaApp::OnCreateDialogs(rex::ui::ImGuiDrawer *drawer) {
 
 void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   REXCVAR_SET(rtl_allow_cross_thread_critical_section_leave, true);
+  // KI-053 (M9-006): detect Proton by the Wine ntdll export as well, so a
+  // stripped environment still selects Vulkan; the variables stay a trigger.
+  const bool compatibility_layer = RunningUnderCompatibilityLayer();
+  if (compatibility_layer &&
+      !HasEnvironmentVariable("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD")) {
+    // KI-050: SDL then ignores the Steam Virtual Gamepad (28DE:11FF).
+    MCLA_INPUT_INFO(
+        "Proton: Steam virtual gamepad not allowed by environment; "
+        "controllers through Steam Input will be invisible");
+  }
   if (config.gpu_backend == "any" &&
-      (HasEnvironmentVariable("STEAM_COMPAT_DATA_PATH") ||
+      (compatibility_layer ||
+       HasEnvironmentVariable("STEAM_COMPAT_DATA_PATH") ||
        HasEnvironmentVariable("WINEPREFIX") ||
        HasEnvironmentVariable("SteamDeck"))) {
     // A Windows D3D12 backend under Proton is translated through VKD3D. Use

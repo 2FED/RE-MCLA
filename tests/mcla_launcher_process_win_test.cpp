@@ -1,4 +1,5 @@
 #include "mcla_launcher_process_win.h"
+#include "mcla_host_platform_win.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -143,6 +144,73 @@ int wmain(int argc, wchar_t **argv) {
   Check(!MakeOwnedEnvironment(huge, L"C:\\Windows", L"C:\\Windows\\System32"), "bounded environment");
   Check(!MakeOwnedEnvironment(source, L"relative", L"C:\\Windows\\System32"), "trusted paths absolute");
   Check(!MakeOwnedEnvironment(source, L"C:\\Windows;D:\\Poison", L"C:\\Windows\\System32"), "no PATH injection");
+
+  // KI-050 (M9-006): Steam/SDL pass-through under Wine only.
+  auto steam = source;
+  steam.emplace_back(L"SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", L"1");
+  steam.emplace_back(L"sdl_gamecontrollerconfig", L"03000000de2800ff11000000000000,Steam Virtual Gamepad,a:b0,platform:Windows=x,");
+  steam.emplace_back(L"SteamDeck", L"1");
+  steam.emplace_back(L"SteamAppId", L"");
+  steam.emplace_back(L"WINEPREFIX", L"/home/deck/.local/share/Steam/steamapps/compatdata/1/pfx");
+  steam.emplace_back(L"SDL_JOYSTICK_HIDAPI", L"SENTINEL_UNLISTED_SDL");
+  steam.emplace_back(L"STEAM_COMPAT_CLIENT_INSTALL_PATH", L"SENTINEL_UNLISTED_STEAM");
+  size_t passed = 99;
+  const auto wine = MakeOwnedEnvironment(steam, L"C:\\Windows", L"C:\\Windows\\System32", true, &passed);
+  Check(wine.has_value() && passed == 4, "Wine passes the four present non-empty Steam/SDL variables");
+  if (wine) {
+    const auto entries = DecodeEnvironment(*wine);
+    Check(entries.size() == 9, "Wine pass-through adds only listed names");
+    const std::wstring all(wine->begin(), wine->end());
+    Check(all.find(L"SENTINEL") == std::wstring::npos, "unlisted SDL/Steam and secret names still dropped");
+    Check(all.find(std::wstring(L"SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1") + L'\0') != std::wstring::npos &&
+          all.find(std::wstring(L"SteamDeck=1") + L'\0') != std::wstring::npos &&
+          all.find(L"WINEPREFIX=/home/deck/") != std::wstring::npos,
+          "allow-steam-virtual-gamepad, SteamDeck and WINEPREFIX reach the child");
+    Check(all.find(std::wstring(L"SDL_GAMECONTROLLERCONFIG=03000000de2800ff11000000000000,Steam Virtual Gamepad,"
+                                L"a:b0,platform:Windows=x,") + L'\0') != std::wstring::npos,
+          "canonical name and a value with an embedded '=' kept intact");
+    Check(all.find(L"SteamAppId") == std::wstring::npos, "empty pass-through value omitted");
+    bool sorted = true;
+    for (size_t i = 1; i < entries.size(); ++i)
+      sorted &= CompareStringOrdinal(entries[i - 1].c_str(), -1, entries[i].c_str(), -1, TRUE) == CSTR_LESS_THAN;
+    Check(sorted, "Wine environment block stays sorted");
+  }
+  passed = 99;
+  const auto windows = MakeOwnedEnvironment(steam, L"C:\\Windows", L"C:\\Windows\\System32", false, &passed);
+  Check(windows && passed == 0 && DecodeEnvironment(*windows).size() == 5 &&
+        std::wstring(windows->begin(), windows->end()).find(L"Steam") == std::wstring::npos &&
+        std::wstring(windows->begin(), windows->end()).find(L"SDL_") == std::wstring::npos,
+        "Windows drops every Steam/SDL variable");
+  Check(windows && block && *windows == *block, "Windows block is byte-identical to the pre-KI-050 block");
+  auto steam_duplicate = steam; steam_duplicate.emplace_back(L"steamdeck", L"0");
+  Check(!MakeOwnedEnvironment(steam_duplicate, L"C:\\Windows", L"C:\\Windows\\System32", true),
+        "duplicate pass-through name rejected under Wine");
+  Check(MakeOwnedEnvironment(steam_duplicate, L"C:\\Windows", L"C:\\Windows\\System32", false).has_value(),
+        "pass-through names are not read on Windows, so their duplicates are ignored");
+  auto steam_nul = steam; steam_nul.emplace_back(L"SteamGameId", std::wstring(L"1\0" L"2", 3));
+  Check(!MakeOwnedEnvironment(steam_nul, L"C:\\Windows", L"C:\\Windows\\System32", true),
+        "embedded NUL in a pass-through value rejected");
+  auto steam_huge = steam; steam_huge.emplace_back(L"SteamVirtualGamepadInfo", std::wstring(32700, L'x'));
+  Check(!MakeOwnedEnvironment(steam_huge, L"C:\\Windows", L"C:\\Windows\\System32", true),
+        "pass-through still bounded by the total environment size");
+  Check(ProtonPassThroughNames().size() == 10, "pass-through list is the bounded named set");
+  mcla::platform::SetWineOverrideForTesting(1);
+  SetEnvironmentVariableW(L"SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", L"1");
+  SetEnvironmentVariableW(L"SteamGameId", L"a=b=c");
+  size_t real_passed = 0;
+  const auto real_wine = BuildOwnedEnvironment(&real_passed);
+  Check(real_wine && real_passed >= 2 &&
+        std::wstring(real_wine->begin(), real_wine->end()).find(std::wstring(L"SteamGameId=a=b=c") + L'\0') != std::wstring::npos,
+        "forced Wine reads the pass-through names from the real environment");
+  mcla::platform::SetWineOverrideForTesting(0);
+  real_passed = 99;
+  const auto real_windows = BuildOwnedEnvironment(&real_passed);
+  Check(real_windows && real_passed == 0 &&
+        std::wstring(real_windows->begin(), real_windows->end()).find(L"SteamGameId") == std::wstring::npos,
+        "forced Windows never reads them");
+  SetEnvironmentVariableW(L"SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", nullptr);
+  SetEnvironmentVariableW(L"SteamGameId", nullptr);
+  mcla::platform::SetWineOverrideForTesting(-1);
   const auto before_path = ParentVariable(L"PATH");
   const auto before_rex = ParentVariable(L"REX_USER_DATA_ROOT");
   Check(BuildOwnedEnvironment().has_value(), "real child environment built");
@@ -185,7 +253,7 @@ int wmain(int argc, wchar_t **argv) {
   }
   {
     auto child = StartOwnedProcess(executable, {L"--exit259", receipt.native()}, root);
-    Check(child.has_value(), "exit259 child launch");
+    Check(child.has_value() && child->ProtonPassThroughCount() == 0, "exit259 child launch; no Proton pass-through on Windows");
     if (child) { const auto status = Wait(*child); Check(status && status->exit_code == 259, "real259 is exited"); }
   }
   Check(!StartOwnedProcess(L"missing.exe", {}, root), "relative executable rejected");

@@ -1,5 +1,6 @@
 #include "mcla_launcher_process_win.h"
 #include "mcla_launcher_profile_policy.h"
+#include "mcla_host_platform_win.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -18,6 +19,15 @@ constexpr uint32_t kOwnedTerminationCode = 0x4d434c41;
 constexpr std::array<std::wstring_view, 8> kInheritedDirectories{
     L"LOCALAPPDATA", L"APPDATA", L"USERPROFILE", L"TEMP", L"TMP",
     L"ProgramData", L"HOMEDRIVE", L"HOMEPATH"};
+// KI-050 (M9-006): Steam sets these for the launched game; Wine imports them
+// into the launcher's environment. Without SDL_GAMECONTROLLER_ALLOW_STEAM_
+// VIRTUAL_GAMEPAD SDL ignores the Steam Virtual Gamepad (28DE:11FF), the only
+// controller Steam Input exposes. Passed only under Wine; never on Windows.
+constexpr std::array<std::wstring_view, 10> kProtonPassThrough{
+    L"SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", L"SDL_GAMECONTROLLERCONFIG",
+    L"SDL_GAMECONTROLLER_IGNORE_DEVICES", L"SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT",
+    L"SteamVirtualGamepadInfo", L"SteamAppId", L"SteamGameId", L"SteamDeck",
+    L"STEAM_COMPAT_DATA_PATH", L"WINEPREFIX"};
 
 bool EqualName(std::wstring_view a, std::wstring_view b) {
   return a.size() == b.size() && a.size() <= INT_MAX &&
@@ -61,9 +71,12 @@ std::wstring QuoteWindowsArgument(std::wstring_view argument) {
   return result;
 }
 
+std::span<const std::wstring_view> ProtonPassThroughNames() { return kProtonPassThrough; }
+
 std::expected<std::vector<wchar_t>, std::wstring> MakeOwnedEnvironment(
     std::span<const EnvironmentEntry> source, std::wstring_view windows_directory,
-    std::wstring_view system_directory) {
+    std::wstring_view system_directory, bool under_wine, size_t *passed_through) {
+  if (passed_through) *passed_through = 0;
   if (windows_directory.empty() || system_directory.empty() ||
       HasNul(windows_directory) || HasNul(system_directory) ||
       windows_directory.find(L';') != std::wstring_view::npos ||
@@ -72,15 +85,24 @@ std::expected<std::vector<wchar_t>, std::wstring> MakeOwnedEnvironment(
       !NormalizeRoot(std::filesystem::path(system_directory).u16string()))
     return std::unexpected(L"Invalid trusted Windows environment directories");
   std::vector<EnvironmentEntry> values;
-  for (const auto allowed : kInheritedDirectories) {
+  size_t passed = 0;
+  const auto keep = [&](std::wstring_view allowed) -> bool {
     const EnvironmentEntry *chosen = nullptr;
     for (const auto &entry : source) {
       if (!EqualName(entry.first, allowed)) continue;
-      if (chosen || HasNul(entry.second))
-        return std::unexpected(L"Invalid or duplicate allowed child environment entry");
+      if (chosen || HasNul(entry.second)) return false;
       chosen = &entry;
     }
     if (chosen && !chosen->second.empty()) values.emplace_back(allowed, chosen->second);
+    return true;
+  };
+  for (const auto allowed : kInheritedDirectories)
+    if (!keep(allowed)) return std::unexpected(L"Invalid or duplicate allowed child environment entry");
+  if (under_wine) {
+    const size_t before = values.size();
+    for (const auto allowed : kProtonPassThrough)
+      if (!keep(allowed)) return std::unexpected(L"Invalid or duplicate allowed child environment entry");
+    passed = values.size() - before;
   }
   values.emplace_back(L"SystemRoot", windows_directory);
   values.emplace_back(L"WINDIR", windows_directory);
@@ -100,16 +122,20 @@ std::expected<std::vector<wchar_t>, std::wstring> MakeOwnedEnvironment(
     block.push_back(L'\0');
   }
   block.push_back(L'\0');
+  if (passed_through) *passed_through = passed;
   return block;
 }
 
-std::expected<std::vector<wchar_t>, std::wstring> BuildOwnedEnvironment() {
+std::expected<std::vector<wchar_t>, std::wstring> BuildOwnedEnvironment(size_t *passed_through) {
   const auto windows = SystemDirectory(true);
   const auto system = SystemDirectory(false);
   if (!windows) return std::unexpected(windows.error());
   if (!system) return std::unexpected(system.error());
+  const bool under_wine = platform::RunningUnderWine();
+  std::vector<std::wstring_view> names(kInheritedDirectories.begin(), kInheritedDirectories.end());
+  if (under_wine) names.insert(names.end(), kProtonPassThrough.begin(), kProtonPassThrough.end());
   std::vector<EnvironmentEntry> source;
-  for (const auto name : kInheritedDirectories) {
+  for (const auto name : names) {
     SetLastError(ERROR_SUCCESS);
     const DWORD required = GetEnvironmentVariableW(name.data(), nullptr, 0);
     if (!required) {
@@ -124,7 +150,7 @@ std::expected<std::vector<wchar_t>, std::wstring> BuildOwnedEnvironment() {
     value.resize(copied);
     source.emplace_back(name, std::move(value));
   }
-  return MakeOwnedEnvironment(source, *windows, *system);
+  return MakeOwnedEnvironment(source, *windows, *system, under_wine, passed_through);
 }
 
 struct OwnedProcess::State {
@@ -132,6 +158,7 @@ struct OwnedProcess::State {
   HANDLE job = nullptr;
   HANDLE executable_pin = INVALID_HANDLE_VALUE;
   DWORD pid = 0;
+  size_t proton_pass_through = 0;
   bool assigned = false;
 
   ~State() {
@@ -158,6 +185,9 @@ OwnedProcess::~OwnedProcess() = default;
 OwnedProcess::OwnedProcess(OwnedProcess &&) noexcept = default;
 OwnedProcess &OwnedProcess::operator=(OwnedProcess &&) noexcept = default;
 uint32_t OwnedProcess::ProcessId() const noexcept { return state_ ? state_->pid : 0; }
+size_t OwnedProcess::ProtonPassThroughCount() const noexcept {
+  return state_ ? state_->proton_pass_through : 0;
+}
 
 std::expected<ProcessStatus, std::wstring> OwnedProcess::Poll() const {
   if (!state_ || !state_->process || !state_->job)
@@ -237,11 +267,13 @@ std::expected<OwnedProcess, std::wstring> StartOwnedProcess(
     if (command.size() > 32766)
       return std::unexpected(L"Owned child command exceeds Windows length bound");
   }
-  auto environment = BuildOwnedEnvironment();
+  size_t proton_pass_through = 0;
+  auto environment = BuildOwnedEnvironment(&proton_pass_through);
   if (!environment) return std::unexpected(environment.error());
   OwnedProcess result;
   result.state_ = std::make_unique<OwnedProcess::State>();
   auto &state = *result.state_;
+  state.proton_pass_through = proton_pass_through;
   state.executable_pin = CreateFileW(executable.c_str(), GENERIC_READ, FILE_SHARE_READ,
       nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
   if (state.executable_pin == INVALID_HANDLE_VALUE)

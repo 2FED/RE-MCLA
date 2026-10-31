@@ -19,6 +19,8 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <bcrypt.h>
+#include "mcla_host_platform_win.h"
+#include "mcla_launcher_gpu_policy.h"
 #include <algorithm>
 #include <exception>
 #include <filesystem>
@@ -175,7 +177,7 @@ std::expected<void,std::wstring> CreateMissingSupportDirectories(
   }
   return {};
 }
-struct Adapter { std::wstring name; unsigned index; };
+struct Adapter { std::wstring name; unsigned index; uint64_t dedicated_video_memory; };
 std::vector<Adapter> Adapters() {
   using Microsoft::WRL::ComPtr;
   ComPtr<IDXGIFactory1> factory;
@@ -187,7 +189,7 @@ std::vector<Adapter> Adapters() {
     DXGI_ADAPTER_DESC1 desc{};
     if (FAILED(adapter->GetDesc1(&desc)) || (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) continue;
     if (FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,__uuidof(ID3D12Device),nullptr))) continue;
-    result.push_back({desc.Description,i});
+    result.push_back({desc.Description,i,static_cast<uint64_t>(desc.DedicatedVideoMemory)});
   }
   return result;
 }
@@ -772,7 +774,11 @@ struct LauncherController::State {
     UiState ui;
     ui.collection_parent=CollectionParentHint();
     ui.library=p.library; ui.build_root=Wide(p.build_root); ui.game_root=Wide(p.game_root);
-    ui.gpu_name=Wide(p.gpu_name); ui.render_target=p.render_target;
+    // KI-051: a never-chosen GPU defaults to the only/largest adapter; a saved
+    // name is kept even when that adapter disappeared (explicit empty in the UI).
+    std::vector<AdapterInfo> inventory;
+    for(const auto &a:adapters) inventory.push_back({a.name,a.dedicated_video_memory});
+    ui.gpu_name=InitialGpuName(Wide(p.gpu_name),inventory); ui.render_target=p.render_target;
     ui.vsync=p.vsync; ui.fullscreen=p.fullscreen; ui.timing=p.timing; ui.running=session.has_value(); ui.status=status;
     ui.export_result=export_result;
     if(pending_report) { ui.report_folder=pending_report->folder; ui.report_prompt=pending_report->prompt; }
@@ -891,7 +897,7 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
     flag(L"draw_resolution_scale_x",std::to_wstring(target.scale)),
     flag(L"draw_resolution_scale_y",std::to_wstring(target.scale)),
     boolean(L"vsync",capability->vsync),boolean(L"fullscreen",p.fullscreen),
-    L"--gpu_backend=d3d12",L"--xam_user_signin_state=1",L"--input_backend=sdl",L"--mnk_mode=false",
+    std::wstring(GpuBackendArgument(platform::RunningUnderWine())),L"--xam_user_signin_state=1",L"--input_backend=sdl",L"--mnk_mode=false",
     flag(L"video_mode_width",std::to_wstring(target.guest_width)),
     flag(L"video_mode_height",std::to_wstring(target.guest_height)),
     flag(L"video_mode_refresh_rate",std::to_wstring(capability->guest_refresh_hz)),
@@ -930,6 +936,14 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   status=running?L"Game running. This profile is locked across builds. Closing this window leaves the game running.":
       L"Game running, but session receipt update failed. Profile lock remains held; finish the game normally.";
   if(recreated_support) status+=L" Missing support folders recreated; existing files were not replaced.";
+  if(platform::RunningUnderWine()) {
+    // KI-050: name the Steam/SDL pass-through once per launch (status and the
+    // debugger/Proton log); 0 means Steam set none of them for this launcher.
+    const auto notice=L"Proton: Steam/SDL environment passed through: "+
+        std::to_wstring(session->process.ProtonPassThroughCount())+L" variables.";
+    status+=L" "+notice;
+    OutputDebugStringW((L"MCLA launcher: "+notice+L"\n").c_str());
+  }
   return {};
 }
 
