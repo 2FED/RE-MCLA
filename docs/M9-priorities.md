@@ -158,6 +158,10 @@ adds the prepare pipeline and is not estimated yet.
 
 The Steam Deck renders the l48 title screen at about 14 fps under Proton (D3D12 through vkd3d or Vulkan, to be confirmed). Reaching a stable 30 on the Deck is M10 work alongside the multi-threaded command processor; record Deck counters from the volunteer exports as M10 input. Owner Deck run of l49 (2026-10-31): 10-14 fps in play with audio tearing at that rate; the host still runs D3D12 through vkd3d because the SDK is built without Vulkan (KI-053); the first l50 diagnostic minute also shows about 65,000 read-back resolves per minute with 16,000 CPU copies, a readback-path cost to measure in M10. The l50 analysis shows the read-back path handles every resolve (about 1,100-1,170 per second, scene tiles, shadows and HDR chain included, which the CPU never needs): about 270-290 CPU copies per second of up to 5 MB plus a GPU downscale and copy for every resolve even when deferred; restricting read-back to ranges that are not resolved every frame is an M10 candidate with a large expected gain.
 
+## M10 candidate: shader and pipeline pre-warm before the first launch (owner, 2026-10-31)
+
+Owner request after the KI-047/KI-037 findings: do what Azimuth does for Forza Horizon 2 (Xbox One) on PC, a precompilation step before a new build is first started, so the per-build shader/pipeline store is warm and no draw is ever skipped or stalled on a cold cache. Scope sketch for M10: ship or generate the shader store with the build (the store is keyed by title and build; check how far translated shaders and PSOs are portable across GPUs/drivers and what must be compiled locally), a launcher-driven pre-warm pass with progress UI before the first START of a new build fingerprint, and a replay of recorded pipeline keys from owner/volunteer sessions. Until then the always-on bounded pipeline wait (l51) trades cold-cache hitches for correctness.
+
 ## Deferred, not dropped
 
 - Multi-threaded CP and stable 60 at heavy intersections: M10.
