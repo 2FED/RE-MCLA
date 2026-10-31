@@ -243,3 +243,9 @@ empty", `private/l49-dryrun-refuse.log`). The temp directory was removed. No
 - The clone came from the local worktree's committed branch; the SDK sources and all
   submodules came from GitHub. The SDK binaries are the l48 clean-clone install. Output is
   not bit-identical across checkout paths.
+
+## Owner signing and publication (2026-10-31)
+
+- The owner ran `private/l49-volunteer-prepare.ps1`: V2 kill-switch ticket with `capabilities 1080p,1440p,unlocked`, `l49-entries.json` (l2, l38, l39, l46, l48 carried; l49 host `0A46AE3E...` added for 30 days), signed `l49-active-builds.txt` issued 1793431588, staged `private/l49-volunteer`, lease probe `SIGNED_LEASES_VERIFIED entries=6`, volunteer audit passed.
+- With the owner's explicit approval the primary agent published the list to branch `DebugBundle` of `2FED/RE-MCLA` (commit `ea1a7b0`, replacing the l48 list `c2069e7`); the raw URL returned HTTP 200 with bytes identical to the signed file.
+- Not done by agents: distribution, the Windows Steam Input check, the Deck checks.
