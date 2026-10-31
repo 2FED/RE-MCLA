@@ -249,3 +249,8 @@ empty", `private/l49-dryrun-refuse.log`). The temp directory was removed. No
 - The owner ran `private/l49-volunteer-prepare.ps1`: V2 kill-switch ticket with `capabilities 1080p,1440p,unlocked`, `l49-entries.json` (l2, l38, l39, l46, l48 carried; l49 host `0A46AE3E...` added for 30 days), signed `l49-active-builds.txt` issued 1793431588, staged `private/l49-volunteer`, lease probe `SIGNED_LEASES_VERIFIED entries=6`, volunteer audit passed.
 - With the owner's explicit approval the primary agent published the list to branch `DebugBundle` of `2FED/RE-MCLA` (commit `ea1a7b0`, replacing the l48 list `c2069e7`); the raw URL returned HTTP 200 with bytes identical to the signed file.
 - Not done by agents: distribution, the Windows Steam Input check, the Deck checks.
+
+## Allowance trimmed to l48 and l49 (2026-10-31)
+
+- Owner request after sharing l49: withdraw every older build. `private/l49-trim-entries.json` keeps only the l48 (`6FEC02D0...`, until 1795957688) and l49 (`0A46AE3E...`, until 1796023588) hosts; the owner signed `private/l49-trim-active-builds.txt` with `private/l49-trim-leases-prepare.ps1` (`SIGNED_LEASES_VERIFIED entries=2`, issued 1793435793).
+- Published with explicit approval to `DebugBundle` (`2f609fb`, replacing `ea1a7b0`); the raw URL serves it byte-identically. Effect: l2, l38, l39 and l46 are refused at their next online check and the withdrawal is cached offline; testers must move to l48 or l49.
