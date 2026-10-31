@@ -154,6 +154,10 @@ About 2-3 weeks of agent work for orders 1-7 under option A, plus owner checks
 (launcher smoke, Setup review, regression) and one volunteer's time. Option B
 adds the prepare pipeline and is not estimated yet.
 
+## M10 performance note (owner, 2026-10-30)
+
+The Steam Deck renders the l48 title screen at about 14 fps under Proton (D3D12 through vkd3d or Vulkan, to be confirmed). Reaching a stable 30 on the Deck is M10 work alongside the multi-threaded command processor; record Deck counters from the volunteer exports as M10 input.
+
 ## Deferred, not dropped
 
 - Multi-threaded CP and stable 60 at heavy intersections: M10.
