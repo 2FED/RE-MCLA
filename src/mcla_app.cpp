@@ -1317,6 +1317,7 @@ void MclaApp::OnWindowFocusChanged(bool focused) {
 
 void MclaApp::OnPostLoadGraphicsPlugin() {
   mcla::ApplyTextureCacheBudget();
+  mcla::photo_capture::StartAlwaysPipelineWait();  // KI-047
   if (rex::cvar::HasNonDefaultValue("readback_resolve")) {
     return;
   }

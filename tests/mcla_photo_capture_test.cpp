@@ -109,6 +109,33 @@ void TestLoggingIsBounded() {
   Check(!w.Open(100000, false).log, "transitions past the cap are not logged");
 }
 
+void TestAlwaysWaitStartDecision() {
+  using mcla::photo_capture::AlwaysWaitStart;
+  using mcla::photo_capture::DecideAlwaysWaitStart;
+  Check(DecideAlwaysWaitStart(true, true, false) == AlwaysWaitStart::kEnable,
+        "default: always-on wait is enabled");
+  Check(DecideAlwaysWaitStart(true, true, true) == AlwaysWaitStart::kUserSet,
+        "a user-set value is left alone");
+  Check(DecideAlwaysWaitStart(true, false, false) ==
+            AlwaysWaitStart::kUnavailable,
+        "older SDK: unavailable");
+  Check(DecideAlwaysWaitStart(true, false, true) ==
+            AlwaysWaitStart::kUnavailable,
+        "older SDK wins over user-set");
+  for (int bits = 0; bits < 4; ++bits) {
+    Check(DecideAlwaysWaitStart(false, bits & 1, bits & 2) ==
+              AlwaysWaitStart::kDisabledByOption,
+          "option off never writes");
+  }
+}
+
+void TestAlwaysWaitShutdownWrite() {
+  using mcla::photo_capture::AlwaysWaitShutdownWrite;
+  const auto owned = AlwaysWaitShutdownWrite(true);
+  Check(owned && !*owned, "an owned always-on wait is turned off");
+  Check(!AlwaysWaitShutdownWrite(false), "a value not owned is not written");
+}
+
 }  // namespace
 
 int main() {
@@ -119,6 +146,8 @@ int main() {
   TestWallTimeout();
   TestShutdownClosesAndStops();
   TestLoggingIsBounded();
+  TestAlwaysWaitStartDecision();
+  TestAlwaysWaitShutdownWrite();
   std::printf("mcla_photo_capture_test: %d checks passed\n", checks);
   return 0;
 }

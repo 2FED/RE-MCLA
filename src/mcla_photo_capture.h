@@ -136,8 +136,46 @@ class Window {
   int logged_ = 0;
 };
 
+// KI-047 always-on pipeline wait: at startup the host turns on the SDK's
+// hot-reload cvar d3d12_async_pipeline_wait_always (bounded per wait and per
+// minute in the SDK), so draws are not skipped while their pipelines are
+// still being created, outside Photo Mode too. A value the user set is left
+// alone (the registry reports only a non-default value, i.e. true; to turn
+// the mode off use mcla_pipeline_wait_always=false); an owned value is turned
+// off at shutdown so a settings save cannot persist it.
+enum class AlwaysWaitStart {
+  kDisabledByOption,  // mcla_pipeline_wait_always=false: nothing written
+  kUnavailable,       // the GPU plugin has no always-on cvar (older SDK)
+  kUserSet,           // the user set the cvar: left alone, not owned
+  kEnable,            // write true and own it until shutdown
+};
+
+inline AlwaysWaitStart DecideAlwaysWaitStart(bool option_on, bool sdk_has_cvar,
+                                             bool user_set) {
+  if (!option_on) {
+    return AlwaysWaitStart::kDisabledByOption;
+  }
+  if (!sdk_has_cvar) {
+    return AlwaysWaitStart::kUnavailable;
+  }
+  return user_set ? AlwaysWaitStart::kUserSet : AlwaysWaitStart::kEnable;
+}
+
+// Value to write at shutdown: false only when the host owns the cvar.
+inline std::optional<bool> AlwaysWaitShutdownWrite(bool owned) {
+  if (owned) {
+    return false;
+  }
+  return std::nullopt;
+}
+
+// Startup hook (defined in mcla_photo_capture.cpp), called once the GPU
+// plugin and its cvars are loaded.
+void StartAlwaysPipelineWait();
+
 // Host shutdown hook (defined in mcla_photo_capture.cpp): turns an owned
-// d3d12_async_pipeline_wait off so a later settings save cannot persist it.
+// d3d12_async_pipeline_wait and an owned d3d12_async_pipeline_wait_always off
+// so a later settings save cannot persist them.
 void ShutdownPhotoCapture();
 
 }  // namespace mcla::photo_capture

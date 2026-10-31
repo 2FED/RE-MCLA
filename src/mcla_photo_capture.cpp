@@ -23,6 +23,15 @@
 // window that opened, the unfreeze asks the SDK to resync the wheel's
 // infinite force-feedback effects (reason host:photo-close). Follows the
 // init-only mcla_photo_pipeline_wait switch (the window must be enabled).
+//
+// KI-047: outside the capture window the same skips bake incomplete content
+// into one-off render-to-texture results such as car liveries (1,705 skipped
+// draws on a cold-store world load). The init-only mcla_pipeline_wait_always
+// switch (default on) turns on the SDK's d3d12_async_pipeline_wait_always at
+// startup: every pending pipeline is waited for, bounded to 2 s per wait and
+// 15 s per minute in the SDK. The capture window keeps its own budget and
+// takes precedence in the SDK. See
+// docs/evidence/M9-006-pipeline-wait-always-20261031.md.
 
 #include "mcla_photo_capture.h"
 
@@ -40,10 +49,21 @@ REXCVAR_DEFINE_BOOL(mcla_photo_pipeline_wait, true, "MCLA",
     "capture window instead of dropping their draws (KI-037)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_pipeline_wait_always, true, "MCLA",
+    "Wait (bounded: 2 s per wait, 15 s per minute) for GPU pipelines still "
+    "being created instead of skipping their draws, at all times, not only in "
+    "the Photo Mode capture window (KI-047)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 namespace {
 
 constexpr uint32_t kCaptureActiveByte = 0x8290622Eu;
 constexpr const char *kWaitCvar = "d3d12_async_pipeline_wait";
+constexpr const char *kAlwaysWaitCvar = "d3d12_async_pipeline_wait_always";
+
+// Set by StartAlwaysPipelineWait when the host wrote the always-on cvar;
+// guarded by window_mutex (start and shutdown both run on the UI thread).
+bool always_wait_owned = false;
 
 uint64_t NowMs() {
   return static_cast<uint64_t>(
@@ -108,9 +128,47 @@ void Apply(const mcla::photo_capture::Decision &decision) {
 
 namespace mcla::photo_capture {
 
+void StartAlwaysPipelineWait() {
+  std::lock_guard lock(window_mutex);
+  const bool option_on = REXCVAR_GET(mcla_pipeline_wait_always);
+  const bool sdk_has_cvar = rex::cvar::GetFlagInfo(kAlwaysWaitCvar) != nullptr;
+  const bool user_set =
+      sdk_has_cvar && rex::cvar::HasNonDefaultValue(kAlwaysWaitCvar);
+  switch (DecideAlwaysWaitStart(option_on, sdk_has_cvar, user_set)) {
+    case AlwaysWaitStart::kDisabledByOption:
+      MCLA_GPU_INFO("MCLA pipeline wait: always-on wait disabled by option");
+      return;
+    case AlwaysWaitStart::kUnavailable:
+      MCLA_GPU_INFO("MCLA pipeline wait: always-on wait unavailable in this "
+                    "SDK");
+      return;
+    case AlwaysWaitStart::kUserSet:
+      MCLA_GPU_INFO("MCLA pipeline wait: {} set by the user ({}), left alone",
+                    kAlwaysWaitCvar, rex::cvar::Query<bool>(kAlwaysWaitCvar));
+      return;
+    case AlwaysWaitStart::kEnable:
+      break;
+  }
+  if (rex::cvar::SetFlagByName(kAlwaysWaitCvar, "true")) {
+    always_wait_owned = true;
+    MCLA_GPU_INFO("MCLA pipeline wait: always on (2 s per wait, 15 s per "
+                  "minute)");
+  } else {
+    MCLA_GPU_ERROR("MCLA pipeline wait: could not set {}=true",
+                   kAlwaysWaitCvar);
+  }
+}
+
 void ShutdownPhotoCapture() {
   std::lock_guard lock(window_mutex);
   Apply(GetWindow().Shutdown(NowMs()));
+  if (const auto write = AlwaysWaitShutdownWrite(always_wait_owned)) {
+    always_wait_owned = false;
+    if (!rex::cvar::SetFlagByName(kAlwaysWaitCvar, *write ? "true" : "false")) {
+      MCLA_GPU_ERROR("MCLA pipeline wait: could not set {}={}", kAlwaysWaitCvar,
+                     *write);
+    }
+  }
 }
 
 }  // namespace mcla::photo_capture
