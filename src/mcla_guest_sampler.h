@@ -5,7 +5,12 @@
 // (PPCContext::current_function) and last kernel import
 // (PPCContext::last_import) at about 500 Hz and logs one line per thread:
 //
-//   MCLA_GUEST_SAMPLE v=1 thread='<name>' samples=<n> fn=<top 12> last_import=<histogram>
+//   MCLA_GUEST_SAMPLE v=1 thread='<name>' tid=<host id> handle=<guest handle>
+//     samples=<n> fn=<top 12> last_import=<histogram>
+//
+// thread is the guest object name, or the host thread name ("XThreadNNNN
+// (F80004E0)") when the guest gave none; tid joins the line with the
+// native_threads table of state.json and MCLA_THREAD_CPU (M10-001).
 //
 // See docs/evidence/M9-006-ki-035-freeze-analysis-20261029.md. The histogram
 // and line formatting below are pure and unit-tested
@@ -37,6 +42,8 @@ inline constexpr int kSampleIntervalMs = 2;
 // while sampling (cheap); FormatLine merges equal names.
 struct Histogram {
   std::string name;
+  uint32_t tid = 0;
+  uint32_t handle = 0;
   uint32_t samples = 0;
   std::unordered_map<uint32_t, uint32_t> functions;
   std::unordered_map<const char *, uint32_t> imports;
@@ -99,8 +106,10 @@ inline std::string FormatLine(const Histogram &histogram) {
   if (!histogram.samples) {
     return {};
   }
-  return "MCLA_GUEST_SAMPLE v=1 thread='" + SanitizeName(histogram.name) +
-         "' samples=" + std::to_string(histogram.samples) +
+  char ids[48];
+  std::snprintf(ids, sizeof(ids), "' tid=%u handle=%08X", histogram.tid, histogram.handle);
+  return "MCLA_GUEST_SAMPLE v=1 thread='" + SanitizeName(histogram.name) + ids +
+         " samples=" + std::to_string(histogram.samples) +
          " fn=" + FormatTopFunctions(histogram.functions, kTopFunctions) +
          " last_import=" + FormatImports(histogram.imports);
 }

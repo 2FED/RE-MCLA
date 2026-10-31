@@ -302,6 +302,19 @@ int RunTests() {
           "guest_ki026 never reaches the exported metadata");
   }
   {
+    // M10-001: the owner-internal perf_split totals block is diagnostic-only;
+    // the projection is byte-for-byte identical with and without it.
+    Fixture f;
+    f.state["perf_split"] = {{"version",1},{"active_mode",1},{"seq",3},{"last_reason","f10"},
+        {"tsc_mhz",2995.123},{"render_tid",6699},{"render_handle",4160750816u},
+        {"wall_ms",180012.5},{"draws",1234567},{"p_setup_ms",812.25},{"packets_other_ms",-1.5},
+        {"render_cpu_ms",-1.0},{"note",kPrivate}};
+    const auto with_block = Accept(f,"extra perf_split state block accepted");
+    const auto baseline = Accept(Fixture{},"baseline without perf_split");
+    Check(with_block.dump() == baseline.dump(),
+          "perf_split never reaches the exported metadata (byte-for-byte)");
+  }
+  {
     Fixture f; f.manifest["capture"]["frame"] = true;
     f.manifest["artifacts"].push_back({{"name","frame.bmp"},{"sha256",kPrivate},{"safe_to_share",true}});
     f.manifest["artifacts"].push_back({{"name","process-private.dmp"},{"bytes",kPrivate}});

@@ -63,6 +63,7 @@
 #include "mcla_diagnostics.h"
 // M9 host hooks (M9-007 menu-state cap, KI-035 sampler, KI-026 state block).
 #include "mcla_guest_sampler.h"
+#include "mcla_perf_split.h"
 #include "mcla_ki026_probe.h"
 #include "mcla_menu_state.h"
 #include "mcla_photo_capture.h"
@@ -1317,6 +1318,7 @@ void MclaApp::OnWindowFocusChanged(bool focused) {
 
 void MclaApp::OnPostLoadGraphicsPlugin() {
   mcla::ApplyTextureCacheBudget();
+  mcla::perf_split::OnGraphicsPluginLoaded();  // M10-001
   mcla::photo_capture::StartAlwaysPipelineWait();  // KI-047
   if (rex::cvar::HasNonDefaultValue("readback_resolve")) {
     return;
@@ -3564,6 +3566,8 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
     state.guest_ki026_json = MclaKi026StateJson(active_runtime->memory(),
                                                 active_runtime->virtual_membase());
   }
+  // M10-001: cumulative cost-split totals (empty without the SDK split).
+  state.perf_split_json = mcla::perf_split::StateJson();
   return state;
 }
 
@@ -3603,6 +3607,8 @@ void MclaApp::RequestLiveSnapshot(mcla::diagnostics::SnapshotTrigger trigger,
     // KI-035: 10 s guest-thread sampler for each accepted snapshot.
     mcla::guest_sampler::Start(
         runtime() ? runtime()->kernel_state() : nullptr);
+    // M10-001: cut the cost-split window at this snapshot.
+    mcla::perf_split::Mark(reason);
   }
   if (diagnostic_status_dialog_) {
     auto *dialog =
@@ -3710,6 +3716,7 @@ bool MclaApp::OnWindowCloseRequested() {
 
 void MclaApp::OnShutdown() {
   mcla::guest_sampler::Stop();                 // KI-035
+  mcla::perf_split::Shutdown();                // M10-001
   mcla::menu_state::ShutdownMenuStateCap();    // M9-007
   mcla::photo_capture::ShutdownPhotoCapture();  // KI-037
   ShutdownDiagnosticTriggers();

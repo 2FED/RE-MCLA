@@ -74,7 +74,7 @@ void TestLineFormat() {
   for (int i = 0; i < 3; ++i) h.Add(0x822C1FA8u, "KeWaitForSingleObject");
   h.Add(0x821C90C0u, nullptr);
   Check(FormatLine(h) ==
-            "MCLA_GUEST_SAMPLE v=1 thread='Main XThread' samples=4 "
+            "MCLA_GUEST_SAMPLE v=1 thread='Main XThread' tid=0 handle=00000000 samples=4 "
             "fn= 822C1FA8:3 821C90C0:1 last_import= KeWaitForSingleObject:3 none:1",
         "line matches the v=1 format");
 }
@@ -82,6 +82,16 @@ void TestLineFormat() {
 void TestNameSanitizing() {
   Check(SanitizeName("Render 'A'\n") == "Render ?A??", "quotes and control characters replaced");
   Check(SanitizeName(std::string(100, 'x')).size() == 64, "names are bounded");
+}
+void TestLineCarriesThreadIds() {
+  Histogram h;
+  h.name = "XThread1A2B (F80004E0)";
+  h.tid = 6699;
+  h.handle = 0xF80004E0u;
+  h.Add(0x82412F98u, nullptr);
+  Check(FormatLine(h).starts_with("MCLA_GUEST_SAMPLE v=1 thread='XThread1A2B (F80004E0)' "
+                                  "tid=6699 handle=F80004E0 samples=1 fn= 82412F98:1"),
+        "tid and guest handle follow the thread name");
 }
 }  // namespace
 
@@ -92,6 +102,7 @@ int main() {
   TestImportsMergeAndSort();
   TestLineFormat();
   TestNameSanitizing();
+  TestLineCarriesThreadIds();
   std::printf("mcla_guest_sampler_test: %d checks passed\n", checks);
   return 0;
 }

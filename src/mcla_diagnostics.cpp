@@ -949,6 +949,9 @@ BuildStateJson(std::string_view reason, const SnapshotTrigger &trigger,
   if (!runtime.guest_ki026_json.empty()) {
     out << "  \"guest_ki026\": " << runtime.guest_ki026_json << ",\n";
   }
+  if (!runtime.perf_split_json.empty()) {
+    out << "  \"perf_split\": " << runtime.perf_split_json << ",\n";
+  }
   out << "  \"native_threads\": [";
   for (size_t i = 0; i < native_threads.size(); ++i) {
     const auto &thread = native_threads[i];

@@ -50,6 +50,14 @@ void Run(std::stop_token stop, rex::system::KernelState *kernel) {
     }
     Target target;
     target.histogram.name = thread->name();
+    // M10-001: the host thread id and its "XThreadNNNN (handle)" name.
+    if (auto *host_thread = thread->thread()) {
+      target.histogram.tid = host_thread->system_id();
+      if (target.histogram.name.empty()) {
+        target.histogram.name = host_thread->name();
+      }
+    }
+    target.histogram.handle = thread->handle();
     target.context = context;
     target.thread = std::move(thread);
     targets.push_back(std::move(target));
