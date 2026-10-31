@@ -1935,11 +1935,11 @@ honest dispositions for the issues testers will meet first.
 
 ## 17b. Milestone M10 — Performance, Steam Deck and stabilisation round 2
 
-Plan drafted 2026-10-31 after the M9 closure, **owner approval pending**: [M10 priorities](docs/M10-priorities.md). Goal: a measurably faster and smoother build for the same closed tester group with the Steam Deck as a first-class target; not in M10: public release hardening (section 17a) and platforms beyond the Deck.
+Plan drafted 2026-10-31 after the M9 closure and **approved by the owner the same day**: [M10 priorities](docs/M10-priorities.md). Goal: a measurably faster and smoother build for the same closed tester group with the Steam Deck as a first-class target; not in M10: public release hardening (section 17a) and platforms beyond the Deck.
 
 ### Tasks (draft)
 
-- [ ] **M10-001** Measurement at one repeatable heavy intersection in unlocked mode (guest render thread, CP thread, real GPU busy, per-draw CP cost split) plus a Deck baseline with the same harness; names what limits each platform.
+- [-] **M10-001** Measurement at one repeatable heavy intersection in unlocked mode (guest render thread, CP thread, real GPU busy, per-draw CP cost split) plus a Deck baseline with the same harness; names what limits each platform.
 - [ ] **M10-002** Read-back path scoping: CPU read-back only for ranges not resolved every frame; before/after counters; photo mode, vinyl/livery and the album preview (KI-056) as named checks.
 - [ ] **M10-003** Shader/pipeline pre-warm before the first launch (owner request): store portability study, launcher pre-warm pass with progress UI, pipeline-key replay.
 - [ ] **M10-004** Vulkan-enabled SDK build and Deck A/B (KI-053); the launcher switches to Vulkan under Wine only if Vulkan wins or ties.
@@ -1952,6 +1952,7 @@ Plan drafted 2026-10-31 after the M9 closure, **owner approval pending**: [M10 p
 ### Checkpoint log
 
 - 2026-10-31 — Plan drafted (docs/M10-priorities.md). Health: `NOT STARTED`. Next: owner approval, then M10-001.
+- 2026-10-31 — Plan approved by the owner ("the plan suits me, start M10-001 to see where to go next"). M10-001 started: harness design first (existing counters, missing CP/thread instrumentation, bench profile, candidate intersections), then an owner-internal measurement build. Health: `GREEN`.
 
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 

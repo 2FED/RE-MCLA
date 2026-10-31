@@ -49,7 +49,7 @@ KI-013, KI-026, KI-032, KI-033, KI-035, KI-036, KI-037 (first photo and save pre
 - Heavy intersections drop to about 30-40 FPS.
 - One `DEVICE_HUNG` in eight l29 title runs.
 
-## Next (M10, plan drafted 2026-10-31, owner approval pending)
+## Next (M10, plan approved by the owner 2026-10-31; M10-001 in progress)
 
 - Plan: [M10 priorities](M10-priorities.md). Order: M10-001 measurement at a heavy intersection plus a Deck baseline, M10-002 read-back path scoping, M10-003 shader/pipeline pre-warm, M10-004 Vulkan-enabled SDK and Deck A/B, M10-005 Deck performance to a stable 30, M10-006 multi-threaded CP (gated on M10-001), M10-007 video-memory budget, M10-008 KI triage round 2, M10-009 volunteer release cadence and closure regression.
 - M9 is closed; see README-AI section 17. Public release hardening stays the later milestone (section 17a).
