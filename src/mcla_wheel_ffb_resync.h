@@ -5,8 +5,7 @@
 // continuous engine periodic). See
 // docs/evidence/M9-006-ki-022-fix-build-20261030.md.
 //
-// The API exists only in the KI-022 dev SDK (branch mcla/ki-022-ffb-rearm,
-// header rex/input/sdl/wheel_force_feedback_resync.h). Against an SDK without
+// The API is part of the published SDK since v0.20.0.4. Against an SDK without
 // it (an SDK older than v0.20.0.4) the request compiles to a no-op that returns
 // false, so the build cannot break on a missing symbol; the fix is then
 // simply absent.

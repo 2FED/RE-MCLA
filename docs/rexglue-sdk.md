@@ -8,7 +8,47 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
-**M9-006 (2026-10-30, pushed 2026-10-30): the submodule pin moves to
+**M9-006 (2026-10-31, pushed 2026-10-31): the submodule pin moves to
+`851f03bd23797e72da4091c3fe7fec7566c0d1c9`** (`851f03b`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
+`v0.20.0.5` (annotated), package version **0.20.0.5**. The exact tag yields `0.20.0.5`;
+the same commit without its tag reports a `-dev.g851f03b` version (`0.20.0.2-dev.g851f03b`
+when `v0.20.0.4` is the nearest tag), so clean clones must fetch tags. Fast-forward on top
+of `daa1ae5`, two KI-047 deltas (both hot-reload cvars, SDK default off):
+
+- `928f6d3` gpu(d3d12): `d3d12_livery_diag` (default off). While on, the D3D12 command
+  processor logs `MCLA_LIVERY_DIAG v=1` lines: `kind=pso_skip` (a draw skipped because its
+  pipeline is still being created or failed; one line per pipeline until 120 quiet frames),
+  `kind=resolve` (a resolve whose destination is read back: range, format, source render
+  target, scale, the CPU copy decision and the skipped draws since the previous resolve) and
+  `kind=minute` (per-minute counts; `pso_pending_skip_per_minute N` is appended to the frame
+  pacing line). At most 64 `pso_skip` and 64 `resolve` lines per minute; no guest memory contents and no paths.
+  With the cvar off the behaviour and the log are unchanged.
+- `851f03b` gpu(d3d12): `d3d12_async_pipeline_wait_always` (default off). With
+  `async_shader_compilation`, every draw whose pipeline is still being created waits for it
+  instead of being skipped, bounded to **2 s per wait and 15 s of waiting per one-minute
+  window**; once a window's budget is spent, draws are skipped again until the next window
+  (one `pipeline wait budget exhausted` warning and one summary line per window). Composed
+  with the KI-037 photo-window wait `d3d12_async_pipeline_wait` (2 s per wait, 8 s per
+  on-period), which takes precedence while on; the two budgets are tracked separately.
+  Pure logic in `rex/graphics/util/pending_pipeline_wait.h`. The MCLA host turns the mode on
+  at startup (init-only `mcla_pipeline_wait_always`, default on).
+
+SDK ctest at `851f03b`: 1912/1912
+([always-on wait](evidence/M9-006-pipeline-wait-always-20261031.md),
+[diagnostics build](evidence/M9-006-ki-047-diag-build-20261031.md)). `thirdparty/sdl3` stays at
+`422c186` from `https://github.com/2FED/SDL.git`; every other nested gitlink is unchanged
+from `daa1ae5` and the manifest below. Verify a fresh clone with:
+
+```powershell
+git -C third_party/rexglue-sdk rev-parse HEAD                  # 851f03bd23797e72da4091c3fe7fec7566c0d1c9
+git -C third_party/rexglue-sdk rev-list -n 1 v0.20.0.5         # same
+git -C third_party/rexglue-sdk ls-tree HEAD thirdparty/sdl3    # 422c186c0a272bf6f255b2f4537a726f804e924b
+git submodule status --recursive
+```
+
+The `daa1ae5` pin text that follows stays as history.
+
+**M9-006 (2026-10-30, pushed 2026-10-30; superseded by `851f03b` on 2026-10-31): the submodule pin moved to
 `daa1ae5f751a55461a5f57e7a42677b6210240ed`** (`daa1ae5`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
 `v0.20.0.4` (annotated), package version **0.20.0.4**. The exact tag yields `0.20.0.4`;
 the same commit without its tag reports a `-dev.gdaa1ae5` version (`0.20.0.4-dev.gdaa1ae5`

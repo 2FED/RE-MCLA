@@ -6,20 +6,22 @@ Purpose: provide reproducible setup, codegen, build, test, and package commands 
 
 ## M9-001 build from the published SDK
 
-The submodule pins rexglue-sdk `daa1ae5` (package `0.20.0.4`, fork tag
-`v0.20.0.4`; pushed 2026-10-30, see [SDK pin](rexglue-sdk.md)). It contains the 32bpp
-resolve fix, the M8 command-processor work, the four M9 deltas of `v0.20.0.3` and the
-four KI-022 wheel force-feedback deltas (host API `RequestWheelEffectResync`), and its
+The submodule pins rexglue-sdk `851f03b` (package `0.20.0.5`, fork tag
+`v0.20.0.5`; pushed 2026-10-31, see [SDK pin](rexglue-sdk.md)). It contains the 32bpp
+resolve fix, the M8 command-processor work, the four M9 deltas of `v0.20.0.3`, the
+four KI-022 wheel force-feedback deltas of `v0.20.0.4` (host API
+`RequestWheelEffectResync`) and the two KI-047 deltas (`d3d12_livery_diag`,
+`d3d12_async_pipeline_wait_always`), and its
 `thirdparty/sdl3` comes from the fork `https://github.com/2FED/SDL.git`. No SDK patch
 is applied at build time. Build the SDK from a clean recursive clone with tags (the
 package version is derived from `git describe`; without the tag the SDK reports
-a `-dev.gdaa1ae5` version, e.g. `0.20.0.4-dev.gdaa1ae5` when only `v0.20.0.3` is
-present, instead of exactly `0.20.0.4`), then build
-`mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.4` (quote the
+a `-dev.g851f03b` version, e.g. `0.20.0.2-dev.g851f03b` when `v0.20.0.4` is the
+nearest tag, instead of exactly `0.20.0.5`), then build
+`mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.5` (quote the
 argument in PowerShell). One host serves both modes: the launcher's Frame rate choice (M9-003) adds `--mcla_guest_vblank_hz=240` for Unlocked. The exact flags, the
 `libmspack` link materialization and the reference hashes are in the
 [M9-001 evidence](evidence/M9-001-reproducible-build-20261028.md) (`a239b83` /
-0.20.0.2 era; the flags are unchanged for `f519dd5` and `daa1ae5`). The older
+0.20.0.2 era; the flags are unchanged for `f519dd5`, `daa1ae5` and `851f03b`). The older
 sections below describe the `5dd58f8` / 0.20.0.0 era.
 
 ## M7 WGC and local profile candidate
