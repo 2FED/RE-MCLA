@@ -174,3 +174,8 @@ ticket, list or staging output exists.
 - One benign `L52` byte match in `mcla.exe` machine code (see check 8).
 - The clone came from the local worktree's committed branch; the SDK sources and all
   submodules came from GitHub. Output is not bit-identical across checkout paths.
+
+## Owner signing and publication (2026-10-31)
+
+- The owner ran `private/l52-volunteer-prepare.ps1`: V2 kill-switch ticket with `capabilities 1080p,1440p,unlocked`, `l52-entries.json` (l48, l49 carried from the trimmed list; l52 host `823BFBA4...` added for 30 days), signed `l52-active-builds.txt` issued 1793453342, staged `private/l52-volunteer`, lease probe `SIGNED_LEASES_VERIFIED entries=3`, volunteer audit passed.
+- With the owner's explicit approval the primary agent published the list to `DebugBundle` of `2FED/RE-MCLA` (commit `6c22440`, replacing `2f609fb`); the raw URL returned HTTP 200 with bytes identical to the signed file.
