@@ -199,7 +199,7 @@ int FakeChild(int argc, wchar_t **argv) {
       args[L"draw_resolution_scale_x"] != L"2" || args[L"draw_resolution_scale_y"] != L"2" ||
       args[L"video_mode_width"] != L"1280" || args[L"video_mode_height"] != L"720" ||
       args[L"vsync"] != L"true" || args[L"fullscreen"] != L"false" ||
-      args[L"gpu_backend"] != (proton ? L"vulkan" : L"d3d12")) return finish(89);
+      args[L"gpu_backend"] != L"d3d12") return finish(89);
   // Exact ordered command line with session-specific root values masked, so
   // the parent can compare a Windows and a Proton launch argument by argument.
   std::string ordered;
@@ -930,9 +930,10 @@ bool FolderChoiceMatrix(const std::filesystem::path &root,
   return true;
 }
 
-// KI-050/KI-053 (M9-006): the same stock launch with Steam/SDL variables in
-// the launcher environment. Forced Windows drops them and keeps D3D12; forced
-// Wine passes them through and changes only --gpu_backend to vulkan.
+// KI-050 (M9-006): the same stock launch with Steam/SDL variables in the
+// launcher environment. Forced Windows drops them; forced Wine passes them
+// through. KI-053 is deferred (SDK without Vulkan), so both command lines are
+// identical to the main launch, including --gpu_backend=d3d12.
 bool ProtonLaunchMatrix(const std::filesystem::path &root,const std::filesystem::path &build,
                         const std::filesystem::path &game,const std::string &windows_args) {
   const auto matrix=root/L"proton-launch";
@@ -973,11 +974,8 @@ bool ProtonLaunchMatrix(const std::filesystem::path &root,const std::filesystem:
             "forced Windows: Steam/SDL variables dropped, stock command line unchanged (d3d12)");
       Check(started.status.find(L"Proton:")==std::wstring::npos,"forced Windows: no Proton status notice");
     } else {
-      auto expected=windows_args;
-      const auto at=expected.find("\n--gpu_backend=d3d12\n");
-      if(at!=expected.npos) expected.replace(at,21,"\n--gpu_backend=vulkan\n");
-      Check(ready && at!=std::string::npos && args==expected,
-            "forced Wine: Steam/SDL variables reach the child; only --gpu_backend becomes vulkan");
+      Check(ready && args==windows_args && args.find("\n--gpu_backend=d3d12\n")!=args.npos,
+            "forced Wine: Steam/SDL variables reach the child; command line identical (d3d12, KI-053 deferred)");
       Check(started.status.find(L" Proton: Steam/SDL environment passed through: 3 variables.")!=std::wstring::npos,
             "forced Wine: status names the pass-through count once");
     }
@@ -1559,8 +1557,8 @@ int wmain(int argc, wchar_t **argv) {
   Check(FolderChoiceMatrix(root,build,game),"folder choice persistence matrix completed");
   Check(TicketGrantMatrix(root,build,game),"signed ticket capability grant matrix completed");
   Check(ProtonLaunchMatrix(root,build,game,windows_args),"Proton launch matrix completed");
-  Check(GpuBackendArgument(false)==L"--gpu_backend=d3d12" && GpuBackendArgument(true)==L"--gpu_backend=vulkan",
-        "backend argument: d3d12 on Windows, vulkan under Wine");
+  Check(GpuBackendArgument(false)==L"--gpu_backend=d3d12" && GpuBackendArgument(true)==L"--gpu_backend=d3d12",
+        "backend argument: d3d12 everywhere until a Vulkan-enabled SDK (KI-053 deferred)");
   std::cout << "Launcher controller: " << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

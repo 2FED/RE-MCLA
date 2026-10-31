@@ -34,10 +34,14 @@ inline std::wstring InitialGpuName(std::wstring_view saved, std::span<const Adap
   return DefaultAdapterName(adapters).value_or(std::wstring{});
 }
 
-// Under Wine/Proton the host's native Vulkan backend avoids D3D12 through
-// vkd3d-proton; real Windows keeps D3D12. Only this argument differs.
+// KI-053 deferred: D3D12 on every platform, including Wine/Proton (vkd3d).
+// The project's SDK installs are built with REXGLUE_USE_VULKAN=OFF, so the
+// xenos plugin has no Vulkan backend and "vulkan" fails at startup. Return
+// --gpu_backend=vulkan under Wine only after an SDK build with
+// REXGLUE_USE_VULKAN=ON and a Steam Deck check of that backend.
 inline std::wstring_view GpuBackendArgument(bool under_wine) {
-  return under_wine ? std::wstring_view(L"--gpu_backend=vulkan") : std::wstring_view(L"--gpu_backend=d3d12");
+  (void)under_wine;
+  return std::wstring_view(L"--gpu_backend=d3d12");
 }
 
 }  // namespace mcla::launcher
