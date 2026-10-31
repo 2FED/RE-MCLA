@@ -936,12 +936,12 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   status=running?L"Game running. This profile is locked across builds. Closing this window leaves the game running.":
       L"Game running, but session receipt update failed. Profile lock remains held; finish the game normally.";
   if(recreated_support) status+=L" Missing support folders recreated; existing files were not replaced.";
-  if(platform::RunningUnderWine()) {
-    // KI-050: name the Steam/SDL pass-through once per launch (status and the
-    // debugger/Proton log); 0 means Steam set none of them for this launcher.
-    const auto notice=L"Proton: Steam/SDL environment passed through: "+
-        std::to_wstring(session->process.ProtonPassThroughCount())+L" variables.";
-    status+=L" "+notice;
+  {
+    // KI-050: name the Steam/SDL pass-through once per launch. The debugger
+    // (Proton) log always gets the count; the status only when Steam set any.
+    const auto passed=session->process.SteamPassThroughCount();
+    const auto notice=L"Steam/SDL environment passed through: "+std::to_wstring(passed)+L" variables.";
+    if(passed>0) status+=L" "+notice;
     OutputDebugStringW((L"MCLA launcher: "+notice+L"\n").c_str());
   }
   return {};

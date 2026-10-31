@@ -183,7 +183,7 @@ int FakeChild(int argc, wchar_t **argv) {
     const auto key = text.substr(0, text.find(L'='));
     bool known = false;
     for (const auto name : allowed) known |= name == key;
-    if (proton) for (const auto name : ProtonPassThroughNames()) known |= name == key;
+    if (proton) for (const auto name : SteamPassThroughNames()) known |= name == key;
     safe &= known;
   }
   FreeEnvironmentStringsW(environment);
@@ -931,9 +931,9 @@ bool FolderChoiceMatrix(const std::filesystem::path &root,
 }
 
 // KI-050 (M9-006): the same stock launch with Steam/SDL variables in the
-// launcher environment. Forced Windows drops them; forced Wine passes them
-// through. KI-053 is deferred (SDK without Vulkan), so both command lines are
-// identical to the main launch, including --gpu_backend=d3d12.
+// launcher environment. Forced Windows and forced Wine both pass them through.
+// KI-053 is deferred (SDK without Vulkan), so both command lines are identical
+// to the main launch, including --gpu_backend=d3d12.
 bool ProtonLaunchMatrix(const std::filesystem::path &root,const std::filesystem::path &build,
                         const std::filesystem::path &game,const std::string &windows_args) {
   const auto matrix=root/L"proton-launch";
@@ -969,16 +969,14 @@ bool ProtonLaunchMatrix(const std::filesystem::path &root,const std::filesystem:
     }
     if(!ready) std::wcerr<<started.status<<L'\n';
     const auto args=Read(session/L"fixture-args.txt");
-    if(!wine) {
-      Check(ready && args==windows_args && args.find("\n--gpu_backend=d3d12\n")!=args.npos,
-            "forced Windows: Steam/SDL variables dropped, stock command line unchanged (d3d12)");
-      Check(started.status.find(L"Proton:")==std::wstring::npos,"forced Windows: no Proton status notice");
-    } else {
-      Check(ready && args==windows_args && args.find("\n--gpu_backend=d3d12\n")!=args.npos,
-            "forced Wine: Steam/SDL variables reach the child; command line identical (d3d12, KI-053 deferred)");
-      Check(started.status.find(L" Proton: Steam/SDL environment passed through: 3 variables.")!=std::wstring::npos,
-            "forced Wine: status names the pass-through count once");
-    }
+    // The child returns 88/98 unless exactly the 3 variables arrive intact.
+    Check(ready && args==windows_args && args.find("\n--gpu_backend=d3d12\n")!=args.npos,
+          wine?"forced Wine: Steam/SDL variables reach the child; command line identical (d3d12, KI-053 deferred)":
+               "forced Windows: Steam/SDL variables reach the child; command line identical (d3d12)");
+    const auto notice=started.status.find(L" Steam/SDL environment passed through: 3 variables.");
+    Check(notice!=std::wstring::npos && started.status.find(L"passed through",notice+40)==std::wstring::npos &&
+          started.status.find(L"Proton:")==std::wstring::npos,
+          "status names the pass-through count once, without a Proton prefix");
     if(!session.empty()) NewFile(session/L"finish.signal","FINISH_FIXTURE\n");
     const auto finishing=GetTickCount64();
     while(controller->running() && GetTickCount64()-finishing<10000) { controller->Dispatch(UiAction::Refresh,{}); Sleep(5); }
@@ -1273,6 +1271,8 @@ int wmain(int argc, wchar_t **argv) {
       Read(root / L"store-a/preferences.dat")==prefs_before_verify, "rejected verify does not claim integrity or mutate preferences");
   const auto initial = first.Dispatch(UiAction::Play, request);
   Check(initial.running && first.running(), "real controller starts only the synthetic self-child");
+  Check(initial.status.find(L"passed through") == std::wstring::npos,
+        "no Steam/SDL variables in the launcher environment: no pass-through notice");
   Check(initial.readiness==LaunchReadiness::Running &&
         first.Dispatch(UiAction::CheckLaunch,request).readiness==LaunchReadiness::Running,
         "owned running session overrides readiness and refuses another preflight");

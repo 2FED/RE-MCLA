@@ -77,21 +77,9 @@
 #define NOMINMAX
 #endif
 #include <Windows.h>
-
-#include "mcla_host_platform_win.h"
 #endif
 
 namespace {
-
-// Wine/Proton process (ntdll export), independent of the environment the
-// launcher passes. Never true on real Windows or other platforms.
-bool RunningUnderCompatibilityLayer() {
-#if defined(_WIN32)
-  return mcla::platform::RunningUnderWine();
-#else
-  return false;
-#endif
-}
 
 bool HasEnvironmentVariable(const char *name) {
 #if defined(_WIN32)
@@ -1241,13 +1229,12 @@ void MclaApp::OnCreateDialogs(rex::ui::ImGuiDrawer *drawer) {
 
 void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
   REXCVAR_SET(rtl_allow_cross_thread_critical_section_leave, true);
-  // KI-050 (M9-006): name the missing Steam virtual gamepad allowance.
-  if (RunningUnderCompatibilityLayer() &&
-      !HasEnvironmentVariable("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD")) {
-    // KI-050: SDL then ignores the Steam Virtual Gamepad (28DE:11FF).
+  // KI-050 (M9-006): name the missing Steam virtual gamepad allowance on
+  // every platform; SDL then ignores the Steam Virtual Gamepad (28DE:11FF).
+  if (!HasEnvironmentVariable("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD")) {
     MCLA_INPUT_INFO(
-        "Proton: Steam virtual gamepad not allowed by environment; "
-        "controllers through Steam Input will be invisible");
+        "Steam virtual gamepad not allowed by environment; controllers "
+        "through Steam Input will be invisible");
   }
   // KI-053 deferred: unchanged environment triggers only. config.gpu_backend
   // is the gpu_backend cvar, so the launcher's explicit --gpu_backend=d3d12
