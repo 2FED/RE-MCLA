@@ -1,6 +1,6 @@
 # Current state and handoff
 
-Updated October 30, 2026 Kyiv (coordinator continuation). README-AI owns the milestone ledger and checkpoint history.
+Updated October 31, 2026 Kyiv (M9 closed; M10 plan drafted). README-AI owns the milestone ledger and checkpoint history.
 
 ## Active outcome
 
@@ -49,10 +49,10 @@ KI-013, KI-026, KI-032, KI-033, KI-035, KI-036, KI-037 (first photo and save pre
 - Heavy intersections drop to about 30-40 FPS.
 - One `DEVICE_HUNG` in eight l29 title runs.
 
-## Next (M9, approved 2026-10-28)
+## Next (M10, plan drafted 2026-10-31, owner approval pending)
 
-- Plan: [M9 priorities](M9-priorities.md). Order: M9-001 reproducible build on SDK `a239b83`, M9-002 launcher reconciliation, M9-003/004 mode option and Setup (ex M8-006/007), M9-005 volunteer build with kill switch and report prompt (ex M8-018), M9-006 KI triage, M9-007 menu state hook, M9-008 regression.
-- M10: multi-threaded command processor. Public release hardening comes after that.
+- Plan: [M10 priorities](M10-priorities.md). Order: M10-001 measurement at a heavy intersection plus a Deck baseline, M10-002 read-back path scoping, M10-003 shader/pipeline pre-warm, M10-004 Vulkan-enabled SDK and Deck A/B, M10-005 Deck performance to a stable 30, M10-006 multi-threaded CP (gated on M10-001), M10-007 video-memory budget, M10-008 KI triage round 2, M10-009 volunteer release cadence and closure regression.
+- M9 is closed; see README-AI section 17. Public release hardening stays the later milestone (section 17a).
 
 ## Rules that still apply
 

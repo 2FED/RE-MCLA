@@ -1933,6 +1933,26 @@ honest dispositions for the issues testers will meet first.
 
 - 2026-10-31 — **M9 CLOSED** by owner decision after the owner regression (M9-008) passed on l48/l52 (both modes) and l49 on the Steam Deck: 9 of 10 tasks complete, M9-004 deferred to REL-019. Exit criteria: clean clones at v0.20.0.3/v0.20.0.4/v0.20.0.5 build the volunteer artifacts and pass the staging audit; kill switch and report prompt pass fixture tests and real owner/tester runs; no new progression blocker or save hazard (one lineage caveat: the Deck uses a profile copy with the MAIN id, the owner must name the canonical copy before any sync); every open KI has a disposition. Health: `GREEN`. Testers continue on l52 (allowance l48/l49/l52). Next milestone: M10 (multi-threaded CP, Deck performance and native Vulkan, shader/pipeline pre-warm, read-back path cost, KI-054/055/056 and the deferred KIs). Branch `claude/admiring-jang-24d485` pushed to origin at this checkpoint.
 
+## 17b. Milestone M10 — Performance, Steam Deck and stabilisation round 2
+
+Plan drafted 2026-10-31 after the M9 closure, **owner approval pending**: [M10 priorities](docs/M10-priorities.md). Goal: a measurably faster and smoother build for the same closed tester group with the Steam Deck as a first-class target; not in M10: public release hardening (section 17a) and platforms beyond the Deck.
+
+### Tasks (draft)
+
+- [ ] **M10-001** Measurement at one repeatable heavy intersection in unlocked mode (guest render thread, CP thread, real GPU busy, per-draw CP cost split) plus a Deck baseline with the same harness; names what limits each platform.
+- [ ] **M10-002** Read-back path scoping: CPU read-back only for ranges not resolved every frame; before/after counters; photo mode, vinyl/livery and the album preview (KI-056) as named checks.
+- [ ] **M10-003** Shader/pipeline pre-warm before the first launch (owner request): store portability study, launcher pre-warm pass with progress UI, pipeline-key replay.
+- [ ] **M10-004** Vulkan-enabled SDK build and Deck A/B (KI-053); the launcher switches to Vulkan under Wine only if Vulkan wins or ties.
+- [ ] **M10-005** Steam Deck performance toward a stable 30 (after 001/002/004).
+- [ ] **M10-006** Multi-threaded command processor: design, then implementation gated on the M10-001 numbers and owner approval.
+- [ ] **M10-007** Video-memory budget behaviour (KI-048, also 1080p on 8 GB; scale-3 footprint; 2160p on the 3080 Ti / 6800 XT).
+- [ ] **M10-008** Known-issue triage round 2: KI-054, KI-055, KI-056, KI-057, KI-035/KI-026 on repro, KI-038/032, KI-041/043, KI-052; confirm KI-022 and KI-047 from tester packages.
+- [ ] **M10-009** Volunteer release cadence (clean clone, changelog, allowance trimming, tester loop) and the closure regression.
+
+### Checkpoint log
+
+- 2026-10-31 — Plan drafted (docs/M10-priorities.md). Health: `NOT STARTED`. Next: owner approval, then M10-001.
+
 ## 17a. Later milestone — Release hardening, packaging, and public distribution
 
 Moved out of M9 by owner decision 2026-10-28. Task IDs are renumbered REL-xxx and get
