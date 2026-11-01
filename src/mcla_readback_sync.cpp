@@ -2,6 +2,7 @@
 
 #include "mcla_readback_sync.h"
 
+#include "mcla_dev_overrides.h"
 #include "mcla_logging.h"
 
 #include <rex/cvar.h>
@@ -17,6 +18,10 @@
 #define MCLA_READBACK_SYNC_COMPOSITE_DEFAULT 0
 #endif
 
+#ifndef MCLA_DEV_OVERRIDES
+#define MCLA_DEV_OVERRIDES 0
+#endif
+
 REXCVAR_DEFINE_BOOL(mcla_readback_sync_composite, MCLA_READBACK_SYNC_COMPOSITE_DEFAULT != 0,
     "MCLA",
     "KI-047: copy livery-composite read-back resolves synchronously "
@@ -28,7 +33,20 @@ REXCVAR_DEFINE_BOOL(mcla_readback_sync_composite, MCLA_READBACK_SYNC_COMPOSITE_D
 namespace mcla::readback_sync {
 namespace {
 
-#if defined(_WIN32) && MCLA_READBACK_SYNC_COMPOSITE_DEFAULT
+#if MCLA_DEV_OVERRIDES
+// Builds with MCLA_DEV_OVERRIDES (l57 and later owner-internal builds): the
+// multi-line override file is read by mcla_dev_overrides.cpp, which has
+// already written mcla_readback_sync_composite at startup. Report what it
+// applied, so a file value is not mistaken for a command-line value.
+OverrideStatus ReadOverrideFile() {
+  const auto value =
+      mcla::dev_overrides::AppliedValue(mcla::dev_overrides::Key::kReadbackSyncComposite);
+  if (!value) {
+    return OverrideStatus::kAbsent;
+  }
+  return *value ? OverrideStatus::kTrue : OverrideStatus::kFalse;
+}
+#elif defined(_WIN32) && MCLA_READBACK_SYNC_COMPOSITE_DEFAULT
 // Reads the per-user override file. Only a regular file (no directory, no
 // reparse point) of at most kOverrideMaxBytes is read.
 OverrideStatus ReadOverrideFile() {
@@ -83,8 +101,11 @@ void OnGraphicsPluginLoaded() {
   const bool sdk_has_cvar = rex::cvar::GetFlagInfo(sdk_cvar) != nullptr;
   const bool sdk_user_set = sdk_has_cvar && rex::cvar::HasNonDefaultValue(sdk_cvar);
   const bool host_value = REXCVAR_GET(mcla_readback_sync_composite);
-  const bool host_user_set = rex::cvar::HasNonDefaultValue(host_cvar);
   const OverrideStatus file = ReadOverrideFile();
+  // With MCLA_DEV_OVERRIDES a valid file value has already been written to the
+  // host cvar; it is a file value, not a command-line value.
+  const bool host_user_set = rex::cvar::HasNonDefaultValue(host_cvar) &&
+                             !((MCLA_DEV_OVERRIDES != 0) && file != OverrideStatus::kAbsent);
   if (file != OverrideStatus::kAbsent) {
     MCLA_GPU_INFO("MCLA readback sync: override file {} found: {}{}", kOverrideFile,
                   OverrideStatusName(file),

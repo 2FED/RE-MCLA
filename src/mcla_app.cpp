@@ -64,6 +64,7 @@
 // M9 host hooks (M9-007 menu-state cap, KI-035 sampler, KI-026 state block).
 #include "mcla_guest_sampler.h"
 #include "mcla_livery_diag.h"
+#include "mcla_dev_overrides.h"
 #include "mcla_readback_sync.h"
 #include "mcla_perf_split.h"
 #include "mcla_ki026_probe.h"
@@ -1178,6 +1179,9 @@ void MclaApp::OnPostInitLogging() {
   if (REXCVAR_GET(mcla_logging_probe)) {
     mcla::logging::EmitSchemaProbe();
   }
+  // Owner-internal A/B overrides (MCLA_DEV_OVERRIDES builds only): host
+  // init-only switches must be written before the guest runs.
+  mcla::dev_overrides::OnStartup();
   if (REXCVAR_GET(mcla_diagnostics_enabled) ||
       REXCVAR_GET(mcla_diagnostics_snapshot_probe) ||
       REXCVAR_GET(mcla_native_crash_probe) ||
@@ -1319,6 +1323,7 @@ void MclaApp::OnWindowFocusChanged(bool focused) {
 }
 
 void MclaApp::OnPostLoadGraphicsPlugin() {
+  mcla::dev_overrides::OnGraphicsPluginLoaded();  // SDK switches of the l57 A/B
   mcla::ApplyTextureCacheBudget();
   mcla::perf_split::OnGraphicsPluginLoaded();  // M10-001
   mcla::livery_diag::OnGraphicsPluginLoaded();  // KI-047 diag v2

@@ -64,7 +64,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window.
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
-            readback_sync native_refcount)
+            readback_sync native_refcount dev_overrides)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -238,6 +238,17 @@ if(MCLA_READBACK_SYNC_COMPOSITE_DEFAULT)
         COMPILE_DEFINITIONS MCLA_READBACK_SYNC_COMPOSITE_DEFAULT=1)
 endif()
 
+# Owner-internal developer overrides (M10 l57 CPU A/B): builds with this
+# option read the per-user file
+# %LocalAppData%\MCLA-R-Launcher-v1\mcla-dev-overrides.txt at game start
+# (whitelisted name=true|false lines, see src/mcla_dev_overrides.h) and write
+# those switches unless the command line set them. OFF by default; ON only for
+# owner-internal measurement builds, never for volunteer builds. Without it
+# nothing is read, and the single-line l55 file of
+# MCLA_READBACK_SYNC_COMPOSITE_DEFAULT builds keeps working as before.
+option(MCLA_DEV_OVERRIDES "Read the owner-internal A/B override file (l57; never for volunteer builds)" OFF)
+list(APPEND MCLA_SOURCES src/mcla_dev_overrides.cpp)
+
 # M10 CPU task 1: native XDK D3D resource AddRef/Release (overrides
 # sub_82422160 and sub_824221D8) and XAPI Interlocked* helpers (sub_821CE080,
 # sub_821CE0A0, sub_821CE0D8, sub_821CE100, sub_821CE128) without the emulated
@@ -292,10 +303,15 @@ if(MCLA_EXPERIMENTAL_F10_WGC)
     target_link_libraries(mcla PRIVATE mcla_diagnostic_image_client)
 endif()
 
+if(MCLA_DEV_OVERRIDES)
+    # Target-wide: mcla_readback_sync.cpp defers to the dev-override reader.
+    target_compile_definitions(mcla PRIVATE MCLA_DEV_OVERRIDES=1)
+endif()
+
 if(WIN32)
     target_link_libraries(mcla PRIVATE psapi bcrypt gdi32 user32)
-    if(MCLA_READBACK_SYNC_COMPOSITE_DEFAULT)
-        # SHGetKnownFolderPath and CoTaskMemFree for the l55 override file.
+    if(MCLA_READBACK_SYNC_COMPOSITE_DEFAULT OR MCLA_DEV_OVERRIDES)
+        # SHGetKnownFolderPath and CoTaskMemFree for the l55/l57 override file.
         target_link_libraries(mcla PRIVATE shell32 ole32)
     endif()
     add_library(mcla_build_lease STATIC

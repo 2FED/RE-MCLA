@@ -1,0 +1,258 @@
+#pragma once
+
+// Owner-internal developer overrides (M10 l57 CPU A/B;
+// docs/evidence/M10-l57-cpu-ab-build-20261101.md).
+//
+// Builds made with the CMake option MCLA_DEV_OVERRIDES (OFF by default; ON
+// only for owner-internal measurement builds, never for volunteer builds) read
+// the per-user file %LocalAppData%\MCLA-R-Launcher-v1\mcla-dev-overrides.txt
+// once at game start, because the launcher cannot pass extra command-line
+// flags. The file holds lines "name=true" or "name=false":
+//
+// - at most kMaxBytes bytes, ASCII only (no BOM); otherwise the whole file is
+//   rejected and nothing is applied;
+// - lines end in LF or CRLF; empty lines and lines starting with '#' are
+//   skipped;
+// - a line must be exactly name=true or name=false (no spaces); the name must
+//   be one of kKeys. Malformed lines, unknown names and repeated names (the
+//   first occurrence wins) are ignored and logged by line number.
+//
+// Each accepted value is applied to its cvar unless that cvar already holds a
+// non-default value (set by the command line or the config file), and logged
+// once as "MCLA dev override: name=value". Host init-only cvars are applied at
+// startup (before the guest runs); SDK cvars of the graphics plugin are applied
+// when the plugin has been loaded (they are registered by the plugin DLL).
+// Without the option nothing is read or written, and the single-line l55 file
+// read of mcla_readback_sync.cpp stays as before.
+//
+// The parser and the apply decision are pure and unit-tested
+// (tests/mcla_dev_overrides_test.cpp); file and cvar calls are in
+// mcla_dev_overrides.cpp.
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+
+namespace mcla::dev_overrides {
+
+inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
+inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
+inline constexpr size_t kMaxBytes = 1024;
+
+enum class Key : uint8_t {
+  kReadbackSyncComposite,
+  kNativeD3dRefcount,
+  kNativeXapiInterlocked,
+  kWrmEventWake,
+  kReplayBatchedWake,
+};
+inline constexpr size_t kKeyCount = 5;
+
+// When the cvar can be written: host init-only cvars before the guest starts,
+// graphics-plugin cvars once the plugin has registered them.
+enum class Phase : uint8_t {
+  kStartup,
+  kGraphicsPlugin,
+};
+
+struct KeyInfo {
+  std::string_view name;
+  Phase phase;
+};
+
+// The whitelist, indexed by Key.
+inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
+    {"mcla_readback_sync_composite", Phase::kStartup},
+    {"mcla_native_d3d_refcount", Phase::kStartup},
+    {"mcla_native_xapi_interlocked", Phase::kStartup},
+    {"d3d12_wrm_event_wake", Phase::kGraphicsPlugin},
+    {"d3d12_replay_batched_wake", Phase::kGraphicsPlugin},
+}};
+
+constexpr const KeyInfo &Info(Key key) {
+  return kKeys[static_cast<size_t>(key)];
+}
+
+constexpr std::optional<Key> FindKey(std::string_view name) {
+  for (size_t i = 0; i < kKeyCount; ++i) {
+    if (kKeys[i].name == name) {
+      return static_cast<Key>(i);
+    }
+  }
+  return std::nullopt;
+}
+
+enum class FileStatus : uint8_t {
+  kAbsent,    // no file
+  kRejected,  // too large, not ASCII or unreadable: nothing applied
+  kParsed,    // read line by line (individual lines may be ignored)
+};
+
+enum class LineIssue : uint8_t {
+  kMalformed,    // not exactly name=true or name=false
+  kUnknownName,  // well formed, name not in kKeys
+  kDuplicate,    // a name already given on an earlier line
+};
+
+struct Issue {
+  uint16_t line = 0;  // 1-based
+  LineIssue issue = LineIssue::kMalformed;
+};
+
+inline constexpr size_t kMaxIssues = 16;
+
+struct Parsed {
+  FileStatus status = FileStatus::kAbsent;
+  std::array<std::optional<bool>, kKeyCount> values{};
+  std::array<Issue, kMaxIssues> issues{};
+  size_t issue_count = 0;    // issues stored (at most kMaxIssues)
+  size_t ignored_lines = 0;  // every ignored line, also beyond kMaxIssues
+
+  constexpr std::optional<bool> Value(Key key) const {
+    return values[static_cast<size_t>(key)];
+  }
+  constexpr size_t ValueCount() const {
+    size_t count = 0;
+    for (const auto &value : values) {
+      count += value.has_value() ? 1 : 0;
+    }
+    return count;
+  }
+};
+
+namespace detail {
+
+constexpr void AddIssue(Parsed &parsed, uint16_t line, LineIssue issue) {
+  if (parsed.issue_count < kMaxIssues) {
+    parsed.issues[parsed.issue_count++] = Issue{line, issue};
+  }
+  ++parsed.ignored_lines;
+}
+
+constexpr void ParseLine(Parsed &parsed, uint16_t number, std::string_view line) {
+  if (line.ends_with('\r')) {
+    line.remove_suffix(1);
+  }
+  if (line.empty() || line.front() == '#') {
+    return;
+  }
+  size_t equals = std::string_view::npos;
+  for (size_t i = 0; i < line.size(); ++i) {
+    const auto c = static_cast<unsigned char>(line[i]);
+    if (c < 0x21 || c > 0x7E) {
+      AddIssue(parsed, number, LineIssue::kMalformed);
+      return;
+    }
+    if (c == '=') {
+      if (equals != std::string_view::npos) {
+        AddIssue(parsed, number, LineIssue::kMalformed);
+        return;
+      }
+      equals = i;
+    }
+  }
+  if (equals == std::string_view::npos || equals == 0) {
+    AddIssue(parsed, number, LineIssue::kMalformed);
+    return;
+  }
+  const std::string_view name = line.substr(0, equals);
+  const std::string_view text = line.substr(equals + 1);
+  bool value = false;
+  if (text == "true") {
+    value = true;
+  } else if (text != "false") {
+    AddIssue(parsed, number, LineIssue::kMalformed);
+    return;
+  }
+  const std::optional<Key> key = FindKey(name);
+  if (!key) {
+    AddIssue(parsed, number, LineIssue::kUnknownName);
+    return;
+  }
+  auto &slot = parsed.values[static_cast<size_t>(*key)];
+  if (slot.has_value()) {
+    AddIssue(parsed, number, LineIssue::kDuplicate);
+    return;
+  }
+  slot = value;
+}
+
+}  // namespace detail
+
+// Strict parse of the whole file content (see the rules above).
+constexpr Parsed Parse(std::string_view content) {
+  Parsed parsed;
+  if (content.size() > kMaxBytes) {
+    parsed.status = FileStatus::kRejected;
+    return parsed;
+  }
+  for (const char c : content) {
+    if (static_cast<unsigned char>(c) > 0x7F) {
+      parsed.status = FileStatus::kRejected;
+      return parsed;
+    }
+  }
+  parsed.status = FileStatus::kParsed;
+  uint16_t number = 0;
+  while (!content.empty()) {
+    ++number;
+    const size_t end = content.find('\n');
+    if (end == std::string_view::npos) {
+      detail::ParseLine(parsed, number, content);
+      break;
+    }
+    detail::ParseLine(parsed, number, content.substr(0, end));
+    content.remove_prefix(end + 1);
+  }
+  return parsed;
+}
+
+constexpr const char *LineIssueName(LineIssue issue) {
+  switch (issue) {
+    case LineIssue::kMalformed:
+      return "malformed (expected name=true or name=false)";
+    case LineIssue::kUnknownName:
+      return "unknown name";
+    case LineIssue::kDuplicate:
+      return "repeated name (the first line wins)";
+  }
+  return "unknown";
+}
+
+enum class ApplyAction : uint8_t {
+  kApply,        // write the cvar
+  kUnavailable,  // the cvar is not registered (e.g. an SDK without it)
+  kUserSet,      // the command line or config set the cvar: left alone
+};
+
+constexpr ApplyAction DecideApply(bool cvar_registered, bool cvar_non_default) {
+  if (!cvar_registered) {
+    return ApplyAction::kUnavailable;
+  }
+  if (cvar_non_default) {
+    return ApplyAction::kUserSet;
+  }
+  return ApplyAction::kApply;
+}
+
+// Runtime (mcla_dev_overrides.cpp). Both calls do nothing in builds without
+// MCLA_DEV_OVERRIDES.
+
+// True in builds made with MCLA_DEV_OVERRIDES.
+bool Enabled();
+
+// Reads and parses the file once and applies the Phase::kStartup keys. Call
+// after logging is set up and before the guest starts.
+void OnStartup();
+
+// Applies the Phase::kGraphicsPlugin keys. Call once after the graphics plugin
+// has been loaded.
+void OnGraphicsPluginLoaded();
+
+// The value written to the key's cvar by this module (nullopt when the file
+// has no valid line for it, the cvar was left alone, or the write failed).
+std::optional<bool> AppliedValue(Key key);
+
+}  // namespace mcla::dev_overrides

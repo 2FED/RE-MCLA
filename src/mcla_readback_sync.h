@@ -17,6 +17,10 @@
 //   bytes, and is parsed strictly; anything else is ignored and logged. An
 //   explicit --mcla_readback_sync_composite on the command line wins over the
 //   file. Without the option nothing is read or written.
+// - Builds that also have MCLA_DEV_OVERRIDES (l57 and later owner-internal
+//   builds) read the same file through mcla_dev_overrides.h instead, which
+//   accepts several name=value lines (this single line among them) and writes
+//   the host switch at startup; this module then only reports that value.
 //
 // The decisions are pure and unit-tested (tests/mcla_readback_sync_test.cpp);
 // the cvar and file calls are in mcla_readback_sync.cpp.
