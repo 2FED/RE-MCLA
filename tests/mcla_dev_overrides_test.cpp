@@ -29,7 +29,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 9, "nine whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 14, "fourteen whitelisted names");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
@@ -41,6 +41,15 @@ void TestWhitelist() {
   Check(FindKey("d3d12_readback_sync_targeted") == Key::kReadbackSyncTargeted,
         "targeted read-back wait key");
   Check(!FindKey("d3d12_readback_sync_kick_draws"), "kick draw count (integer) not whitelisted");
+  Check(FindKey("memory_watch_census") == Key::kWatchCensus, "watch census key");
+  Check(FindKey("memory_watch_probes") == Key::kWatchProbes, "watch probes key");
+  Check(FindKey("memory_watch_disarm_bridge_safe_gaps") == Key::kWatchDisarmBridge,
+        "disarm bridge key");
+  Check(FindKey("shared_memory_upload_ahead_16") == Key::kUploadAhead16, "upload-ahead 16 key");
+  Check(FindKey("shared_memory_upload_ahead_64") == Key::kUploadAhead64, "upload-ahead 64 key");
+  Check(!FindKey("shared_memory_upload_ahead_pages"), "integer upload-ahead cvar not whitelisted");
+  Check(!FindKey("shared_memory_upload_ahead_32"), "only 16 and 64");
+  Check(!FindKey("memory_watch_disarm_bridge"), "bridge key prefix");
   Check(!FindKey("d3d12_readback_sync_scope"), "read-back sync scope not whitelisted");
   Check(!FindKey("d3d12_readback_sync"), "targeted key prefix");
   Check(!FindKey("prewarm_seed"), "store seeding prefix");
@@ -79,6 +88,69 @@ void TestWhitelist() {
         "store seeding is a launcher key (no host cvar)");
   Check(mcla::dev_overrides::Info(Key::kReadbackSyncTargeted).phase == Phase::kGraphicsPlugin,
         "targeted read-back wait after the plugin registered it");
+  Check(mcla::dev_overrides::Info(Key::kWatchCensus).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kWatchProbes).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kWatchDisarmBridge).phase == Phase::kStartup,
+        "rexruntime memory cvars at startup");
+  Check(mcla::dev_overrides::Info(Key::kUploadAhead16).phase == Phase::kGraphicsPlugin &&
+            mcla::dev_overrides::Info(Key::kUploadAhead64).phase == Phase::kGraphicsPlugin,
+        "upload-ahead after the plugin registered shared_memory_upload_ahead_pages");
+  {
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
+      const auto &info = mcla::dev_overrides::kKeys[i];
+      const bool ahead =
+          static_cast<Key>(i) == Key::kUploadAhead16 || static_cast<Key>(i) == Key::kUploadAhead64;
+      if (!ahead) {
+        Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
+                  CvarText(info, false) == "false",
+              "bool keys write their own cvar as true/false");
+      }
+    }
+    Check(CvarName(Info(Key::kUploadAhead16)) == "shared_memory_upload_ahead_pages" &&
+              CvarText(Info(Key::kUploadAhead16), true) == "16" &&
+              CvarText(Info(Key::kUploadAhead16), false).empty(),
+          "ahead_16=true writes 16, false writes nothing");
+    Check(CvarName(Info(Key::kUploadAhead64)) == "shared_memory_upload_ahead_pages" &&
+              CvarText(Info(Key::kUploadAhead64), true) == "64" &&
+              CvarText(Info(Key::kUploadAhead64), false).empty(),
+          "ahead_64=true writes 64, false writes nothing");
+  }
+  {
+    // The step 1/2 arm files.
+    const Parsed bridge = Parse("memory_watch_disarm_bridge_safe_gaps=true\n");
+    Check(bridge.ValueCount() == 1 && bridge.Value(Key::kWatchDisarmBridge) == true,
+          "bridge arm");
+    const Parsed ahead = Parse("shared_memory_upload_ahead_64=true\r\n"
+                               "memory_watch_probes=true\r\n");
+    Check(ahead.ValueCount() == 2 && ahead.Value(Key::kUploadAhead64) == true &&
+              ahead.Value(Key::kWatchProbes) == true && ahead.ignored_lines == 0,
+          "ahead 64 arm with probes");
+    const Parsed census_off = Parse("memory_watch_census=false\n");
+    Check(census_off.Value(Key::kWatchCensus) == false, "census off (overhead A/B)");
+    const Parsed both = Parse("shared_memory_upload_ahead_16=true\n"
+                              "memory_watch_census=true\n"
+                              "shared_memory_upload_ahead_64=true\n");
+    Check(both.ValueCount() == 1 && !both.Value(Key::kUploadAhead16) &&
+              !both.Value(Key::kUploadAhead64) && both.Value(Key::kWatchCensus) == true,
+          "both upload-ahead keys true: neither applies");
+    Check(both.ignored_lines == 1 && both.issue_count == 1 && both.issues[0].line == 3 &&
+              both.issues[0].issue == LineIssue::kConflict,
+          "conflict logged on the later line");
+    const Parsed one_off = Parse("shared_memory_upload_ahead_16=false\n"
+                                 "shared_memory_upload_ahead_64=true\n");
+    Check(one_off.ValueCount() == 2 && one_off.Value(Key::kUploadAhead64) == true &&
+              one_off.ignored_lines == 0,
+          "16=false with 64=true is not a conflict");
+    const Parsed integer = Parse("shared_memory_upload_ahead_pages=16\n"
+                                 "shared_memory_upload_ahead_16=16\n");
+    Check(integer.ValueCount() == 0 && integer.ignored_lines == 2 &&
+              integer.issues[0].issue == LineIssue::kMalformed &&
+              integer.issues[1].issue == LineIssue::kMalformed,
+          "integer values are not accepted");
+  }
   {
     const Parsed p = Parse("mcla_readback_sync_composite=true\r\n"
                            "d3d12_readback_sync_targeted=true\r\n");
@@ -292,6 +364,10 @@ void TestConstexpr() {
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kUnknownName)) ==
             "unknown name",
         "issue names");
+  constexpr Parsed conflict =
+      Parse("shared_memory_upload_ahead_64=true\nshared_memory_upload_ahead_16=true\n");
+  static_assert(conflict.ValueCount() == 0);
+  static_assert(conflict.issues[0].line == 2);
 }
 }  // namespace
 

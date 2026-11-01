@@ -79,26 +79,38 @@ void ApplyPhase(Phase phase) {
     if (info.phase != phase || !value) {
       continue;
     }
-    const std::string name(info.name);
+    const std::string key_name(info.name);
+    const std::string name(CvarName(info));
+    const std::string text(CvarText(info, *value));
+    if (text.empty()) {
+      REXLOG_CAT_INFO(category, "MCLA dev overrides: {}={} leaves {} unchanged", key_name, *value,
+                      name);
+      continue;
+    }
     const bool registered = rex::cvar::GetFlagInfo(name) != nullptr;
     const bool non_default = registered && rex::cvar::HasNonDefaultValue(name);
     switch (DecideApply(registered, non_default)) {
       case ApplyAction::kUnavailable:
         REXLOG_CAT_INFO(category, "MCLA dev overrides: {} unavailable in this build; {}={} ignored",
-                        name, name, *value);
+                        name, key_name, *value);
         break;
       case ApplyAction::kUserSet:
         REXLOG_CAT_INFO(category,
                         "MCLA dev overrides: {} set by the command line or config ({}); file "
-                        "value {} ignored",
-                        name, rex::cvar::GetFlagByName(name), *value);
+                        "value {}={} ignored",
+                        name, rex::cvar::GetFlagByName(name), key_name, *value);
         break;
       case ApplyAction::kApply:
-        if (rex::cvar::SetFlagByName(name, *value ? "true" : "false")) {
+        if (rex::cvar::SetFlagByName(name, text)) {
           g_applied[i] = *value;
-          REXLOG_CAT_INFO(category, "MCLA dev override: {}={}", name, *value);
+          if (key_name == name) {
+            REXLOG_CAT_INFO(category, "MCLA dev override: {}={}", name, *value);
+          } else {
+            REXLOG_CAT_INFO(category, "MCLA dev override: {}={} ({}={})", key_name, *value, name,
+                            text);
+          }
         } else {
-          REXLOG_CAT_ERROR(category, "MCLA dev overrides: could not set {}={}", name, *value);
+          REXLOG_CAT_ERROR(category, "MCLA dev overrides: could not set {}={}", name, text);
         }
         break;
     }

@@ -7,7 +7,9 @@
 // docs/evidence/M10-004-vulkan-deck-ab-build-20261101.md; M10-003 shader
 // store seeding switch, docs/evidence/M10-prewarm-union-store-20261101.md;
 // KI-047 targeted read-back wait A/B,
-// docs/evidence/M10-ki047-targeted-wait-20261101.md).
+// docs/evidence/M10-ki047-targeted-wait-20261101.md; M10 watch census and
+// steps 1-2 of the Deck watch/upload path,
+// docs/evidence/M10-watch-steps0-2-20261101.md).
 //
 // Builds made with the CMake option MCLA_DEV_OVERRIDES (OFF by default; ON
 // only for owner-internal measurement builds, never for volunteer builds) read
@@ -22,6 +24,12 @@
 // - a line must be exactly name=true or name=false (no spaces); the name must
 //   be one of kKeys. Malformed lines, unknown names and repeated names (the
 //   first occurrence wins) are ignored and logged by line number.
+// - shared_memory_upload_ahead_16 and shared_memory_upload_ahead_64 are bool
+//   convenience keys for the integer SDK cvar shared_memory_upload_ahead_pages
+//   (0 = off, 16 or 64): =true writes 16 or 64, =false changes nothing. Both
+//   true in one file is contradictory: neither is applied (logged as a
+//   conflict on the later line). Integer values are deliberately not accepted
+//   in the file; any other value needs the command line.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
 // non-default value (set by the command line or the config file), and logged
@@ -62,8 +70,13 @@ enum class Key : uint8_t {
   kGpuBackendVulkan,  // M10-004 Deck A/B: native Vulkan for the session
   kPrewarmSeedStore,  // M10-003: launcher shader store seeding (default on)
   kReadbackSyncTargeted,  // KI-047 cost: targeted read-back wait + early submit
+  kWatchCensus,           // M10 watch census counters (SDK default on)
+  kWatchProbes,           // M10 watch F10 probes (SDK default off)
+  kWatchDisarmBridge,     // M10 step 1: disarm safe-gap bridging
+  kUploadAhead16,         // M10 step 2: shared_memory_upload_ahead_pages=16
+  kUploadAhead64,         // M10 step 2: shared_memory_upload_ahead_pages=64
 };
-inline constexpr size_t kKeyCount = 9;
+inline constexpr size_t kKeyCount = 14;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -77,6 +90,11 @@ enum class Phase : uint8_t {
 struct KeyInfo {
   std::string_view name;
   Phase phase;
+  // The cvar written (empty: the key's own name) and the text written for
+  // true and false (empty: nothing is written for that value).
+  std::string_view cvar = {};
+  std::string_view true_text = "true";
+  std::string_view false_text = "false";
 };
 
 // The whitelist, indexed by Key.
@@ -90,10 +108,29 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"mcla_gpu_backend_vulkan", Phase::kStartup},
     {"prewarm_seed_store", Phase::kLauncher},
     {"d3d12_readback_sync_targeted", Phase::kGraphicsPlugin},
+    // rexruntime cvars, registered before startup.
+    {"memory_watch_census", Phase::kStartup},
+    {"memory_watch_probes", Phase::kStartup},
+    {"memory_watch_disarm_bridge_safe_gaps", Phase::kStartup},
+    // Registered by the graphics plugin (shared memory).
+    {"shared_memory_upload_ahead_16", Phase::kGraphicsPlugin, "shared_memory_upload_ahead_pages",
+     "16", ""},
+    {"shared_memory_upload_ahead_64", Phase::kGraphicsPlugin, "shared_memory_upload_ahead_pages",
+     "64", ""},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
   return kKeys[static_cast<size_t>(key)];
+}
+
+// The cvar a key writes.
+constexpr std::string_view CvarName(const KeyInfo &info) {
+  return info.cvar.empty() ? info.name : info.cvar;
+}
+
+// The text written to the cvar for a value; empty: nothing is written.
+constexpr std::string_view CvarText(const KeyInfo &info, bool value) {
+  return value ? info.true_text : info.false_text;
 }
 
 constexpr std::optional<Key> FindKey(std::string_view name) {
@@ -115,6 +152,7 @@ enum class LineIssue : uint8_t {
   kMalformed,    // not exactly name=true or name=false
   kUnknownName,  // well formed, name not in kKeys
   kDuplicate,    // a name already given on an earlier line
+  kConflict,     // contradicts an earlier line (both upload-ahead keys true)
 };
 
 struct Issue {
@@ -127,6 +165,7 @@ inline constexpr size_t kMaxIssues = 16;
 struct Parsed {
   FileStatus status = FileStatus::kAbsent;
   std::array<std::optional<bool>, kKeyCount> values{};
+  std::array<uint16_t, kKeyCount> lines{};  // line of each value (1-based)
   std::array<Issue, kMaxIssues> issues{};
   size_t issue_count = 0;    // issues stored (at most kMaxIssues)
   size_t ignored_lines = 0;  // every ignored line, also beyond kMaxIssues
@@ -198,6 +237,20 @@ constexpr void ParseLine(Parsed &parsed, uint16_t number, std::string_view line)
     return;
   }
   slot = value;
+  parsed.lines[static_cast<size_t>(*key)] = number;
+}
+
+// Both upload-ahead keys true: neither applies.
+constexpr void ResolveConflicts(Parsed &parsed) {
+  const size_t k16 = static_cast<size_t>(Key::kUploadAhead16);
+  const size_t k64 = static_cast<size_t>(Key::kUploadAhead64);
+  if (parsed.values[k16] == true && parsed.values[k64] == true) {
+    const uint16_t later = parsed.lines[k16] > parsed.lines[k64] ? parsed.lines[k16]
+                                                                 : parsed.lines[k64];
+    parsed.values[k16].reset();
+    parsed.values[k64].reset();
+    AddIssue(parsed, later, LineIssue::kConflict);
+  }
 }
 
 }  // namespace detail
@@ -227,6 +280,7 @@ constexpr Parsed Parse(std::string_view content) {
     detail::ParseLine(parsed, number, content.substr(0, end));
     content.remove_prefix(end + 1);
   }
+  detail::ResolveConflicts(parsed);
   return parsed;
 }
 
@@ -238,6 +292,8 @@ constexpr const char *LineIssueName(LineIssue issue) {
       return "unknown name";
     case LineIssue::kDuplicate:
       return "repeated name (the first line wins)";
+    case LineIssue::kConflict:
+      return "conflicting upload-ahead keys (neither is applied)";
   }
   return "unknown";
 }
