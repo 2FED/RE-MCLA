@@ -98,6 +98,10 @@ Total: about 6-8 weeks of agent work without the M10-006 implementation, 2-3
 weeks more if the gate opens it. Owner time is mostly short timed runs on the
 bench route plus Deck sessions.
 
+## Shader/pipeline pre-warm (owner request; design 2026-11-01)
+
+The store holds raw guest ucode (`.xsh`, never distributable) and 72-byte derived pipeline descriptions (`.xpso`); its format does not depend on the host build, but the launcher keys it per build and per profile, so every new build and BENCH copy starts cold (344-607 waits, 0.4-2.8 s in minute 1, versus 3-122 warm). Plan from [the pre-warm design](evidence/M10-prewarm-design-20261101.md): (1) store-source and run-time creation counters; (2) local union store across builds and profiles in the launcher (no distribution, 1-2 days) plus the SDK fix for the creation-thread count (`creation_thread_original_count` used instead of the needed count); owner A/B on two fresh BENCH copies; (3) background or launcher pre-creation only if startup reaches seconds; (4) a shipped derived-hint `.xpso` after a source-data-policy amendment; (5) a research spike on hooking the engine effect loader (Azimuth-style). KI-047 is not a pre-warm target (warm-store catches).
+
 ## M10-001 outcome and the CPU-side task list (2026-11-01)
 
 PC verdict: GPU-bound at 1440p; at 720p the render thread is first, the CP second (a fixed WAIT_REG_MEM Sleep(1) per frame under vsync), the GPU third. M10-006 (multi-threaded CP) is not justified on the PC. Ranked CPU-side work from [the CPU targets analysis](evidence/M10-cpu-targets-20261101.md): (1) native AddRef/Release for the XDK D3D resource helpers via REX_EXTERN (render about -1 ms/frame); (2) WAIT_REG_MEM episode counters, then an event wake after each interrupt dispatch (CP -0.5 to -1.7 ms/frame); (3) promote the M7 published function scope (render -0.8 to -2.4 ms/frame, medium risk); (4) codegen elision of the interrupt-disable idiom (45 regions); (5) write-fault per-thread counters, then a hot-block policy; (6) replay worker batched wake (frees about half a core); (7) precise vblank timer. Deck arm of M10-001 still pending.
