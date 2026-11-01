@@ -4,6 +4,9 @@ Updated November 1, 2026 evening Kyiv (M10 in progress on main: M10-001 PC arms 
 
 ## Active outcome
 
+**MORNING 2026-11-02: test l63 (owner-internal, every M10 change behind switch files).** Follow `private/l63-MORNING.txt`: sign `private/l63-internal-prepare.ps1`; PC BENCH-C 1440p Unlocked ABAB base/all, 720p base+all, Vulkan quick check; Deck (if brought) base, all, all-vulkan, all, base; send the session and F10 folders. l63 = SDK `8081f63` (local branch `mcla/m10-watch`: v0.20.0.6 + WRM/replay waits + read-back counters/elision + pre-warm thread fix + KI-047 targeted wait/kicks + watch census and steps 1-2 + review fixes), D3D12+Vulkan, ctest 2004/2004; host from main `b714e6b`, 43/43 suites, 0 warnings. [Evidence](evidence/M10-l63-combined-build-20261101.md). **Nothing in l57-l63 has run in the game.** l63 supersedes l57, l58 and l59 for testing.
+
+
 **M10 at 2026-11-01 evening (main `169daf9`, local commits not yet pushed; push at M10 closure):**
 - **M10-001 PC arms done (owner, l53/l54):** 1440p GPU-bound (about 37-38 fps, GPU 98-99%); 720p render thread first, CP second (fixed WAIT_REG_MEM Sleep(1) per frame under vsync), GPU third. M10-006 (multi-threaded CP) not justified on the PC. Deck arm pending. [1440p](evidence/M10-001-run1-1440p-cold-20261101.md), [720p](evidence/M10-001-720p-and-ki047-20261101.md), [CPU targets](evidence/M10-cpu-targets-20261101.md).
 - **KI-047 (police livery) reopened and re-diagnosed:** broken also on warm stores and at 720p with zero skipped draws; l54 diag v2 saw the livery composite (1024x1024 + mips sharing scratch 050A0000) resolved with `decision=deferred read=prev` before a catch. Candidate fix: fenced same-frame copy for the composite family (SDK `483458d`, cvar `d3d12_readback_sync_composite`). **Not yet run in the game.**
