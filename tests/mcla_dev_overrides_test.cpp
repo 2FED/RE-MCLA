@@ -29,7 +29,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 8, "eight whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 9, "nine whitelisted names");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
@@ -38,6 +38,11 @@ void TestWhitelist() {
   Check(FindKey("d3d12_readback_elide_unread") == Key::kReadbackElideUnread, "elide key");
   Check(FindKey("mcla_gpu_backend_vulkan") == Key::kGpuBackendVulkan, "vulkan backend key");
   Check(FindKey("prewarm_seed_store") == Key::kPrewarmSeedStore, "store seeding key");
+  Check(FindKey("d3d12_readback_sync_targeted") == Key::kReadbackSyncTargeted,
+        "targeted read-back wait key");
+  Check(!FindKey("d3d12_readback_sync_kick_draws"), "kick draw count (integer) not whitelisted");
+  Check(!FindKey("d3d12_readback_sync_scope"), "read-back sync scope not whitelisted");
+  Check(!FindKey("d3d12_readback_sync"), "targeted key prefix");
   Check(!FindKey("prewarm_seed"), "store seeding prefix");
   for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
     Check(FindKey(mcla::dev_overrides::kKeys[i].name) == static_cast<Key>(i),
@@ -72,6 +77,20 @@ void TestWhitelist() {
         "vulkan backend at startup (OnPostInitLogging precedes OnPreSetup)");
   Check(mcla::dev_overrides::Info(Key::kPrewarmSeedStore).phase == Phase::kLauncher,
         "store seeding is a launcher key (no host cvar)");
+  Check(mcla::dev_overrides::Info(Key::kReadbackSyncTargeted).phase == Phase::kGraphicsPlugin,
+        "targeted read-back wait after the plugin registered it");
+  {
+    const Parsed p = Parse("mcla_readback_sync_composite=true\r\n"
+                           "d3d12_readback_sync_targeted=true\r\n");
+    Check(p.status == FileStatus::kParsed && p.ValueCount() == 2 &&
+              p.Value(Key::kReadbackSyncComposite) == true &&
+              p.Value(Key::kReadbackSyncTargeted) == true,
+          "targeted arm file: sync on, targeted on");
+    const Parsed q = Parse("d3d12_readback_sync_targeted=false\n");
+    Check(q.status == FileStatus::kParsed && q.ValueCount() == 1 &&
+              q.Value(Key::kReadbackSyncTargeted) == false,
+          "full arm file: targeted off");
+  }
   {
     const Parsed p = Parse("prewarm_seed_store=false\n");
     Check(p.status == FileStatus::kParsed && p.Value(Key::kPrewarmSeedStore) == false,
