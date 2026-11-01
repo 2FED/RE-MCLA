@@ -203,3 +203,9 @@ log (`override file ... (applied)`, `fix OFF`).
 - Two benign guest-address byte matches in `mcla.exe` machine code (check 7).
 - The clone came from the local committed `main`; the SDK and all submodules from GitHub.
   Output is not bit-identical across checkout paths.
+
+## Owner signature and publication (2026-11-01)
+
+- The owner ran `private/l56-volunteer-prepare.ps1` and staged `private/l56-volunteer`; the signed `l56-active-builds.txt` (issued 1793549989) lists 4 entries: l49 `0A46AE3E...`, l48 `6FEC02D0...`, l52 `823BFBA4...`, l56 `BAED27A7...` (expiry 1796141989).
+- With the owner's explicit approval ("publish l56") the primary agent published the list to `DebugBundle` of `2FED/RE-MCLA` (commit `0a96366`, replacing `6c22440`); the raw URL and the contents API both returned bytes identical to the signed file.
+- Sharing the staged folder with testers and the Steam Deck is the owner's step. Nothing in l56 has run in the game yet.
