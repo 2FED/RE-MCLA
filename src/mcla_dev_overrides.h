@@ -2,7 +2,9 @@
 
 // Owner-internal developer overrides (M10 l57 CPU A/B,
 // docs/evidence/M10-l57-cpu-ab-build-20261101.md; M10-002 l58 read-back
-// elision A/B, docs/evidence/M10-002-readback-elision-build-20261101.md).
+// elision A/B, docs/evidence/M10-002-readback-elision-build-20261101.md;
+// M10-004 l59 Vulkan Deck A/B,
+// docs/evidence/M10-004-vulkan-deck-ab-build-20261101.md).
 //
 // Builds made with the CMake option MCLA_DEV_OVERRIDES (OFF by default; ON
 // only for owner-internal measurement builds, never for volunteer builds) read
@@ -49,8 +51,9 @@ enum class Key : uint8_t {
   kWrmEventWake,
   kReplayBatchedWake,
   kReadbackElideUnread,
+  kGpuBackendVulkan,  // M10-004 Deck A/B: native Vulkan for the session
 };
-inline constexpr size_t kKeyCount = 6;
+inline constexpr size_t kKeyCount = 7;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them.
@@ -72,6 +75,7 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"d3d12_wrm_event_wake", Phase::kGraphicsPlugin},
     {"d3d12_replay_batched_wake", Phase::kGraphicsPlugin},
     {"d3d12_readback_elide_unread", Phase::kGraphicsPlugin},
+    {"mcla_gpu_backend_vulkan", Phase::kStartup},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

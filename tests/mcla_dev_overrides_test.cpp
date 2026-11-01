@@ -29,13 +29,14 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 6, "six whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 7, "seven whitelisted names");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
   Check(FindKey("d3d12_wrm_event_wake") == Key::kWrmEventWake, "wrm key");
   Check(FindKey("d3d12_replay_batched_wake") == Key::kReplayBatchedWake, "replay key");
   Check(FindKey("d3d12_readback_elide_unread") == Key::kReadbackElideUnread, "elide key");
+  Check(FindKey("mcla_gpu_backend_vulkan") == Key::kGpuBackendVulkan, "vulkan backend key");
   for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
     Check(FindKey(mcla::dev_overrides::kKeys[i].name) == static_cast<Key>(i),
           "kKeys is indexed by Key");
@@ -47,6 +48,9 @@ void TestWhitelist() {
   Check(!FindKey("d3d12_readback_gpu_timing"), "read-back GPU timing not whitelisted");
   Check(!FindKey("d3d12_readback_elide"), "elide prefix");
   Check(!FindKey("vsync"), "vsync not whitelisted");
+  Check(!FindKey("gpu_backend"), "SDK gpu_backend string cvar not whitelisted");
+  Check(!FindKey("mcla_gpu_backend"), "vulkan key prefix");
+  Check(!FindKey("vulkan_device"), "vulkan_device not whitelisted");
   Check(!FindKey("mcla_native_d3d_refcountX"), "suffix");
   Check(!FindKey("MCLA_NATIVE_D3D_REFCOUNT"), "case sensitive");
   Check(!FindKey(""), "empty name");
@@ -62,6 +66,8 @@ void TestWhitelist() {
         "replay after the plugin registered it");
   Check(mcla::dev_overrides::Info(Key::kReadbackElideUnread).phase == Phase::kGraphicsPlugin,
         "elide after the plugin registered it");
+  Check(mcla::dev_overrides::Info(Key::kGpuBackendVulkan).phase == Phase::kStartup,
+        "vulkan backend at startup (OnPostInitLogging precedes OnPreSetup)");
   Check(mcla::dev_overrides::kFile == "mcla-dev-overrides.txt", "file name (same as l55)");
   Check(mcla::dev_overrides::kDirectory == "MCLA-R-Launcher-v1", "launcher per-user directory");
   Check(mcla::dev_overrides::kMaxBytes == 1024, "1 KiB limit");
@@ -92,7 +98,7 @@ void TestValidFiles() {
         "d3d12_replay_batched_wake=false\r\n"
         "d3d12_readback_elide_unread=true\r\n");
     Check(p.status == FileStatus::kParsed && p.ValueCount() == 6 && p.ignored_lines == 0,
-          "all six keys");
+          "six keys");
     Check(p.Value(Key::kReadbackSyncComposite) == true, "all six: readback");
     Check(p.Value(Key::kNativeD3dRefcount) == false, "all six: refcount");
     Check(p.Value(Key::kNativeXapiInterlocked) == false, "all six: xapi");
@@ -112,6 +118,43 @@ void TestValidFiles() {
     Check(p.ValueCount() == 6 && p.Value(Key::kReadbackElideUnread) == false &&
               p.Value(Key::kReadbackSyncComposite) == true,
           "l58 baseline arm");
+  }
+  {
+    // The l59 Deck arm files (private/l59-deck-arms/<arm>/mcla-dev-overrides.txt,
+    // ASCII LF): all seven keys, read-back sync on, Vulkan on or off.
+    constexpr const char *kVulkanArm =
+        "mcla_readback_sync_composite=true\n"
+        "mcla_native_d3d_refcount=false\n"
+        "mcla_native_xapi_interlocked=false\n"
+        "d3d12_wrm_event_wake=false\n"
+        "d3d12_replay_batched_wake=false\n"
+        "d3d12_readback_elide_unread=false\n"
+        "mcla_gpu_backend_vulkan=true\n";
+    const Parsed v = Parse(kVulkanArm);
+    Check(v.status == FileStatus::kParsed && v.ValueCount() == 7 && v.ignored_lines == 0,
+          "l59 vulkan arm: seven keys");
+    Check(v.Value(Key::kGpuBackendVulkan) == true &&
+              v.Value(Key::kReadbackSyncComposite) == true &&
+              v.Value(Key::kReadbackElideUnread) == false &&
+              v.Value(Key::kNativeD3dRefcount) == false,
+          "l59 vulkan arm values");
+    const Parsed d = Parse(
+        "mcla_readback_sync_composite=true\n"
+        "mcla_native_d3d_refcount=false\n"
+        "mcla_native_xapi_interlocked=false\n"
+        "d3d12_wrm_event_wake=false\n"
+        "d3d12_replay_batched_wake=false\n"
+        "d3d12_readback_elide_unread=false\n"
+        "mcla_gpu_backend_vulkan=false\n");
+    Check(d.ValueCount() == 7 && d.ignored_lines == 0 &&
+              d.Value(Key::kGpuBackendVulkan) == false &&
+              d.Value(Key::kReadbackSyncComposite) == true,
+          "l59 d3d12 arm");
+    const Parsed bad = Parse("mcla_gpu_backend_vulkan=vulkan\ngpu_backend=true\n");
+    Check(bad.ValueCount() == 0 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName,
+          "no string backend values, gpu_backend unknown");
   }
   {
     const Parsed p = Parse("d3d12_wrm_event_wake=true\nd3d12_replay_batched_wake=true\n");

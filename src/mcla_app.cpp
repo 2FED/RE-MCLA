@@ -865,6 +865,20 @@ REXCVAR_DEFINE_BOOL(
     "Validate the loaded image and dispatch table without launching guest code")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+// M10-004 (KI-053) owner Deck A/B: request the xenos plugin's native Vulkan
+// backend for this session although the launcher always passes
+// --gpu_backend=d3d12 (the launcher cannot pass vulkan). Set from the command
+// line or, in MCLA_DEV_OVERRIDES builds, from the owner override file (startup
+// phase, applied in OnPostInitLogging before SetupPresentation/OnPreSetup).
+// Only hosts built against an SDK with REXGLUE_USE_VULKAN=ON (REX_HAS_VULKAN)
+// act on it; others log and keep the launcher's backend, so a D3D12-only SDK
+// never fails setup because of it.
+REXCVAR_DEFINE_BOOL(mcla_gpu_backend_vulkan, false, "MCLA",
+                    "Use the native Vulkan GPU backend for this session, "
+                    "overriding gpu_backend (M10-004 A/B; needs an SDK built "
+                    "with Vulkan)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 REXCVAR_DEFINE_BOOL(mcla_vfs_probe, false, "MCLA",
                     "Validate the guest disc mount and write containment "
                     "without launching guest code")
@@ -1242,6 +1256,22 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
     MCLA_INPUT_INFO(
         "Steam virtual gamepad not allowed by environment; controllers "
         "through Steam Input will be invisible");
+  }
+  // M10-004 owner A/B switch (see mcla_gpu_backend_vulkan). It wins over the
+  // launcher's explicit --gpu_backend=d3d12 for this session only; a Vulkan
+  // device that fails to initialize fails setup (no D3D12 fallback).
+  if (REXCVAR_GET(mcla_gpu_backend_vulkan)) {
+#if defined(REX_HAS_VULKAN) && REX_HAS_VULKAN
+    MCLA_GPU_INFO(
+        "MCLA gpu backend: vulkan (dev override); launcher backend was '{}'",
+        config.gpu_backend);
+    config.gpu_backend = "vulkan";
+#else
+    MCLA_GPU_INFO(
+        "MCLA gpu backend: mcla_gpu_backend_vulkan ignored: this build's SDK "
+        "has no Vulkan backend; keeping '{}'",
+        config.gpu_backend);
+#endif
   }
   // KI-053 deferred: unchanged environment triggers only. config.gpu_backend
   // is the gpu_backend cvar, so the launcher's explicit --gpu_backend=d3d12
