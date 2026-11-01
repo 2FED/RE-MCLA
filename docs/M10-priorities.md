@@ -98,6 +98,10 @@ Total: about 6-8 weeks of agent work without the M10-006 implementation, 2-3
 weeks more if the gate opens it. Owner time is mostly short timed runs on the
 bench route plus Deck sessions.
 
+## Deck: CP-bound, watch/upload path first (2026-11-01)
+
+The l56 Deck arm puts the CP first (busy 90%), the render thread second and the GPU far behind, with the CPU oversubscribed. Deck levers in order: (1) the watch/upload path under Wine, about 32 ms per driving frame (upload 23.4 ms on the CP, faults 8.7 ms on guest threads; about 20 ms of `VirtualProtect` under the global lock): step 0 census, then disarm safe-gap bridging, upload-ahead within the 256 KiB block, hot-block exact uploads without watching, and conditionally protect outside the lock ([design](evidence/M10-deck-watch-upload-design-20261101.md)); (2) the KI-047 composite sync as a targeted wait instead of a full drain (about 10.6 ms per frame); (3) freeing cores (replay batched wake, the guest polling loop F800068C, audio thread); then M10-006 once a core is free. Vulkan (l59) is expected to be a moderate gain.
+
 ## Shader/pipeline pre-warm (owner request; design 2026-11-01)
 
 The store holds raw guest ucode (`.xsh`, never distributable) and 72-byte derived pipeline descriptions (`.xpso`); its format does not depend on the host build, but the launcher keys it per build and per profile, so every new build and BENCH copy starts cold (344-607 waits, 0.4-2.8 s in minute 1, versus 3-122 warm). Plan from [the pre-warm design](evidence/M10-prewarm-design-20261101.md): (1) store-source and run-time creation counters; (2) local union store across builds and profiles in the launcher (no distribution, 1-2 days) plus the SDK fix for the creation-thread count (`creation_thread_original_count` used instead of the needed count); owner A/B on two fresh BENCH copies; (3) background or launcher pre-creation only if startup reaches seconds; (4) a shipped derived-hint `.xpso` after a source-data-policy amendment; (5) a research spike on hooking the engine effect loader (Azimuth-style). KI-047 is not a pre-warm target (warm-store catches).
