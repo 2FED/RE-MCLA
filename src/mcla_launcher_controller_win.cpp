@@ -4,6 +4,7 @@
 #include "mcla_diagnostic_export_win.h"
 #include "mcla_launcher_game_win.h"
 #include "mcla_launcher_process_win.h"
+#include "mcla_launcher_shader_seed_win.h"
 #include "mcla_launcher_snapshot_win.h"
 #include "mcla_launcher_writable_root_win.h"
 #include "mcla_launcher_import_policy.h"
@@ -885,6 +886,16 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   if(!CreateDirectoryW(Native(cache_path).c_str(),nullptr) && GetLastError()!=ERROR_ALREADY_EXISTS)
     return std::unexpected(L"Cannot prepare build-specific cache");
   auto cache=fs::OpenDirectory(cache_path); if(!cache) return std::unexpected(cache.error());
+  {
+    // M10-003: seed this build's shader store from the other stores of this
+    // installation (library profiles; local only, never blocks the launch).
+    std::vector<std::wstring> store_roots;
+    for(const auto &other:p.library.entries) store_roots.push_back(Wide(other.root));
+    const auto seed=SeedShaderStore(*cache,store_roots,StoreSeedEnabled(store.directory()));
+    const auto seed_line=shader_store::SummaryLine(seed);
+    auto seed_receipt=Text(*directory,kStoreSeedFile,seed_line+"\n"); if(!seed_receipt) return seed_receipt;
+    OutputDebugStringA(("MCLA launcher: "+seed_line+"\n").c_str());
+  }
   const auto flag=[](std::wstring_view name,std::wstring_view value) { return L"--"+std::wstring(name)+L"="+std::wstring(value); };
   const auto boolean=[&](std::wstring_view name,bool value) { return flag(name,value?L"true":L"false"); };
   std::vector<std::wstring> args{

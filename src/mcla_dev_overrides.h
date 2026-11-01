@@ -4,7 +4,8 @@
 // docs/evidence/M10-l57-cpu-ab-build-20261101.md; M10-002 l58 read-back
 // elision A/B, docs/evidence/M10-002-readback-elision-build-20261101.md;
 // M10-004 l59 Vulkan Deck A/B,
-// docs/evidence/M10-004-vulkan-deck-ab-build-20261101.md).
+// docs/evidence/M10-004-vulkan-deck-ab-build-20261101.md; M10-003 shader
+// store seeding switch, docs/evidence/M10-prewarm-union-store-20261101.md).
 //
 // Builds made with the CMake option MCLA_DEV_OVERRIDES (OFF by default; ON
 // only for owner-internal measurement builds, never for volunteer builds) read
@@ -27,6 +28,11 @@
 // when the plugin has been loaded (they are registered by the plugin DLL).
 // Without the option nothing is read or written, and the single-line l55 file
 // read of mcla_readback_sync.cpp stays as before.
+//
+// Phase::kLauncher keys are not cvars: the host parses and ignores them; the
+// launcher (MCLA_DEV_OVERRIDES launcher builds) reads the same file before a
+// session and applies them itself (prewarm_seed_store=false: no shader store
+// seeding, for cold baselines).
 //
 // The parser and the apply decision are pure and unit-tested
 // (tests/mcla_dev_overrides_test.cpp); file and cvar calls are in
@@ -52,14 +58,17 @@ enum class Key : uint8_t {
   kReplayBatchedWake,
   kReadbackElideUnread,
   kGpuBackendVulkan,  // M10-004 Deck A/B: native Vulkan for the session
+  kPrewarmSeedStore,  // M10-003: launcher shader store seeding (default on)
 };
-inline constexpr size_t kKeyCount = 7;
+inline constexpr size_t kKeyCount = 8;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
-// graphics-plugin cvars once the plugin has registered them.
+// graphics-plugin cvars once the plugin has registered them. Launcher keys are
+// read by the launcher only (no host cvar).
 enum class Phase : uint8_t {
   kStartup,
   kGraphicsPlugin,
+  kLauncher,
 };
 
 struct KeyInfo {
@@ -76,6 +85,7 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"d3d12_replay_batched_wake", Phase::kGraphicsPlugin},
     {"d3d12_readback_elide_unread", Phase::kGraphicsPlugin},
     {"mcla_gpu_backend_vulkan", Phase::kStartup},
+    {"prewarm_seed_store", Phase::kLauncher},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

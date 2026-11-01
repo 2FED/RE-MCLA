@@ -249,6 +249,11 @@ endif()
 option(MCLA_DEV_OVERRIDES "Read the owner-internal A/B override file (l57; never for volunteer builds)" OFF)
 list(APPEND MCLA_SOURCES src/mcla_dev_overrides.cpp)
 
+# M10-003: host log line with the shader store record counts at startup
+# (src/mcla_shader_store_log.h; the store parser is src/mcla_shader_store_seed.h,
+# which uses the SDK's xxhash.h header-only).
+list(APPEND MCLA_SOURCES src/mcla_shader_store_log.cpp)
+
 # M10 CPU task 1: native XDK D3D resource AddRef/Release (overrides
 # sub_82422160 and sub_824221D8) and XAPI Interlocked* helpers (sub_821CE080,
 # sub_821CE0A0, sub_821CE0D8, sub_821CE100, sub_821CE128) without the emulated
@@ -345,11 +350,29 @@ if(WIN32)
         src/mcla_launcher_writable_root_win.cpp src/mcla_launcher_process_win.cpp
         src/mcla_launcher_snapshot_win.cpp src/mcla_launcher_build_win.cpp
         src/mcla_launcher_game_win.cpp src/mcla_diagnostic_export_win.cpp
-        src/mcla_diagnostic_export_ui_win.cpp)
+        src/mcla_diagnostic_export_ui_win.cpp src/mcla_launcher_shader_seed_win.cpp)
+    # M10-003 shader store seeding (src/mcla_launcher_shader_seed_win.h):
+    # header-only XXH3 from the SDK submodule. MCLA_PREWARM_SEED_DEFAULT sets the
+    # launcher default; MCLA_DEV_OVERRIDES launcher builds also read
+    # prewarm_seed_store=true|false from the owner override file.
+    set(MCLA_XXHASH_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/rexglue-sdk/thirdparty/xxHash")
+    option(MCLA_PREWARM_SEED_DEFAULT "Launcher seeds a build's shader store from the other local stores (M10-003; ON only for owner-internal builds until the A/B)" OFF)
+    set(MCLA_STORE_SEED_DEFINITIONS "")
+    if(NOT MCLA_PREWARM_SEED_DEFAULT)
+        list(APPEND MCLA_STORE_SEED_DEFINITIONS MCLA_PREWARM_SEED_DEFAULT=0)
+    endif()
+    if(MCLA_DEV_OVERRIDES)
+        list(APPEND MCLA_STORE_SEED_DEFINITIONS MCLA_DEV_OVERRIDES=1)
+    endif()
+    if(MCLA_STORE_SEED_DEFINITIONS)
+        set_source_files_properties(src/mcla_launcher_shader_seed_win.cpp PROPERTIES
+            COMPILE_DEFINITIONS "${MCLA_STORE_SEED_DEFINITIONS}")
+    endif()
     add_executable(mcla_internal_launcher WIN32 src/mcla_launcher_main_win.cpp ${MCLA_LAUNCHER_SOURCES})
     set_target_properties(mcla_internal_launcher PROPERTIES OUTPUT_NAME "MCLA-Launcher")
     target_include_directories(mcla_internal_launcher PRIVATE src
         third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+    target_include_directories(mcla_internal_launcher SYSTEM PRIVATE "${MCLA_XXHASH_INCLUDE_DIR}")
     target_link_libraries(mcla_internal_launcher PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
     target_link_libraries(mcla_internal_launcher PRIVATE mcla_build_lease)
     # Local, explicit metadata projection only. Not part of volunteer staging yet.
@@ -428,6 +451,7 @@ if(WIN32)
             tests/mcla_launcher_controller_win_test.cpp ${MCLA_LAUNCHER_SOURCES})
         target_include_directories(mcla_launcher_controller_win_test PRIVATE src
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        target_include_directories(mcla_launcher_controller_win_test SYSTEM PRIVATE "${MCLA_XXHASH_INCLUDE_DIR}")
         target_compile_definitions(mcla_launcher_controller_win_test PRIVATE
             MCLA_LAUNCHER_CONTROLLER_TESTING MCLA_LAUNCHER_GAME_TESTING)
         target_link_libraries(mcla_launcher_controller_win_test PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
@@ -436,6 +460,7 @@ if(WIN32)
             tests/mcla_launcher_host_probe_win.cpp ${MCLA_LAUNCHER_SOURCES})
         target_include_directories(mcla_launcher_host_probe_win PRIVATE src
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        target_include_directories(mcla_launcher_host_probe_win SYSTEM PRIVATE "${MCLA_XXHASH_INCLUDE_DIR}")
         target_compile_definitions(mcla_launcher_host_probe_win PRIVATE MCLA_LAUNCHER_HOST_LIFECYCLE_TEST)
         target_link_libraries(mcla_launcher_host_probe_win PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
         target_link_libraries(mcla_launcher_host_probe_win PRIVATE mcla_build_lease)
@@ -450,6 +475,21 @@ if(WIN32)
             tests/mcla_launcher_import_win_test.cpp ${MCLA_LAUNCHER_SOURCES})
         target_include_directories(mcla_launcher_import_win_test PRIVATE src
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)
+        target_include_directories(mcla_launcher_import_win_test SYSTEM PRIVATE "${MCLA_XXHASH_INCLUDE_DIR}")
+        # M10-003: pure store parser/merger and the Windows seeding pass.
+        add_executable(mcla_shader_store_seed_test EXCLUDE_FROM_ALL tests/mcla_shader_store_seed_test.cpp)
+        target_include_directories(mcla_shader_store_seed_test PRIVATE src)
+        target_include_directories(mcla_shader_store_seed_test SYSTEM PRIVATE "${MCLA_XXHASH_INCLUDE_DIR}")
+        target_compile_features(mcla_shader_store_seed_test PRIVATE cxx_std_23)
+        add_executable(mcla_launcher_shader_seed_win_test EXCLUDE_FROM_ALL
+            tests/mcla_launcher_shader_seed_win_test.cpp src/mcla_launcher_shader_seed_win.cpp
+            src/mcla_launcher_fs_win.cpp)
+        target_include_directories(mcla_launcher_shader_seed_win_test PRIVATE src)
+        target_include_directories(mcla_launcher_shader_seed_win_test SYSTEM PRIVATE "${MCLA_XXHASH_INCLUDE_DIR}")
+        target_link_libraries(mcla_launcher_shader_seed_win_test PRIVATE bcrypt)
+        if(MCLA_STORE_SEED_DEFINITIONS)
+            target_compile_definitions(mcla_launcher_shader_seed_win_test PRIVATE ${MCLA_STORE_SEED_DEFINITIONS})
+        endif()
         target_link_libraries(mcla_launcher_import_win_test PRIVATE bcrypt user32 gdi32 shell32 ole32 uuid dxgi d3d12)
         target_link_libraries(mcla_launcher_import_win_test PRIVATE mcla_build_lease)
         add_executable(mcla_launcher_ui_render_win EXCLUDE_FROM_ALL

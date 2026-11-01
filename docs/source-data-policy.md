@@ -89,4 +89,24 @@ source-consistency PASS is not proof of complete clock history, frame identity,
 physical simulation or FPS. Preserve unique raw inputs while the linked timing
 investigation remains open.
 
+Shader stores (M10-003). The SDK keeps a per-build store in
+`<profile>/cache/<build fingerprint>/shaders/shareable/`: `545407F8.xsh` holds
+the raw guest shader microcode the game uploaded (game data), and the
+`*.xpso` files hold derived pipeline descriptions (hashes and fixed-function
+state, no shader bytes). Since M10-003 the launcher seeds a build's store with
+the local union of the other stores of the same installation (the profiles of
+its library, MAIN and BENCH copies alike), reading only those store files
+below `cache/<fingerprint>/shaders/shareable/` and writing only the selected
+build's store; see
+[the union store](evidence/M10-prewarm-union-store-20261101.md). The union
+store, like every store, is local derived data plus game data: it never leaves
+the machine that produced it, is never tracked, packaged, attached to a report
+folder, included in the metadata export (which never reads `cache/`), uploaded
+or sent to model workers, and evidence records only counts, sizes, header
+words and hashes of it. Copying one's own store to one's own second machine
+(for example the owner's Deck) is a private local copy, not distribution. A
+shipped description-only `.xpso` hint set would be a new distribution channel
+and needs its own amendment and owner review first; an `.xsh` is never
+distributed.
+
 Update this document whenever a new artifact type, tool, diagnostic format, package path, or distribution channel is introduced.

@@ -65,6 +65,7 @@
 #include "mcla_guest_sampler.h"
 #include "mcla_livery_diag.h"
 #include "mcla_dev_overrides.h"
+#include "mcla_shader_store_log.h"
 #include "mcla_readback_sync.h"
 #include "mcla_perf_split.h"
 #include "mcla_ki026_probe.h"
@@ -1196,6 +1197,9 @@ void MclaApp::OnPostInitLogging() {
   // Owner-internal A/B overrides (MCLA_DEV_OVERRIDES builds only): host
   // init-only switches must be written before the guest runs.
   mcla::dev_overrides::OnStartup();
+  // M10-003: record counts of the shader store this session starts with
+  // (after the launcher seeding, before the SDK reads it).
+  mcla::shader_store::LogStartupStore(rex::to_path(REXCVAR_GET(cache_root)));
   if (REXCVAR_GET(mcla_diagnostics_enabled) ||
       REXCVAR_GET(mcla_diagnostics_snapshot_probe) ||
       REXCVAR_GET(mcla_native_crash_probe) ||

@@ -29,7 +29,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 7, "seven whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 8, "eight whitelisted names");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
@@ -37,6 +37,8 @@ void TestWhitelist() {
   Check(FindKey("d3d12_replay_batched_wake") == Key::kReplayBatchedWake, "replay key");
   Check(FindKey("d3d12_readback_elide_unread") == Key::kReadbackElideUnread, "elide key");
   Check(FindKey("mcla_gpu_backend_vulkan") == Key::kGpuBackendVulkan, "vulkan backend key");
+  Check(FindKey("prewarm_seed_store") == Key::kPrewarmSeedStore, "store seeding key");
+  Check(!FindKey("prewarm_seed"), "store seeding prefix");
   for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
     Check(FindKey(mcla::dev_overrides::kKeys[i].name) == static_cast<Key>(i),
           "kKeys is indexed by Key");
@@ -68,6 +70,13 @@ void TestWhitelist() {
         "elide after the plugin registered it");
   Check(mcla::dev_overrides::Info(Key::kGpuBackendVulkan).phase == Phase::kStartup,
         "vulkan backend at startup (OnPostInitLogging precedes OnPreSetup)");
+  Check(mcla::dev_overrides::Info(Key::kPrewarmSeedStore).phase == Phase::kLauncher,
+        "store seeding is a launcher key (no host cvar)");
+  {
+    const Parsed p = Parse("prewarm_seed_store=false\n");
+    Check(p.status == FileStatus::kParsed && p.Value(Key::kPrewarmSeedStore) == false,
+          "store seeding off parses");
+  }
   Check(mcla::dev_overrides::kFile == "mcla-dev-overrides.txt", "file name (same as l55)");
   Check(mcla::dev_overrides::kDirectory == "MCLA-R-Launcher-v1", "launcher per-user directory");
   Check(mcla::dev_overrides::kMaxBytes == 1024, "1 KiB limit");
