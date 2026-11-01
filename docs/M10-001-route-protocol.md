@@ -1,5 +1,8 @@
 # M10-001 owner route protocol (l53 measurement build)
 
+> **Simplification agreed with the owner on 2026-11-01:** driving without explicit progress never changes the save and the game always spawns at the first garage, and the launcher already proves the save unchanged with its before/after snapshots. So ONE launcher copy of MAIN named `BENCH` is enough (it keeps MAIN's shader store and statistics untouched); the first launch of `BENCH` on a build is the cold run, every later launch is warm; a second cold run, if ever needed, is one more copy. The BENCH-A/B/C/D scheme below is kept only as the original design.
+
+
 Owner-facing protocol for the M10-001 measurement runs. Design:
 `docs/evidence/M10-001-harness-design-20261031.md` (sections 3-6); build:
 `docs/evidence/M10-001-instrumentation-build-20261031.md`.
