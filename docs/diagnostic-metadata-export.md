@@ -35,9 +35,11 @@ from a source subtree:
   when the session receipt has them. `gpu_driver` and `cpu` are always
   `unavailable`; the exporter does not inspect the current machine instead.
   `capabilities` is `recorded-v1` when the session has a capability record and
-  `unavailable-legacy` otherwise. With a record, `guest_refresh_hz` is the fixed
-  stock value 60, also for Unlocked sessions; it is not the vblank rate the
-  session actually used.
+  `unavailable-legacy` otherwise. With a record, `guest_refresh_hz` is the
+  guest refresh the recorded plan resolved: the stock 60 for Stock sessions and
+  the guest vblank override (240) for Unlocked ones (KI-058; earlier exporters
+  reported 60 for both). It is the recorded launch argument, not a measured
+  rate or FPS.
 - `capture.frame_written`: whether the package recorded an image.
 - `diagnostic_window`: logical/physical window size and fullscreen, when
   `state.json` has them. Window size is not a render-resolution measurement.

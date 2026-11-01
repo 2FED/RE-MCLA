@@ -274,6 +274,9 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
       Require(target != nullptr);
     } else Require(*scale <= 2); // The scale-only legacy schema admitted only 1/2.
     const bool has_capabilities = receipt.contains("capability_policy");
+    // Guest refresh rate of the recorded plan (KI-058): the Unlocked guest
+    // vblank override when the plan has one, else the stock refresh.
+    uint32_t recorded_guest_refresh_hz = 0;
     if (has_capabilities) {
       Require(target && receipt.at("capability_policy") == "1" && receipt.at("capability_record") == "capabilities.txt" &&
               input.capabilities.size() <= kMaximumExportReceiptBytes);
@@ -292,6 +295,7 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
       Require(plan.has_value());
       const auto canonical = SerializeCapabilities(*plan);
       Require(canonical && *canonical == input.capabilities);
+      recorded_guest_refresh_hz = plan->guest_vblank_hz ? plan->guest_vblank_hz : plan->guest_refresh_hz;
     } else Require(input.capabilities.empty());
 
     const auto manifest = ParseJson(input.manifest), state = ParseJson(input.diagnostic_state);
@@ -338,7 +342,7 @@ inline std::expected<MetadataProjection, std::string> ProjectLiveMetadata(const 
       report["session_recorded"]["render_target"] = {{"width",target->width},{"height",target->height}};
       report["session_recorded"]["guest_mode"] = {{"width",target->guest_width},{"height",target->guest_height}};
     }
-    if (has_capabilities) report["session_recorded"]["guest_refresh_hz"] = kStockGuestRefreshHz;
+    if (has_capabilities) report["session_recorded"]["guest_refresh_hz"] = recorded_guest_refresh_hz;
     if (!input.log_tail.empty()) {
       Require(input.log_tail.size() <= kMaximumExportLogTailBytes);
       auto performance = PerformanceSummary(input.log_tail);

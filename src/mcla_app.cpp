@@ -2011,6 +2011,8 @@ void MclaApp::OnPostLaunchModule(rex::system::XThread *thread) {
           // The token is invalidated on the UI thread before app teardown.
           app_context().CallInUIThreadDeferred([this, lifetime]() {
             if (!lifetime.expired() && window()) {
+              // A programmatic close skips OnWindowCloseRequested (KI-055).
+              window_close_requested_.store(true, std::memory_order_release);
               window()->RequestClose();
             }
           });
@@ -3699,14 +3701,29 @@ void MclaApp::ShutdownDiagnosticTriggers() {
 
 void MclaApp::OnGuestThreadExit(rex::system::XThread *thread) {
   (void)thread;
-  if (diagnostics_ && !REXCVAR_GET(mcla_diagnostics_snapshot_probe) &&
-      !REXCVAR_GET(mcla_native_crash_probe)) {
-    diagnostics_->RequestSnapshot("unexpected-guest-exit", {});
-    diagnostics_->WaitForIdle(std::chrono::seconds(20));
+  const bool close_requested =
+      window_close_requested_.load(std::memory_order_acquire);
+  if (!diagnostics_) {
+    return;
   }
+  if (!mcla::diagnostics::ShouldSnapshotGuestExit(
+          close_requested, REXCVAR_GET(mcla_diagnostics_snapshot_probe),
+          REXCVAR_GET(mcla_native_crash_probe))) {
+    if (close_requested) {
+      // KI-055: a normal close; the process hard-exits right after this.
+      MCLA_APP_INFO("MCLA lifecycle: guest exit after window close; no "
+                    "unexpected-guest-exit snapshot");
+    }
+    return;
+  }
+  diagnostics_->RequestSnapshot("unexpected-guest-exit", {});
+  diagnostics_->WaitForIdle(std::chrono::seconds(20));
 }
 
 bool MclaApp::OnWindowCloseRequested() {
+  // KI-055: MCLA never vetoes the close, so the guest exit that follows is
+  // the normal shutdown (published before the SDK terminates the title).
+  window_close_requested_.store(true, std::memory_order_release);
   mcla::guest_sampler::Stop();  // KI-035
   readback_probe_lifetime_.reset();
   ShutdownDiagnosticTriggers();

@@ -351,6 +351,21 @@ void TestPackageReport() {
                         "window unknown\n") != std::string::npos,
         "crash report never guesses unknown facts");
 }
+
+void TestGuestExitSnapshotPolicy() {
+  // KI-055: only a guest exit before an accepted window close is unexpected.
+  Check(ShouldSnapshotGuestExit(false, false, false),
+        "guest exit without a close request is snapshotted");
+  Check(!ShouldSnapshotGuestExit(true, false, false),
+        "guest exit after a window close request is a normal shutdown");
+  for (const bool close : {false, true}) {
+    Check(!ShouldSnapshotGuestExit(close, true, false),
+          "snapshot probe owns its exit");
+    Check(!ShouldSnapshotGuestExit(close, false, true),
+          "native crash probe owns its exit");
+    Check(!ShouldSnapshotGuestExit(close, true, true), "both probes");
+  }
+}
 } // namespace
 
 int main() {
@@ -361,5 +376,6 @@ int main() {
   TestSdkLogClassification();
   TestJson();
   TestPackageReport();
+  TestGuestExitSnapshotPolicy();
   std::printf("PASS: %d diagnostic trigger checks\n", checks);
 }

@@ -64,7 +64,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window.
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
-            readback_sync)
+            readback_sync native_refcount)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -237,6 +237,13 @@ if(MCLA_READBACK_SYNC_COMPOSITE_DEFAULT)
     set_source_files_properties(src/mcla_readback_sync.cpp PROPERTIES
         COMPILE_DEFINITIONS MCLA_READBACK_SYNC_COMPOSITE_DEFAULT=1)
 endif()
+
+# M10 CPU task 1: native XDK D3D resource AddRef/Release (overrides
+# sub_82422160 and sub_824221D8) and XAPI Interlocked* helpers (sub_821CE080,
+# sub_821CE0A0, sub_821CE0D8, sub_821CE100, sub_821CE128) without the emulated
+# interrupt lock. Default on; --mcla_native_d3d_refcount=false and
+# --mcla_native_xapi_interlocked=false restore the generated bodies.
+list(APPEND MCLA_SOURCES src/mcla_native_refcount.cpp)
 
 # Measured-time game timer (docs/evidence/M8-001-timebox-20261025.md). It
 # overrides sub_822D2478, so it stays out of builds where the diagnostic timer

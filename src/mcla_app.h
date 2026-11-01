@@ -7,6 +7,7 @@
 #include <rex/rex_app.h>
 #include "mcla_diagnostic_hotkey.h"
 
+#include <atomic>
 #include <memory>
 #include <stop_token>
 #include <thread>
@@ -81,6 +82,9 @@ private:
   std::unique_ptr<mcla::diagnostics::Manager> diagnostics_;
   std::unique_ptr<rex::ui::ImGuiDialog> diagnostic_status_dialog_;
   bool diagnostic_keybind_registered_ = false;
+  // KI-055: set on the UI thread once a window close is accepted, before the
+  // SDK terminates the title; read by the guest-exit hook on the module thread.
+  std::atomic<bool> window_close_requested_{false};
   mcla::diagnostics::DiagnosticHotkey diagnostic_hotkey_;
   // A managed session's comment-only config remains read-locked until this
   // host is destroyed. It is never the launcher's persistent settings store.

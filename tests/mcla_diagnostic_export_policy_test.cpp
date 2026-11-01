@@ -151,6 +151,13 @@ int RunTests() {
     const auto report = Accept(unlocked,"unlocked session metadata accepted");
     Check(report.contains("session_recorded") && report.at("session_recorded").at("timing") == "unlocked",
           "report records the unlocked mode, not stock");
+    // KI-058: the recorded guest refresh of an Unlocked plan is its guest
+    // vblank override (240 Hz), not the stock 60 Hz.
+    Check(plan && plan->guest_vblank_hz == kUnlockedGuestVblankHz &&
+          report.contains("session_recorded") &&
+          report.at("session_recorded").at("guest_refresh_hz") == kUnlockedGuestVblankHz &&
+          report.at("session_recorded").at("guest_refresh_hz") != kStockGuestRefreshHz,
+          "unlocked report carries the recorded guest vblank override");
     auto stock_record = unlocked;
     const auto stock_plan = ResolveCapabilities({build,kGame,TimingMode::Stock,720,true});
     stock_record.capabilities = stock_plan ? *SerializeCapabilities(*stock_plan) : std::string();
@@ -171,7 +178,10 @@ int RunTests() {
     const auto plan = ResolveCapabilities({kHash,kGame,TimingMode::Stock,2160,true,true});
     owner.capabilities = plan ? *SerializeCapabilities(*plan) : std::string();
     Check(owner.capabilities.ends_with("\nadmission owner-allowlist\n"),"owner record names the admission");
-    Accept(owner,"owner-admitted 2160p session metadata accepted");
+    const auto owner_report = Accept(owner,"owner-admitted 2160p session metadata accepted");
+    Check(owner_report.contains("session_recorded") &&
+          owner_report.at("session_recorded").at("guest_refresh_hz") == kStockGuestRefreshHz,
+          "owner-admitted stock report keeps the stock guest refresh");
     auto stripped = owner;
     stripped.capabilities.erase(stripped.capabilities.size() - std::string("admission owner-allowlist\n").size());
     Reject(stripped,"2160p record of an unlisted build without admission is rejected");
@@ -190,7 +200,10 @@ int RunTests() {
                                                    mcla::lease::kGrantUnlocked});
     granted.capabilities = granted_plan ? *SerializeCapabilities(*granted_plan) : std::string();
     Check(granted.capabilities.ends_with("\nadmission ticket-grant\n"),"granted record names the ticket grant");
-    Accept(granted,"ticket-granted Unlocked session metadata accepted");
+    const auto granted_report = Accept(granted,"ticket-granted Unlocked session metadata accepted");
+    Check(granted_report.contains("session_recorded") &&
+          granted_report.at("session_recorded").at("guest_refresh_hz") == kUnlockedGuestVblankHz,
+          "ticket-granted unlocked report carries the recorded guest vblank override");
     auto ungranted = granted;
     ungranted.capabilities.erase(ungranted.capabilities.size() - std::string("admission ticket-grant\n").size());
     Reject(ungranted,"unlocked record of an untested build without the grant is rejected");

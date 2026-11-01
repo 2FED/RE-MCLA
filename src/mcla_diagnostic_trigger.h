@@ -331,6 +331,17 @@ struct SnapshotTrigger {
   std::optional<WheelState> wheel;
 };
 
+// KI-055: whether the exit of the guest main thread gets an
+// "unexpected-guest-exit" snapshot. A normal window close also ends the guest
+// (the SDK's OnClosing terminates the title and then hard-exits the process),
+// so a snapshot queued then is cut off and leaves an empty or unfinished
+// live-*.partial package. Only an exit before any accepted close request is
+// unexpected. The diagnostic snapshot and native crash probes own their exits.
+inline bool ShouldSnapshotGuestExit(bool close_requested, bool snapshot_probe,
+                                    bool native_crash_probe) {
+  return !close_requested && !snapshot_probe && !native_crash_probe;
+}
+
 inline constexpr size_t kMaxSdkLogLinesPerKind = 32;
 inline constexpr size_t kMaxSdkLogLineBytes = 512;
 
