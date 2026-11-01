@@ -63,7 +63,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     target_compile_features(mcla_cursor_autohide_test PRIVATE cxx_std_23)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window.
-    foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split)
+    foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -210,6 +210,17 @@ list(APPEND MCLA_SOURCES src/mcla_perf_split.cpp)
 if(MCLA_PERF_SPLIT_DEFAULT)
     set_source_files_properties(src/mcla_perf_split.cpp PROPERTIES
         COMPILE_DEFINITIONS MCLA_PERF_SPLIT_DEFAULT=1)
+endif()
+
+# KI-047 diag v2 (M10-001 l54): sets the SDK d3d12_livery_diag2=true at
+# graphics-plugin load unless the user set it. OFF by default; ON only for the
+# owner-internal diagnostic build l54. With an SDK without the cvar (the
+# pinned volunteer SDK) it only logs that the cvar is unavailable.
+option(MCLA_LIVERY_DIAG2_DEFAULT "Default the SDK d3d12_livery_diag2 KI-047 diagnostics ON (l54)" OFF)
+list(APPEND MCLA_SOURCES src/mcla_livery_diag.cpp)
+if(MCLA_LIVERY_DIAG2_DEFAULT)
+    set_source_files_properties(src/mcla_livery_diag.cpp PROPERTIES
+        COMPILE_DEFINITIONS MCLA_LIVERY_DIAG2_DEFAULT=1)
 endif()
 
 # Measured-time game timer (docs/evidence/M8-001-timebox-20261025.md). It

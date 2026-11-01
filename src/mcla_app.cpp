@@ -63,6 +63,7 @@
 #include "mcla_diagnostics.h"
 // M9 host hooks (M9-007 menu-state cap, KI-035 sampler, KI-026 state block).
 #include "mcla_guest_sampler.h"
+#include "mcla_livery_diag.h"
 #include "mcla_perf_split.h"
 #include "mcla_ki026_probe.h"
 #include "mcla_menu_state.h"
@@ -1319,6 +1320,7 @@ void MclaApp::OnWindowFocusChanged(bool focused) {
 void MclaApp::OnPostLoadGraphicsPlugin() {
   mcla::ApplyTextureCacheBudget();
   mcla::perf_split::OnGraphicsPluginLoaded();  // M10-001
+  mcla::livery_diag::OnGraphicsPluginLoaded();  // KI-047 diag v2
   mcla::photo_capture::StartAlwaysPipelineWait();  // KI-047
   if (rex::cvar::HasNonDefaultValue("readback_resolve")) {
     return;
