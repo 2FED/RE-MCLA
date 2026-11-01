@@ -63,7 +63,8 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     target_compile_features(mcla_cursor_autohide_test PRIVATE cxx_std_23)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window.
-    foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag)
+    foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
+            readback_sync)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -223,6 +224,20 @@ if(MCLA_LIVERY_DIAG2_DEFAULT)
         COMPILE_DEFINITIONS MCLA_LIVERY_DIAG2_DEFAULT=1)
 endif()
 
+# KI-047 fix candidate (M10-001 l55): sets the SDK
+# d3d12_readback_sync_composite=true at graphics-plugin load (synchronous,
+# fenced read-back of livery-composite resolves) unless the user set it or the
+# host switch mcla_readback_sync_composite is false; such builds also read the
+# per-user A/B override file (see src/mcla_readback_sync.h). OFF by default;
+# ON only for the owner-internal build l55. Without the option nothing is read
+# or written.
+option(MCLA_READBACK_SYNC_COMPOSITE_DEFAULT "Default the SDK d3d12_readback_sync_composite KI-047 fix ON with the A/B override file (l55)" OFF)
+list(APPEND MCLA_SOURCES src/mcla_readback_sync.cpp)
+if(MCLA_READBACK_SYNC_COMPOSITE_DEFAULT)
+    set_source_files_properties(src/mcla_readback_sync.cpp PROPERTIES
+        COMPILE_DEFINITIONS MCLA_READBACK_SYNC_COMPOSITE_DEFAULT=1)
+endif()
+
 # Measured-time game timer (docs/evidence/M8-001-timebox-20261025.md). It
 # overrides sub_822D2478, so it stays out of builds where the diagnostic timer
 # configuration probe owns that function.
@@ -272,6 +287,10 @@ endif()
 
 if(WIN32)
     target_link_libraries(mcla PRIVATE psapi bcrypt gdi32 user32)
+    if(MCLA_READBACK_SYNC_COMPOSITE_DEFAULT)
+        # SHGetKnownFolderPath and CoTaskMemFree for the l55 override file.
+        target_link_libraries(mcla PRIVATE shell32 ole32)
+    endif()
     add_library(mcla_build_lease STATIC
         src/mcla_build_lease_policy.cpp src/mcla_build_lease_network_win.cpp
         src/mcla_build_lease_runtime_win.cpp src/mcla_launcher_fs_win.cpp)
