@@ -1,7 +1,8 @@
 #pragma once
 
-// Owner-internal developer overrides (M10 l57 CPU A/B;
-// docs/evidence/M10-l57-cpu-ab-build-20261101.md).
+// Owner-internal developer overrides (M10 l57 CPU A/B,
+// docs/evidence/M10-l57-cpu-ab-build-20261101.md; M10-002 l58 read-back
+// elision A/B, docs/evidence/M10-002-readback-elision-build-20261101.md).
 //
 // Builds made with the CMake option MCLA_DEV_OVERRIDES (OFF by default; ON
 // only for owner-internal measurement builds, never for volunteer builds) read
@@ -47,8 +48,9 @@ enum class Key : uint8_t {
   kNativeXapiInterlocked,
   kWrmEventWake,
   kReplayBatchedWake,
+  kReadbackElideUnread,
 };
-inline constexpr size_t kKeyCount = 5;
+inline constexpr size_t kKeyCount = 6;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them.
@@ -69,6 +71,7 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"mcla_native_xapi_interlocked", Phase::kStartup},
     {"d3d12_wrm_event_wake", Phase::kGraphicsPlugin},
     {"d3d12_replay_batched_wake", Phase::kGraphicsPlugin},
+    {"d3d12_readback_elide_unread", Phase::kGraphicsPlugin},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

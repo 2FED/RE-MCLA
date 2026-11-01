@@ -29,12 +29,13 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 5, "five whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 6, "six whitelisted names");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
   Check(FindKey("d3d12_wrm_event_wake") == Key::kWrmEventWake, "wrm key");
   Check(FindKey("d3d12_replay_batched_wake") == Key::kReplayBatchedWake, "replay key");
+  Check(FindKey("d3d12_readback_elide_unread") == Key::kReadbackElideUnread, "elide key");
   for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
     Check(FindKey(mcla::dev_overrides::kKeys[i].name) == static_cast<Key>(i),
           "kKeys is indexed by Key");
@@ -43,6 +44,8 @@ void TestWhitelist() {
   Check(!FindKey("d3d12_readback_sync_composite"), "SDK readback cvar not whitelisted");
   Check(!FindKey("readback_resolve"), "readback_resolve not whitelisted");
   Check(!FindKey("d3d12_perf_split"), "perf split not whitelisted");
+  Check(!FindKey("d3d12_readback_gpu_timing"), "read-back GPU timing not whitelisted");
+  Check(!FindKey("d3d12_readback_elide"), "elide prefix");
   Check(!FindKey("vsync"), "vsync not whitelisted");
   Check(!FindKey("mcla_native_d3d_refcountX"), "suffix");
   Check(!FindKey("MCLA_NATIVE_D3D_REFCOUNT"), "case sensitive");
@@ -57,6 +60,8 @@ void TestWhitelist() {
         "wrm after the plugin registered it");
   Check(mcla::dev_overrides::Info(Key::kReplayBatchedWake).phase == Phase::kGraphicsPlugin,
         "replay after the plugin registered it");
+  Check(mcla::dev_overrides::Info(Key::kReadbackElideUnread).phase == Phase::kGraphicsPlugin,
+        "elide after the plugin registered it");
   Check(mcla::dev_overrides::kFile == "mcla-dev-overrides.txt", "file name (same as l55)");
   Check(mcla::dev_overrides::kDirectory == "MCLA-R-Launcher-v1", "launcher per-user directory");
   Check(mcla::dev_overrides::kMaxBytes == 1024, "1 KiB limit");
@@ -84,14 +89,29 @@ void TestValidFiles() {
         "mcla_native_d3d_refcount=false\r\n"
         "mcla_native_xapi_interlocked=false\r\n"
         "d3d12_wrm_event_wake=true\r\n"
-        "d3d12_replay_batched_wake=false\r\n");
-    Check(p.status == FileStatus::kParsed && p.ValueCount() == 5 && p.ignored_lines == 0,
-          "all five keys");
-    Check(p.Value(Key::kReadbackSyncComposite) == true, "all five: readback");
-    Check(p.Value(Key::kNativeD3dRefcount) == false, "all five: refcount");
-    Check(p.Value(Key::kNativeXapiInterlocked) == false, "all five: xapi");
-    Check(p.Value(Key::kWrmEventWake) == true, "all five: wrm");
-    Check(p.Value(Key::kReplayBatchedWake) == false, "all five: replay");
+        "d3d12_replay_batched_wake=false\r\n"
+        "d3d12_readback_elide_unread=true\r\n");
+    Check(p.status == FileStatus::kParsed && p.ValueCount() == 6 && p.ignored_lines == 0,
+          "all six keys");
+    Check(p.Value(Key::kReadbackSyncComposite) == true, "all six: readback");
+    Check(p.Value(Key::kNativeD3dRefcount) == false, "all six: refcount");
+    Check(p.Value(Key::kNativeXapiInterlocked) == false, "all six: xapi");
+    Check(p.Value(Key::kWrmEventWake) == true, "all six: wrm");
+    Check(p.Value(Key::kReplayBatchedWake) == false, "all six: replay");
+    Check(p.Value(Key::kReadbackElideUnread) == true, "all six: elide");
+  }
+  {
+    // The l58 arm files: six lines of at most 37 bytes fit the 1 KiB limit.
+    const Parsed p = Parse(
+        "mcla_readback_sync_composite=true\r\n"
+        "mcla_native_d3d_refcount=false\r\n"
+        "mcla_native_xapi_interlocked=false\r\n"
+        "d3d12_wrm_event_wake=false\r\n"
+        "d3d12_replay_batched_wake=false\r\n"
+        "d3d12_readback_elide_unread=false\r\n");
+    Check(p.ValueCount() == 6 && p.Value(Key::kReadbackElideUnread) == false &&
+              p.Value(Key::kReadbackSyncComposite) == true,
+          "l58 baseline arm");
   }
   {
     const Parsed p = Parse("d3d12_wrm_event_wake=true\nd3d12_replay_batched_wake=true\n");
