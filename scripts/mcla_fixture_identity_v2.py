@@ -44,6 +44,17 @@ class Identity:
         uint(self.paint, positive=True)
 
 
+class PixelIdentityError(ValueError):
+    """Canonical grid mismatch, with bounded scalar context and no pixels/nonce."""
+    def __init__(self, slot, expected, observed):
+        super().__init__('wrong session or stale pixel identity')
+        self.diagnostic = {'schema': 'mcla-fixture-identity-rejection-v1',
+            'guard': 'pixel identity mismatch', 'slot': slot,
+            'expected_challenge': expected.challenge, 'expected_paint': expected.paint,
+            'observed_challenge': observed.challenge, 'observed_paint': observed.paint,
+            'session_matches': observed.session == expected.session}
+
+
 def encode(identity):
     """Canonical full-client BGRA grid; CRC detects corruption, not forgery."""
     need(type(identity) is Identity, 'identity required')
@@ -195,7 +206,8 @@ class FixtureModel:
                                               self.publication.cleanup_after_qpc),
                  'observation predates completed producer/host issue')
             identity = decode(observation.pixels)
-            need(identity == self.challenge.identity, 'wrong session or stale pixel identity')
+            if identity != self.challenge.identity:
+                raise PixelIdentityError(self.count-1, self.challenge.identity, identity)
             result = {'schema': SCHEMA, 'identity': identity,
                       'raw_wgc_100ns': observation.raw_wgc_100ns,
                       'fixture_content_model_pass': True,

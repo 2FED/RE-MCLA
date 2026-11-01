@@ -30,8 +30,8 @@ Each task evidence records job receipt, requested scope, accepted/rejected
 findings and validation. Completed inference is not accepted engineering work.
 Unavailable inference and rejected answers retain their evidence; do not blindly
 retry or block independent safe progress. Report actual usage rather than guessed
-cost savings; Codex subagents are separate from Spark. The owner's existing-credit
-floor is 5,000, with no authority to purchase credits or redeem resets.
+cost savings; Codex subagents are separate from Spark. Usage limits follow the
+owner's current instruction in AGENTS.md; no credit purchases or reset redemption.
 
 ## Packet and invocation
 

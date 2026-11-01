@@ -59,6 +59,24 @@ These repository-specific rules supplement the global Codex working rules.
   or blindly retry. Preserve the failure, use a justified fallback, and continue
   safe independent milestone work. Existing credit floor remains 5,000.
 
+## Owner-authorized storage maintenance
+
+- Owner requested recurring cleanup every two days on2026-10-18. Heartbeat
+  automation `temp` owns this schedule; do not create duplicate schedules.
+- Scope: stale `%LocalAppData%\Temp` and genuinely obsolete temporary builds or
+  artifacts under this repository's `private/`. Age/completion alone does not
+  make project evidence disposable. General Temp cleanup uses a7-day quiet age.
+- Preserve active builds and dependency closures, MAIN and all save lineage,
+  game sources/assets, secrets, clipboard attachments, open-bug raw evidence,
+  and representative original/fixed captures. Check current-state and the
+  storage-cleanup report before selecting exact files. No active-test interference.
+- Record exact paths, hashes, sizes, reasons and recovery limits before deleting;
+  keep derived reports and explicitly document lost raw replay. A hash is not a
+  substitute for raw evidence. Validate all ancestors; never follow reparse
+  points or recursively remove a broad root. Skip uncertain/in-use targets.
+- Maintenance alone does not authorize renewed M8 runtime tests or a milestone
+  acceptance claim. See docs/evidence/M8-storage-cleanup-20261013.md.
+
 ## Scoped multi-agent workflow
 
 - Use subagents when an active task has at least two genuinely independent, bounded tracks, or when a narrow independent review materially reduces reverse-engineering, test-design, privacy, or upstream-reporting risk. Do not delegate trivial work or serial steps whose coordination cost exceeds the benefit.

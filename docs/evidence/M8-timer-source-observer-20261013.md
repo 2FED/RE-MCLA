@@ -104,6 +104,28 @@ Raw timer JSON, source snapshots and images remain private. The native hook,
 source scout and supervisor integration are still uncommitted prerequisites;
 the bounded journal/observer/reader/decoder contract can be reviewed separately.
 
-The next analysis follows the observed caller and actual state transitions.
-Animation phase, game-time correctness, frame-to-step causality and safe60FPS
-remain unproved. M8-001 remains open.
+## Timer consumer limitation
+
+Primary and independent caller inspection identifies the observed object as the
+global timer used by the main-loop function, not an isolated vehicle-physics
+step. The caller at `0x822C1FA8` invokes its virtual timer slot and later
+temporarily changes the effective-delta field at offset8. It calls the
+subdivision helper at `0x821BD910`, forwards an f30 delta to one consumer path,
+then restores the cached f28 delta and forwards that elsewhere. Helper fields
+73/76/80 and the caller's loop registers were not part of the observation.
+
+All165 calls have the same fixed-mode effective value and all captured fields
+match across164 AFTER-to-next-BEFORE transitions. That continuity does not
+observe the transient consumer values between calls. Summing the returned
+effective values would therefore measure this timer's returns, not proved
+simulation elapsed time. The raw tick-derived delta also uses a game conversion
+constant that was not captured; no timebase correction follows from it.
+
+The next bounded diagnostic carries an explicit emission token through the
+SDK-owned swap packet to the selected source texture and mailbox resource.
+It must compare the consumed fetch state as well as the swap words, because the
+D3D12 backend selects its source texture through fetch register0. Token transport
+can establish emission-to-resource provenance; it cannot establish which earlier
+simulation update generated the draw commands. A separate consumer/phase witness
+remains necessary. Animation phase, game-time correctness and safe60FPS remain
+unproved. M8-001 remains open.
