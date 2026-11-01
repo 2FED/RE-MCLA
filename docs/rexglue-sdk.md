@@ -8,7 +8,49 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
-**M9-006 (2026-10-31, pushed 2026-10-31): the submodule pin moves to
+**M10-001 (2026-11-01, pushed 2026-11-01): the submodule pin moves to
+`483458d2885419234a0729698f29a8850a052b55`** (`483458d`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
+`v0.20.0.6` (annotated, tag object `22bfdc0`), package version **0.20.0.6**. The exact tag yields
+`0.20.0.6`; the same commit without its tag reports a `-dev.g483458d` version, so clean clones
+must fetch tags. Fast-forward on top of `851f03b`, three deltas (all hot-reload cvars, SDK
+default off; behaviour and log unchanged while off):
+
+- `7892797` gpu(d3d12): `d3d12_perf_split` (int 0-2, default 0). Optional command-processor
+  cost split: one `MCLA_PERF_SPLIT v=1` line per one-minute window and one per
+  `rex::graphics::MarkPerfSplit(reason)` (host F10), with CP busy, draw, upload, read-back,
+  fence-wait and replay shares and the render thread's GPU-serial wait. Mode 1 adds about
+  0.1-0.8% of CP time in the micro-benchmark, mode 2 about 2-6%
+  ([instrumentation build](evidence/M10-001-instrumentation-build-20261031.md)).
+- `83b093b` gpu(d3d12): `d3d12_livery_diag2` (bool, default false), KI-047 diagnostics v2
+  (`MCLA_LIVERY_DIAG2 v=1` lines: read-back resolve history and overlaps, fence and pipeline
+  waits, atlas texture loads, per-minute counts), plus a behaviour fix: a draw that waited
+  for a pending pipeline now binds that pipeline's root signature
+  (`SelectRootSignatureForDraw`) ([diag v2 build](evidence/M10-001-ki047-diag2-build-20261101.md)).
+- `483458d` gpu(d3d12): `d3d12_readback_sync_composite` (bool, default false) and
+  `d3d12_readback_sync_scope` (0 composite family, 1 all; default 0): KI-047 candidate fix,
+  a delayed (`some`/`fast`) read-back resolve of the livery-composite family that shares a
+  live range, is sporadic (8+ frames) or has the composite shape is made synchronous like
+  `readback_resolve=full` (`MCLA_READBACK_SYNC v=1` start/stop/minute/mark lines); diag v3
+  (paced line budgets, `kind=composite` lines, F10 flight recorder of the last 64
+  resolve and atlas lines) ([sync fix build](evidence/M10-001-ki047-sync-fix-build-20261101.md)).
+
+The MCLA host turns each on at graphics-plugin load only when built with the matching
+CMake option (`MCLA_PERF_SPLIT_DEFAULT`, `MCLA_LIVERY_DIAG2_DEFAULT`,
+`MCLA_READBACK_SYNC_COMPOSITE_DEFAULT`; all OFF in `CMakeLists.txt`, ON for volunteer
+builds from l56, see [build](build.md)). SDK ctest at `483458d`: 1952/1952.
+`thirdparty/sdl3` stays at `422c186` from `https://github.com/2FED/SDL.git`; every other
+nested gitlink is unchanged from `851f03b`. Verify a fresh clone with:
+
+```powershell
+git -C third_party/rexglue-sdk rev-parse HEAD                  # 483458d2885419234a0729698f29a8850a052b55
+git -C third_party/rexglue-sdk rev-list -n 1 v0.20.0.6         # same
+git -C third_party/rexglue-sdk ls-tree HEAD thirdparty/sdl3    # 422c186c0a272bf6f255b2f4537a726f804e924b
+git submodule status --recursive
+```
+
+The `851f03b` pin text that follows stays as history.
+
+**M9-006 (2026-10-31, pushed 2026-10-31; superseded by `483458d` on 2026-11-01): the submodule pin moved to
 `851f03bd23797e72da4091c3fe7fec7566c0d1c9`** (`851f03b`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
 `v0.20.0.5` (annotated), package version **0.20.0.5**. The exact tag yields `0.20.0.5`;
 the same commit without its tag reports a `-dev.g851f03b` version (`0.20.0.2-dev.g851f03b`
