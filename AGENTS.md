@@ -31,6 +31,17 @@ These repository-specific rules supplement the global Codex working rules.
   until the owner changes it; weekly zero alone is not a stop while credits remain
   above that floor and execution is available.
 
+### Temporary owner usage override
+
+- Latest owner instruction, 2026-11-01: the weekly-allowance stop rules are suspended while the
+  work mostly waits on owner-side physical checks and measurement runs. The only usage stop is
+  when about 5% of the 5-hour limit remains. Check the live value when the environment shows it;
+  do not guess it. No purchases or reset redemption. Earlier percentage/credit floors (October 11,
+  17, 18, 21, 23) are historical and not additional active stops.
+- Before stopping at that limit or at a genuine owner-only blocker, refresh the applicable current
+  documentation (README-AI ledger/checkpoint, current-state handoff, evidence, tested versus pending
+  identities, blockers, exact next actions). Preserve dated history and raw receipts.
+
 ### Ordinary policy
 
 - Continue working autonomously on the active milestone until one of these terminal conditions is reached: the milestone is fully reviewed, closed, committed, and pushed; further progress genuinely requires user input or authorization; or the observable remaining weekly usage allowance reaches 30%.
