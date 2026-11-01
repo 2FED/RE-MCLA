@@ -98,6 +98,10 @@ Total: about 6-8 weeks of agent work without the M10-006 implementation, 2-3
 weeks more if the gate opens it. Owner time is mostly short timed runs on the
 bench route plus Deck sessions.
 
+## M10-001 outcome and the CPU-side task list (2026-11-01)
+
+PC verdict: GPU-bound at 1440p; at 720p the render thread is first, the CP second (a fixed WAIT_REG_MEM Sleep(1) per frame under vsync), the GPU third. M10-006 (multi-threaded CP) is not justified on the PC. Ranked CPU-side work from [the CPU targets analysis](evidence/M10-cpu-targets-20261101.md): (1) native AddRef/Release for the XDK D3D resource helpers via REX_EXTERN (render about -1 ms/frame); (2) WAIT_REG_MEM episode counters, then an event wake after each interrupt dispatch (CP -0.5 to -1.7 ms/frame); (3) promote the M7 published function scope (render -0.8 to -2.4 ms/frame, medium risk); (4) codegen elision of the interrupt-disable idiom (45 regions); (5) write-fault per-thread counters, then a hot-block policy; (6) replay worker batched wake (frees about half a core); (7) precise vblank timer. Deck arm of M10-001 still pending.
+
 ## Measurement harness and acceptance rules
 
 - **No PASS without counters.** A performance claim needs the per-minute log
