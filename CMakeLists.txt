@@ -75,6 +75,11 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
     target_compile_features(mcla_frame_signal_test PRIVATE cxx_std_23)
     # KI-049 (M9-006): pure Wine/Proton ancestor policy of the launcher fs guard.
+    # KI-061: pure Vulkan device choice for the launcher-selected adapter.
+    add_executable(mcla_vulkan_device_select_test EXCLUDE_FROM_ALL
+        tests/mcla_vulkan_device_select_test.cpp)
+    target_include_directories(mcla_vulkan_device_select_test PRIVATE src)
+    target_compile_features(mcla_vulkan_device_select_test PRIVATE cxx_std_23)
     add_executable(mcla_wine_path_policy_test EXCLUDE_FROM_ALL
         tests/mcla_wine_path_policy_test.cpp)
     target_include_directories(mcla_wine_path_policy_test PRIVATE src)
@@ -280,6 +285,8 @@ if(WIN32)
     list(APPEND MCLA_SOURCES src/mcla_native_crash_win.cpp)
     list(APPEND MCLA_SOURCES src/mcla_timer_resolution_win.cpp)
     list(APPEND MCLA_SOURCES src/mcla_texture_budget_win.cpp)
+    # KI-061: launcher GPU choice -> SDK vulkan_device (Vulkan backend only).
+    list(APPEND MCLA_SOURCES src/mcla_vulkan_device_win.cpp)
 else()
     list(APPEND MCLA_SOURCES src/mcla_native_crash_stub.cpp)
 endif()

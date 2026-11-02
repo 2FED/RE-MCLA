@@ -2,6 +2,7 @@
 
 #include "mcla_app.h"
 #include "mcla_texture_budget.h"
+#include "mcla_vulkan_device_win.h"
 #if defined(MCLA_TEST_BUILD_EXPIRY)
 #include "mcla_build_lease_runtime_win.h"
 #endif
@@ -1292,6 +1293,13 @@ void MclaApp::OnPreSetup(rex::RuntimeConfig &config) {
     MCLA_GPU_INFO(
         "MCLA graphics: selected native Vulkan backend for Proton/Wine");
   }
+#if defined(REX_HAS_VULKAN) && REX_HAS_VULKAN
+  // KI-061: the launcher's GPU choice reaches the SDK only as d3d12_adapter;
+  // map it to vulkan_device before the GPU plugin creates the Vulkan provider.
+  if (config.gpu_backend == "vulkan") {
+    mcla::SelectVulkanDeviceForLauncherAdapter();
+  }
+#endif
   if (REXCVAR_GET(mcla_frontend_smoke_probe) ||
       REXCVAR_GET(mcla_readback_cost_probe) ||
       REXCVAR_GET(mcla_rendering_smoke_probe) ||
