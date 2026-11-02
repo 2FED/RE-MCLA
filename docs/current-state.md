@@ -1,10 +1,14 @@
 # Current state and handoff
 
-Updated November 1, 2026 evening Kyiv (M10 in progress on main: M10-001 PC arms done, l56 volunteer candidate awaiting signature, l57 CPU A/B build ready).
+Updated November 2, 2026 Kyiv (l63 owner A/B done; SDK v0.20.0.7 published; volunteer candidate l65 ready for the owner).
 
 ## Active outcome
 
-**MORNING 2026-11-02: test l63 (owner-internal, every M10 change behind switch files).** Follow `private/l63-MORNING.txt`: sign `private/l63-internal-prepare.ps1`; PC BENCH-C 1440p Unlocked ABAB base/all, 720p base+all, Vulkan quick check; Deck (if brought) base, all, all-vulkan, all, base; send the session and F10 folders. l63 = SDK `8081f63` (local branch `mcla/m10-watch`: v0.20.0.6 + WRM/replay waits + read-back counters/elision + pre-warm thread fix + KI-047 targeted wait/kicks + watch census and steps 1-2 + review fixes), D3D12+Vulkan, ctest 2004/2004; host from main `b714e6b`, 43/43 suites, 0 warnings. [Evidence](evidence/M10-l63-combined-build-20261101.md). **Nothing in l57-l63 has run in the game.** l63 supersedes l57, l58 and l59 for testing.
+**State 2026-11-02 (main `HEAD`, local commits since `99d6e56` unpushed until M10 closure):**
+- **Owner l63 PC A/B done** ([analysis](evidence/M10-l63-pc-ab-20261102.md)): "all" +15-24% at 1440p; the l56 KI-047 full-drain sync costs about 22% at 720p and 15% at 1440p; the targeted wait cuts it by two thirds with 0 failures; bridging and upload-ahead are net negative on the PC; pre-warm gives 0 pipeline waits. Police livery correct in every arm (owner). Vulkan smoke ran on the iGPU (KI-061, fixed in `b769d09`, owner repeat on l64 pending) and shows glitches (KI-062).
+- **SDK v0.20.0.7 = `43577c8` published** on the fork and pinned (`1ff00dc`) ([evidence](evidence/M10-sdk-v0.20.0.7-20261102.md)).
+- **Volunteer candidate l65 READY for the owner** (clean clone of `1ff00dc`, SDK ctest 2006/2006, 45 suites, 0 warnings; `MCLA_M10_SPEEDUP_DEFAULTS` and pre-warm on): before signing, the owner plays one 720p and one 1440p session on the staged l65 with a police car in view (check `MCLA m10 default:` lines, `applied=5`, `store-seed.txt`; no leftover `mcla-dev-overrides.txt`); then `private/l65-volunteer-prepare.ps1` (expect `SIGNED_LEASES_VERIFIED entries=5`) and "publish l65". [Evidence](evidence/M9-005-volunteer-candidate-l65-20261102.md), [changelog](volunteer-changelog-l65.txt).
+- **Owner-internal builds waiting:** l64 (Vulkan GPU fix; PC Vulkan repeat at 720p with `private/l63-arm-all-vulkan.cmd`), l63 Deck arms (base, all, all-vulkan, all, base per `private/l63-MORNING.txt` step 4).
 
 
 **M10 at 2026-11-01 evening (main `169daf9`, local commits not yet pushed; push at M10 closure):**
