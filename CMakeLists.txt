@@ -64,7 +64,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window.
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
-            readback_sync native_refcount dev_overrides)
+            readback_sync native_refcount dev_overrides m10_defaults)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -253,6 +253,23 @@ endif()
 # MCLA_READBACK_SYNC_COMPOSITE_DEFAULT builds keeps working as before.
 option(MCLA_DEV_OVERRIDES "Read the owner-internal A/B override file (l57; never for volunteer builds)" OFF)
 list(APPEND MCLA_SOURCES src/mcla_dev_overrides.cpp)
+
+# M10 volunteer speed-up defaults (l65, src/mcla_m10_defaults.h): at startup
+# memory_watch_census=false; at graphics-plugin load
+# d3d12_readback_sync_targeted, d3d12_readback_elide_unread,
+# d3d12_wrm_event_wake and d3d12_replay_batched_wake true and
+# d3d12_readback_gpu_timing false. Each only when the cvar exists, still holds
+# its default and the owner override file did not write it (applied after the
+# MCLA_DEV_OVERRIDES file, so owner A/B arms win); the two diagnostic switches
+# stay at the SDK default in MCLA_DEV_OVERRIDES builds. OFF by default; ON for
+# volunteer builds (with MCLA_READBACK_SYNC_COMPOSITE_DEFAULT, which the
+# targeted wait needs). Without it the module compiles to empty calls.
+option(MCLA_M10_SPEEDUP_DEFAULTS "Default the M10 SDK speed-up switches ON for volunteer builds (l65)" OFF)
+list(APPEND MCLA_SOURCES src/mcla_m10_defaults.cpp)
+if(MCLA_M10_SPEEDUP_DEFAULTS)
+    set_source_files_properties(src/mcla_m10_defaults.cpp PROPERTIES
+        COMPILE_DEFINITIONS MCLA_M10_SPEEDUP_DEFAULTS=1)
+endif()
 
 # M10-003: host log line with the shader store record counts at startup
 # (src/mcla_shader_store_log.h; the store parser is src/mcla_shader_store_seed.h,

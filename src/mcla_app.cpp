@@ -66,6 +66,7 @@
 #include "mcla_guest_sampler.h"
 #include "mcla_livery_diag.h"
 #include "mcla_dev_overrides.h"
+#include "mcla_m10_defaults.h"
 #include "mcla_shader_store_log.h"
 #include "mcla_readback_sync.h"
 #include "mcla_perf_split.h"
@@ -1198,6 +1199,9 @@ void MclaApp::OnPostInitLogging() {
   // Owner-internal A/B overrides (MCLA_DEV_OVERRIDES builds only): host
   // init-only switches must be written before the guest runs.
   mcla::dev_overrides::OnStartup();
+  // M10 volunteer speed-up defaults (MCLA_M10_SPEEDUP_DEFAULTS builds only),
+  // after the override file so owner A/B arms win.
+  mcla::m10_defaults::OnStartup();
   // M10-003: record counts of the shader store this session starts with
   // (after the launcher seeding, before the SDK reads it).
   mcla::shader_store::LogStartupStore(rex::to_path(REXCVAR_GET(cache_root)));
@@ -1371,23 +1375,26 @@ void MclaApp::OnPostLoadGraphicsPlugin() {
   mcla::livery_diag::OnGraphicsPluginLoaded();  // KI-047 diag v2
   mcla::readback_sync::OnGraphicsPluginLoaded();  // KI-047 fix candidate (l55)
   mcla::photo_capture::StartAlwaysPipelineWait();  // KI-047
-  if (rex::cvar::HasNonDefaultValue("readback_resolve")) {
-    return;
-  }
   // Photo Mode encodes its JPEG from a CPU-visible resolve buffer. Keep the
   // delayed readback path enabled by default for this title so that buffer is
   // populated without imposing the stalls of the fully synchronous mode.
   // "some" skips most per-frame CPU copies; Photo Mode keeps resolving the
   // frozen frame, so its buffer is still refreshed (owner-tested on l20).
-  if (rex::cvar::SetFlagByName("readback_resolve", "some")) {
-    MCLA_GPU_INFO(
-        "MCLA graphics: enabled light render-to-texture CPU readback for photo "
-        "mode");
-  } else {
-    MCLA_GPU_ERROR(
-        "MCLA graphics: readback_resolve is unavailable; photo mode cannot "
-        "capture a CPU-visible frame");
+  if (!rex::cvar::HasNonDefaultValue("readback_resolve")) {
+    if (rex::cvar::SetFlagByName("readback_resolve", "some")) {
+      MCLA_GPU_INFO(
+          "MCLA graphics: enabled light render-to-texture CPU readback for photo "
+          "mode");
+    } else {
+      MCLA_GPU_ERROR(
+          "MCLA graphics: readback_resolve is unavailable; photo mode cannot "
+          "capture a CPU-visible frame");
+    }
   }
+  // M10 volunteer speed-up defaults (MCLA_M10_SPEEDUP_DEFAULTS builds only):
+  // last, so the dev-override arms, the composite sync and readback_resolve
+  // are settled and reported.
+  mcla::m10_defaults::OnGraphicsPluginLoaded();
 }
 
 std::optional<rex::PathConfig>
