@@ -8,6 +8,10 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
+**M10 (2026-11-02, pushed 2026-11-02): the submodule pin moves to
+`43577c89c7f5409ce5b2501d5d183b0f00bcbe04`** (`43577c8`) on the fork branch `mcla/mcla-r-hotfixes`, tagged `v0.20.0.7`
+(fast-forward from `483458d`): `62cd66d` WRM event wake and replay batched wake, `141e13f` read-back counters, GPU timing and exact elision, `9d8ede4` startup pipeline-creation threads, `561a737` KI-047 targeted wait with early submissions, `e57fd88` and `8081f63` memory-watch census, safe-gap bridging and upload-ahead (with the review fixes), `43577c8` read-back slot diagnostics fix. All new switches default off in the SDK except `memory_watch_census` and `d3d12_readback_gpu_timing` (on; volunteer builds switch them off through `MCLA_M10_SPEEDUP_DEFAULTS`). SDK ctest 2006/2006; `thirdparty/sdl3` unchanged `422c186`. [Evidence](evidence/M10-sdk-v0.20.0.7-20261102.md). The `0.20.0.6` section below is history.
+
 **M10-001 (2026-11-01, pushed 2026-11-01): the submodule pin moves to
 `483458d2885419234a0729698f29a8850a052b55`** (`483458d`) on the fork branch `mcla/mcla-r-hotfixes`, tagged
 `v0.20.0.6` (annotated, tag object `22bfdc0`), package version **0.20.0.6**. The exact tag yields
