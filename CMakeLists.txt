@@ -258,7 +258,9 @@ list(APPEND MCLA_SOURCES src/mcla_dev_overrides.cpp)
 # memory_watch_census=false; at graphics-plugin load
 # d3d12_readback_sync_targeted, d3d12_readback_elide_unread,
 # d3d12_wrm_event_wake and d3d12_replay_batched_wake true and
-# d3d12_readback_gpu_timing false. Each only when the cvar exists, still holds
+# d3d12_readback_gpu_timing false; under Wine/Proton only (l66, net negative
+# on Windows) also memory_watch_disarm_bridge_safe_gaps=true at startup and
+# shared_memory_upload_ahead_pages=16 at graphics-plugin load. Each only when the cvar exists, still holds
 # its default and the owner override file did not write it (applied after the
 # MCLA_DEV_OVERRIDES file, so owner A/B arms win); the two diagnostic switches
 # stay at the SDK default in MCLA_DEV_OVERRIDES builds. OFF by default; ON for

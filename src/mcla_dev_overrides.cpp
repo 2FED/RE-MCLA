@@ -168,4 +168,13 @@ std::optional<bool> AppliedValue(Key key) {
 #endif
 }
 
+std::optional<bool> FileValue(Key key) {
+#if MCLA_DEV_OVERRIDES
+  return g_parsed.Value(key);
+#else
+  (void)key;
+  return std::nullopt;
+#endif
+}
+
 }  // namespace mcla::dev_overrides

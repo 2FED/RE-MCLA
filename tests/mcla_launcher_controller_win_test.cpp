@@ -268,6 +268,7 @@ UiRequest Settings(const Preferences &p) {
 std::filesystem::path OnlySession(const std::filesystem::path &profile) {
   std::filesystem::path result;
   for (const auto &entry : std::filesystem::directory_iterator(profile / L"sessions")) {
+    if (!entry.is_directory()) continue;  // KI-064 fixture: stray plain files
     if (!result.empty()) return {};
     result = entry.path();
   }
@@ -542,6 +543,8 @@ bool SupportDirectoryMatrix(const std::filesystem::path &root,
   // Reappearing nonempty support folder must be retained; Start rechecks.
   if(!CreateDirectoryW((profile/L"backups").c_str(),nullptr) ||
      !NewFile(profile/L"backups/existing.txt","RETAINED_HISTORY\n")) return false;
+  // KI-064: a plain file in sessions does not block START either.
+  if(!NewFile(profile/L"sessions/stray-archive.zip","PK stray archive\n")) return false;
   const auto started=controller.Dispatch(UiAction::Play,request);
   Check(started.running && controller.running(),"Start automatically recreates safe missing support directories");
   if(!started.running) return true; // Preserve RED evidence; no fake child exists.
@@ -562,6 +565,9 @@ bool SupportDirectoryMatrix(const std::filesystem::path &root,
   auto ready=check(LaunchReadiness::Ready,request);
   Check(ready.status.find(L"recreated on START GAME")==std::wstring::npos,
         "repaired layout is idempotently Ready without stale repair notice");
+  Check(ready.status.find(L"(ignored 1 file(s) in sessions)")!=std::wstring::npos &&
+        Read(profile/L"sessions/stray-archive.zip")=="PK stray archive\n",
+        "START and the session left the stray sessions file alone (KI-064)");
   return true;
 }
 
@@ -695,8 +701,32 @@ bool ReadOnlyPreflightMatrix(const std::filesystem::path &root,
   if(!MoveFileExW((profile_root/L"pending-operation.dat").c_str(),(matrix/L"preserved-pending.dat").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
   const auto unfinished=profile_root/L"sessions/11111111111111111111111111111111";
   if(!CreateDirectoryW(unfinished.c_str(),nullptr) || !NewFile(unfinished/L"state.txt","running\n")) return false;
-  run_check(request,LaunchReadiness::Blocked,"unfinished session is Blocked and retained");
+  const auto unfinished_view=run_check(request,LaunchReadiness::Blocked,"unfinished session is Blocked and retained");
+  Check(unfinished_view.readiness_reason.find(L"unfinished session")!=std::wstring::npos &&
+        unfinished_view.readiness_reason.find(L"11111111111111111111111111111111")!=std::wstring::npos,
+        "unfinished session refusal names the session entry");
   if(!MoveFileExW(unfinished.c_str(),(matrix/L"preserved-unfinished").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+  {
+    // KI-064: a plain file in sessions (e.g. an archive another tool created
+    // there) is not a session: Check skips it, says so and never touches it.
+    const auto stray_file=profile_root/L"sessions/stray-archive.zip";
+    if(!NewFile(stray_file,"PK stray archive\n")) return false;
+    const auto stray=run_check(request,LaunchReadiness::Ready,"a plain file in sessions does not block the check (KI-064)");
+    Check(stray.status.find(L"(ignored 1 file(s) in sessions)")!=std::wstring::npos,
+          "check reports the ignored file in sessions");
+    Check(Read(stray_file)=="PK stray archive\n","ignored sessions file is left unchanged");
+    // A stray subdirectory is still a session record without state.txt.
+    const auto stray_dir=profile_root/L"sessions/stray-folder";
+    if(!CreateDirectoryW(stray_dir.c_str(),nullptr)) return false;
+    const auto stray_record=run_check(request,LaunchReadiness::Blocked,"a subdirectory without state.txt is still Blocked");
+    Check(stray_record.readiness_reason.find(L"unfinished session")!=std::wstring::npos &&
+          stray_record.readiness_reason.find(L"stray-folder")!=std::wstring::npos,
+          "unfinished session refusal names the stray subdirectory");
+    if(!MoveFileExW(stray_dir.c_str(),(matrix/L"preserved-stray-folder").c_str(),MOVEFILE_WRITE_THROUGH) ||
+       !MoveFileExW(stray_file.c_str(),(matrix/L"preserved-stray-archive.zip").c_str(),MOVEFILE_WRITE_THROUGH)) return false;
+    const auto clean=run_check(request,LaunchReadiness::Ready,"sessions without stray entries is Ready again");
+    Check(clean.status.find(L"file(s) in sessions")==std::wstring::npos,"no ignored-file note without stray files");
+  }
   const auto marker=profile_root/L"managed-profile.dat";
   if(!MoveFileExW(marker.c_str(),(matrix/L"preserved-marker.dat").c_str(),MOVEFILE_WRITE_THROUGH) ||
       !NewFile(marker,"MCLA managed profile v1\n11111111111111111111111111111111\n")) return false;

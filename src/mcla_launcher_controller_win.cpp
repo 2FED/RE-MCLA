@@ -59,6 +59,53 @@ std::vector<std::wstring> PackageNames(const std::wstring &root,std::wstring_vie
     if(it->is_directory(ec) && !it->is_symlink(ec)) names.push_back(it->path().filename().wstring());
   return names;
 }
+// KI-064: entries directly below <profile>\sessions. Session records are
+// directories; a plain file (e.g. an archive another tool created there) is not
+// a session: it is skipped, counted and never opened. Directories, every reparse
+// point (also a reparse file) and entries whose attributes cannot be read go
+// through fs::OpenDirectory, so the KI-049 rules still decide them.
+enum class SessionFault : uint8_t { kCapacity, kOpen, kUnfinished };
+struct SessionProblem {
+  SessionFault fault=SessionFault::kOpen;
+  std::wstring entry;   // entry name below sessions
+  std::wstring detail;  // kOpen: the OpenDirectory error; kUnfinished: the record path
+};
+bool SessionRecordCandidate(DWORD attributes) {
+  return attributes==INVALID_FILE_ATTRIBUTES ||
+      (attributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT))!=0;
+}
+// Every record must hold state.txt starting "complete\n". Fails on the entry
+// that exceeds max_entries (all entries count, files too). Returns the number
+// of skipped plain files.
+std::expected<size_t,SessionProblem> InspectSessionHistory(const std::wstring &sessions,size_t max_entries) {
+  size_t entries=0, ignored=0;
+  for(const auto &item:std::filesystem::directory_iterator(sessions)) {
+    const auto name=item.path().filename().wstring();
+    if(++entries>max_entries) return std::unexpected(SessionProblem{SessionFault::kCapacity,name,{}});
+    if(!SessionRecordCandidate(GetFileAttributesW(Native(item.path().wstring()).c_str()))) { ++ignored; continue; }
+    auto record=fs::OpenDirectory(item.path().wstring());
+    if(!record) return std::unexpected(SessionProblem{SessionFault::kOpen,name,record.error()});
+    auto state=fs::ReadFile(*record,L"state.txt",256);
+    if(!state || !std::string_view(reinterpret_cast<const char*>(state->data()),state->size()).starts_with("complete\n"))
+      return std::unexpected(SessionProblem{SessionFault::kUnfinished,name,record->path()});
+  }
+  return ignored;
+}
+// User text for a session-history failure: capacity and unfinished texts are
+// the caller's; every text names the entry (unfinished_path: the full record
+// path instead of the name).
+std::wstring SessionProblemText(const SessionProblem &problem,std::wstring_view capacity,
+                                std::wstring_view unfinished,bool unfinished_path=false) {
+  switch(problem.fault) {
+    case SessionFault::kCapacity: return std::wstring(capacity);
+    case SessionFault::kOpen: return L"Session entry \""+problem.entry+L"\" cannot be inspected: "+problem.detail;
+    case SessionFault::kUnfinished: break;
+  }
+  return std::wstring(unfinished)+L": "+(unfinished_path?problem.detail:problem.entry);
+}
+std::wstring IgnoredSessionFilesNotice(size_t ignored) {
+  return ignored==0 ? std::wstring() : L" (ignored "+std::to_wstring(ignored)+L" file(s) in sessions)";
+}
 // Category of a completed live package (M9-010), from its bounded manifest.
 std::string LiveCategory(const std::wstring &root,const std::wstring &name) {
   std::ifstream in(std::filesystem::path(root)/L"live"/name/L"manifest.json",std::ios::binary);
@@ -523,14 +570,11 @@ struct LauncherController::State {
       if(!user) return std::unexpected(SupportError(L"user",user.error()));
       auto support=InspectSupportDirectories(*profile); if(!support) return std::unexpected(support.error());
       const auto &sessions=*support->directories[3];
-      size_t history=0;
-      for(const auto &item:std::filesystem::directory_iterator(sessions.path())) {
-        if(++history>=1024) return std::unexpected(L"Session history capacity reached; preserve/archive before launch");
-        auto previous=fs::OpenDirectory(item.path().wstring()); if(!previous) return std::unexpected(previous.error());
-        auto state=fs::ReadFile(*previous,L"state.txt",256);
-        if(!state || !std::string_view(reinterpret_cast<const char*>(state->data()),state->size()).starts_with("complete\n"))
-          return std::unexpected(L"An unfinished session needs review before launch");
-      }
+      auto history=InspectSessionHistory(sessions.path(),1023);
+      if(!history) return std::unexpected(SessionProblemText(history.error(),
+          L"Session history capacity reached; preserve/archive before launch",
+          L"An unfinished session needs review before launch"));
+      const auto ignored_sessions_notice=IgnoredSessionFilesNotice(*history);
       auto name=ReadDisplayName(*profile); if(!name) return std::unexpected(name.error());
       auto source=ValidateSaveTreeForSnapshot(*user,
           sessions.path()+L"\\11111111111111111111111111111111\\before-user");
@@ -560,6 +604,7 @@ struct LauncherController::State {
       if(support->missing()) support_notice=L" Missing support folders will be recreated on START GAME. Existing files are not restored or replaced.";
       support_notice+=admission_notice;
       support_notice+=WineAncestorNotice();
+      support_notice+=ignored_sessions_notice;
       return expires;
     } catch(const std::exception &) {
       return std::unexpected(L"Read-only launch inspection failed; no launch or repair was attempted");
@@ -694,14 +739,10 @@ struct LauncherController::State {
       if(GetFileAttributesW(Native(pending).c_str())!=INVALID_FILE_ATTRIBUTES || GetLastError()!=ERROR_FILE_NOT_FOUND)
         return std::unexpected(L"Source has an unfinished operation. Restore a verified snapshot instead of copying uncertain live data");
       auto sessions=fs::OpenDirectory(original->path()+L"\\sessions"); if(!sessions) return std::unexpected(sessions.error());
-      size_t count=0;
-      for(const auto &item:std::filesystem::directory_iterator(sessions->path())) {
-        if(++count>1024) return std::unexpected(L"Source session history exceeds bound");
-        auto record=fs::OpenDirectory(item.path().wstring()); if(!record) return std::unexpected(record.error());
-        auto state=fs::ReadFile(*record,L"state.txt",256);
-        if(!state || !std::string_view(reinterpret_cast<const char*>(state->data()),state->size()).starts_with("complete\n"))
-          return std::unexpected(L"Source has an unfinished session. Choose a verified snapshot for recovery");
-      }
+      auto history=InspectSessionHistory(sessions->path(),1024);
+      if(!history) return std::unexpected(SessionProblemText(history.error(),
+          L"Source session history exceeds bound",
+          L"Source has an unfinished session. Choose a verified snapshot for recovery"));
     }
     auto source=fs::OpenDirectory(source_path); if(!source) return std::unexpected(source.error());
     auto entry=CreateImportProfile(prefs,r.profile_root,U16(r.profile_label),store.directory()); if(!entry) return std::unexpected(entry.error());
@@ -736,14 +777,10 @@ struct LauncherController::State {
     if(GetFileAttributesW(Native(pending).c_str())!=INVALID_FILE_ATTRIBUTES || GetLastError()!=ERROR_FILE_NOT_FOUND)
       return std::unexpected(L"An unfinished profile operation needs review before renaming");
     auto sessions=fs::OpenDirectory(profile->path()+L"\\sessions"); if(!sessions) return std::unexpected(sessions.error());
-    size_t session_count=0;
-    for(const auto &item:std::filesystem::directory_iterator(sessions->path())) {
-      if(++session_count>1024) return std::unexpected(L"Session history exceeds bound; inspect before renaming");
-      auto record=fs::OpenDirectory(item.path().wstring()); if(!record) return std::unexpected(record.error());
-      auto state=fs::ReadFile(*record,L"state.txt",256);
-      if(!state || !std::string_view(reinterpret_cast<const char*>(state->data()),state->size()).starts_with("complete\n"))
-        return std::unexpected(L"An unfinished session needs recovery before editing the in-game name");
-    }
+    auto history=InspectSessionHistory(sessions->path(),1024);
+    if(!history) return std::unexpected(SessionProblemText(history.error(),
+        L"Session history exceeds bound; inspect before renaming",
+        L"An unfinished session needs recovery before editing the in-game name"));
     auto old=ReadDisplayName(*profile); if(!old) return std::unexpected(old.error());
     if(*old==name) return {};
     auto user=fs::OpenDirectory(profile->path()+L"\\user"); if(!user) return std::unexpected(user.error());
@@ -843,14 +880,10 @@ std::expected<void,std::wstring> LauncherController::State::Start() {
   if(!user) return std::unexpected(SupportError(L"user",user.error()));
   auto support=InspectSupportDirectories(*profile); if(!support) return std::unexpected(support.error());
   auto &sessions=*support->directories[3];
-  size_t history=0;
-  for(const auto &item:std::filesystem::directory_iterator(sessions.path())) {
-    if(++history>=1024) return std::unexpected(L"Session history capacity reached; preserve/archive explicitly before launching");
-    auto previous=fs::OpenDirectory(item.path().wstring()); if(!previous) return std::unexpected(previous.error());
-    auto state=fs::ReadFile(*previous,L"state.txt",256);
-    if(!state || !std::string_view(reinterpret_cast<const char*>(state->data()),state->size()).starts_with("complete\n"))
-      return std::unexpected(L"An unfinished session needs review. No automatic rollback or new launch: "+previous->path());
-  }
+  auto history=InspectSessionHistory(sessions.path(),1023);
+  if(!history) return std::unexpected(SessionProblemText(history.error(),
+      L"Session history capacity reached; preserve/archive explicitly before launching",
+      L"An unfinished session needs review. No automatic rollback or new launch",true));
   std::wstring display_name=L"User";
   const auto profile_name_root=user->path()+L"\\B13EBABEBABEBABE";
   const auto name_path=profile_name_root+L"\\local-display-name.txt";

@@ -2,7 +2,9 @@
 
 // M10 volunteer speed-up defaults (l65;
 // docs/evidence/M10-volunteer-speedup-defaults-20261102.md, measured in the
-// owner's l63 PC A/B, docs/evidence/M10-l63-pc-ab-20261102.md).
+// owner's l63 PC A/B, docs/evidence/M10-l63-pc-ab-20261102.md; Wine/Proton
+// entries l66, docs/evidence/M10-proton-defaults-and-ki064-20261103.md,
+// measured in the owner's l64 Deck A/B, docs/evidence/M10-l64-deck-ab-20261103.md).
 //
 // Builds made with the CMake option MCLA_M10_SPEEDUP_DEFAULTS (OFF by
 // default) write the SDK switches of kDefaults below, so a volunteer build
@@ -11,24 +13,33 @@
 //
 // - at startup (rexruntime cvars, after dev_overrides::OnStartup):
 //   memory_watch_census=false (counters nobody reads in volunteer logs);
+//   under Wine/Proton only: memory_watch_disarm_bridge_safe_gaps=true;
 // - at graphics-plugin load (after dev_overrides::OnGraphicsPluginLoaded,
 //   the KI-047 composite sync and the readback_resolve=some default):
 //   d3d12_readback_sync_targeted=true, d3d12_readback_elide_unread=true,
 //   d3d12_wrm_event_wake=true, d3d12_replay_batched_wake=true,
-//   d3d12_readback_gpu_timing=false.
+//   d3d12_readback_gpu_timing=false; under Wine/Proton only:
+//   shared_memory_upload_ahead_pages=16.
+//
+// Each phase is the phase of the owner override key for the same cvar.
 //
 // A value is written only when the cvar is registered, still holds its
 // default (the command line or config did not change it), and the owner
 // override file (MCLA_DEV_OVERRIDES builds) did not write it: owner A/B arms
-// and explicit user values always win. The two diagnostic switches
+// and explicit user values always win. For upload-ahead, an override line
+// shared_memory_upload_ahead_16=false or _64=false writes nothing itself but
+// is the owner's "off" arm, so it also wins. The two diagnostic switches
 // (memory_watch_census, d3d12_readback_gpu_timing) are left at the SDK default
 // in MCLA_DEV_OVERRIDES (owner measurement) builds. The host switch
 // --mcla_m10_speedup_defaults=false turns the whole set off for a session.
 //
-// Not written (net negative on PC in l63): memory_watch_disarm_bridge_safe_gaps
-// stays false and shared_memory_upload_ahead_pages stays 0. The host init-only
-// switches mcla_native_d3d_refcount and mcla_native_xapi_interlocked already
-// default to true (mcla_native_refcount.cpp) and are only reported.
+// Wine-only entries (Platform::kWineOnly): disarm bridging and upload-ahead 16
+// were the two largest Deck gains in l64 (upload-ahead CP -8.3 ms/frame,
+// bridging -3.3 ms/frame) but net negative on Windows in l63, so on Windows
+// they are never written. platform::RunningUnderWine() decides; the summary
+// lines say platform=wine|windows. The host init-only switches
+// mcla_native_d3d_refcount and mcla_native_xapi_interlocked already default to
+// true (mcla_native_refcount.cpp) and are only reported.
 //
 // Semantics kept from the SDK: targeted sync acts only while
 // d3d12_readback_sync_composite is on (MCLA_READBACK_SYNC_COMPOSITE_DEFAULT);
@@ -43,7 +54,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <string_view>
 
 namespace mcla::m10_defaults {
@@ -55,59 +65,82 @@ enum class Phase : uint8_t {
   kGraphicsPlugin,
 };
 
+enum class Platform : uint8_t {
+  kAll,       // Windows and Wine/Proton
+  kWineOnly,  // only under Wine/Proton (net negative on Windows, l63)
+};
+
 struct Default {
   std::string_view cvar;
-  bool value;
+  std::string_view value;  // the text written
   Phase phase;
   // Diagnostics only: left at the SDK default in owner measurement builds.
   bool diagnostic;
-  // The owner override file key writing the same cvar, if any.
-  std::optional<dev_overrides::Key> override_key;
+  Platform platform = Platform::kAll;
 };
 
-inline constexpr std::array<Default, 6> kDefaults = {{
-    {"memory_watch_census", false, Phase::kStartup, true, dev_overrides::Key::kWatchCensus},
-    {"d3d12_readback_sync_targeted", true, Phase::kGraphicsPlugin, false,
-     dev_overrides::Key::kReadbackSyncTargeted},
-    {"d3d12_readback_elide_unread", true, Phase::kGraphicsPlugin, false,
-     dev_overrides::Key::kReadbackElideUnread},
-    {"d3d12_wrm_event_wake", true, Phase::kGraphicsPlugin, false,
-     dev_overrides::Key::kWrmEventWake},
-    {"d3d12_replay_batched_wake", true, Phase::kGraphicsPlugin, false,
-     dev_overrides::Key::kReplayBatchedWake},
-    {"d3d12_readback_gpu_timing", false, Phase::kGraphicsPlugin, true, std::nullopt},
+inline constexpr std::array<Default, 8> kDefaults = {{
+    {"memory_watch_census", "false", Phase::kStartup, true},
+    {"memory_watch_disarm_bridge_safe_gaps", "true", Phase::kStartup, false, Platform::kWineOnly},
+    {"d3d12_readback_sync_targeted", "true", Phase::kGraphicsPlugin, false},
+    {"d3d12_readback_elide_unread", "true", Phase::kGraphicsPlugin, false},
+    {"d3d12_wrm_event_wake", "true", Phase::kGraphicsPlugin, false},
+    {"d3d12_replay_batched_wake", "true", Phase::kGraphicsPlugin, false},
+    {"d3d12_readback_gpu_timing", "false", Phase::kGraphicsPlugin, true},
+    {"shared_memory_upload_ahead_pages", "16", Phase::kGraphicsPlugin, false,
+     Platform::kWineOnly},
 }};
 
-// Cvars this module must never write (net negative on PC, l63).
-inline constexpr std::array<std::string_view, 2> kNeverWritten = {
+// Cvars this module writes only under Wine/Proton, never on Windows.
+inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
     "memory_watch_disarm_bridge_safe_gaps",
     "shared_memory_upload_ahead_pages",
 };
+
+// True when an owner override key writes the entry's cvar (its line is the
+// owner's A/B arm and wins).
+constexpr bool HasOverrideKey(const Default &entry) {
+  for (const auto &info : dev_overrides::kKeys) {
+    if (info.phase != dev_overrides::Phase::kLauncher &&
+        dev_overrides::CvarName(info) == entry.cvar) {
+      return true;
+    }
+  }
+  return false;
+}
 
 constexpr std::string_view ValueText(bool value) {
   return value ? "true" : "false";
 }
 
+constexpr std::string_view PlatformName(bool wine) {
+  return wine ? "wine" : "windows";
+}
+
 enum class Action : uint8_t {
   kDisabledByOption,  // build without MCLA_M10_SPEEDUP_DEFAULTS
   kOffBySwitch,       // --mcla_m10_speedup_defaults=false
+  kNotThisPlatform,   // Wine-only entry on Windows
   kMeasurementBuild,  // diagnostic switch in an MCLA_DEV_OVERRIDES build
-  kDevOverride,       // the owner override file wrote this cvar
+  kDevOverride,       // the owner override file wrote (or set off) this cvar
   kUnavailable,       // the cvar is not registered (e.g. an older SDK)
   kUserSet,           // the command line or config changed the cvar
   kAlready,           // the cvar already holds the value (SDK default equal)
   kApply,             // write the value
 };
-inline constexpr size_t kActionCount = 8;
+inline constexpr size_t kActionCount = 9;
 
 struct Inputs {
   bool option_on = false;          // MCLA_M10_SPEEDUP_DEFAULTS
   bool switch_on = true;           // mcla_m10_speedup_defaults
+  bool wine = false;               // platform::RunningUnderWine()
   bool measurement_build = false;  // MCLA_DEV_OVERRIDES
   bool registered = false;         // rex::cvar::GetFlagInfo != nullptr
   bool non_default = false;        // rex::cvar::HasNonDefaultValue
-  bool dev_override_applied = false;  // dev_overrides::AppliedValue has a value
-  bool holds_value = false;        // the current value already equals the default's
+  // An override key of this cvar was applied, or its file line is an explicit
+  // "off" that writes nothing (shared_memory_upload_ahead_16/_64=false).
+  bool dev_override_applied = false;
+  bool holds_value = false;  // the current value already equals the default's
 };
 
 constexpr Action Decide(const Default &entry, const Inputs &in) {
@@ -117,12 +150,15 @@ constexpr Action Decide(const Default &entry, const Inputs &in) {
   if (!in.switch_on) {
     return Action::kOffBySwitch;
   }
+  if (entry.platform == Platform::kWineOnly && !in.wine) {
+    return Action::kNotThisPlatform;
+  }
   if (entry.diagnostic && in.measurement_build) {
     return Action::kMeasurementBuild;
   }
   // A file value equal to the SDK default is not visible as non-default; the
   // applied record is what keeps such an A/B arm.
-  if (entry.override_key && in.dev_override_applied) {
+  if (HasOverrideKey(entry) && in.dev_override_applied) {
     return Action::kDevOverride;
   }
   if (!in.registered) {
@@ -143,6 +179,8 @@ constexpr const char *ActionName(Action action) {
       return "disabled";
     case Action::kOffBySwitch:
       return "switch_off";
+    case Action::kNotThisPlatform:
+      return "wine_only";
     case Action::kMeasurementBuild:
       return "measurement_build";
     case Action::kDevOverride:

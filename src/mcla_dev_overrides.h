@@ -332,4 +332,9 @@ void OnGraphicsPluginLoaded();
 // has no valid line for it, the cvar was left alone, or the write failed).
 std::optional<bool> AppliedValue(Key key);
 
+// The value of the key's valid file line (nullopt without the option, without
+// a parsed file or without a valid line), whether or not anything was
+// written. Used for keys whose value writes nothing (upload-ahead =false).
+std::optional<bool> FileValue(Key key);
+
 }  // namespace mcla::dev_overrides
