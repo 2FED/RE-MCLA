@@ -98,6 +98,10 @@ Total: about 6-8 weeks of agent work without the M10-006 implementation, 2-3
 weeks more if the gate opens it. Owner time is mostly short timed runs on the
 bench route plus Deck sessions.
 
+## Deck A/B result (l64, 2026-11-03)
+
+"all" gives +15% fps while driving (12.7 to 14.7) and far better pacing (frames over 100 ms per minute 26-94 to 1-7); the CP is still first (about 99% occupied), the GPU 40% busy, the CPU oversubscribed at 4.3 cores. On the Deck, unlike the PC, upload-ahead 16 is the largest single gain (CP -8.3 ms/frame) and disarm bridging helps (-3.3 ms/frame on the fault path), so both become Proton-only defaults; targeted sync is a small net gain because each fence round trip costs about 4.5 ms under vkd3d and kicks cost 0.23 ms each. Vulkan is 4-7% slower than D3D12 "all" with the black player car (KI-062): shelved. Next Deck levers: hot blocks (watch step 3), a kick-interval A/B, freeing the two hot guest threads (about 1.6 cores), then CP draw phases or M10-006. [Deck A/B](evidence/M10-l64-deck-ab-20261103.md).
+
 ## Deck: CP-bound, watch/upload path first (2026-11-01)
 
 The l56 Deck arm puts the CP first (busy 90%), the render thread second and the GPU far behind, with the CPU oversubscribed. Deck levers in order: (1) the watch/upload path under Wine, about 32 ms per driving frame (upload 23.4 ms on the CP, faults 8.7 ms on guest threads; about 20 ms of `VirtualProtect` under the global lock): step 0 census, then disarm safe-gap bridging, upload-ahead within the 256 KiB block, hot-block exact uploads without watching, and conditionally protect outside the lock ([design](evidence/M10-deck-watch-upload-design-20261101.md)); (2) the KI-047 composite sync as a targeted wait instead of a full drain (about 10.6 ms per frame); (3) freeing cores (replay batched wake, the guest polling loop F800068C, audio thread); then M10-006 once a core is free. Vulkan (l59) is expected to be a moderate gain.
