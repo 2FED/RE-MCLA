@@ -98,6 +98,10 @@ Total: about 6-8 weeks of agent work without the M10-006 implementation, 2-3
 weeks more if the gate opens it. Owner time is mostly short timed runs on the
 bench route plus Deck sessions.
 
+## Hot blocks result (l66 Deck A/B, 2026-11-03)
+
+Hot blocks (watch step 3, mode 2) removed the arm/fault/upload work they target (arm calls -42%, about -9 ms/frame of CP watch work) but the CP spent it again on draws, copies and waits, and GPU busy rose from 27 to 37.5 ms/frame (+10.4 ms, about 5 us per copy): about 2,050 hot copies per frame land between draws and split render passes under vkd3d. fps unchanged (14.9 vs 14.9). Safety clean (0 protect failures, 0 guard misses); PC regression check clean. Decision: NOT a Proton default; keep as an experiment and change the copy shape (batch hot copies per block per submission, or snapshot hot blocks before the first draw of a submission), then re-measure (M11). Shadow mode costs nothing and stays available. [l66 Deck A/B](evidence/M10-l66-deck-ab-20261103.md).
+
 ## Deck A/B result (l64, 2026-11-03)
 
 "all" gives +15% fps while driving (12.7 to 14.7) and far better pacing (frames over 100 ms per minute 26-94 to 1-7); the CP is still first (about 99% occupied), the GPU 40% busy, the CPU oversubscribed at 4.3 cores. On the Deck, unlike the PC, upload-ahead 16 is the largest single gain (CP -8.3 ms/frame) and disarm bridging helps (-3.3 ms/frame on the fault path), so both become Proton-only defaults; targeted sync is a small net gain because each fence round trip costs about 4.5 ms under vkd3d and kicks cost 0.23 ms each. Vulkan is 4-7% slower than D3D12 "all" with the black player car (KI-062): shelved. Next Deck levers: hot blocks (watch step 3), a kick-interval A/B, freeing the two hot guest threads (about 1.6 cores), then CP draw phases or M10-006. [Deck A/B](evidence/M10-l64-deck-ab-20261103.md).
