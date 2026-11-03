@@ -1,6 +1,6 @@
 # Current state and handoff
 
-Updated November 2, 2026 Kyiv (l63 owner A/B done; SDK v0.20.0.7 published; volunteer candidate l65 ready for the owner).
+Updated November 3, 2026 Kyiv (l65 published and cleared for testers; l64 Deck A/B done; Proton defaults and hot blocks in progress).
 
 ## Active outcome
 
@@ -8,7 +8,8 @@ Updated November 2, 2026 Kyiv (l63 owner A/B done; SDK v0.20.0.7 published; volu
 - **Owner l63 PC A/B done** ([analysis](evidence/M10-l63-pc-ab-20261102.md)): "all" +15-24% at 1440p; the l56 KI-047 full-drain sync costs about 22% at 720p and 15% at 1440p; the targeted wait cuts it by two thirds with 0 failures; bridging and upload-ahead are net negative on the PC; pre-warm gives 0 pipeline waits. Police livery correct in every arm (owner). Vulkan smoke ran on the iGPU (KI-061, fixed in `b769d09`, owner repeat on l64 pending) and shows glitches (KI-062).
 - **SDK v0.20.0.7 = `43577c8` published** on the fork and pinned (`1ff00dc`) ([evidence](evidence/M10-sdk-v0.20.0.7-20261102.md)).
 - **Volunteer build l65 signed and PUBLISHED (`DebugBundle` `d7a6d93`, entries l48/l49/l52/l56/l65, raw URL verified) on 2026-11-03; owner pre-share check PASSED on 2026-11-03 (720p and 1440p, police livery correct, defaults applied, seeded store, 0 failures; about 54 fps at 720p and 35 at 1440p in the F10 windows); sharing with testers is the owner's step.** Clean clone of `1ff00dc`, SDK v0.20.0.7, 45 suites; speed-up defaults and pre-warm on. [Evidence](evidence/M9-005-volunteer-candidate-l65-20261102.md), [changelog](volunteer-changelog-l65.txt).
-- **Owner-internal builds waiting:** l64 (Vulkan GPU fix; PC Vulkan repeat at 720p with `private/l63-arm-all-vulkan.cmd`), l63 Deck arms (base, all, all-vulkan, all, base per `private/l63-MORNING.txt` step 4).
+- **l64 Deck A/B done (2026-11-03):** "all" +15% fps driving (12.7 to 14.7) and frames over 100 ms per minute 26-94 to 1-7; the CP still first, GPU 40%, CPU oversubscribed; upload-ahead 16 (CP -8.3 ms/frame) and disarm bridging (-3.3 ms/frame) are the Deck winners and become Proton-only defaults (`88fdc01`); Vulkan 4-7% slower with the black player car: shelved (KI-062/063). KI-064 (stray file in `sessions` blocks CHECK SETUP) fixed in code. Pre-warm did not run on the Deck because the l56 launcher was used (expected). [Deck A/B](evidence/M10-l64-deck-ab-20261103.md), [Proton defaults + KI-064](evidence/M10-proton-defaults-and-ki064-20261103.md).
+- **In progress (agent side, no owner input needed):** SDK hot blocks (watch step 3, branch `mcla/m10-hotblocks` on v0.20.0.7) for the next owner build; then an owner Deck A/B all vs all+hot. Owner items left: a police car under D3D12 on the Deck (visual check), the KI-064 fix confirmation on the next build.
 
 
 **M10 at 2026-11-01 evening (main `169daf9`, local commits not yet pushed; push at M10 closure):**
