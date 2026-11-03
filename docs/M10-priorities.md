@@ -98,6 +98,13 @@ Total: about 6-8 weeks of agent work without the M10-006 implementation, 2-3
 weeks more if the gate opens it. Owner time is mostly short timed runs on the
 bench route plus Deck sessions.
 
+## Gate decisions (2026-11-03)
+
+- **M10-006 (multi-threaded CP): gate closed for M10, "not justified now".** PC: the CP is not the first wall (1440p GPU, 720p render thread). Deck: the CP is first (about 89-90% busy) but the CPU is oversubscribed (top eight threads 4.3-4.4 of 8 logical CPUs; the CP is off-CPU about 10% of wall), so a second CP thread has no core to run on. Revisit in M11 after the Deck core-freeing work (replay wake done; the guest polling thread F800068C and the audio-side thread F8000534, about 1.6 cores). Numbers: [l64 Deck A/B](evidence/M10-l64-deck-ab-20261103.md), [l63 PC A/B](evidence/M10-l63-pc-ab-20261102.md).
+- **M10-007 (video-memory budget):** not started in M10; the 30-minute 1080p owner session is folded into the l67 pre-share check (budget lines per minute); the 2160p run on the 3080 Ti or 6800 XT moves to M11 unless the owner has the card at hand.
+- **M10-008 (triage round 2):** done 2026-11-03 ([triage](evidence/M10-008-ki-triage-round2-20261103.md)); nine rows closed, KI-057 fixed, KI-065 mitigated, the rest retargeted or awaiting repro.
+- **M10-004 (Vulkan):** shelved (KI-062, KI-063; slower than D3D12 on the Deck).
+
 ## Hot blocks result (l66 Deck A/B, 2026-11-03)
 
 Hot blocks (watch step 3, mode 2) removed the arm/fault/upload work they target (arm calls -42%, about -9 ms/frame of CP watch work) but the CP spent it again on draws, copies and waits, and GPU busy rose from 27 to 37.5 ms/frame (+10.4 ms, about 5 us per copy): about 2,050 hot copies per frame land between draws and split render passes under vkd3d. fps unchanged (14.9 vs 14.9). Safety clean (0 protect failures, 0 guard misses); PC regression check clean. Decision: NOT a Proton default; keep as an experiment and change the copy shape (batch hot copies per block per submission, or snapshot hot blocks before the first draw of a submission), then re-measure (M11). Shadow mode costs nothing and stays available. [l66 Deck A/B](evidence/M10-l66-deck-ab-20261103.md).
