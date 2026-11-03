@@ -4,6 +4,7 @@
 
 #include "mcla_frame_signal.h"
 #include "mcla_native_crash.h"
+#include "mcla_save_copy_guard.h"
 #if defined(MCLA_EXPERIMENTAL_F10_WGC)
 #include "mcla_diagnostic_image_client_win.h"
 #include "mcla_image_helper_pin.h"
@@ -53,8 +54,32 @@
 #define MCLA_VERSION "0.0.0.0"
 #endif
 
+// KI-065: SDK content-transaction indicator (rexruntime of SDK branch
+// mcla/m10-content-logs). An older SDK does not export it; the linker then
+// binds the fallback, which reports the indicator as unavailable and leaves
+// the export with the marker-file check alone.
+extern "C" uint32_t mcla_content_transactions_unavailable(void) {
+  return mcla::save_copy_guard::kIndicatorUnavailable;
+}
+#if defined(_WIN32)
+extern "C" uint32_t rex_xam_content_transactions_active(void);
+#pragma comment(linker, "/alternatename:rex_xam_content_transactions_active=mcla_content_transactions_unavailable")
+#else
+extern "C" __attribute__((weak)) uint32_t rex_xam_content_transactions_active(void);
+#endif
+
 namespace mcla::diagnostics {
 namespace {
+
+uint32_t SdkContentTransactionsActive() {
+#if defined(_WIN32)
+  return rex_xam_content_transactions_active();
+#else
+  return rex_xam_content_transactions_active
+             ? rex_xam_content_transactions_active()
+             : mcla_content_transactions_unavailable();
+#endif
+}
 
 constexpr uint64_t kMaxFrameBytes = 64ull * 1024 * 1024;
 constexpr uint64_t kMaxSaveBytes = 64ull * 1024 * 1024;
@@ -652,6 +677,7 @@ bool CopyStableFile(const std::filesystem::path &source,
   std::error_code ec;
 #if defined(_WIN32)
   DWORD last_copy_error = ERROR_SUCCESS;
+  uint32_t sharing_retries = 0;
 #endif
   for (int attempt = 0; attempt < 3; ++attempt) {
     const auto size_before = std::filesystem::file_size(source, ec);
@@ -677,6 +703,16 @@ bool CopyStableFile(const std::filesystem::path &source,
         source, destination, kMaxSaveFileBytes);
     if (!copied.copied) {
       last_copy_error = copied.error;
+      if (save_copy_guard::ShouldRetryCopy(copied.error, sharing_retries)) {
+        // KI-065: another handle holds the file; wait once before retrying.
+        ++sharing_retries;
+        REXLOG_WARN("MCLA diagnostics: save copy retry {} in {} ms (Win32 "
+                    "error {})",
+                    GenericPathUtf8(relative.filename()),
+                    save_copy_guard::kRetryDelayMs, copied.error);
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(save_copy_guard::kRetryDelayMs));
+      }
       continue;
     }
 #else
@@ -714,6 +750,81 @@ bool CopyStableFile(const std::filesystem::path &source,
               GenericPathUtf8(relative.filename()));
 #endif
   return false;
+}
+
+// True when the save tree holds SDK transaction markers or backups
+// (*.rexpending, *.rexbackup): a save is in flight or was interrupted.
+bool SaveTreeHasTransactionArtifacts(
+    const std::filesystem::path &user_data_root) {
+  uint32_t visited_entries = 0;
+  std::error_code ec;
+  for (const auto &profile :
+       std::filesystem::directory_iterator(user_data_root, ec)) {
+    if (ec || ++visited_entries > kMaxSaveEntries) {
+      break;
+    }
+    if (!profile.is_directory(ec) || IsReparsePoint(profile.path())) {
+      ec.clear();
+      continue;
+    }
+    const auto title_root = profile.path() / "545407F8";
+    if (!std::filesystem::is_directory(title_root, ec) ||
+        IsReparsePoint(title_root)) {
+      ec.clear();
+      continue;
+    }
+    for (std::filesystem::recursive_directory_iterator
+             it(title_root,
+                std::filesystem::directory_options::skip_permission_denied, ec),
+         end;
+         it != end; it.increment(ec)) {
+      if (ec || ++visited_entries > kMaxSaveEntries) {
+        break;
+      }
+      if (IsReparsePoint(it->path())) {
+        it.disable_recursion_pending();
+        continue;
+      }
+      if (save_copy_guard::IsTransactionArtifactName(
+              PathUtf8(it->path().filename()))) {
+        return true;
+      }
+    }
+    ec.clear();
+  }
+  return false;
+}
+
+struct SaveCopyGateResult {
+  save_copy_guard::GateInput input;
+  save_copy_guard::Gate gate = save_copy_guard::Gate::kCopy;
+};
+
+// KI-065: never copy the save tree while a save transaction is open. Polls
+// the SDK indicator and the marker files every 50 ms for at most 2 s.
+SaveCopyGateResult WaitForSaveCopyGate(
+    const std::filesystem::path &user_data_root, const std::stop_token &token) {
+  const auto start = std::chrono::steady_clock::now();
+  SaveCopyGateResult result;
+  for (;;) {
+    result.input.sdk_active = SdkContentTransactionsActive();
+    result.input.pending_files =
+        SaveTreeHasTransactionArtifacts(user_data_root);
+    result.input.waited_ms = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start)
+            .count());
+    result.gate = save_copy_guard::Decide(result.input);
+    if (result.gate != save_copy_guard::Gate::kWait) {
+      return result;
+    }
+    if (token.stop_requested()) {
+      result.gate = save_copy_guard::Gate::kSkip;
+      return result;
+    }
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(save_copy_guard::kPollIntervalMs));
+  }
 }
 
 SaveCopyStats CopySaveTrees(const std::filesystem::path &user_data_root,
@@ -1327,19 +1438,46 @@ public:
     }
 
     if (token.stop_requested()) return false;
-    const auto save_copy_start = std::chrono::steady_clock::now();
-    REXLOG_INFO("MCLA diagnostics: save copy start");
-    const SaveCopyStats save =
-        CopySaveTrees(user_data_root_, partial / "save-private");
-    // KI-065: bracket the live save copy so a game save failure can be lined
-    // up with it.
-    REXLOG_INFO(
-        "MCLA diagnostics: save copy end files={} bytes={} skipped={} "
-        "transaction_entries={} ms={}",
-        save.files, save.bytes, save.skipped, save.transaction_entries,
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - save_copy_start)
-            .count());
+    // KI-065: wait (at most 2 s) until no save transaction is open; skip the
+    // save copy of this package if it does not clear.
+    const SaveCopyGateResult save_gate =
+        WaitForSaveCopyGate(user_data_root_, token);
+    const bool save_copy_skipped =
+        save_gate.gate == save_copy_guard::Gate::kSkip;
+    SaveCopyStats save;
+    if (save_copy_skipped) {
+      REXLOG_WARN("MCLA diagnostics: save copy skipped: {} after {} ms (SDK "
+                  "transaction indicator {})",
+                  save_copy_guard::BusyReason(save_gate.input),
+                  save_gate.input.waited_ms,
+                  save_copy_guard::IndicatorText(save_gate.input.sdk_active));
+      if (!WriteText(partial / std::string(save_copy_guard::kSkippedNoteFile),
+                     save_copy_guard::SkippedNote(save_gate.input))) {
+        REXLOG_ERROR("MCLA diagnostics: save-copy-skipped.txt write failed");
+      }
+    } else {
+      const auto save_copy_start = std::chrono::steady_clock::now();
+      REXLOG_INFO("MCLA diagnostics: save copy start (gate waited {} ms, SDK "
+                  "transaction indicator {})",
+                  save_gate.input.waited_ms,
+                  save_copy_guard::IndicatorText(save_gate.input.sdk_active));
+      save = CopySaveTrees(user_data_root_, partial / "save-private");
+      // KI-065: bracket the live save copy so a game save failure can be
+      // lined up with it.
+      REXLOG_INFO(
+          "MCLA diagnostics: save copy end files={} bytes={} skipped={} "
+          "transaction_entries={} ms={}",
+          save.files, save.bytes, save.skipped, save.transaction_entries,
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::steady_clock::now() - save_copy_start)
+              .count());
+      const uint32_t after = SdkContentTransactionsActive();
+      if (save_copy_guard::IndicatorAvailable(after) && after > 0) {
+        REXLOG_WARN("MCLA diagnostics: a content transaction became active "
+                    "during the save copy (SDK indicator {})",
+                    after);
+      }
+    }
     std::ostringstream save_metadata;
     save_metadata << "{\n"
                   << "  \"schema\": \"mcla-save-snapshot-metadata-v1\",\n"
@@ -1348,6 +1486,16 @@ public:
                   << "  \"bytes\": " << save.bytes << ",\n"
                   << "  \"skipped_or_unstable_files\": " << save.skipped
                   << ",\n"
+                  << "  \"copy_gate\": \""
+                  << (save_copy_skipped ? "skipped" : "copied") << "\",\n"
+                  << "  \"copy_gate_wait_ms\": " << save_gate.input.waited_ms
+                  << ",\n"
+                  << "  \"sdk_transaction_indicator\": \""
+                  << (save_copy_guard::IndicatorAvailable(
+                          save_gate.input.sdk_active)
+                          ? "available"
+                          : "unavailable")
+                  << "\",\n"
                   << "  \"safe_to_share\": false\n"
                   << "}\n";
     if (!WriteText(partial / "save-metadata.json", save_metadata.str())) {
@@ -1458,6 +1606,8 @@ public:
              << ", \"helper_failure\": " << static_cast<unsigned>(frame.helper.metadata.failure) << "}"
 #endif
              << ", \"minidump\": " << (dump_written ? "true" : "false")
+             << ", \"save_copy_skipped\": "
+             << (save_copy_skipped ? "true" : "false")
              << ", \"save_found\": " << (save.found ? "true" : "false")
              << ", \"save_files\": " << save.files
              << ", \"save_bytes\": " << save.bytes << ", \"minidump_error\": \""

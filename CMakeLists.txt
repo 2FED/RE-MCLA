@@ -64,7 +64,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window.
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
-            readback_sync native_refcount dev_overrides m10_defaults)
+            readback_sync native_refcount dev_overrides m10_defaults save_copy_guard)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
