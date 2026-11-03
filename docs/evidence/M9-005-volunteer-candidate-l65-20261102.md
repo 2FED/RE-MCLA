@@ -195,3 +195,9 @@ ticket, list or staging output exists. Note: l48 expires 2026-11-29 and l49 2026
 - Benign guest-address and instruction byte matches in the path scan (check 7).
 - The clone came from the local committed `main`; the SDK and all submodules from GitHub.
   Output is not bit-identical across checkout paths.
+
+## Owner signature and publication (2026-11-03)
+
+- The owner ran `private/l65-volunteer-prepare.ps1`; the signed `l65-active-builds.txt` (issued 1793686298) lists 5 entries: l49 `0A46AE3E...`, l65 `422A20A6...` (expiry 1796278298), l48 `6FEC02D0...`, l52 `823BFBA4...`, l56 `BAED27A7...`; staging `private/l65-volunteer` present.
+- With the owner's explicit approval ("publish l65") the primary agent published the list to `DebugBundle` of `2FED/RE-MCLA` (commit `d7a6d93`, replacing `0a96366`); the raw URL and the contents API returned bytes identical to the signed file.
+- The owner plays one 720p and one 1440p session with a police car in view before sharing l65 with testers; sharing is the owner's step.
