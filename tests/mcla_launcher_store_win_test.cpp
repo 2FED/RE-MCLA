@@ -1,4 +1,5 @@
 #include "mcla_launcher_store_win.h"
+#include "mcla_host_platform_win.h"
 #include "mcla_launcher_writable_root_win.h"
 
 #ifndef NOMINMAX
@@ -140,6 +141,38 @@ void TestStore(const std::wstring &root) {
   Check(GetFileAttributesW((nonempty + L"\\.mcla-writer.lock").c_str()) == INVALID_FILE_ATTRIBUTES,
         "wrong nonempty store rejected without lock-file mutation");
   Check(!OpenPreferenceStore(root + L"\\does-not-exist"), "store never creates arbitrary root");
+}
+
+// KI-057: a first run under Wine/Proton starts fullscreen; a saved choice is
+// kept as is (also under Wine), and real Windows keeps the windowed default.
+void TestFirstRunFullscreen(const std::wstring &root) {
+  Preferences windowed;
+  windowed.gpu_name = u"Synthetic APU";
+  mcla::platform::SetWineOverrideForTesting(1);
+  const auto wine_path = Directory(root, L"first-run-wine");
+  {
+    auto store = OpenPreferenceStore(wine_path);
+    Check(store.has_value(), "Wine first run opens");
+    if (store) {
+      Check(store->preferences().fullscreen, "Wine first run defaults to fullscreen");
+      Check(store->preferences() == FirstRunPreferences(true), "Wine first run changes only fullscreen");
+      Check(ChildCount(wine_path) == 1, "Wine first run writes nothing but the writer lock");
+      Check(store->Save(windowed).has_value(), "Wine user saves windowed");
+    }
+  }
+  {
+    auto store = OpenPreferenceStore(wine_path);
+    Check(store && !store->preferences().fullscreen && store->preferences() == windowed,
+          "Wine keeps a saved windowed choice");
+  }
+  mcla::platform::SetWineOverrideForTesting(0);
+  {
+    const auto windows_path = Directory(root, L"first-run-windows");
+    auto store = OpenPreferenceStore(windows_path);
+    Check(store && store->preferences() == Preferences{} && !store->preferences().fullscreen,
+          "Windows first run stays windowed");
+  }
+  mcla::platform::SetWineOverrideForTesting(-1);
 }
 
 void TestRenderTargetMigration(const std::wstring &root) {
@@ -365,7 +398,10 @@ int main() {
   try {
     const auto root = NewFixture();
     std::wcout << L"Preserved isolated fixture: " << root << L'\n';
+    mcla::platform::SetWineOverrideForTesting(0);
     TestStore(root);
+    mcla::platform::SetWineOverrideForTesting(-1);
+    TestFirstRunFullscreen(root);
     TestRenderTargetMigration(root);
     TestProfiles(root);
     TestWritablePolicy(root);

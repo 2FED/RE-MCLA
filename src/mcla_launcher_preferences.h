@@ -14,6 +14,16 @@ struct Preferences {
   bool operator==(const Preferences &) const = default;
 };
 inline constexpr uint32_t kUnlockedTimingCode = 2;
+// KI-057: the settings a first run (no preferences.dat yet) starts from. Under
+// Wine/Proton (Steam Deck) the game starts fullscreen, so the presenter
+// letterboxes the 16:9 guest output on the 1280x800 panel instead of the game
+// running in a 1280x720 window. Real Windows keeps the windowed default. Saved
+// preferences are never changed by this.
+inline Preferences FirstRunPreferences(bool under_wine) {
+  Preferences p;
+  p.fullscreen = under_wine;
+  return p;
+}
 inline constexpr size_t kMaximumPreferencesBytes = kMaximumLibraryBytes + 8192;
 inline bool ValidPreferences(const Preferences &p) {
   if (!p.build_root.empty() && !NormalizeRoot(p.build_root)) return false;

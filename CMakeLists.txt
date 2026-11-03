@@ -459,6 +459,8 @@ if(WIN32)
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)
         add_executable(mcla_session_report_test EXCLUDE_FROM_ALL tests/mcla_session_report_test.cpp)
         target_include_directories(mcla_session_report_test PRIVATE src)
+        add_executable(mcla_shared_read_copy_win_test EXCLUDE_FROM_ALL tests/mcla_shared_read_copy_win_test.cpp)
+        target_include_directories(mcla_shared_read_copy_win_test PRIVATE src)
         add_executable(mcla_diagnostic_export_policy_test EXCLUDE_FROM_ALL tests/mcla_diagnostic_export_policy_test.cpp)
         target_include_directories(mcla_diagnostic_export_policy_test PRIVATE src
             third_party/rexglue-sdk/thirdparty/inja/third_party/include)

@@ -1,4 +1,5 @@
 #include "mcla_launcher_store_win.h"
+#include "mcla_host_platform_win.h"
 #include "mcla_launcher_writable_root_win.h"
 
 #ifndef NOMINMAX
@@ -156,6 +157,9 @@ std::expected<PreferenceStore, std::wstring> OpenPreferenceStore(std::wstring_vi
   if (*missing) {
     auto empty = EmptyFirstRunDirectory(*directory);
     if (!empty) return std::unexpected(empty.error());
+    // KI-057: first run under Wine/Proton starts fullscreen (nothing is
+    // written until the user saves or starts the game).
+    preferences = FirstRunPreferences(platform::RunningUnderWine());
   } else {
     auto bytes = fs::ReadFile(*directory, kPreferencesName, kMaximumPreferencesBytes);
     if (!bytes) return std::unexpected(bytes.error());

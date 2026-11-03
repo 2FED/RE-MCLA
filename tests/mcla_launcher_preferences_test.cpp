@@ -112,6 +112,25 @@ int main() {
   p.build_root.clear(); p.gpu_name = u"bad\nGPU"; check(!EncodePreferences(p));
   std::vector<uint8_t> too_large(kMaximumPreferencesBytes + 1);
   check(!DecodePreferences(too_large));
+  // KI-057: first-run defaults. Windows: the plain defaults (windowed);
+  // Wine/Proton: identical except fullscreen, and still a valid, encodable model.
+  {
+    const Preferences windows = FirstRunPreferences(false);
+    check(windows == Preferences{});
+    check(!windows.fullscreen);
+    const Preferences wine = FirstRunPreferences(true);
+    check(wine.fullscreen);
+    Preferences expected;
+    expected.fullscreen = true;
+    check(wine == expected);
+    check(ValidPreferences(wine));
+    const auto encoded = EncodePreferences(wine);
+    check(encoded.has_value());
+    if (encoded) {
+      const auto decoded = DecodePreferences(*encoded);
+      check(decoded && *decoded == wine);
+    }
+  }
   std::cout << "Preferences: " << count << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

@@ -43,6 +43,8 @@
 #include <Psapi.h>
 #include <TlHelp32.h>
 #include <bcrypt.h>
+
+#include "mcla_shared_read_copy_win.h"
 #else
 #include <unistd.h>
 #endif
@@ -635,6 +637,8 @@ struct SaveCopyStats {
   uint64_t bytes = 0;
   uint32_t files = 0;
   uint32_t skipped = 0;
+  // KI-065: content-transaction scratch entries left out (not in skipped).
+  uint32_t transaction_entries = 0;
   bool found = false;
   std::vector<File> inventory;
 };
@@ -646,6 +650,9 @@ bool CopyStableFile(const std::filesystem::path &source,
                     const std::filesystem::path &relative,
                     SaveCopyStats &stats) {
   std::error_code ec;
+#if defined(_WIN32)
+  DWORD last_copy_error = ERROR_SUCCESS;
+#endif
   for (int attempt = 0; attempt < 3; ++attempt) {
     const auto size_before = std::filesystem::file_size(source, ec);
     if (ec || size_before > kMaxSaveFileBytes ||
@@ -663,6 +670,16 @@ bool CopyStableFile(const std::filesystem::path &source,
       ++stats.skipped;
       return false;
     }
+#if defined(_WIN32)
+    // KI-065: never hold the save file without write/delete sharing while the
+    // game may be saving it (see mcla_shared_read_copy_win.h).
+    const auto copied = mcla::diagnostics::CopyFileSharedRead(
+        source, destination, kMaxSaveFileBytes);
+    if (!copied.copied) {
+      last_copy_error = copied.error;
+      continue;
+    }
+#else
     std::filesystem::copy_file(
         source, destination, std::filesystem::copy_options::overwrite_existing,
         ec);
@@ -670,6 +687,7 @@ bool CopyStableFile(const std::filesystem::path &source,
       ec.clear();
       continue;
     }
+#endif
     const auto size_after = std::filesystem::file_size(source, ec);
     const auto time_after = std::filesystem::last_write_time(source, ec);
     if (!ec && size_before == size_after && time_before == time_after) {
@@ -687,6 +705,14 @@ bool CopyStableFile(const std::filesystem::path &source,
   }
   ++stats.skipped;
   std::filesystem::remove(destination, ec);
+#if defined(_WIN32)
+  REXLOG_WARN("MCLA diagnostics: save copy skipped {} after 3 attempts "
+              "(last Win32 error {})",
+              GenericPathUtf8(relative.filename()), last_copy_error);
+#else
+  REXLOG_WARN("MCLA diagnostics: save copy skipped {} after 3 attempts",
+              GenericPathUtf8(relative.filename()));
+#endif
   return false;
 }
 
@@ -740,6 +766,16 @@ SaveCopyStats CopySaveTrees(const std::filesystem::path &user_data_root,
         ++stats.skipped;
         continue;
       }
+#if defined(_WIN32)
+      if (mcla::diagnostics::IsTransactionScratchName(
+              it->path().filename().native())) {
+        // KI-065: a save in flight; its backup copy and marker are replaced
+        // or removed by the game, so they are not read.
+        it.disable_recursion_pending();
+        ++stats.transaction_entries;
+        continue;
+      }
+#endif
       const auto destination = destination_root / relative;
       if (it->is_directory(ec)) {
         std::filesystem::create_directories(destination, ec);
@@ -1291,8 +1327,19 @@ public:
     }
 
     if (token.stop_requested()) return false;
+    const auto save_copy_start = std::chrono::steady_clock::now();
+    REXLOG_INFO("MCLA diagnostics: save copy start");
     const SaveCopyStats save =
         CopySaveTrees(user_data_root_, partial / "save-private");
+    // KI-065: bracket the live save copy so a game save failure can be lined
+    // up with it.
+    REXLOG_INFO(
+        "MCLA diagnostics: save copy end files={} bytes={} skipped={} "
+        "transaction_entries={} ms={}",
+        save.files, save.bytes, save.skipped, save.transaction_entries,
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - save_copy_start)
+            .count());
     std::ostringstream save_metadata;
     save_metadata << "{\n"
                   << "  \"schema\": \"mcla-save-snapshot-metadata-v1\",\n"
