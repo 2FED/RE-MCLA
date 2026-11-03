@@ -8,6 +8,10 @@ Update trigger: any intentional ReXGlue or nested submodule revision change.
 
 ## Project fork pin
 
+**M10 (2026-11-03, pushed 2026-11-03): the submodule pin moves to
+`c63895c8ed53748d04de91403c467ece2e8f6fa8`** (`c63895c`) on the fork branch `mcla/mcla-r-hotfixes`, tagged `v0.20.0.8`
+(fast-forward from `43577c8`): `c63895c` KI-065 content/save failure WARN logs (rate-limited, no host paths or user names) and the content-transaction indicator (`rex::content_log::TransactionsActive()`, exported `rex_xam_content_transactions_active`), plus two `create_directories` sites that now return ACCESS_DENIED instead of throwing and a null-handle guard in the thumbnail path. SDK ctest 2014/2014; `thirdparty/sdl3` unchanged `422c186`. [Evidence](evidence/M10-ki065-content-logs-and-f10-guard-20261103.md). The hot-blocks branch (`mcla/m10-hotblocks`, local) stays unpublished as an M11 experiment. The `0.20.0.7` section below is history.
+
 **M10 (2026-11-02, pushed 2026-11-02): the submodule pin moves to
 `43577c89c7f5409ce5b2501d5d183b0f00bcbe04`** (`43577c8`) on the fork branch `mcla/mcla-r-hotfixes`, tagged `v0.20.0.7`
 (fast-forward from `483458d`): `62cd66d` WRM event wake and replay batched wake, `141e13f` read-back counters, GPU timing and exact elision, `9d8ede4` startup pipeline-creation threads, `561a737` KI-047 targeted wait with early submissions, `e57fd88` and `8081f63` memory-watch census, safe-gap bridging and upload-ahead (with the review fixes), `43577c8` read-back slot diagnostics fix. All new switches default off in the SDK except `memory_watch_census` and `d3d12_readback_gpu_timing` (on; volunteer builds switch them off through `MCLA_M10_SPEEDUP_DEFAULTS`). SDK ctest 2006/2006; `thirdparty/sdl3` unchanged `422c186`. [Evidence](evidence/M10-sdk-v0.20.0.7-20261102.md). The `0.20.0.6` section below is history.

@@ -6,8 +6,8 @@ Purpose: provide reproducible setup, codegen, build, test, and package commands 
 
 ## M9-001 build from the published SDK
 
-The submodule pins rexglue-sdk `43577c8` (package `0.20.0.7`, fork tag
-`v0.20.0.7`; pushed 2026-11-02, see [SDK pin](rexglue-sdk.md)). It contains the 32bpp
+The submodule pins rexglue-sdk `c63895c` (package `0.20.0.8`, fork tag
+`v0.20.0.8`; pushed 2026-11-03, see [SDK pin](rexglue-sdk.md)). It contains the 32bpp
 resolve fix, the M8 command-processor work, the four M9 deltas of `v0.20.0.3`, the
 four KI-022 wheel force-feedback deltas of `v0.20.0.4` (host API
 `RequestWheelEffectResync`), the two KI-047 deltas of `v0.20.0.5` (`d3d12_livery_diag`,
@@ -16,16 +16,18 @@ four KI-022 wheel force-feedback deltas of `v0.20.0.4` (host API
 `d3d12_readback_sync_composite` with diag v3) and the seven M10 deltas of `v0.20.0.7`
 (`d3d12_wrm_event_wake`, `d3d12_replay_batched_wake`, `d3d12_readback_elide_unread` with
 `MCLA_READBACK` counters, the startup pipeline-creation thread fix, `d3d12_readback_sync_targeted`,
-the `memory_watch_*` census with bridging and upload-ahead, and the read-back slot diagnostics fix), and its
+the `memory_watch_*` census with bridging and upload-ahead, and the read-back slot diagnostics fix) and the
+KI-065 delta of `v0.20.0.8` (content/save failure logs and the transaction indicator
+`rex_xam_content_transactions_active`), and its
 `thirdparty/sdl3` comes from the fork `https://github.com/2FED/SDL.git`. No SDK patch
 is applied at build time. Build the SDK from a clean recursive clone with tags (the
 package version is derived from `git describe`; without the tag the SDK reports
-a `-dev.g43577c8` version instead of exactly `0.20.0.7`), then build
-`mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.7` (quote the
+a `-dev.gc63895c` version instead of exactly `0.20.0.8`), then build
+`mcla` against its install prefix with `-DREXSDK_VERSION=0.20.0.8` (quote the
 argument in PowerShell). One host serves both modes: the launcher's Frame rate choice (M9-003) adds `--mcla_guest_vblank_hz=240` for Unlocked. The exact flags, the
 `libmspack` link materialization and the reference hashes are in the
 [M9-001 evidence](evidence/M9-001-reproducible-build-20261028.md) (`a239b83` /
-0.20.0.2 era; the flags are unchanged for `f519dd5`, `daa1ae5`, `851f03b`, `483458d` and `43577c8`). From
+0.20.0.2 era; the flags are unchanged for `f519dd5`, `daa1ae5`, `851f03b`, `483458d`, `43577c8` and `c63895c`). From
 volunteer build l56 the host configure step additionally passes
 `-DMCLA_PERF_SPLIT_DEFAULT=ON -DMCLA_LIVERY_DIAG2_DEFAULT=ON
 -DMCLA_READBACK_SYNC_COMPOSITE_DEFAULT=ON` (KI-047 composite read-back fix, cost split and
