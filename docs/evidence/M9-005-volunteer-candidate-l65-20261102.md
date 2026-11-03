@@ -201,3 +201,10 @@ ticket, list or staging output exists. Note: l48 expires 2026-11-29 and l49 2026
 - The owner ran `private/l65-volunteer-prepare.ps1`; the signed `l65-active-builds.txt` (issued 1793686298) lists 5 entries: l49 `0A46AE3E...`, l65 `422A20A6...` (expiry 1796278298), l48 `6FEC02D0...`, l52 `823BFBA4...`, l56 `BAED27A7...`; staging `private/l65-volunteer` present.
 - With the owner's explicit approval ("publish l65") the primary agent published the list to `DebugBundle` of `2FED/RE-MCLA` (commit `d7a6d93`, replacing `0a96366`); the raw URL and the contents API returned bytes identical to the signed file.
 - The owner plays one 720p and one 1440p session with a police car in view before sharing l65 with testers; sharing is the owner's step.
+
+## Owner pre-share check (2026-11-03): PASS
+
+- 720p Unlocked and 1440p Unlocked sessions on the staged l65 (profile BENCH-B): police car livery correct in both (owner, F10 taken); `MCLA m10 defaults` lines show `applied=1` (startup) and `applied=5` (graphics plugin) with 0 failed, composite sync on, `readback_resolve=some`; store seed `source=seeded` (758 shaders, 7,381 descriptions, 0.9 s) then `existing`; no crash, no new errors, 0 pipeline waits.
+- Livery fix counters: 3,104 (720p) and 836 (1440p) forced copies, all targeted, `forced_wait_failed=0`, `fallbacks_to_full=0`.
+- Speed in the single F10 window: about 54 fps at 720p (l63 "all" 45-51, l63 base about 43) and about 35 fps at 1440p (l63 base 31-33, l63 "all" 37-41; one short window, not a full loop).
+- l65 is cleared for sharing with testers; sharing is the owner's step.
