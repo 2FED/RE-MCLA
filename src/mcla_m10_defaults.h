@@ -33,6 +33,12 @@
 // in MCLA_DEV_OVERRIDES (owner measurement) builds. The host switch
 // --mcla_m10_speedup_defaults=false turns the whole set off for a session.
 //
+// kNeverWrittenCvars lists switches this module must not write: diagnostics,
+// switches owned by other host modules, the Vulkan backend, and the SDK hot
+// blocks (M10 watch step 3, docs/evidence/M10-hot-blocks-host-keys-20261103.md)
+// until an owner A/B accepts them; until then only the owner override keys
+// shared_memory_hot_blocks_shadow/_on set shared_memory_hot_blocks.
+//
 // Wine-only entries (Platform::kWineOnly): disarm bridging and upload-ahead 16
 // were the two largest Deck gains in l64 (upload-ahead CP -8.3 ms/frame,
 // bridging -3.3 ms/frame) but net negative on Windows in l63, so on Windows
@@ -96,6 +102,43 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
     "memory_watch_disarm_bridge_safe_gaps",
     "shared_memory_upload_ahead_pages",
 };
+
+// Cvars never written by this module (see above). The unit test checks that
+// none is in kDefaults and that every non-launcher override key writes either
+// a kDefaults cvar or one of these.
+inline constexpr std::array<std::string_view, 12> kNeverWrittenCvars = {
+    "memory_watch_probes",
+    "mcla_readback_sync_composite",
+    "d3d12_readback_sync_composite",
+    "d3d12_readback_sync_kick_draws",
+    "mcla_native_d3d_refcount",
+    "mcla_native_xapi_interlocked",
+    "mcla_gpu_backend_vulkan",
+    "shared_memory_hot_blocks",
+    "shared_memory_hot_k",
+    "shared_memory_hot_n",
+    "shared_memory_hot_upload_cap_kb",
+    "shared_memory_hot_probe_frames",
+};
+
+constexpr bool IsNeverWritten(std::string_view cvar) {
+  for (const auto name : kNeverWrittenCvars) {
+    if (name == cvar) {
+      return true;
+    }
+  }
+  return false;
+}
+
+constexpr bool DefaultsAvoidNeverWritten() {
+  for (const auto &entry : kDefaults) {
+    if (IsNeverWritten(entry.cvar)) {
+      return false;
+    }
+  }
+  return true;
+}
+static_assert(DefaultsAvoidNeverWritten(), "a never-written cvar is in kDefaults");
 
 // True when an owner override key writes the entry's cvar (its line is the
 // owner's A/B arm and wins).

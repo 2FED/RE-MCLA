@@ -19,7 +19,9 @@ using mcla::m10_defaults::Decide;
 using mcla::m10_defaults::Default;
 using mcla::m10_defaults::HasOverrideKey;
 using mcla::m10_defaults::Inputs;
+using mcla::m10_defaults::IsNeverWritten;
 using mcla::m10_defaults::kDefaults;
+using mcla::m10_defaults::kNeverWrittenCvars;
 using mcla::m10_defaults::kWineOnlyCvars;
 using mcla::m10_defaults::Phase;
 using mcla::m10_defaults::Platform;
@@ -132,6 +134,39 @@ void TestTable() {
   Check(Find("mcla_native_d3d_refcount") == nullptr && Find("mcla_native_xapi_interlocked") == nullptr,
         "host native switches already default true");
   Check(Find("mcla_gpu_backend_vulkan") == nullptr, "Vulkan is not a default");
+  // Never-written set: none is a default; hot blocks (M10 step 3) stay owner
+  // A/B only until an A/B accepts them.
+  for (const auto cvar : kNeverWrittenCvars) {
+    Check(Find(cvar) == nullptr, "never-written cvar is not in the table");
+  }
+  for (size_t i = 0; i < kNeverWrittenCvars.size(); ++i) {
+    for (size_t j = i + 1; j < kNeverWrittenCvars.size(); ++j) {
+      Check(kNeverWrittenCvars[i] != kNeverWrittenCvars[j], "never-written: no cvar twice");
+    }
+  }
+  Check(IsNeverWritten("shared_memory_hot_blocks"), "hot blocks never written");
+  Check(IsNeverWritten("shared_memory_hot_k") && IsNeverWritten("shared_memory_hot_n") &&
+            IsNeverWritten("shared_memory_hot_upload_cap_kb") &&
+            IsNeverWritten("shared_memory_hot_probe_frames"),
+        "hot block tuning never written");
+  Check(Find("shared_memory_hot_blocks") == nullptr, "hot blocks not a default");
+  Check(!IsNeverWritten("shared_memory_upload_ahead_pages") &&
+            !IsNeverWritten("memory_watch_census"),
+        "defaults are not in the never-written set");
+  for (const auto key : {dev::Key::kHotBlocksShadow, dev::Key::kHotBlocksOn}) {
+    Check(IsNeverWritten(dev::CvarName(dev::Info(key))),
+          "hot blocks keys write a never-written cvar");
+  }
+  // Every non-launcher override key writes a default cvar or a never-written
+  // one, so a new key forces a decision here.
+  for (const auto &info : dev::kKeys) {
+    if (info.phase == dev::Phase::kLauncher) {
+      continue;
+    }
+    const bool is_default = Find(dev::CvarName(info)) != nullptr;
+    Check(is_default != IsNeverWritten(dev::CvarName(info)),
+          "override key cvar: exactly one of default or never-written");
+  }
   for (size_t i = 0; i < kDefaults.size(); ++i) {
     for (size_t j = i + 1; j < kDefaults.size(); ++j) {
       Check(kDefaults[i].cvar != kDefaults[j].cvar, "no cvar twice");

@@ -29,7 +29,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 14, "fourteen whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 16, "sixteen whitelisted names");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
@@ -49,6 +49,18 @@ void TestWhitelist() {
   Check(FindKey("shared_memory_upload_ahead_64") == Key::kUploadAhead64, "upload-ahead 64 key");
   Check(!FindKey("shared_memory_upload_ahead_pages"), "integer upload-ahead cvar not whitelisted");
   Check(!FindKey("shared_memory_upload_ahead_32"), "only 16 and 64");
+  Check(FindKey("shared_memory_hot_blocks_shadow") == Key::kHotBlocksShadow,
+        "hot blocks shadow key");
+  Check(FindKey("shared_memory_hot_blocks_on") == Key::kHotBlocksOn, "hot blocks on key");
+  Check(!FindKey("shared_memory_hot_blocks"), "integer hot blocks cvar not whitelisted");
+  Check(!FindKey("shared_memory_hot_blocks_off"), "no off key (=false writes nothing)");
+  Check(!FindKey("shared_memory_hot_blocks_1") && !FindKey("shared_memory_hot_blocks_2"),
+        "no numeric hot blocks keys");
+  Check(!FindKey("shared_memory_hot_k") && !FindKey("shared_memory_hot_n") &&
+            !FindKey("shared_memory_hot_upload_cap_kb") &&
+            !FindKey("shared_memory_hot_probe_frames"),
+        "hot block K, N, cap and probe stay command-line only");
+  Check(!FindKey("shared_memory_hot_blocks_sha"), "hot blocks shadow prefix");
   Check(!FindKey("memory_watch_disarm_bridge"), "bridge key prefix");
   Check(!FindKey("d3d12_readback_sync_scope"), "read-back sync scope not whitelisted");
   Check(!FindKey("d3d12_readback_sync"), "targeted key prefix");
@@ -95,15 +107,19 @@ void TestWhitelist() {
   Check(mcla::dev_overrides::Info(Key::kUploadAhead16).phase == Phase::kGraphicsPlugin &&
             mcla::dev_overrides::Info(Key::kUploadAhead64).phase == Phase::kGraphicsPlugin,
         "upload-ahead after the plugin registered shared_memory_upload_ahead_pages");
+  Check(mcla::dev_overrides::Info(Key::kHotBlocksShadow).phase == Phase::kGraphicsPlugin &&
+            mcla::dev_overrides::Info(Key::kHotBlocksOn).phase == Phase::kGraphicsPlugin,
+        "hot blocks after the plugin registered shared_memory_hot_blocks");
   {
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
     using mcla::dev_overrides::Info;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       const auto &info = mcla::dev_overrides::kKeys[i];
-      const bool ahead =
-          static_cast<Key>(i) == Key::kUploadAhead16 || static_cast<Key>(i) == Key::kUploadAhead64;
-      if (!ahead) {
+      const Key key = static_cast<Key>(i);
+      const bool mapped = key == Key::kUploadAhead16 || key == Key::kUploadAhead64 ||
+                          key == Key::kHotBlocksShadow || key == Key::kHotBlocksOn;
+      if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
               "bool keys write their own cvar as true/false");
@@ -117,6 +133,31 @@ void TestWhitelist() {
               CvarText(Info(Key::kUploadAhead64), true) == "64" &&
               CvarText(Info(Key::kUploadAhead64), false).empty(),
           "ahead_64=true writes 64, false writes nothing");
+    Check(CvarName(Info(Key::kHotBlocksShadow)) == "shared_memory_hot_blocks" &&
+              CvarText(Info(Key::kHotBlocksShadow), true) == "1" &&
+              CvarText(Info(Key::kHotBlocksShadow), false).empty(),
+          "hot_blocks_shadow=true writes 1, false writes nothing");
+    Check(CvarName(Info(Key::kHotBlocksOn)) == "shared_memory_hot_blocks" &&
+              CvarText(Info(Key::kHotBlocksOn), true) == "2" &&
+              CvarText(Info(Key::kHotBlocksOn), false).empty(),
+          "hot_blocks_on=true writes 2, false writes nothing");
+    // Keys sharing a cvar are exactly the conflict pairs.
+    size_t shared = 0;
+    for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
+      for (size_t j = i + 1; j < mcla::dev_overrides::kKeyCount; ++j) {
+        if (CvarName(mcla::dev_overrides::kKeys[i]) != CvarName(mcla::dev_overrides::kKeys[j])) {
+          continue;
+        }
+        ++shared;
+        bool paired = false;
+        for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+          paired = paired || (static_cast<size_t>(pair.first) == i &&
+                              static_cast<size_t>(pair.second) == j);
+        }
+        Check(paired, "keys writing one cvar form a conflict pair");
+      }
+    }
+    Check(shared == mcla::dev_overrides::kConflictPairs.size(), "two shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -150,6 +191,85 @@ void TestWhitelist() {
               integer.issues[0].issue == LineIssue::kMalformed &&
               integer.issues[1].issue == LineIssue::kMalformed,
           "integer values are not accepted");
+  }
+  {
+    // Hot blocks (M10 step 3): the same pair rules as upload-ahead.
+    const Parsed shadow = Parse("shared_memory_hot_blocks_shadow=true\n"
+                                "shared_memory_hot_blocks_on=false\n");
+    Check(shadow.ValueCount() == 2 && shadow.Value(Key::kHotBlocksShadow) == true &&
+              shadow.Value(Key::kHotBlocksOn) == false && shadow.ignored_lines == 0,
+          "shadow arm");
+    const Parsed on = Parse("shared_memory_hot_blocks_shadow=false\r\n"
+                            "shared_memory_hot_blocks_on=true\r\n");
+    Check(on.ValueCount() == 2 && on.Value(Key::kHotBlocksOn) == true && on.ignored_lines == 0,
+          "on arm; shadow=false with on=true is not a conflict");
+    const Parsed both = Parse("shared_memory_hot_blocks_on=true\n"
+                              "memory_watch_census=true\n"
+                              "shared_memory_hot_blocks_shadow=true\n"
+                              "d3d12_wrm_event_wake=true\n");
+    Check(both.ValueCount() == 2 && !both.Value(Key::kHotBlocksShadow) &&
+              !both.Value(Key::kHotBlocksOn) && both.Value(Key::kWatchCensus) == true &&
+              both.Value(Key::kWrmEventWake) == true,
+          "both hot blocks keys true: neither applies");
+    Check(both.ignored_lines == 1 && both.issue_count == 1 && both.issues[0].line == 3 &&
+              both.issues[0].issue == LineIssue::kConflict,
+          "hot blocks conflict logged on the later line");
+    const Parsed cross = Parse("shared_memory_upload_ahead_16=true\n"
+                               "shared_memory_hot_blocks_on=true\n");
+    Check(cross.ValueCount() == 2 && cross.Value(Key::kUploadAhead16) == true &&
+              cross.Value(Key::kHotBlocksOn) == true && cross.ignored_lines == 0,
+          "upload-ahead 16 with hot blocks on is not a conflict");
+    const Parsed two = Parse("shared_memory_hot_blocks_shadow=true\n"
+                             "shared_memory_upload_ahead_64=true\n"
+                             "shared_memory_upload_ahead_16=true\n"
+                             "shared_memory_hot_blocks_on=true\n");
+    Check(two.ValueCount() == 0 && two.ignored_lines == 2 && two.issue_count == 2,
+          "both pairs in conflict: four lines, no value");
+    Check(two.issues[0].line == 3 && two.issues[0].issue == LineIssue::kConflict &&
+              two.issues[1].line == 4 && two.issues[1].issue == LineIssue::kConflict,
+          "each conflict logged on its later line");
+    const Parsed dup = Parse("shared_memory_hot_blocks_on=true\n"
+                             "shared_memory_hot_blocks_on=false\n");
+    Check(dup.ValueCount() == 1 && dup.Value(Key::kHotBlocksOn) == true &&
+              dup.issues[0].issue == LineIssue::kDuplicate,
+          "repeated hot blocks key: first wins");
+    const Parsed integer = Parse("shared_memory_hot_blocks=2\n"
+                                 "shared_memory_hot_blocks_on=2\n");
+    Check(integer.ValueCount() == 0 && integer.ignored_lines == 2 &&
+              integer.issues[0].issue == LineIssue::kMalformed &&
+              integer.issues[1].issue == LineIssue::kMalformed,
+          "integer hot blocks values are not accepted");
+  }
+  {
+    // The l66 owner arm files (private/l66-arms/<pc|deck>/<arm>/, ASCII LF):
+    // every whitelisted key written, base = the l63 "all" arm.
+    const std::string common = "mcla_readback_sync_composite=true\n"
+                               "mcla_native_d3d_refcount=true\n"
+                               "mcla_native_xapi_interlocked=true\n"
+                               "d3d12_wrm_event_wake=true\n"
+                               "d3d12_replay_batched_wake=true\n"
+                               "d3d12_readback_elide_unread=true\n"
+                               "mcla_gpu_backend_vulkan=false\n"
+                               "prewarm_seed_store=true\n"
+                               "d3d12_readback_sync_targeted=true\n"
+                               "memory_watch_census=true\n"
+                               "memory_watch_probes=false\n"
+                               "memory_watch_disarm_bridge_safe_gaps=true\n"
+                               "shared_memory_upload_ahead_16=true\n"
+                               "shared_memory_upload_ahead_64=false\n";
+    const char *const arms[3][2] = {{"false", "false"}, {"true", "false"}, {"false", "true"}};
+    for (const auto &arm : arms) {
+      const std::string text = common + "shared_memory_hot_blocks_shadow=" + arm[0] + "\n" +
+                               "shared_memory_hot_blocks_on=" + arm[1] + "\n";
+      const Parsed p = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && p.status == FileStatus::kParsed &&
+                p.ValueCount() == mcla::dev_overrides::kKeyCount && p.ignored_lines == 0,
+            "l66 arm: every key, nothing ignored");
+      Check(p.Value(Key::kHotBlocksShadow) == (arm[0][0] == 't') &&
+                p.Value(Key::kHotBlocksOn) == (arm[1][0] == 't') &&
+                p.Value(Key::kUploadAhead16) == true && p.Value(Key::kWatchCensus) == true,
+            "l66 arm values");
+    }
   }
   {
     const Parsed p = Parse("mcla_readback_sync_composite=true\r\n"
@@ -368,6 +488,14 @@ void TestConstexpr() {
       Parse("shared_memory_upload_ahead_64=true\nshared_memory_upload_ahead_16=true\n");
   static_assert(conflict.ValueCount() == 0);
   static_assert(conflict.issues[0].line == 2);
+  constexpr Parsed hot_conflict =
+      Parse("shared_memory_hot_blocks_shadow=true\nshared_memory_hot_blocks_on=true\n");
+  static_assert(hot_conflict.ValueCount() == 0);
+  static_assert(hot_conflict.issues[0].line == 2);
+  static_assert(hot_conflict.issues[0].issue == LineIssue::kConflict);
+  Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
+            "conflicting keys for one cvar (neither is applied)",
+        "conflict issue name covers both pairs");
 }
 }  // namespace
 

@@ -9,7 +9,9 @@
 // KI-047 targeted read-back wait A/B,
 // docs/evidence/M10-ki047-targeted-wait-20261101.md; M10 watch census and
 // steps 1-2 of the Deck watch/upload path,
-// docs/evidence/M10-watch-steps0-2-20261101.md).
+// docs/evidence/M10-watch-steps0-2-20261101.md; M10 watch step 3 hot blocks,
+// docs/evidence/M10-hot-blocks-sdk-20261103.md and
+// docs/evidence/M10-hot-blocks-host-keys-20261103.md).
 //
 // Builds made with the CMake option MCLA_DEV_OVERRIDES (OFF by default; ON
 // only for owner-internal measurement builds, never for volunteer builds) read
@@ -30,6 +32,11 @@
 //   true in one file is contradictory: neither is applied (logged as a
 //   conflict on the later line). Integer values are deliberately not accepted
 //   in the file; any other value needs the command line.
+// - shared_memory_hot_blocks_shadow and shared_memory_hot_blocks_on are the
+//   same kind of pair for the integer SDK cvar shared_memory_hot_blocks
+//   (0 = off, 1 = shadow, 2 = on): =true writes 1 or 2, =false changes
+//   nothing, both true is a conflict (neither applied). The other hot-block
+//   cvars (K, N, upload cap, probe frames) need the command line.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
 // non-default value (set by the command line or the config file), and logged
@@ -75,8 +82,10 @@ enum class Key : uint8_t {
   kWatchDisarmBridge,     // M10 step 1: disarm safe-gap bridging
   kUploadAhead16,         // M10 step 2: shared_memory_upload_ahead_pages=16
   kUploadAhead64,         // M10 step 2: shared_memory_upload_ahead_pages=64
+  kHotBlocksShadow,       // M10 step 3: shared_memory_hot_blocks=1 (shadow)
+  kHotBlocksOn,           // M10 step 3: shared_memory_hot_blocks=2 (on)
 };
-inline constexpr size_t kKeyCount = 14;
+inline constexpr size_t kKeyCount = 16;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -117,6 +126,20 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
      "16", ""},
     {"shared_memory_upload_ahead_64", Phase::kGraphicsPlugin, "shared_memory_upload_ahead_pages",
      "64", ""},
+    {"shared_memory_hot_blocks_shadow", Phase::kGraphicsPlugin, "shared_memory_hot_blocks", "1",
+     ""},
+    {"shared_memory_hot_blocks_on", Phase::kGraphicsPlugin, "shared_memory_hot_blocks", "2", ""},
+}};
+
+// Key pairs that write different values to one integer cvar: both true in one
+// file is contradictory and neither is applied.
+struct ConflictPair {
+  Key first;
+  Key second;
+};
+inline constexpr std::array<ConflictPair, 2> kConflictPairs = {{
+    {Key::kUploadAhead16, Key::kUploadAhead64},
+    {Key::kHotBlocksShadow, Key::kHotBlocksOn},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -152,7 +175,7 @@ enum class LineIssue : uint8_t {
   kMalformed,    // not exactly name=true or name=false
   kUnknownName,  // well formed, name not in kKeys
   kDuplicate,    // a name already given on an earlier line
-  kConflict,     // contradicts an earlier line (both upload-ahead keys true)
+  kConflict,     // contradicts an earlier line (both keys of a kConflictPairs pair true)
 };
 
 struct Issue {
@@ -240,16 +263,17 @@ constexpr void ParseLine(Parsed &parsed, uint16_t number, std::string_view line)
   parsed.lines[static_cast<size_t>(*key)] = number;
 }
 
-// Both upload-ahead keys true: neither applies.
+// Both keys of a conflict pair true: neither applies.
 constexpr void ResolveConflicts(Parsed &parsed) {
-  const size_t k16 = static_cast<size_t>(Key::kUploadAhead16);
-  const size_t k64 = static_cast<size_t>(Key::kUploadAhead64);
-  if (parsed.values[k16] == true && parsed.values[k64] == true) {
-    const uint16_t later = parsed.lines[k16] > parsed.lines[k64] ? parsed.lines[k16]
-                                                                 : parsed.lines[k64];
-    parsed.values[k16].reset();
-    parsed.values[k64].reset();
-    AddIssue(parsed, later, LineIssue::kConflict);
+  for (const ConflictPair &pair : kConflictPairs) {
+    const size_t a = static_cast<size_t>(pair.first);
+    const size_t b = static_cast<size_t>(pair.second);
+    if (parsed.values[a] == true && parsed.values[b] == true) {
+      const uint16_t later = parsed.lines[a] > parsed.lines[b] ? parsed.lines[a] : parsed.lines[b];
+      parsed.values[a].reset();
+      parsed.values[b].reset();
+      AddIssue(parsed, later, LineIssue::kConflict);
+    }
   }
 }
 
@@ -293,7 +317,7 @@ constexpr const char *LineIssueName(LineIssue issue) {
     case LineIssue::kDuplicate:
       return "repeated name (the first line wins)";
     case LineIssue::kConflict:
-      return "conflicting upload-ahead keys (neither is applied)";
+      return "conflicting keys for one cvar (neither is applied)";
   }
   return "unknown";
 }
@@ -334,7 +358,8 @@ std::optional<bool> AppliedValue(Key key);
 
 // The value of the key's valid file line (nullopt without the option, without
 // a parsed file or without a valid line), whether or not anything was
-// written. Used for keys whose value writes nothing (upload-ahead =false).
+// written. Used for keys whose value writes nothing (upload-ahead and hot
+// blocks =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides
