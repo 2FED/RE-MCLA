@@ -163,3 +163,7 @@ run on the PC or the Deck.
   the gate clears. The shared-read copier (267ae4b) is what keeps that case
   from blocking the game; the post-copy WARN records it.
 - `/alternatename` and the weak import were verified with lld-link only.
+
+## Primary note (2026-11-03)
+
+- SDK `c63895c` was tagged `v0.20.0.8` and pushed to `2FED/rexglue-sdk` `mcla/mcla-r-hotfixes` the same day (fast-forward from `43577c8`); the project pin moved in `e551fb6`. The host guard is `c66bcf7` (main). Statements above that the SDK commit is local or unpushed are superseded.
