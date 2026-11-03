@@ -215,3 +215,77 @@ l65-class builds.
   watches change) and fault bits under the global lock; `WatchMemoryRange` is assumed to run on the
   CP thread (texture cache), as today.
 - Nothing here is a physical PASS; the owner A/B and visual checks are required.
+
+---
+
+## Review fixes (SDK `cdf469a`, 2026-11-03)
+
+Correction to the rules above: requests from other threads are NOT tracked (not foreign, no hold, no exit); they take the normal path, which is correct in any block. The immediate `source` exit applies to another request source on the command-processor thread. Independent review: [review of ff30a86](M10-hot-blocks-review-ff30a86-20261103.md). Fix notes by the implementing subagent follow; ctest 2016/2016.
+
+# l66c SDK: M10 hot blocks review fixes (S1-S3 of M10-hot-blocks-review-ff30a86-20261103.md)
+
+Status: SDK built and unit-tested; not run in the game. No physical PASS.
+
+## Identity
+- SDK commit: cdf469a85e4ad37d415b3ecd9cb83bd80b11e8fe (branch mcla/m10-hotblocks, parent ff30a86), local only, not pushed.
+- Worktree private/l66-sdk-wt; build private/l66c-sdk-b; output private/l66c-sdk-o; install private/l66c-sdk-install.
+  Same configuration as l66 (Ninja Multi-Config, clang 20.1.8, VS 2022 BT, -march=x86-64-v3, D3D12 on, Vulkan off, Tracy on, perf counters on).
+- Scripts/logs: private/l66c-sdk-work/ (l66c_sdk_build.ps1, l66c_sdk_test.ps1, l66c-sdk-configure.log, l66c-sdk-build.log, l66c-sdk-build2.log (no-op re-check), l66c-sdk-test.log, warn-l66c.txt).
+
+| File (l66c-sdk-install) | SHA-256 |
+|---|---|
+| bin/rexruntime.dll | 18e38180de1eb3ef05a3a6cc471d72ded27291293a5267c79701e513224b6afb (no runtime source change; differs from l66 by build dir / PDB identity) |
+| bin/rexgpu-xenos.dll | 91d09e0cbdd3b166c4780bf7632a1759918d8aa65c77aef4f4d1f37b0cb60097 |
+| lib/rexruntime.lib | 03990569ea1e2d84c370216d1d7a39de3cb2ff2d4f457dc20da9beeb36559822 (same as l66) |
+| lib/rexgpu-xenos.lib | 841edfd459dae28d03720df49a7f098a5aabd968866625978e8d270eee0d1ea0 (same as l66) |
+| bin/TracyClient.dll | b34b6c29b97e98e7b84db3804e5116198ce26b4b4f2deb3ee9a6bc21395a3573 |
+
+## Changes
+- S1 (doc/comment only): hot_blocks.h now says requests from other threads are not tracked at all
+  (no foreign mark, no hold, no exit); they take the normal path (valid + armed), correct in any
+  block (redundant uploads, never stale). Immediate `source` exit = other source *on the CP thread*.
+  Other threads still never touch the tracker. The host evidence doc M10-hot-blocks-sdk-20261103.md
+  ("Requests from any other thread are never hot" is right; the "foreign" wording in Rules/entry
+  list and the header-derived text should be aligned by the primary) was not edited (main checkout).
+- S2: new cvar `shared_memory_hot_upload_cap_requests` (int, default 256, range 0-1000000, hot
+  reload; 0 = no hot uploads): per-submission (HotUploadEpoch) cap on the number of hot-path
+  requests. Tracker::Charge(epoch, bytes, cap_bytes, cap_requests) checks the request count first
+  (miss -> `cap_request_hits`), then bytes (miss -> `cap_hits`); a miss charges nothing and the
+  request takes the normal path. Mode 1 projects it the same way.
+  New counters (Counters + MCLA_WATCH minute/mark line, appended after hot_shadow_saved_arms):
+  `hot_cap_req=<current cap> hot_cap_request_hits= hot_copies= hot_copy_kb= hot_copies_after_draw=
+  hot_gpu_whole= hot_req_pf= hot_copies_pf= hot_copies_after_draw_pf=`
+  - hot_copies / hot_copy_kb: upload-pool copies (one per MakeRangeValid chunk, i.e. per
+    CopyBufferRegion) of hot-path requests whose chunk includes a block in hot mode, and their bytes
+    (whole chunk). Mode 1: 0.
+  - hot_copies_after_draw: those copies recorded when a draw was already recorded into the open D3D12
+    submission (new virtual SharedMemory::HotCopyAfterDraw; D3D12 uses the existing per-submission
+    draw counter via new D3D12CommandProcessor::GetSubmissionDrawCount() > 1, since IssueDraw counts
+    its own draw before requesting VB/IB). These are the copies that split draws (render pass end on
+    vkd3d-proton). Base/Vulkan: false.
+  - *_pf: per frame of the census window (frames=).
+  - hot_gpu_whole: whole-buffer GPU writes while hot blocks mode != 0.
+- S3: MakeRangeValid now evaluates OnCommandProcessorThread() before reading hot_request_on_ /
+  hot_request_shadow_ (only the CP thread reads them).
+- N6 note: RangeWrittenByGpu(0, kBufferSize) (memexport fallback without exact ranges) with
+  shared_memory_hot_blocks=1/2 logs one INFO line, at most once per 60 s:
+  "MCLA shared memory: whole-buffer GPU write (memexport without exact ranges) with
+  shared_memory_hot_blocks=<m>: ends hot mode in all <n> active blocks ...; <k> since the last line".
+  Mode 0: only an extra lock acquire on that (already whole-buffer) path; nothing logged.
+
+## Tests
+- ctest -C Release: 2016/2016 passed at the first run (baseline 2015 + 1 new test case); tagged
+  suites of the l66 script all rc=0, [hot-blocks] 30340 assertions.
+- New/changed [hot-blocks]: SanitizeCapRequests; "per-submission request-count cap" (exact cap,
+  over-cap, epoch reset, byte miss charges no request, over both caps counted once as request hit,
+  lowered cap applies at once, cap 0); existing byte-cap test passes cap 256; model test now applies
+  a tiny request cap (1-3) every 7th frame without consuming the RNG sequence, and requires
+  cap_request_hits > 0 besides zero stale reads over 40 seeds x 1500 frames.
+- Warnings: unique warning set identical to l66 (224 lines, warn-l66c.txt vs warn-l66.txt).
+- clang-format 20.1.8 via clang-format-diff on the changed lines: clean. Changed sources ASCII.
+- Not tested: counters/log in the real game (needs the owner build).
+
+## Host keys
+Nothing new required; the cap is command-line/cvar only like the byte cap. Add
+shared_memory_hot_upload_cap_requests next to the other hot cvars in any never-written list if the
+host keeps one.
