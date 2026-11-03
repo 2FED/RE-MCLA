@@ -208,3 +208,5 @@ ticket, list or staging output exists. Note: l48 expires 2026-11-29 and l49 2026
 - Livery fix counters: 3,104 (720p) and 836 (1440p) forced copies, all targeted, `forced_wait_failed=0`, `fallbacks_to_full=0`.
 - Speed in the single F10 window: about 54 fps at 720p (l63 "all" 45-51, l63 base about 43) and about 35 fps at 1440p (l63 base 31-33, l63 "all" 37-41; one short window, not a full loop).
 - l65 is cleared for sharing with testers; sharing is the owner's step.
+
+- Note (owner, 2026-11-03): l56 was published to the allowance list but never shared with testers; the testers move from l52 directly to l65, so `docs/volunteer-changelog-l65.txt` is written against l52 and folds the l56 items in.
