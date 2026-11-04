@@ -29,7 +29,14 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 16, "sixteen whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 18, "eighteen whitelisted names");
+  Check(FindKey("mcla_warp_probe") == Key::kWarpProbe, "warp probe key");
+  Check(FindKey("mcla_warp_watchdog") == Key::kWarpWatchdog, "warp watchdog key");
+  Check(!FindKey("mcla_warp_watchdog_seconds"), "integer watchdog cvar not whitelisted");
+  Check(!FindKey("mcla_warp_watchdog_15") && !FindKey("mcla_warp"),
+        "no numeric or prefix warp keys");
+  Check(!FindKey("mcla_ki026_probe") && !FindKey("mcla_ki026_watchdog"),
+        "KI-026 switches stay command-line only");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
@@ -110,6 +117,9 @@ void TestWhitelist() {
   Check(mcla::dev_overrides::Info(Key::kHotBlocksShadow).phase == Phase::kGraphicsPlugin &&
             mcla::dev_overrides::Info(Key::kHotBlocksOn).phase == Phase::kGraphicsPlugin,
         "hot blocks after the plugin registered shared_memory_hot_blocks");
+  Check(mcla::dev_overrides::Info(Key::kWarpProbe).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kWarpWatchdog).phase == Phase::kStartup,
+        "warp keys at startup (host init-only cvars, before the guest)");
   {
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -118,7 +128,8 @@ void TestWhitelist() {
       const auto &info = mcla::dev_overrides::kKeys[i];
       const Key key = static_cast<Key>(i);
       const bool mapped = key == Key::kUploadAhead16 || key == Key::kUploadAhead64 ||
-                          key == Key::kHotBlocksShadow || key == Key::kHotBlocksOn;
+                          key == Key::kHotBlocksShadow || key == Key::kHotBlocksOn ||
+                          key == Key::kWarpWatchdog;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -141,6 +152,13 @@ void TestWhitelist() {
               CvarText(Info(Key::kHotBlocksOn), true) == "2" &&
               CvarText(Info(Key::kHotBlocksOn), false).empty(),
           "hot_blocks_on=true writes 2, false writes nothing");
+    Check(CvarName(Info(Key::kWarpWatchdog)) == "mcla_warp_watchdog_seconds" &&
+              CvarText(Info(Key::kWarpWatchdog), true) == "15" &&
+              CvarText(Info(Key::kWarpWatchdog), false).empty(),
+          "warp_watchdog=true writes 15 s, false writes nothing");
+    Check(CvarName(Info(Key::kWarpProbe)) == "mcla_warp_probe" &&
+              CvarText(Info(Key::kWarpProbe), true) == "true",
+          "warp probe writes its own bool cvar");
     // Keys sharing a cvar are exactly the conflict pairs.
     size_t shared = 0;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
@@ -263,8 +281,15 @@ void TestWhitelist() {
                                "shared_memory_hot_blocks_on=" + arm[1] + "\n";
       const Parsed p = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && p.status == FileStatus::kParsed &&
-                p.ValueCount() == mcla::dev_overrides::kKeyCount && p.ignored_lines == 0,
-            "l66 arm: every key, nothing ignored");
+                p.ValueCount() == 16 && p.ignored_lines == 0,
+            "l66 arm: every key of l66 (16), nothing ignored");
+      // l68: the same arm plus the two KI-035 keys still fits and parses.
+      const std::string l68 = text + "mcla_warp_probe=true\nmcla_warp_watchdog=true\n";
+      const Parsed q = Parse(l68);
+      Check(l68.size() <= mcla::dev_overrides::kMaxBytes && q.status == FileStatus::kParsed &&
+                q.ValueCount() == mcla::dev_overrides::kKeyCount && q.ignored_lines == 0 &&
+                q.Value(Key::kWarpProbe) == true && q.Value(Key::kWarpWatchdog) == true,
+            "l68 arm: every key, nothing ignored");
       Check(p.Value(Key::kHotBlocksShadow) == (arm[0][0] == 't') &&
                 p.Value(Key::kHotBlocksOn) == (arm[1][0] == 't') &&
                 p.Value(Key::kUploadAhead16) == true && p.Value(Key::kWatchCensus) == true,
@@ -282,6 +307,16 @@ void TestWhitelist() {
     Check(q.status == FileStatus::kParsed && q.ValueCount() == 1 &&
               q.Value(Key::kReadbackSyncTargeted) == false,
           "full arm file: targeted off");
+  }
+  {
+    const Parsed p = Parse("mcla_warp_probe=true\r\nmcla_warp_watchdog=false\r\n");
+    Check(p.status == FileStatus::kParsed && p.ValueCount() == 2 &&
+              p.Value(Key::kWarpProbe) == true && p.Value(Key::kWarpWatchdog) == false,
+          "warp probe on, watchdog off parses");
+    const Parsed q = Parse("mcla_warp_watchdog=15\nmcla_warp_watchdog_seconds=15\n");
+    Check(NoValues(q) && q.ignored_lines == 2 && q.issues[0].issue == LineIssue::kMalformed &&
+              q.issues[1].issue == LineIssue::kMalformed,
+          "integer watchdog values are not accepted");
   }
   {
     const Parsed p = Parse("prewarm_seed_store=false\n");

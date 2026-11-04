@@ -67,6 +67,7 @@
 #include "mcla_livery_diag.h"
 #include "mcla_dev_overrides.h"
 #include "mcla_m10_defaults.h"
+#include "mcla_warp_probe.h"
 #include "mcla_shader_store_log.h"
 #include "mcla_readback_sync.h"
 #include "mcla_perf_split.h"
@@ -1362,10 +1363,47 @@ void MclaApp::OnPostSetup() {
   }
 }
 
+namespace {
+
+// KI-035: one INFO line per window focus change, minimize and restore (the
+// SDK already logs fullscreen toggles as REX_WINDOW_FULLSCREEN_TOGGLE), at
+// most mcla::warp::kFocusBurst per minute. UI thread only; the mutex keeps
+// the limiter safe if the SDK ever calls from elsewhere.
+void LogWindowEvent(const char *event, rex::ui::Window *window) {
+  static std::mutex mutex;
+  static mcla::warp::RateLimiter limiter(mcla::warp::kFocusBurst, mcla::warp::kFocusWindowMs);
+  const uint64_t now_ms = static_cast<uint64_t>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+  uint32_t suppressed = 0;
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!limiter.Allow(now_ms)) {
+      return;
+    }
+    suppressed = limiter.suppressed();
+  }
+  MCLA_APP_INFO("MCLA_WINDOW_EVENT v=1 event={} focused={} fullscreen={} suppressed={}", event,
+                window ? (window->HasFocus() ? 1 : 0) : -1,
+                window ? (window->IsFullscreen() ? 1 : 0) : -1, suppressed);
+}
+
+}  // namespace
+
 void MclaApp::OnWindowFocusChanged(bool focused) {
+  LogWindowEvent(focused ? "focus-gained" : "focus-lost", window());
   if (cursor_autohide_) {
     mcla::cursor::NotifyFocusChanged(*cursor_autohide_, focused);
   }
+}
+
+void MclaApp::OnWindowMinimized() {
+  LogWindowEvent("minimized", window());
+}
+
+void MclaApp::OnWindowRestored() {
+  LogWindowEvent("restored", window());
 }
 
 void MclaApp::OnPostLoadGraphicsPlugin() {

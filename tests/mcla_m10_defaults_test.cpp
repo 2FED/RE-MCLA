@@ -150,6 +150,9 @@ void TestTable() {
             IsNeverWritten("shared_memory_hot_probe_frames"),
         "hot block tuning never written");
   Check(Find("shared_memory_hot_blocks") == nullptr, "hot blocks not a default");
+  Check(IsNeverWritten("mcla_warp_probe") && IsNeverWritten("mcla_warp_watchdog_seconds") &&
+            Find("mcla_warp_probe") == nullptr && Find("mcla_warp_watchdog_seconds") == nullptr,
+        "KI-035 warp probe and watchdog are never volunteer defaults");
   Check(!IsNeverWritten("shared_memory_upload_ahead_pages") &&
             !IsNeverWritten("memory_watch_census"),
         "defaults are not in the never-written set");

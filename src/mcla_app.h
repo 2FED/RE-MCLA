@@ -52,6 +52,8 @@ protected:
   void OnGuestThreadExit(rex::system::XThread *thread) override;
   bool OnWindowCloseRequested() override;
   void OnWindowFocusChanged(bool focused) override;
+  void OnWindowMinimized() override;
+  void OnWindowRestored() override;
   void OnShutdown() override;
 
 private:

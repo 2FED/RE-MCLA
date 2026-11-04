@@ -20,11 +20,17 @@
 // read in this file except the bare register values goes through
 // GuestReader, which checks the guest heap bounds and page protection before
 // dereferencing.
+//
+// KI-035 (docs/evidence/M10-ki035-warp-probe-20261104.md) adds the warp
+// camera to the F10 block, default-off warp state logging (--mcla_warp_probe)
+// and a default-off state-20 watchdog (--mcla_warp_watchdog_seconds). Their
+// decisions are pure and unit-tested (mcla_warp_probe.h).
 
 #include "mcla_ki026_probe.h"
 
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_warp_probe.h"
 
 #include <rex/cvar.h>
 #include <rex/system/kernel_state.h>
@@ -44,6 +50,16 @@ REXCVAR_DEFINE_BOOL(mcla_ki026_probe, false, "MCLA",
 
 REXCVAR_DEFINE_BOOL(mcla_ki026_watchdog, false, "MCLA",
     "Release a camera pause left behind by a finished or stalled warp (KI-026)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(mcla_warp_probe, false, "MCLA",
+    "Log KI-035 warp state changes with the warp camera time and duration")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_INT32(mcla_warp_watchdog_seconds, 0, "MCLA",
+    "Finish a cinematic warp left in state 20 with a frozen camera after this "
+    "many seconds (KI-035; 0 = off)")
+    .range(0, 600)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace {
@@ -73,6 +89,16 @@ constexpr uint32_t kWarperState = 288;
 constexpr uint32_t kWarperCamera = 296;
 constexpr uint32_t kWarperIdle = 29;
 
+// KI-035 warp camera (docs/evidence/M10-ki035-warp-probe-20261104.md).
+constexpr uint32_t kWarperExitFlag = 276;      // stb r28(=1),276(r31) at 0x8221C1D8
+constexpr uint32_t kWarperCameraCopy = 300;    // stw at 0x82219EA8 (sub_82219DA0)
+constexpr uint32_t kRequestCamera = 108;       // stw at 0x82219DE8 (sub_82219DA0)
+constexpr uint32_t kUiTransitions = 52;        // *(UIManager) + 52 (sub_82220980 r3)
+constexpr uint32_t kActiveTransitions = 0x40850u;  // +0 array, +4 u16 count
+constexpr uint32_t kExitGlobalPtr = 0x8286D8F0u;   // lwz r11,-10000(0x82870000)
+constexpr uint32_t kExitGlobalByte = 293;          // stb r26(=0),293(r11) at 0x8221C1D4
+constexpr uint32_t kMaxActiveScan = 256;
+
 constexpr uint32_t kRacerCamera = 0x370;  // mcPlayerCamera
 constexpr uint32_t kRacerState = 656;     // 3 = active (racer reset path)
 constexpr uint32_t kRacerCameraInputOff = 908;
@@ -89,6 +115,19 @@ bool WatchdogOn() {
   return on;
 }
 
+bool WarpProbeOn() {
+  static const bool on = REXCVAR_GET(mcla_warp_probe);
+  return on;
+}
+
+uint64_t WarpWatchdogLimitMs() {
+  static const uint64_t limit =
+      mcla::warp::WatchdogLimitMs(REXCVAR_GET(mcla_warp_watchdog_seconds));
+  return limit;
+}
+
+std::atomic<uint32_t> warp_watchdog_fires{0};
+
 // Checked guest reads. A read is allowed only when the address lies inside a
 // guest heap and the page protection includes read access. Spans are at most
 // one guest page, so checking both ends covers every page they touch. A
@@ -99,6 +138,14 @@ class GuestReader {
   GuestReader(rex::memory::Memory *memory, uint8_t *base) : memory_(memory), base_(base) {}
 
   bool Readable(uint32_t address, uint32_t size) const {
+    return Accessible(address, size, rex::memory::kMemoryProtectRead);
+  }
+  // Used only by the KI-035 watchdog before its three guest stores.
+  bool Writable(uint32_t address, uint32_t size) const {
+    return Accessible(address, size,
+                      rex::memory::kMemoryProtectRead | rex::memory::kMemoryProtectWrite);
+  }
+  bool Accessible(uint32_t address, uint32_t size, uint32_t required) const {
     if (!memory_ || !base_ || !address || size == 0 || size > kGuestPage ||
         address > UINT32_MAX - (size - 1)) {
       return false;
@@ -110,8 +157,7 @@ class GuestReader {
       // the page-table size.
       if (!heap || probe < heap->heap_base() ||
           probe - heap->heap_base() >= heap->heap_size() ||
-          !heap->QueryProtect(probe, &protect) ||
-          !(protect & rex::memory::kMemoryProtectRead)) {
+          !heap->QueryProtect(probe, &protect) || (protect & required) != required) {
         return false;
       }
     }
@@ -124,6 +170,14 @@ class GuestReader {
     }
     uint8_t *base = base_;
     return REX_LOAD_U32(address);
+  }
+  uint32_t U16(uint32_t address, bool &ok) const {
+    if (!Readable(address, 2)) {
+      ok = false;
+      return 0;
+    }
+    uint8_t *base = base_;
+    return REX_LOAD_U16(address);
   }
   uint32_t U8(uint32_t address, bool &ok) const {
     if (!Readable(address, 1)) {
@@ -167,6 +221,76 @@ class GuestReader {
 GuestReader HookReader(uint8_t *base) {
   auto *kernel = rex::system::kernel_state();
   return GuestReader(kernel ? kernel->memory() : nullptr, base);
+}
+
+// --- KI-035: warp camera (warper+296, a UITransition) ------------------------
+// Reads the camera's vtable, the three getter slots of the state-20 wait and
+// the fields those getters read (mcla_warp_probe.h); no guest code runs.
+struct WarpCamera {
+  uint32_t ptr = 0;
+  bool read = false;  // vtable, slots and fields all read
+  uint32_t vtable = 0;
+  uint32_t fn_ready = 0;
+  uint32_t fn_duration = 0;
+  uint32_t fn_time = 0;
+  mcla::warp::CameraFields fields;
+  bool ready_known = false;
+  bool ready = false;
+  mcla::warp::Value duration;
+  mcla::warp::Value time;
+  bool list_read = false;  // the transition manager's active list was read
+  uint32_t active_count = 0;
+  int active_index = -1;   // index of the camera in that list, -1 = absent
+};
+
+WarpCamera ReadWarpCamera(const GuestReader &read, uint32_t camera) {
+  WarpCamera cam;
+  cam.ptr = camera;
+  if (!camera) {
+    return cam;
+  }
+  bool ok = true;
+  cam.vtable = read.U32(camera, ok);
+  if (ok && cam.vtable) {
+    cam.fn_ready = read.U32(cam.vtable + mcla::warp::kSlotReady, ok);
+    cam.fn_duration = read.U32(cam.vtable + mcla::warp::kSlotDuration, ok);
+    cam.fn_time = read.U32(cam.vtable + mcla::warp::kSlotTime, ok);
+  }
+  cam.fields.flags16 = read.U32(camera + 16, ok);
+  cam.fields.f76 = read.F32(camera + 76, ok);
+  cam.fields.f80 = read.F32(camera + 80, ok);
+  cam.fields.f96 = read.F32(camera + 96, ok);
+  cam.fields.b471 = static_cast<uint8_t>(read.U8(camera + 471, ok));
+  cam.read = ok && cam.vtable != 0;
+  if (cam.read) {
+    cam.ready = mcla::warp::Ready(mcla::warp::ReadyGetter(cam.fn_ready), cam.fields,
+                                  cam.ready_known);
+    cam.duration = mcla::warp::Duration(mcla::warp::DurationGetter(cam.fn_duration), cam.fields);
+    cam.time = mcla::warp::Time(mcla::warp::TimeGetter(cam.fn_time), cam.fields);
+  }
+  // sub_82220980 adds a transition to *(*(UIManager)+52)+0x40850 (pointer
+  // array, u16 count at +4); sub_822247A8 -> sub_82221DB0 updates that list
+  // and drops finished entries (sub_8221E310 removes one).
+  bool list_ok = true;
+  if (const uint32_t manager = read.U32(kUiManagerPtr, list_ok)) {
+    if (const uint32_t transitions = read.U32(manager + kUiTransitions, list_ok)) {
+      const uint32_t list = read.U32(transitions + kActiveTransitions, list_ok);
+      cam.active_count = read.U16(transitions + kActiveTransitions + 4, list_ok);
+      const uint32_t scan = cam.active_count < kMaxActiveScan ? cam.active_count : kMaxActiveScan;
+      for (uint32_t i = 0; list_ok && list && i < scan; ++i) {
+        if (read.U32(list + 4 * i, list_ok) == camera) {
+          cam.active_index = static_cast<int>(i);
+          break;
+        }
+      }
+      cam.list_read = list_ok && (list != 0 || cam.active_count == 0);
+    }
+  }
+  return cam;
+}
+
+const char *Known(const mcla::warp::Value &value) {
+  return value.known ? "known" : "unknown";
 }
 
 // --- probe: stripped debug printf -------------------------------------------
@@ -329,9 +453,120 @@ void Ki026Watchdog(PPCContext &ctx, uint8_t *base, uint32_t warper, uint32_t sta
 
 }  // namespace
 
+// --- KI-035: warp state log + state-20 watchdog --------------------------------
+namespace {
+
+struct WarpTracker {
+  mcla::warp::Watchdog watchdog;
+  mcla::warp::WaitPacer pacer;
+  uint32_t state_lines = 0;
+};
+WarpTracker warp_tracker;  // the warper update runs on one guest thread
+
+uint64_t SteadyMs() {
+  return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::steady_clock::now().time_since_epoch())
+                                   .count());
+}
+
+void WarpObserve(uint8_t *base, uint32_t warper, bool before_ok, uint32_t state_before,
+                 uint32_t state) {
+  const GuestReader read = HookReader(base);
+  bool ok = true;
+  const uint32_t request = read.U32(warper + kWarperRequest, ok);
+  const uint32_t camera_ptr = read.U32(warper + kWarperCamera, ok);
+  const uint32_t request_type = request ? read.U32(request + 12, ok) : 0;
+  const uint32_t req0 = request ? read.U8(request + 0, ok) : 0;
+  const uint32_t req3 = request ? read.U8(request + 3, ok) : 0;
+  const uint32_t req7 = request ? read.U8(request + 7, ok) : 0;
+  const uint32_t req9 = request ? read.U8(request + 9, ok) : 0;
+  const uint32_t exit_flag = read.U8(warper + kWarperExitFlag, ok);
+  bool paused = false;
+  if (const uint32_t pm = read.U32(kPauseManagerPtr, ok)) {
+    paused = read.U8(pm + 4, ok) != 0 && read.U8(pm + 10, ok) == 0;
+  }
+  const WarpCamera cam = ReadWarpCamera(read, camera_ptr);
+  const uint64_t now_ms = SteadyMs();
+  const float time = cam.time.known ? cam.time.value : -1.0f;
+  const float duration = cam.duration.known ? cam.duration.value : -1.0f;
+  const int ready = cam.ready_known ? (cam.ready ? 1 : 0) : -1;
+
+  if (WarpProbeOn()) {
+    if (before_ok && state != state_before &&
+        warp_tracker.state_lines < mcla::warp::kMaxStateLines) {
+      ++warp_tracker.state_lines;
+      MCLA_APP_INFO("MCLA_KI035_WARP_STATE v=1 from={} to={} request={:08X} type={} "
+                    "req0={} req3={} req7={} req9={} exit276={} camera={:08X} class={} "
+                    "ready={} time={} ({}) duration={} ({}) active_index={} active_count={} "
+                    "paused={} complete={}",
+                    state_before, state, request, request_type, req0, req3, req7, req9,
+                    exit_flag, camera_ptr, mcla::warp::TransitionClassName(cam.vtable), ready,
+                    time, Known(cam.time), duration, Known(cam.duration), cam.active_index,
+                    cam.active_count, paused ? 1 : 0, ok && cam.read ? 1 : 0);
+    }
+    if (warp_tracker.pacer.Observe(now_ms, state == mcla::warp::kStateCinematicZoom)) {
+      MCLA_APP_INFO("MCLA_KI035_WARP_WAIT v=1 state={} request={:08X} type={} req0={} req3={} "
+                    "camera={:08X} class={} ready={} time={} duration={} flags16={:08X} "
+                    "active_index={} active_count={} paused={} complete={}",
+                    state, request, request_type, req0, req3, camera_ptr,
+                    mcla::warp::TransitionClassName(cam.vtable), ready, time, duration,
+                    cam.fields.flags16, cam.active_index, cam.active_count, paused ? 1 : 0,
+                    ok && cam.read ? 1 : 0);
+    }
+  }
+
+  const uint64_t limit_ms = WarpWatchdogLimitMs();
+  if (!limit_ms) {
+    return;
+  }
+  mcla::warp::Sample sample;
+  sample.now_ms = now_ms;
+  sample.complete = ok && cam.read;
+  sample.state = state;
+  sample.request = request;
+  sample.camera = camera_ptr;
+  sample.time_known = cam.time.known;
+  sample.time = cam.time.value;
+  sample.paused = paused;
+  const uint64_t frozen_before = warp_tracker.watchdog.frozen_since_ms();
+  if (warp_tracker.watchdog.Observe(sample, limit_ms) != mcla::warp::Verdict::kFire) {
+    return;
+  }
+  const uint64_t frozen_ms = now_ms - frozen_before;
+  // The stock exit of state 20 (0x8221C1C4..0x8221C1E0): *(0x8286D8F0)+293 = 0,
+  // warper+276 = 1, warper+288 = 29. Every address is checked first.
+  bool exit_ok = true;
+  const uint32_t global = read.U32(kExitGlobalPtr, exit_ok);
+  const bool writable = exit_ok && global && read.Writable(global + kExitGlobalByte, 1) &&
+                        read.Writable(warper + kWarperExitFlag, 1) &&
+                        read.Writable(warper + kWarperState, 4) &&
+                        read.U32(warper + kWarperState, exit_ok) ==
+                            mcla::warp::kStateCinematicZoom &&
+                        exit_ok;
+  REXLOG_CAT_WARN(::mcla::logging::App(),
+                  "MCLA_KI035_WARP_WATCHDOG v=1 action={} limit_s={} frozen_ms={} "
+                  "request={:08X} type={} req0={} req3={} camera={:08X} class={} ready={} "
+                  "time={} duration={} flags16={:08X} active_index={} active_count={} "
+                  "global={:08X}",
+                  writable ? "finish-state20" : "refused-unwritable", limit_ms / 1000,
+                  frozen_ms, request, request_type, req0, req3, camera_ptr,
+                  mcla::warp::TransitionClassName(cam.vtable), ready, time, duration,
+                  cam.fields.flags16, cam.active_index, cam.active_count, global);
+  if (!writable) {
+    return;
+  }
+  REX_STORE_U8(global + kExitGlobalByte, 0);
+  REX_STORE_U8(warper + kWarperExitFlag, 1);
+  REX_STORE_U32(warper + kWarperState, kWarperIdle);
+  warp_watchdog_fires.fetch_add(1);
+}
+
+}  // namespace
+
 REX_EXTERN(sub_8221BE98) {
   const uint32_t warper = ctx.r3.u32;
-  if (!ProbeOn() && !WatchdogOn()) {
+  const bool warp_on = WarpProbeOn() || WarpWatchdogLimitMs() != 0;
+  if (!ProbeOn() && !WatchdogOn() && !warp_on) {
     __imp__sub_8221BE98(ctx, base);
     return;
   }
@@ -364,6 +599,9 @@ REX_EXTERN(sub_8221BE98) {
   if (WatchdogOn()) {
     Ki026Watchdog(ctx, base, warper, state);
   }
+  if (warp_on) {
+    WarpObserve(base, warper, before_ok, state_before, state);
+  }
 }
 
 // --- F10 state block ----------------------------------------------------------
@@ -383,6 +621,34 @@ std::string Float(float value) {
   char text[32];
   std::snprintf(text, sizeof(text), "%.9g", static_cast<double>(value));
   return text;
+}
+
+std::string WarpCameraJson(const WarpCamera &cam) {
+  std::ostringstream out;
+  out << "{\"ptr\": " << Hex(cam.ptr) << ", \"read\": " << (cam.read ? "true" : "false")
+      << ", \"vtable\": " << Hex(cam.vtable) << ", \"class\": \""
+      << mcla::warp::TransitionClassName(cam.vtable) << "\""
+      << ", \"fn_ready92\": " << Hex(cam.fn_ready)
+      << ", \"fn_duration592\": " << Hex(cam.fn_duration)
+      << ", \"fn_time608\": " << Hex(cam.fn_time) << ", \"getters\": [\""
+      << mcla::warp::GetterName(mcla::warp::ReadyGetter(cam.fn_ready)) << "\", \""
+      << mcla::warp::GetterName(mcla::warp::DurationGetter(cam.fn_duration)) << "\", \""
+      << mcla::warp::GetterName(mcla::warp::TimeGetter(cam.fn_time)) << "\"]"
+      << ", \"flags16\": " << Hex(cam.fields.flags16)
+      << ", \"f76\": " << Float(cam.fields.f76) << ", \"f80\": " << Float(cam.fields.f80)
+      << ", \"f96\": " << Float(cam.fields.f96)
+      << ", \"b471\": " << static_cast<uint32_t>(cam.fields.b471)
+      << ", \"ready\": " << (cam.ready_known ? (cam.ready ? "1" : "0") : "null")
+      << ", \"duration\": " << (cam.duration.known ? Float(cam.duration.value) : "null")
+      << ", \"time\": " << (cam.time.known ? Float(cam.time.value) : "null")
+      << ", \"exit_due\": "
+      << (cam.time.known && cam.duration.known
+              ? (cam.time.value + mcla::warp::kExitEpsilon < cam.duration.value ? "0" : "1")
+              : "null")
+      << ", \"active_list_read\": " << (cam.list_read ? "true" : "false")
+      << ", \"active_count\": " << cam.active_count
+      << ", \"active_index\": " << cam.active_index << "}";
+  return out.str();
 }
 
 }  // namespace
@@ -420,7 +686,17 @@ std::string MclaKi026StateJson(rex::memory::Memory *memory, uint8_t *base) {
     }
     out << "], \"prestream_frames\": " << read.U32(w + kWarperPrestreamFrames, ok)
         << ", \"prestream_timer\": " << Float(read.F32(w + kWarperPrestreamTimer, ok))
-        << ", \"camera\": " << Hex(read.U32(w + kWarperCamera, ok)) << "}";
+        << ", \"camera\": " << Hex(read.U32(w + kWarperCamera, ok));
+    // KI-035: the camera behind the state-20 wait. Its reads have their own
+    // "read" flag and do not change "complete".
+    const uint32_t camera = read.U32(w + kWarperCamera, ok);
+    out << ", \"camera300\": " << Hex(read.U32(w + kWarperCameraCopy, ok))
+        << ", \"request_camera108\": "
+        << Hex(request ? read.U32(request + kRequestCamera, ok) : 0)
+        << ", \"warp_camera\": " << WarpCameraJson(ReadWarpCamera(read, camera)) << "}";
+    out << ", \"warp_probe\": " << (WarpProbeOn() ? "true" : "false")
+        << ", \"warp_watchdog_limit_s\": " << WarpWatchdogLimitMs() / 1000
+        << ", \"warp_watchdog_fires\": " << warp_watchdog_fires.load();
   }
   if (const uint32_t pm = read.U32(kPauseManagerPtr, ok)) {
     out << ", \"pause_manager\": {\"paused\": " << read.U8(pm + 4, ok)

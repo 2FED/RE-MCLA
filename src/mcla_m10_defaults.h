@@ -34,7 +34,8 @@
 // --mcla_m10_speedup_defaults=false turns the whole set off for a session.
 //
 // kNeverWrittenCvars lists switches this module must not write: diagnostics,
-// switches owned by other host modules, the Vulkan backend, and the SDK hot
+// switches owned by other host modules (also the KI-035 warp probe and
+// watchdog, owner builds only), the Vulkan backend, and the SDK hot
 // blocks (M10 watch step 3, docs/evidence/M10-hot-blocks-host-keys-20261103.md)
 // until an owner A/B accepts them; until then only the owner override keys
 // shared_memory_hot_blocks_shadow/_on set shared_memory_hot_blocks.
@@ -106,7 +107,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 12> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 14> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -119,6 +120,8 @@ inline constexpr std::array<std::string_view, 12> kNeverWrittenCvars = {
     "shared_memory_hot_n",
     "shared_memory_hot_upload_cap_kb",
     "shared_memory_hot_probe_frames",
+    "mcla_warp_probe",
+    "mcla_warp_watchdog_seconds",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {

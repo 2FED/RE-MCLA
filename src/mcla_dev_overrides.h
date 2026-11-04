@@ -37,6 +37,10 @@
 //   (0 = off, 1 = shadow, 2 = on): =true writes 1 or 2, =false changes
 //   nothing, both true is a conflict (neither applied). The other hot-block
 //   cvars (K, N, upload cap, probe frames) need the command line.
+// - mcla_warp_probe (KI-035) is a plain host bool. mcla_warp_watchdog is a
+//   bool convenience key for the integer host cvar mcla_warp_watchdog_seconds
+//   (0 = off): =true writes 15, =false changes nothing. Other limits need the
+//   command line.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
 // non-default value (set by the command line or the config file), and logged
@@ -84,8 +88,10 @@ enum class Key : uint8_t {
   kUploadAhead64,         // M10 step 2: shared_memory_upload_ahead_pages=64
   kHotBlocksShadow,       // M10 step 3: shared_memory_hot_blocks=1 (shadow)
   kHotBlocksOn,           // M10 step 3: shared_memory_hot_blocks=2 (on)
+  kWarpProbe,             // KI-035: warp state / camera logging
+  kWarpWatchdog,          // KI-035: mcla_warp_watchdog_seconds=15
 };
-inline constexpr size_t kKeyCount = 16;
+inline constexpr size_t kKeyCount = 18;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -129,6 +135,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"shared_memory_hot_blocks_shadow", Phase::kGraphicsPlugin, "shared_memory_hot_blocks", "1",
      ""},
     {"shared_memory_hot_blocks_on", Phase::kGraphicsPlugin, "shared_memory_hot_blocks", "2", ""},
+    // KI-035 host init-only cvars (mcla_ki026_probe.cpp), before the guest.
+    {"mcla_warp_probe", Phase::kStartup},
+    {"mcla_warp_watchdog", Phase::kStartup, "mcla_warp_watchdog_seconds", "15", ""},
 }};
 
 // Key pairs that write different values to one integer cvar: both true in one
