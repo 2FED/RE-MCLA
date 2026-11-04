@@ -6,6 +6,7 @@
 
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_texture_budget.h"
 
 #include <rex/cvar.h>
 
@@ -158,6 +159,9 @@ void OnGraphicsPluginLoaded() {
 }
 
 void Mark(std::string_view source) {
+  // M10-007: the same accepted snapshots add an MCLA_VRAM census line (host
+  // video-memory monitor; independent of the SDK split).
+  ::mcla::MarkTextureCacheBudgetCensus(source);
 #if MCLA_HAVE_PERF_SPLIT
   const std::string tag(source);
   rex::graphics::MarkPerfSplit(tag.c_str());

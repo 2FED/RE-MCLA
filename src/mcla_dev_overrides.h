@@ -41,6 +41,9 @@
 //   bool convenience key for the integer host cvar mcla_warp_watchdog_seconds
 //   (0 = off): =true writes 15, =false changes nothing. Other limits need the
 //   command line.
+// - mcla_texture_budget_soft_cap_off=true writes 0 (off) to the host integer
+//   cvar mcla_texture_budget_soft_cap_mb (M10-007 / KI-048 A/B); =false changes
+//   nothing.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
 // non-default value (set by the command line or the config file), and logged
@@ -90,8 +93,9 @@ enum class Key : uint8_t {
   kHotBlocksOn,           // M10 step 3: shared_memory_hot_blocks=2 (on)
   kWarpProbe,             // KI-035: warp state / camera logging
   kWarpWatchdog,          // KI-035: mcla_warp_watchdog_seconds=15
+  kTextureSoftCapOff,     // M10-007: mcla_texture_budget_soft_cap_mb=0
 };
-inline constexpr size_t kKeyCount = 18;
+inline constexpr size_t kKeyCount = 19;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -138,6 +142,10 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // KI-035 host init-only cvars (mcla_ki026_probe.cpp), before the guest.
     {"mcla_warp_probe", Phase::kStartup},
     {"mcla_warp_watchdog", Phase::kStartup, "mcla_warp_watchdog_seconds", "15", ""},
+    // M10-007 host init-only cvar (mcla_texture_budget_win.cpp), read at
+    // graphics-plugin load, so the startup phase is early enough.
+    {"mcla_texture_budget_soft_cap_off", Phase::kStartup, "mcla_texture_budget_soft_cap_mb", "0",
+     ""},
 }};
 
 // Key pairs that write different values to one integer cvar: both true in one

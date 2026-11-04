@@ -80,6 +80,11 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         tests/mcla_vulkan_device_select_test.cpp)
     target_include_directories(mcla_vulkan_device_select_test PRIVATE src)
     target_compile_features(mcla_vulkan_device_select_test PRIVATE cxx_std_23)
+    # M10-007 / KI-048: pure soft-cap decision, D3DKMT reader policy and MCLA_VRAM line.
+    add_executable(mcla_vram_census_win_test EXCLUDE_FROM_ALL
+        tests/mcla_vram_census_win_test.cpp)
+    target_include_directories(mcla_vram_census_win_test PRIVATE src)
+    target_compile_features(mcla_vram_census_win_test PRIVATE cxx_std_23)
     add_executable(mcla_wine_path_policy_test EXCLUDE_FROM_ALL
         tests/mcla_wine_path_policy_test.cpp)
     target_include_directories(mcla_wine_path_policy_test PRIVATE src)
@@ -304,6 +309,8 @@ if(WIN32)
     list(APPEND MCLA_SOURCES src/mcla_native_crash_win.cpp)
     list(APPEND MCLA_SOURCES src/mcla_timer_resolution_win.cpp)
     list(APPEND MCLA_SOURCES src/mcla_texture_budget_win.cpp)
+    # M10-007: MCLA_VRAM census D3DKMT perf data (gdi32 entry points at run time).
+    list(APPEND MCLA_SOURCES src/mcla_vram_census_win.cpp)
     # KI-061: launcher GPU choice -> SDK vulkan_device (Vulkan backend only).
     list(APPEND MCLA_SOURCES src/mcla_vulkan_device_win.cpp)
 else()

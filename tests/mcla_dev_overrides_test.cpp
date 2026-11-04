@@ -29,7 +29,12 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 18, "eighteen whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 19, "nineteen whitelisted names");
+  Check(FindKey("mcla_texture_budget_soft_cap_off") == Key::kTextureSoftCapOff,
+        "texture soft cap off key");
+  Check(!FindKey("mcla_texture_budget_soft_cap_mb"), "integer soft cap cvar not whitelisted");
+  Check(!FindKey("mcla_texture_budget_soft_cap_on") && !FindKey("mcla_texture_budget_soft_cap"),
+        "only the off key");
   Check(FindKey("mcla_warp_probe") == Key::kWarpProbe, "warp probe key");
   Check(FindKey("mcla_warp_watchdog") == Key::kWarpWatchdog, "warp watchdog key");
   Check(!FindKey("mcla_warp_watchdog_seconds"), "integer watchdog cvar not whitelisted");
@@ -129,7 +134,7 @@ void TestWhitelist() {
       const Key key = static_cast<Key>(i);
       const bool mapped = key == Key::kUploadAhead16 || key == Key::kUploadAhead64 ||
                           key == Key::kHotBlocksShadow || key == Key::kHotBlocksOn ||
-                          key == Key::kWarpWatchdog;
+                          key == Key::kWarpWatchdog || key == Key::kTextureSoftCapOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -156,6 +161,11 @@ void TestWhitelist() {
               CvarText(Info(Key::kWarpWatchdog), true) == "15" &&
               CvarText(Info(Key::kWarpWatchdog), false).empty(),
           "warp_watchdog=true writes 15 s, false writes nothing");
+    Check(Info(Key::kTextureSoftCapOff).phase == Phase::kStartup &&
+              CvarName(Info(Key::kTextureSoftCapOff)) == "mcla_texture_budget_soft_cap_mb" &&
+              CvarText(Info(Key::kTextureSoftCapOff), true) == "0" &&
+              CvarText(Info(Key::kTextureSoftCapOff), false).empty(),
+          "soft_cap_off=true writes 0 at startup, false writes nothing");
     Check(CvarName(Info(Key::kWarpProbe)) == "mcla_warp_probe" &&
               CvarText(Info(Key::kWarpProbe), true) == "true",
           "warp probe writes its own bool cvar");
@@ -284,7 +294,8 @@ void TestWhitelist() {
                 p.ValueCount() == 16 && p.ignored_lines == 0,
             "l66 arm: every key of l66 (16), nothing ignored");
       // l68: the same arm plus the two KI-035 keys still fits and parses.
-      const std::string l68 = text + "mcla_warp_probe=true\nmcla_warp_watchdog=true\n";
+      const std::string l68 = text + "mcla_warp_probe=true\nmcla_warp_watchdog=true\n" +
+                              "mcla_texture_budget_soft_cap_off=true\n";
       const Parsed q = Parse(l68);
       Check(l68.size() <= mcla::dev_overrides::kMaxBytes && q.status == FileStatus::kParsed &&
                 q.ValueCount() == mcla::dev_overrides::kKeyCount && q.ignored_lines == 0 &&
@@ -317,6 +328,25 @@ void TestWhitelist() {
     Check(NoValues(q) && q.ignored_lines == 2 && q.issues[0].issue == LineIssue::kMalformed &&
               q.issues[1].issue == LineIssue::kMalformed,
           "integer watchdog values are not accepted");
+  }
+  {
+    // The M10-007 / KI-048 owner A/B: cap off versus the build default.
+    const Parsed off = Parse("mcla_texture_budget_soft_cap_off=true\r\n");
+    Check(off.status == FileStatus::kParsed && off.ValueCount() == 1 &&
+              off.Value(Key::kTextureSoftCapOff) == true && off.ignored_lines == 0,
+          "soft cap off arm parses");
+    const Parsed on = Parse("mcla_texture_budget_soft_cap_off=false\n");
+    Check(on.ValueCount() == 1 && on.Value(Key::kTextureSoftCapOff) == false,
+          "soft cap default arm parses");
+    const Parsed integer = Parse("mcla_texture_budget_soft_cap_mb=0\n"
+                                 "mcla_texture_budget_soft_cap_off=0\n");
+    Check(integer.ValueCount() == 0 && integer.ignored_lines == 2 &&
+              integer.issues[0].issue == LineIssue::kMalformed &&
+              integer.issues[1].issue == LineIssue::kMalformed,
+          "integer soft cap values are not accepted");
+    const Parsed name = Parse("mcla_texture_budget_soft_cap_mb=true\n");
+    Check(name.ValueCount() == 0 && name.issues[0].issue == LineIssue::kUnknownName,
+          "the integer cvar name is not a key");
   }
   {
     const Parsed p = Parse("prewarm_seed_store=false\n");
