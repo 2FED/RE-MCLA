@@ -184,3 +184,7 @@ Note: l48 expires 2026-11-29 and l49 2026-11-30.
 - Benign machine-code and UI-text matches in the path scan (check 8).
 - The clone came from the local committed `main`; the SDK and all submodules from GitHub.
   Output is not bit-identical across checkout paths.
+
+## Owner signature (2026-11-05)
+
+- The owner ran `private/l70-volunteer-prepare.ps1`: V2 ticket (host `146FBBB5...`, capabilities 1080p,1440p,unlocked, created 1793897204), 7 entries, signed `l70-active-builds.txt` (issued 1793897204), staging `private/l70-volunteer`. The script's step 5 failed because the lease probe binary had been removed by the storage cleanup; the primary rebuilt the probe and ran steps 5-6: `SIGNED_LEASES_VERIFIED entries=7`, volunteer audit 195 checks / 0 findings, receipt capabilities correct. Publication awaits the owner's "publish l70".

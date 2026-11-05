@@ -60,3 +60,7 @@ l67-build, l68-build, l68-host-build, l68-vram-build, l65-src, l67-src, l34-src,
 - Clean clones: re-clone at the recorded HEAD. l43, l45, l46, l48, l49 and l52 are on origin/main. **l56-src (85128b6) is recoverable only from local main until main is pushed.**
 - Worktrees: `git worktree add` from the kept branch refs (or daa1ae5 for l47).
 - Staging fixtures: rerun `scripts\Test-MclaInternalLauncherStaging.ps1`. Temp and scratch entries: no recovery needed (temporary). Raw content was not hashed or archived. That was acceptable because none of it was evidence.
+
+## Correction (2026-11-05 evening)
+
+- One live dependency was removed with the pre-M9 lanes: `private/l35-launcher-build/mcla_build_lease_probe_win.exe`, which every `l*-volunteer-prepare.ps1` calls in its step 5 (signed-list verification). The owner's l70 signing run stopped there after ticket, entries, signed list and staging were already written. Recovery: the probe is a CMake target (`mcla_build_lease_probe_win`, EXCLUDE_FROM_ALL); it was rebuilt into `private/gate-host-build/` and steps 5 and 6 were run by hand (`SIGNED_LEASES_VERIFIED entries=7`; volunteer audit 195 checks, 0 findings; receipt capabilities 1080p,1440p,unlocked). Future prepare scripts must reference `private/gate-host-build/mcla_build_lease_probe_win.exe` (or build the target first). Lesson for the maintenance rule: scripts under `private/` are part of a build's dependency closure; grep them for paths before deleting a folder.
