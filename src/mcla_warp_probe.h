@@ -189,6 +189,120 @@ constexpr Value Time(Getter getter, const CameraFields &fields) {
 inline constexpr uint32_t kStateCinematicZoom = 20;  // loc_8221C120
 inline constexpr uint32_t kStateIdle = 29;
 
+// --- finish-race fix (KI-035 root cause) -------------------------------------
+// docs/evidence/M10-l68-pc-ab-ki035-root-cause-20261105.md part 2 and
+// docs/evidence/M10-ki035-finish-race-fix-20261105.md. Citations are
+// generated/default/mcla_recomp.8.cpp.
+//
+// Each UI frame updates the transition list (sub_82221DB0) before the warper
+// (sub_8221BE98). State 20 exits only while the camera is ready and
+// time + dt + 0.0001 >= duration with the *current* dt. When dt grows on the
+// last frame of the zoom-in, the camera finishes itself first (SetFinished
+// clears ready, the stop path resets time) and state 20 never exits.
+//
+// The warper's camera-finished callback sub_8221B8C8 (r3 = warper, r4 = event
+// source, r5 = finished transition) proceeds only when
+//   0x8221B8DC..E0  lwz r11,256(r31); cmplw cr6,r11,r4    warper+256 == r4
+//   0x8221B8E8..EC  lwz r11,68(r31);  cmplwi cr6,r11,0    request != 0
+//   0x8221B8F4..F8  lwz r11,108(r11); cmplw cr6,r5,r11    r5 == request+108
+// then clears warper+300 only when r5 == warper+300 (0x8221B900..0x8221B924),
+// calls the finalise sub_8221B790 only when warper+276 != 0 (0x8221B984..94)
+// and always sets warper+273 = 1 (0x8221B998..9C).
+//
+// The fix: when that callback arrives for the warper's own camera while the
+// warper is still in state 20, perform the state-20 handler's own exit first
+// (0x8221C1C8..0x8221C1DC: lis r11,-32121; li r10,29; lwz r11,-10000(r11);
+// stb r26(=0),293(r11); stb r28(=1),276(r31); stw r10,288(r31)), then run the
+// original callback, which now finalises exactly as on a healthy trip.
+inline constexpr uint32_t kFinishCallback = 0x8221B8C8u;
+inline constexpr uint32_t kWarperEventSource = 256;  // compared with r4
+inline constexpr uint32_t kWarperRequestField = 68;
+inline constexpr uint32_t kRequestCameraField = 108;  // compared with r5
+inline constexpr uint32_t kWarperCameraField = 296;   // the state-20 wait camera
+inline constexpr uint32_t kWarperCameraCopyField = 300;
+inline constexpr uint32_t kWarperFinishFlagField = 276;
+inline constexpr uint32_t kWarperNotifiedField = 273;
+inline constexpr uint32_t kWarperStateField = 288;
+// lis r11,-32121; lwz r11,-10000(r11)
+inline constexpr uint32_t kExitGlobalPointer =
+    static_cast<uint32_t>(-32121 * 65536) + static_cast<uint32_t>(-10000);
+inline constexpr uint32_t kExitGlobalByteField = 293;
+inline constexpr uint8_t kExitGlobalByteValue = 0;  // stb r26 (prologue li r26,0)
+inline constexpr uint8_t kExitFinishFlagValue = 1;  // stb r28 (prologue li r28,1)
+inline constexpr uint32_t kExitStateValue = kStateIdle;  // li r10,29
+static_assert(kExitGlobalPointer == 0x8286D8F0u);
+
+// What the callback hook reads before the original runs.
+struct FinishSample {
+  bool enabled = true;        // mcla_warp_finish_fix
+  bool complete = false;      // every guest read succeeded
+  bool global_warper = false; // r3 == *(0x8286D8D4) + 0x51240
+  uint32_t state = 0;         // warper+288
+  uint32_t request = 0;       // warper+68
+  uint32_t camera = 0;        // r5
+  bool source_match = false;          // warper+256 == r4
+  bool request_camera_match = false;  // r5 == request+108
+  bool camera_copy_match = false;     // r5 == warper+300
+  uint8_t req0 = 0;   // request+0 (the state-20 wait needs it)
+  uint8_t req3 = 0;   // request+3 (the state-20 wait needs it)
+  bool writable = false;  // the three exit addresses are writable
+};
+
+enum class FinishAction : uint8_t {
+  kPassThrough,        // run the original unchanged, nothing logged as a race
+  kFinish,             // perform the state-20 exit, then run the original
+  kSkipRequestPending, // matched in state 20 but req+0/req+3 not set: pass through
+  kRefusedUnwritable,  // matched but an exit address is not writable: pass through
+};
+
+constexpr const char *FinishActionName(FinishAction action) {
+  switch (action) {
+    case FinishAction::kPassThrough:
+      return "pass";
+    case FinishAction::kFinish:
+      return "finish-state20";
+    case FinishAction::kSkipRequestPending:
+      return "skip-request-pending";
+    case FinishAction::kRefusedUnwritable:
+      return "refused-unwritable";
+  }
+  return "unknown";
+}
+
+// True when the original callback would act on this notification (its own
+// three compares) and the camera is also the one the warper still holds.
+constexpr bool FinishMatched(const FinishSample &s) {
+  return s.request != 0 && s.camera != 0 && s.source_match && s.request_camera_match &&
+         s.camera_copy_match;
+}
+
+constexpr FinishAction DecideFinish(const FinishSample &s) {
+  if (!s.enabled || !s.complete || !s.global_warper || s.state != kStateCinematicZoom ||
+      !FinishMatched(s)) {
+    return FinishAction::kPassThrough;
+  }
+  // The state-20 handler waits for req+3 and req+0 before it looks at the
+  // camera (0x8221C15C..0x8221C180); never skip that wait.
+  if (!s.req0 || !s.req3) {
+    return FinishAction::kSkipRequestPending;
+  }
+  if (!s.writable) {
+    return FinishAction::kRefusedUnwritable;
+  }
+  return FinishAction::kFinish;
+}
+
+// The state-20 compare (0x8221C1B0..0x8221C1C0) with float rounding as the
+// generated code does it: exit when float(float(time + dt) + K) >= duration.
+constexpr bool State20ExitDue(float time, float dt, float duration) {
+  const float sum = static_cast<float>(time + dt);
+  return !(static_cast<float>(sum + kExitEpsilon) < duration);
+}
+
+// Probe log of every callback entry (--mcla_warp_probe), at most this many
+// per process.
+inline constexpr uint32_t kMaxFinishNotifyLines = 2000;
+
 // --- watchdog ---------------------------------------------------------------
 // One sample per mcWarper::Update call, taken after the stock update.
 struct Sample {

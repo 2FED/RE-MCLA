@@ -153,6 +153,10 @@ void TestTable() {
   Check(IsNeverWritten("mcla_warp_probe") && IsNeverWritten("mcla_warp_watchdog_seconds") &&
             Find("mcla_warp_probe") == nullptr && Find("mcla_warp_watchdog_seconds") == nullptr,
         "KI-035 warp probe and watchdog are never volunteer defaults");
+  Check(IsNeverWritten("mcla_warp_finish_fix") &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kWarpFinishFixOff))) &&
+            Find("mcla_warp_finish_fix") == nullptr,
+        "the KI-035 finish-race fix cvar is never written by the M10 defaults");
   Check(IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kTextureSoftCapOff))) &&
             Find("mcla_texture_budget_soft_cap_mb") == nullptr,
         "the M10-007 soft cap is never written by the M10 defaults");

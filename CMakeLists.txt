@@ -70,6 +70,10 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
         target_compile_features(mcla_${m9_hook_test}_test PRIVATE cxx_std_23)
     endforeach()
+    # KI-035 finish-race fix: the warp test checks the hook constants against
+    # the generated callback and state-20 exit it mirrors.
+    target_compile_definitions(mcla_warp_probe_test PRIVATE
+        MCLA_WARP_GENERATED_RECOMP8="${CMAKE_CURRENT_SOURCE_DIR}/generated/default/mcla_recomp.8.cpp")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)

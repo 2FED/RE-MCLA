@@ -25,6 +25,13 @@
 // camera to the F10 block, default-off warp state logging (--mcla_warp_probe)
 // and a default-off state-20 watchdog (--mcla_warp_watchdog_seconds). Their
 // decisions are pure and unit-tested (mcla_warp_probe.h).
+//
+// KI-035 root cause (docs/evidence/M10-ki035-finish-race-fix-20261105.md): the
+// warper's camera-finished callback sub_8221B8C8 can arrive while the warper
+// is still in state 20 (a frame-time race in the state-20 exit check); the
+// warp then never finishes. --mcla_warp_finish_fix (default on, init-only)
+// performs the state-20 handler's own exit at the entry of that callback in
+// exactly that case, then runs the original callback.
 
 #include "mcla_ki026_probe.h"
 
@@ -60,6 +67,11 @@ REXCVAR_DEFINE_INT32(mcla_warp_watchdog_seconds, 0, "MCLA",
     "Finish a cinematic warp left in state 20 with a frozen camera after this "
     "many seconds (KI-035; 0 = off)")
     .range(0, 600)
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(mcla_warp_finish_fix, true, "MCLA",
+    "Finish a cinematic warp whose camera completed while the warper was still "
+    "in state 20 (KI-035 frame-time race)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace {
@@ -127,6 +139,28 @@ uint64_t WarpWatchdogLimitMs() {
 }
 
 std::atomic<uint32_t> warp_watchdog_fires{0};
+
+bool WarpFinishFixOn() {
+  static const bool on = REXCVAR_GET(mcla_warp_finish_fix);
+  return on;
+}
+
+std::atomic<uint32_t> warp_finish_fixes{0};    // state-20 exits done by the fix
+std::atomic<uint32_t> warp_finish_races{0};    // race notifications seen (any action)
+
+// The dt of the last mcWarper::Update call (f1 at entry, every call) and the
+// last state-20 sample after the stock update (warp probe or watchdog on).
+// Diagnostics only: written on the UI thread, read by the callback hook.
+std::atomic<float> last_update_dt{-1.0f};
+struct LastState20 {
+  std::atomic<bool> valid{false};
+  std::atomic<float> time{-1.0f};
+  std::atomic<float> duration{-1.0f};
+  std::atomic<float> dt{-1.0f};
+  std::atomic<int> ready{-1};
+  std::atomic<uint64_t> at_ms{0};
+};
+LastState20 last_state20;
 
 // Checked guest reads. A read is allowed only when the address lies inside a
 // guest heap and the page protection includes read access. Spans are at most
@@ -356,7 +390,8 @@ MCLA_KI026_EDGE(sub_82207A48, "Script_Warper_SetPauseCameraAtEndOfWarp")
 MCLA_KI026_EDGE(sub_8221A440, "Warper_BeginWarp")
 MCLA_KI026_EDGE(sub_8221B790, "Warper_Finish")
 MCLA_KI026_EDGE(sub_8221BB90, "Warper_Abort")
-MCLA_KI026_EDGE(sub_8221B8C8, "Warper_OnCameraFinished")
+// sub_8221B8C8 (Warper_OnCameraFinished) has its own hook below (KI-035 fix);
+// it logs the same edge line.
 // All 17 direct callers of the camera-apply function (the v2 race-back probe
 // covered six); lr identifies the call site, r4 the camera mode.
 MCLA_KI026_EDGE(sub_822B0F10, "PlayerCamera_Apply")
@@ -470,7 +505,7 @@ uint64_t SteadyMs() {
 }
 
 void WarpObserve(uint8_t *base, uint32_t warper, bool before_ok, uint32_t state_before,
-                 uint32_t state) {
+                 uint32_t state, float dt) {
   const GuestReader read = HookReader(base);
   bool ok = true;
   const uint32_t request = read.U32(warper + kWarperRequest, ok);
@@ -490,6 +525,18 @@ void WarpObserve(uint8_t *base, uint32_t warper, bool before_ok, uint32_t state_
   const float time = cam.time.known ? cam.time.value : -1.0f;
   const float duration = cam.duration.known ? cam.duration.value : -1.0f;
   const int ready = cam.ready_known ? (cam.ready ? 1 : 0) : -1;
+
+  if (state == mcla::warp::kStateCinematicZoom && ok && cam.read) {
+    // The last state-20 sample the stock exit check did not leave: if the
+    // camera's finish notification arrives next, this shows whether the
+    // race (time + dt + K < duration, then a larger dt) caused it.
+    last_state20.time.store(time, std::memory_order_relaxed);
+    last_state20.duration.store(duration, std::memory_order_relaxed);
+    last_state20.dt.store(dt, std::memory_order_relaxed);
+    last_state20.ready.store(ready, std::memory_order_relaxed);
+    last_state20.at_ms.store(now_ms, std::memory_order_relaxed);
+    last_state20.valid.store(true, std::memory_order_relaxed);
+  }
 
   if (WarpProbeOn()) {
     if (before_ok && state != state_before &&
@@ -565,6 +612,9 @@ void WarpObserve(uint8_t *base, uint32_t warper, bool before_ok, uint32_t state_
 
 REX_EXTERN(sub_8221BE98) {
   const uint32_t warper = ctx.r3.u32;
+  // f1 = dt (fmr f31,f1 in the prologue); kept for the KI-035 race lines.
+  const float dt = static_cast<float>(ctx.f1.f64);
+  last_update_dt.store(dt, std::memory_order_relaxed);
   const bool warp_on = WarpProbeOn() || WarpWatchdogLimitMs() != 0;
   if (!ProbeOn() && !WatchdogOn() && !warp_on) {
     __imp__sub_8221BE98(ctx, base);
@@ -600,8 +650,158 @@ REX_EXTERN(sub_8221BE98) {
     Ki026Watchdog(ctx, base, warper, state);
   }
   if (warp_on) {
-    WarpObserve(base, warper, before_ok, state_before, state);
+    WarpObserve(base, warper, before_ok, state_before, state, dt);
   }
+}
+
+// --- KI-035 fix: camera-finished callback during state 20 --------------------
+// sub_8221B8C8 (r3 = warper, r4 = event source, r5 = finished transition). The
+// decision is pure (mcla::warp::DecideFinish, unit-tested); this hook reads
+// the inputs through GuestReader, performs the state-20 handler's own three
+// exit stores when told to, and always runs the original afterwards. No other
+// guest code runs here.
+namespace {
+
+std::atomic<uint32_t> finish_notify_lines{0};
+constexpr uint32_t kMaxFinishRaceLines = 200;
+
+}  // namespace
+
+REX_EXTERN(sub_8221B8C8) {
+  if (ProbeOn()) {
+    MCLA_APP_INFO("MCLA_KI026_EDGE v=1 fn=Warper_OnCameraFinished"
+                  " r3={:08X} r4={:08X} r5={:08X} f1={} lr={:08X}",
+                  ctx.r3.u32, ctx.r4.u32, ctx.r5.u32, ctx.f1.f64,
+                  static_cast<uint32_t>(ctx.lr));
+  }
+  const bool fix_on = WarpFinishFixOn();
+  const bool probe_on = WarpProbeOn();
+  if (!fix_on && !probe_on) {
+    __imp__sub_8221B8C8(ctx, base);
+    return;
+  }
+  namespace warp = mcla::warp;
+  const uint32_t warper = ctx.r3.u32;
+  const uint32_t source = ctx.r4.u32;
+  const uint32_t camera = ctx.r5.u32;
+  const GuestReader read = HookReader(base);
+  bool ok = true;
+  warp::FinishSample s;
+  s.enabled = fix_on;
+  const uint32_t ui = read.U32(kUiLogicPtr, ok);
+  s.global_warper = ui != 0 && warper == ui + kWarperOffset;
+  s.state = read.U32(warper + warp::kWarperStateField, ok);
+  s.request = read.U32(warper + warp::kWarperRequestField, ok);
+  const uint32_t event_source = read.U32(warper + warp::kWarperEventSource, ok);
+  const uint32_t camera_copy = read.U32(warper + warp::kWarperCameraCopyField, ok);
+  const uint32_t wait_camera = read.U32(warper + warp::kWarperCameraField, ok);
+  const uint32_t exit_flag = read.U8(warper + warp::kWarperFinishFlagField, ok);
+  uint32_t request_camera = 0;
+  uint32_t request_type = 0;
+  uint32_t req7 = 0;
+  if (s.request) {
+    request_camera = read.U32(s.request + warp::kRequestCameraField, ok);
+    request_type = read.U32(s.request + 12, ok);
+    s.req0 = static_cast<uint8_t>(read.U8(s.request + 0, ok));
+    s.req3 = static_cast<uint8_t>(read.U8(s.request + 3, ok));
+    req7 = read.U8(s.request + 7, ok);
+  }
+  s.camera = camera;
+  s.source_match = event_source == source;
+  s.request_camera_match = s.request != 0 && camera == request_camera;
+  s.camera_copy_match = camera == camera_copy;
+  s.complete = ok;
+  uint32_t global = 0;
+  if (s.complete && s.state == warp::kStateCinematicZoom && warp::FinishMatched(s)) {
+    bool global_ok = true;
+    global = read.U32(warp::kExitGlobalPointer, global_ok);
+    s.writable = global_ok && global != 0 &&
+                 read.Writable(global + warp::kExitGlobalByteField, 1) &&
+                 read.Writable(warper + warp::kWarperFinishFlagField, 1) &&
+                 read.Writable(warper + warp::kWarperStateField, 4);
+  }
+  const warp::FinishAction action = warp::DecideFinish(s);
+  warp::FinishSample as_if_on = s;
+  as_if_on.enabled = true;
+  const warp::FinishAction would = warp::DecideFinish(as_if_on);
+  const bool race = would != warp::FinishAction::kPassThrough;
+
+  if (race || probe_on) {
+    const float dt_update = last_update_dt.load(std::memory_order_relaxed);
+    const bool last_valid = last_state20.valid.load(std::memory_order_relaxed);
+    const float last_time = last_state20.time.load(std::memory_order_relaxed);
+    const float last_duration = last_state20.duration.load(std::memory_order_relaxed);
+    const float last_dt = last_state20.dt.load(std::memory_order_relaxed);
+    const int last_ready = last_state20.ready.load(std::memory_order_relaxed);
+    const uint64_t now_ms = SteadyMs();
+    const uint64_t last_at = last_state20.at_ms.load(std::memory_order_relaxed);
+    const int64_t last_age_ms =
+        last_valid && now_ms >= last_at ? static_cast<int64_t>(now_ms - last_at) : -1;
+    const int last_due =
+        last_valid && last_time >= 0.0f && last_duration >= 0.0f
+            ? (warp::State20ExitDue(last_time, last_dt, last_duration) ? 1 : 0)
+            : -1;
+    const WarpCamera cam = ReadWarpCamera(read, camera);
+    const float time = cam.time.known ? cam.time.value : -1.0f;
+    const float duration = cam.duration.known ? cam.duration.value : -1.0f;
+    const int ready = cam.ready_known ? (cam.ready ? 1 : 0) : -1;
+    const char *action_name =
+        !fix_on && race ? "observed-fix-off" : warp::FinishActionName(action);
+    if (probe_on && finish_notify_lines.fetch_add(1) < warp::kMaxFinishNotifyLines) {
+      MCLA_APP_INFO("MCLA_KI035_FINISH_NOTIFY v=1 action={} warper={:08X} global_warper={} "
+                    "state={} request={:08X} type={} req0={} req3={} req7={} source={:08X} "
+                    "source_match={} camera={:08X} class={} request_camera_match={} "
+                    "camera_copy_match={} wait_camera={:08X} exit276={} ready={} time={} "
+                    "duration={} flags16={:08X} active_index={} active_count={} dt_update={} "
+                    "last20_time={} last20_dt={} last20_duration={} last20_ready={} "
+                    "last20_due={} last20_age_ms={} complete={}",
+                    action_name, warper, s.global_warper ? 1 : 0, s.state, s.request,
+                    request_type, s.req0, s.req3, req7, source, s.source_match ? 1 : 0, camera,
+                    warp::TransitionClassName(cam.vtable), s.request_camera_match ? 1 : 0,
+                    s.camera_copy_match ? 1 : 0, wait_camera, exit_flag, ready, time, duration,
+                    cam.fields.flags16, cam.active_index, cam.active_count, dt_update, last_time,
+                    last_dt, last_duration, last_ready, last_due, last_age_ms,
+                    s.complete ? 1 : 0);
+    }
+    if (race && warp_finish_races.fetch_add(1) < kMaxFinishRaceLines) {
+      REXLOG_CAT_WARN(::mcla::logging::App(),
+                      "MCLA_KI035_FINISH_RACE v=1 action={} fix={} state={} request={:08X} "
+                      "type={} req0={} req3={} req7={} camera={:08X} class={} ready={} time={} "
+                      "duration={} flags16={:08X} active_index={} active_count={} exit276={} "
+                      "global={:08X} dt_update={} last20_time={} last20_dt={} "
+                      "last20_duration={} last20_ready={} last20_due={} last20_age_ms={}",
+                      action_name, fix_on ? 1 : 0, s.state, s.request, request_type, s.req0,
+                      s.req3, req7, camera, warp::TransitionClassName(cam.vtable), ready, time,
+                      duration, cam.fields.flags16, cam.active_index, cam.active_count,
+                      exit_flag, global, dt_update, last_time, last_dt, last_duration,
+                      last_ready, last_due, last_age_ms);
+    }
+  }
+
+  if (action != warp::FinishAction::kFinish) {
+    __imp__sub_8221B8C8(ctx, base);
+    return;
+  }
+  // The state-20 handler's own exit (0x8221C1C8..0x8221C1DC), every address
+  // checked writable above: *(0x8286D8F0)+293 = 0, warper+276 = 1,
+  // warper+288 = 29. The original callback then sees +276 = 1 and calls the
+  // finalise sub_8221B790, as on a healthy trip.
+  REX_STORE_U8(global + warp::kExitGlobalByteField, warp::kExitGlobalByteValue);
+  REX_STORE_U8(warper + warp::kWarperFinishFlagField, warp::kExitFinishFlagValue);
+  REX_STORE_U32(warper + warp::kWarperStateField, warp::kExitStateValue);
+  warp_finish_fixes.fetch_add(1);
+  __imp__sub_8221B8C8(ctx, base);
+  bool after_ok = true;
+  const GuestReader after = HookReader(base);
+  const uint32_t after_state = after.U32(warper + warp::kWarperStateField, after_ok);
+  const uint32_t after_request = after.U32(warper + warp::kWarperRequestField, after_ok);
+  const uint32_t after_exit = after.U8(warper + warp::kWarperFinishFlagField, after_ok);
+  const uint32_t after_notified = after.U8(warper + warp::kWarperNotifiedField, after_ok);
+  const uint32_t after_copy = after.U32(warper + warp::kWarperCameraCopyField, after_ok);
+  MCLA_APP_INFO("MCLA_KI035_FINISH_RACE_DONE v=1 state={} request={:08X} exit276={} "
+                "notified273={} camera300={:08X} complete={}",
+                after_state, after_request, after_exit, after_notified, after_copy,
+                after_ok ? 1 : 0);
 }
 
 // --- F10 state block ----------------------------------------------------------
@@ -696,7 +896,10 @@ std::string MclaKi026StateJson(rex::memory::Memory *memory, uint8_t *base) {
         << ", \"warp_camera\": " << WarpCameraJson(ReadWarpCamera(read, camera)) << "}";
     out << ", \"warp_probe\": " << (WarpProbeOn() ? "true" : "false")
         << ", \"warp_watchdog_limit_s\": " << WarpWatchdogLimitMs() / 1000
-        << ", \"warp_watchdog_fires\": " << warp_watchdog_fires.load();
+        << ", \"warp_watchdog_fires\": " << warp_watchdog_fires.load()
+        << ", \"warp_finish_fix\": " << (WarpFinishFixOn() ? "true" : "false")
+        << ", \"warp_finish_races\": " << warp_finish_races.load()
+        << ", \"warp_finish_fixes\": " << warp_finish_fixes.load();
   }
   if (const uint32_t pm = read.U32(kPauseManagerPtr, ok)) {
     out << ", \"pause_manager\": {\"paused\": " << read.U8(pm + 4, ok)

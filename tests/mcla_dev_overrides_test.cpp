@@ -29,7 +29,11 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 19, "nineteen whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 20, "twenty whitelisted names");
+  Check(FindKey("mcla_warp_finish_fix_off") == Key::kWarpFinishFixOff,
+        "KI-035 finish-race fix off key");
+  Check(!FindKey("mcla_warp_finish_fix") && !FindKey("mcla_warp_finish_fix_on"),
+        "only the off key for the finish-race fix (default on)");
   Check(FindKey("mcla_texture_budget_soft_cap_off") == Key::kTextureSoftCapOff,
         "texture soft cap off key");
   Check(!FindKey("mcla_texture_budget_soft_cap_mb"), "integer soft cap cvar not whitelisted");
@@ -123,7 +127,8 @@ void TestWhitelist() {
             mcla::dev_overrides::Info(Key::kHotBlocksOn).phase == Phase::kGraphicsPlugin,
         "hot blocks after the plugin registered shared_memory_hot_blocks");
   Check(mcla::dev_overrides::Info(Key::kWarpProbe).phase == Phase::kStartup &&
-            mcla::dev_overrides::Info(Key::kWarpWatchdog).phase == Phase::kStartup,
+            mcla::dev_overrides::Info(Key::kWarpWatchdog).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kWarpFinishFixOff).phase == Phase::kStartup,
         "warp keys at startup (host init-only cvars, before the guest)");
   {
     using mcla::dev_overrides::CvarName;
@@ -134,7 +139,8 @@ void TestWhitelist() {
       const Key key = static_cast<Key>(i);
       const bool mapped = key == Key::kUploadAhead16 || key == Key::kUploadAhead64 ||
                           key == Key::kHotBlocksShadow || key == Key::kHotBlocksOn ||
-                          key == Key::kWarpWatchdog || key == Key::kTextureSoftCapOff;
+                          key == Key::kWarpWatchdog || key == Key::kTextureSoftCapOff ||
+                          key == Key::kWarpFinishFixOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -166,6 +172,10 @@ void TestWhitelist() {
               CvarText(Info(Key::kTextureSoftCapOff), true) == "0" &&
               CvarText(Info(Key::kTextureSoftCapOff), false).empty(),
           "soft_cap_off=true writes 0 at startup, false writes nothing");
+    Check(CvarName(Info(Key::kWarpFinishFixOff)) == "mcla_warp_finish_fix" &&
+              CvarText(Info(Key::kWarpFinishFixOff), true) == "false" &&
+              CvarText(Info(Key::kWarpFinishFixOff), false).empty(),
+          "warp_finish_fix_off=true writes false, false writes nothing");
     Check(CvarName(Info(Key::kWarpProbe)) == "mcla_warp_probe" &&
               CvarText(Info(Key::kWarpProbe), true) == "true",
           "warp probe writes its own bool cvar");
@@ -298,9 +308,16 @@ void TestWhitelist() {
                               "mcla_texture_budget_soft_cap_off=true\n";
       const Parsed q = Parse(l68);
       Check(l68.size() <= mcla::dev_overrides::kMaxBytes && q.status == FileStatus::kParsed &&
-                q.ValueCount() == mcla::dev_overrides::kKeyCount && q.ignored_lines == 0 &&
+                q.ValueCount() == 19 && q.ignored_lines == 0 &&
                 q.Value(Key::kWarpProbe) == true && q.Value(Key::kWarpWatchdog) == true,
-            "l68 arm: every key, nothing ignored");
+            "l68 arm: every l68 key (19), nothing ignored");
+      // l69: the l68 arm plus the finish-race fix off key: every key, still fits.
+      const std::string l69 = l68 + "mcla_warp_finish_fix_off=true\n";
+      const Parsed r = Parse(l69);
+      Check(l69.size() <= mcla::dev_overrides::kMaxBytes && r.status == FileStatus::kParsed &&
+                r.ValueCount() == mcla::dev_overrides::kKeyCount && r.ignored_lines == 0 &&
+                r.Value(Key::kWarpFinishFixOff) == true,
+            "l69 arm: every key, nothing ignored");
       Check(p.Value(Key::kHotBlocksShadow) == (arm[0][0] == 't') &&
                 p.Value(Key::kHotBlocksOn) == (arm[1][0] == 't') &&
                 p.Value(Key::kUploadAhead16) == true && p.Value(Key::kWatchCensus) == true,
@@ -328,6 +345,19 @@ void TestWhitelist() {
     Check(NoValues(q) && q.ignored_lines == 2 && q.issues[0].issue == LineIssue::kMalformed &&
               q.issues[1].issue == LineIssue::kMalformed,
           "integer watchdog values are not accepted");
+  }
+  {
+    // The KI-035 finish-race fix A/B: fix (default) versus fix-off.
+    const Parsed off = Parse("mcla_warp_finish_fix_off=true\r\nmcla_warp_probe=true\r\n");
+    Check(off.status == FileStatus::kParsed && off.ValueCount() == 2 &&
+              off.Value(Key::kWarpFinishFixOff) == true && off.Value(Key::kWarpProbe) == true,
+          "fix-off arm parses");
+    const Parsed on = Parse("mcla_warp_finish_fix_off=false\n");
+    Check(on.ValueCount() == 1 && on.Value(Key::kWarpFinishFixOff) == false,
+          "fix arm (explicit default) parses");
+    const Parsed cvar = Parse("mcla_warp_finish_fix=false\n");
+    Check(cvar.ValueCount() == 0 && cvar.issues[0].issue == LineIssue::kUnknownName,
+          "the cvar name itself is not a key");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.

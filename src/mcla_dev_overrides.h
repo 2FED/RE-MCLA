@@ -41,6 +41,9 @@
 //   bool convenience key for the integer host cvar mcla_warp_watchdog_seconds
 //   (0 = off): =true writes 15, =false changes nothing. Other limits need the
 //   command line.
+// - mcla_warp_finish_fix_off=true writes false to the host bool cvar
+//   mcla_warp_finish_fix (KI-035 finish-race fix, default on) for the A/B
+//   control arm; =false changes nothing.
 // - mcla_texture_budget_soft_cap_off=true writes 0 (off) to the host integer
 //   cvar mcla_texture_budget_soft_cap_mb (M10-007 / KI-048 A/B); =false changes
 //   nothing.
@@ -94,8 +97,9 @@ enum class Key : uint8_t {
   kWarpProbe,             // KI-035: warp state / camera logging
   kWarpWatchdog,          // KI-035: mcla_warp_watchdog_seconds=15
   kTextureSoftCapOff,     // M10-007: mcla_texture_budget_soft_cap_mb=0
+  kWarpFinishFixOff,      // KI-035 fix A/B: mcla_warp_finish_fix=false
 };
-inline constexpr size_t kKeyCount = 19;
+inline constexpr size_t kKeyCount = 20;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -146,6 +150,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // graphics-plugin load, so the startup phase is early enough.
     {"mcla_texture_budget_soft_cap_off", Phase::kStartup, "mcla_texture_budget_soft_cap_mb", "0",
      ""},
+    // KI-035 finish-race fix (host init-only bool, default true), before the
+    // guest.
+    {"mcla_warp_finish_fix_off", Phase::kStartup, "mcla_warp_finish_fix", "false", ""},
 }};
 
 // Key pairs that write different values to one integer cvar: both true in one
