@@ -1,5 +1,9 @@
 # M10 performance, Steam Deck and stabilisation round 2
 
+## Closure (2026-11-05)
+
+M10 is closed; the final per-task status, the checkpoint entries and the M11 inputs are in [README-AI](../README-AI) section 17b. In short: done M10-001, M10-003 (PC; Deck seeding unverified), M10-008 (KI-035 fixed) and M10-009 (l56, l65, l67, l70); partially done M10-002 (read-back elision), M10-005 (Proton defaults; stable 30 not reached) and M10-007 (1080p measurement and the 2048 MB soft cap; 2160p and budget steering to M11); M10-006 closed as not justified now; M10-004 shelved. Testers run l70 only (`DebugBundle` `31c806d`). The closure regression on l70 is the owner's pending step. The plan below is kept as approved, with the dated result sections added during M10.
+
 Draft for the owner, 2026-10-31. [README-AI](../README-AI) will own the task
 ledger once approved. Inputs: the [M9 priorities](M9-priorities.md) (M10 notes,
 deferred list), the M9 closure checkpoint in README-AI section 17,
