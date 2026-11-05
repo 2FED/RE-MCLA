@@ -196,3 +196,9 @@ l49 2026-11-30.
 - The owner ran `private/l67-volunteer-prepare.ps1`; the signed `l67-active-builds.txt` (issued 1793773100) lists 6 entries (l48, l49, l52, l56, l65, l67 `1B464248...`); staging `private/l67-volunteer` present.
 - With the owner's explicit approval ("publish l67") the primary agent published the list to `DebugBundle` of `2FED/RE-MCLA` (commit `2e6c503`, replacing `d7a6d93`); the raw URL and the contents API returned bytes identical to the signed file.
 - Pre-share check by the owner (PC 30-minute 1080p Unlocked + 720p loop, Deck loop) follows; sharing is the owner's step.
+
+## Owner pre-share check (2026-11-05): PASS
+
+- PC 1080p Unlocked, about 30 minutes on MAIN (2026-11-04): defaults applied (platform=windows, 1 + 5), seeded store, no new errors; ended in the KI-035 garage freeze (pre-existing; diagnosed, see KI-035) with stutters attributed to video-memory over-commit (KI-048). PC 720p Unlocked loop on MAIN (2026-11-05): 3 packages, clean exit, 0 sync failures, about 63 fps in the lap window (health sign only: MAIN save, night, different car).
+- Deck loop (2026-11-05, owner reading of mcla.log): `MCLA m10 defaults (startup): platform=wine applied=2 failed=0` and `(graphics plugin): platform=wine applied=6 failed=0`, i.e. both Proton-only values (disarm bridging, upload-ahead 16) active; the loop felt normal. Session folder to be copied for the M10 closure numbers.
+- l67 cleared for sharing with testers; sharing is the owner's step.
