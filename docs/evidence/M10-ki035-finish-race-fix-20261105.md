@@ -266,3 +266,7 @@ test).
 
 Not used: generated-code reading of a private game image and a small host edit whose validation
 is the build, the unit tests and the generated-code mirror test.
+
+## Owner confirmation (2026-11-05)
+
+- l69 fix arm, PC 1080p Unlocked, session 37a5ea6b: five garage trips after races, no freeze. Hook fires: 17:47:21 (duration 3.040), 18:01:18 (duration 5.244), 18:17:11 (duration 3.045), each with `action=finish-state20` and a `_DONE` line showing state 29 and the request cleared; healthy exits at 17:40:28 (time 2.978 of 2.992) and 18:12:36 (3.024 of 3.026). Three of five trips hit the race in this session. Control arm (fix-off) pending/optional.
