@@ -188,3 +188,7 @@ Note: l48 expires 2026-11-29 and l49 2026-11-30.
 ## Owner signature (2026-11-05)
 
 - The owner ran `private/l70-volunteer-prepare.ps1`: V2 ticket (host `146FBBB5...`, capabilities 1080p,1440p,unlocked, created 1793897204), 7 entries, signed `l70-active-builds.txt` (issued 1793897204), staging `private/l70-volunteer`. The script's step 5 failed because the lease probe binary had been removed by the storage cleanup; the primary rebuilt the probe and ran steps 5-6: `SIGNED_LEASES_VERIFIED entries=7`, volunteer audit 195 checks / 0 findings, receipt capabilities correct. Publication awaits the owner's "publish l70".
+
+## Publication (2026-11-05): l70 only
+
+- Owner decision: withdraw every older build from the published allowance. The owner re-signed a one-entry list (`private/l70-trim-leases-prepare.ps1` from `l70-trim-entries.json`; issued 1793897517; l70 host `146FBBB5...` valid until 1796489204). With the owner's "publish", the primary published it to `DebugBundle` of `2FED/RE-MCLA` (commit `31c806d`, replacing `2e6c503`); raw URL and contents API bytes identical to the signed file. Effect: l48, l49, l52, l56, l65 and l67 are refused at their next online check; testers must move to l70. The seven-entry `l70-active-builds.txt` from the first signing run was never published.
