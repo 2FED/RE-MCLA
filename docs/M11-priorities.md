@@ -215,7 +215,7 @@ KI-072 attribution: the lag episodes were our own builds on the play PC (KI-067 
 ## Build train (2026-11-06 evening)
 
 - l72 (staging): host main `060dbcf` (KI-056 Fix A default off + key; M11-015 kick keys 256/128/1024; 32 keys) + SDK `d08813b`. Owner: album Fix A check, kick A/B (3 arms), carry-over l71 items.
-- l73 (next): SDK `ae35ae3` (M11-016 fetch identity cache, default on, + `d3d12_fetch_identity_verify`) cherry-picked onto `mcla/m11-content-unmount`, with dev keys `fetch_identity_off` / `fetch_identity_verify`; owner A/B off / on / on+verify on the same route; watch liveries/vinyls/album for stale textures; `tex_memo_mismatch` must stay 0. Then M11-017 ThinLTO+PGO.
+- l73 (staging): host main `1dec761` (39 keys: fetch_identity_off/verify, readback_steady_exempt, 4 XMA keys; arm limit 2 KiB) + SDK `4a3aea1` (`mcla/m11-xma-doubling` = d08813b + ae35ae3 M11-016 fetch identity cache [default on] + e412c5c M11-007a steady-key exemption [default off] + 4a3aea1 KI-071 XMA fixes [default off]); install `private/l73-sdk-install`. Owner A/Bs: steady (base vs steady on South Central Tour + KI-047 livery routine), fetch (fetch-off vs base, fetch-verify), voice (base vs voice-c1 vs voice-fix on a cut-scene + radio), Deck steady. Then M11-017 ThinLTO+PGO.
 
 ## Perf benchmark route (owner, 2026-11-06)
 
