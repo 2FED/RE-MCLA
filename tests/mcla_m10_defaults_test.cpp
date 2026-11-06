@@ -174,6 +174,12 @@ void TestTable() {
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kPursuitProbe))) &&
             Find("mcla_album_probe") == nullptr && Find("mcla_pursuit_probe") == nullptr,
         "the M11-002 album and pursuit probes are never volunteer defaults");
+  Check(IsNeverWritten("d3d12_readback_sync_kick_draws") &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kReadbackKick256))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kReadbackKick128))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kReadbackKick1024))) &&
+            Find("d3d12_readback_sync_kick_draws") == nullptr,
+        "the M11-015 kick interval is never written by the M10 defaults (owner keys only)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
             Find("mcla_album_preview_restore") == nullptr,

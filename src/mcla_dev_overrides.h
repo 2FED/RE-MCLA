@@ -69,6 +69,18 @@
 //   arm restores the legacy weights). audio_channel_rms_probe is the plain SDK
 //   bool (1 Hz per-channel RMS log line). All are rexruntime cvars registered
 //   before startup; an SDK without them logs the keys as unavailable.
+// - M11-015 read-back sync kick-interval A/B
+//   (docs/evidence/M11-cp-cost-plan-20261106.md item 1): readback_kick_256,
+//   readback_kick_128 and readback_kick_1024 are bool convenience keys for the
+//   integer SDK cvar d3d12_readback_sync_kick_draws (graphics plugin,
+//   hot-reload; SDK default 512): =true writes 256, 128 or 1024, =false
+//   changes nothing (all three false is the 512 default arm). The three form a
+//   conflict group of three pairs: two or more true in one file is
+//   contradictory and none of the true ones is applied.
+// - Conflict rule (all groups): every key of a true-true kConflictPairs pair
+//   (evaluated on the file as read, so a group of three is resolved as a
+//   whole) loses its value; one kConflict issue is logged for each of those
+//   lines except the earliest of its group.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
 // non-default value (set by the command line or the config file), and logged
@@ -129,8 +141,11 @@ enum class Key : uint8_t {
   kAudioDownmixItuOff,    // KI-071 A/B: audio_downmix_itu=false (legacy weights)
   kAudioChannelRmsProbe,  // KI-071: audio_channel_rms_probe (1 Hz RMS line)
   kAlbumPreviewRestore,   // KI-056 fix A: mcla_album_preview_restore (default off)
+  kReadbackKick256,       // M11-015 A/B: d3d12_readback_sync_kick_draws=256
+  kReadbackKick128,       // M11-015 A/B: d3d12_readback_sync_kick_draws=128
+  kReadbackKick1024,      // M11-015 A/B control: d3d12_readback_sync_kick_draws=1024
 };
-inline constexpr size_t kKeyCount = 29;
+inline constexpr size_t kKeyCount = 32;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -201,19 +216,29 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // KI-056 fix A host init-only bool (mcla_album_probe.cpp), before the
     // guest.
     {"mcla_album_preview_restore", Phase::kStartup},
+    // M11-015 kick-interval A/B: the integer SDK cvar is registered by the
+    // graphics plugin (command_processor.cpp, hot-reload), so after the plugin
+    // has loaded.
+    {"readback_kick_256", Phase::kGraphicsPlugin, "d3d12_readback_sync_kick_draws", "256", ""},
+    {"readback_kick_128", Phase::kGraphicsPlugin, "d3d12_readback_sync_kick_draws", "128", ""},
+    {"readback_kick_1024", Phase::kGraphicsPlugin, "d3d12_readback_sync_kick_draws", "1024", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, or the
 // audio_speaker_config string): both true in one file is contradictory and
-// neither is applied.
+// neither is applied. A group of three keys for one cvar is listed as its
+// three pairs (first < second in Key order); see ResolveConflicts.
 struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 3> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 6> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
+    {Key::kReadbackKick256, Key::kReadbackKick128},
+    {Key::kReadbackKick256, Key::kReadbackKick1024},
+    {Key::kReadbackKick128, Key::kReadbackKick1024},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -249,7 +274,7 @@ enum class LineIssue : uint8_t {
   kMalformed,    // not exactly name=true or name=false
   kUnknownName,  // well formed, name not in kKeys
   kDuplicate,    // a name already given on an earlier line
-  kConflict,     // contradicts an earlier line (both keys of a kConflictPairs pair true)
+  kConflict,     // contradicts an earlier line (two keys of one cvar true, kConflictPairs)
 };
 
 struct Issue {
@@ -337,16 +362,42 @@ constexpr void ParseLine(Parsed &parsed, uint16_t number, std::string_view line)
   parsed.lines[static_cast<size_t>(*key)] = number;
 }
 
-// Both keys of a conflict pair true: neither applies.
+// Two keys of a conflict pair true: none of the keys in a true-true pair
+// applies. Pairs are evaluated on the values as parsed (before any reset), so
+// a group of three (listed as its three pairs) is dropped as a whole when two
+// or more of its keys are true. One conflict is logged on each dropped line
+// that has an earlier-line partner in a true-true pair (for a pair: the later
+// line), in line order.
 constexpr void ResolveConflicts(Parsed &parsed) {
+  std::array<bool, kKeyCount> dropped{};
+  std::array<bool, kKeyCount> logged{};
   for (const ConflictPair &pair : kConflictPairs) {
     const size_t a = static_cast<size_t>(pair.first);
     const size_t b = static_cast<size_t>(pair.second);
     if (parsed.values[a] == true && parsed.values[b] == true) {
-      const uint16_t later = parsed.lines[a] > parsed.lines[b] ? parsed.lines[a] : parsed.lines[b];
-      parsed.values[a].reset();
-      parsed.values[b].reset();
-      AddIssue(parsed, later, LineIssue::kConflict);
+      dropped[a] = true;
+      dropped[b] = true;
+      logged[parsed.lines[a] > parsed.lines[b] ? a : b] = true;
+    }
+  }
+  uint16_t previous = 0;
+  for (;;) {
+    // The next logged line after `previous` (lines are unique per key).
+    uint16_t next = 0;
+    for (size_t i = 0; i < kKeyCount; ++i) {
+      if (logged[i] && parsed.lines[i] > previous && (next == 0 || parsed.lines[i] < next)) {
+        next = parsed.lines[i];
+      }
+    }
+    if (next == 0) {
+      break;
+    }
+    AddIssue(parsed, next, LineIssue::kConflict);
+    previous = next;
+  }
+  for (size_t i = 0; i < kKeyCount; ++i) {
+    if (dropped[i]) {
+      parsed.values[i].reset();
     }
   }
 }
@@ -432,8 +483,8 @@ std::optional<bool> AppliedValue(Key key);
 
 // The value of the key's valid file line (nullopt without the option, without
 // a parsed file or without a valid line), whether or not anything was
-// written. Used for keys whose value writes nothing (upload-ahead and hot
-// blocks =false).
+// written. Used for keys whose value writes nothing (upload-ahead, hot blocks
+// and read-back kick =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

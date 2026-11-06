@@ -111,6 +111,8 @@ inline constexpr std::array<std::string_view, 24> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
+    // SDK default 512; only the M11-015 owner keys readback_kick_256/_128/
+    // _1024 change it until an owner A/B accepts another interval.
     "d3d12_readback_sync_kick_draws",
     "mcla_native_d3d_refcount",
     "mcla_native_xapi_interlocked",

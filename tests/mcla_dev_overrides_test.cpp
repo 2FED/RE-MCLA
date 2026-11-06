@@ -29,7 +29,19 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 29, "twenty-nine whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 32, "thirty-two whitelisted names");
+  Check(FindKey("readback_kick_256") == Key::kReadbackKick256 &&
+            FindKey("readback_kick_128") == Key::kReadbackKick128 &&
+            FindKey("readback_kick_1024") == Key::kReadbackKick1024,
+        "M11-015 kick-interval keys");
+  Check(!FindKey("readback_kick_512") && !FindKey("readback_kick") &&
+            !FindKey("readback_kick_0") && !FindKey("readback_kick_64") &&
+            !FindKey("readback_kick_102") && !FindKey("readback_kick_1024_on"),
+        "no default (512), prefix, off or other numeric kick keys");
+  Check(mcla::dev_overrides::Info(Key::kReadbackKick256).phase == Phase::kGraphicsPlugin &&
+            mcla::dev_overrides::Info(Key::kReadbackKick128).phase == Phase::kGraphicsPlugin &&
+            mcla::dev_overrides::Info(Key::kReadbackKick1024).phase == Phase::kGraphicsPlugin,
+        "kick keys after the plugin registered d3d12_readback_sync_kick_draws");
   Check(FindKey("mcla_album_preview_restore") == Key::kAlbumPreviewRestore,
         "KI-056 fix A restore key");
   Check(mcla::dev_overrides::Info(Key::kAlbumPreviewRestore).phase == Phase::kStartup &&
@@ -188,7 +200,9 @@ void TestWhitelist() {
                           key == Key::kWarpWatchdog || key == Key::kTextureSoftCapOff ||
                           key == Key::kWarpFinishFixOff || key == Key::kStableCreationTimeOff ||
                           key == Key::kContentTraceOff || key == Key::kAudioSpeakerStereo ||
-                          key == Key::kAudioSpeakerSurround || key == Key::kAudioDownmixItuOff;
+                          key == Key::kAudioSpeakerSurround || key == Key::kAudioDownmixItuOff ||
+                          key == Key::kReadbackKick256 || key == Key::kReadbackKick128 ||
+                          key == Key::kReadbackKick1024;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -248,6 +262,17 @@ void TestWhitelist() {
               CvarText(Info(Key::kAudioChannelRmsProbe), true) == "true" &&
               CvarText(Info(Key::kAudioChannelRmsProbe), false) == "false",
           "rms probe writes its own bool cvar");
+    {
+      const Key kick_keys[] = {Key::kReadbackKick256, Key::kReadbackKick128,
+                               Key::kReadbackKick1024};
+      const char *const kick_values[] = {"256", "128", "1024"};
+      for (size_t k = 0; k < 3; ++k) {
+        Check(CvarName(Info(kick_keys[k])) == "d3d12_readback_sync_kick_draws" &&
+                  CvarText(Info(kick_keys[k]), true) == kick_values[k] &&
+                  CvarText(Info(kick_keys[k]), false).empty(),
+              "readback_kick_N=true writes N, false writes nothing");
+      }
+    }
     Check(CvarName(Info(Key::kWarpProbe)) == "mcla_warp_probe" &&
               CvarText(Info(Key::kWarpProbe), true) == "true",
           "warp probe writes its own bool cvar");
@@ -267,8 +292,9 @@ void TestWhitelist() {
         Check(paired, "keys writing one cvar form a conflict pair");
       }
     }
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 3,
-          "three shared-cvar pairs");
+    // Three pairs plus the kick group of three (listed as its three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 6,
+          "six shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -478,7 +504,8 @@ void TestWhitelist() {
   }
   {
     // l72 KI-056 fix A arm: the l71 triad arm file (every l71 key, in file
-    // order) plus the restore key: every key (29), nothing ignored, fits.
+    // order) plus the restore key: every key of that build (29), nothing
+    // ignored, fits.
     const std::string triad =
         "mcla_readback_sync_composite=true\n"
         "mcla_native_d3d_refcount=true\n"
@@ -515,13 +542,118 @@ void TestWhitelist() {
     const std::string l72 = triad + "mcla_album_preview_restore=true\n";
     const Parsed fix = Parse(l72);
     Check(l72.size() <= mcla::dev_overrides::kMaxBytes && fix.status == FileStatus::kParsed &&
-              fix.ValueCount() == mcla::dev_overrides::kKeyCount && fix.ignored_lines == 0 &&
+              fix.ValueCount() == 29 && fix.ignored_lines == 0 &&
               fix.Value(Key::kAlbumPreviewRestore) == true &&
               fix.Value(Key::kAlbumProbe) == true,
-          "l72 album fix arm: every key (29), nothing ignored, fits in 1 KiB");
+          "l72 album fix arm: every key of l72 album fix (29), nothing ignored, fits in 1 KiB");
     const Parsed integer = Parse("mcla_album_preview_restore=1\n");
     Check(integer.ValueCount() == 0 && integer.issues[0].issue == LineIssue::kMalformed,
           "restore value must be true or false");
+  }
+  {
+    // M11-015 kick-interval A/B: one key true applies; two or three true is a
+    // conflict for the whole group (none applied), logged on every true line
+    // but the earliest.
+    const Parsed k256 = Parse("readback_kick_256=true\r\n"
+                              "readback_kick_128=false\r\n"
+                              "readback_kick_1024=false\r\n");
+    Check(k256.ValueCount() == 3 && k256.Value(Key::kReadbackKick256) == true &&
+              k256.Value(Key::kReadbackKick128) == false &&
+              k256.Value(Key::kReadbackKick1024) == false && k256.ignored_lines == 0,
+          "kick 256 arm; the other two false is not a conflict");
+    const Parsed k1024 = Parse("readback_kick_1024=true\n");
+    Check(k1024.ValueCount() == 1 && k1024.Value(Key::kReadbackKick1024) == true,
+          "kick 1024 control arm");
+    const Parsed two = Parse("readback_kick_128=true\n"
+                             "memory_watch_census=true\n"
+                             "readback_kick_1024=true\n"
+                             "readback_kick_256=false\n");
+    Check(two.ValueCount() == 2 && !two.Value(Key::kReadbackKick128) &&
+              !two.Value(Key::kReadbackKick1024) && two.Value(Key::kReadbackKick256) == false &&
+              two.Value(Key::kWatchCensus) == true,
+          "two kick keys true: neither applies, the false one and other keys do");
+    Check(two.ignored_lines == 1 && two.issue_count == 1 && two.issues[0].line == 3 &&
+              two.issues[0].issue == LineIssue::kConflict,
+          "kick conflict logged on the later line");
+    const Parsed three = Parse("readback_kick_1024=true\n"
+                               "readback_kick_256=true\n"
+                               "d3d12_wrm_event_wake=true\n"
+                               "readback_kick_128=true\n");
+    Check(three.ValueCount() == 1 && !three.Value(Key::kReadbackKick256) &&
+              !three.Value(Key::kReadbackKick128) && !three.Value(Key::kReadbackKick1024) &&
+              three.Value(Key::kWrmEventWake) == true,
+          "all three kick keys true: none applies (resolved as a group)");
+    Check(three.ignored_lines == 2 && three.issue_count == 2 && three.issues[0].line == 2 &&
+              three.issues[0].issue == LineIssue::kConflict && three.issues[1].line == 4 &&
+              three.issues[1].issue == LineIssue::kConflict,
+          "three-way kick conflict logged on the two later lines, in line order");
+    const Parsed mixed = Parse("readback_kick_128=true\n"
+                               "audio_speaker_config_surround=true\n"
+                               "readback_kick_256=true\n"
+                               "audio_speaker_config_stereo=true\n");
+    Check(mixed.ValueCount() == 0 && mixed.issue_count == 2 && mixed.issues[0].line == 3 &&
+              mixed.issues[1].line == 4,
+          "kick and speaker conflicts in one file: each on its later line, in line order");
+    const Parsed integer = Parse("d3d12_readback_sync_kick_draws=256\n"
+                                 "readback_kick_256=256\n"
+                                 "d3d12_readback_sync_kick_draws=true\n");
+    Check(integer.ValueCount() == 0 && integer.ignored_lines == 3 &&
+              integer.issues[0].issue == LineIssue::kMalformed &&
+              integer.issues[1].issue == LineIssue::kMalformed &&
+              integer.issues[2].issue == LineIssue::kUnknownName,
+          "integer kick values and the cvar name itself are not accepted");
+    // l72 kick arms: the l71 triad arm file (every l71 key, in file order)
+    // plus the restore key false and the three kick keys explicit: every key
+    // (32), nothing ignored, within 1 KiB. kick-512 is all three false.
+    const std::string triad =
+        "mcla_readback_sync_composite=true\n"
+        "mcla_native_d3d_refcount=true\n"
+        "mcla_native_xapi_interlocked=true\n"
+        "d3d12_wrm_event_wake=true\n"
+        "d3d12_replay_batched_wake=true\n"
+        "d3d12_readback_elide_unread=true\n"
+        "mcla_gpu_backend_vulkan=false\n"
+        "prewarm_seed_store=true\n"
+        "d3d12_readback_sync_targeted=true\n"
+        "memory_watch_census=false\n"
+        "memory_watch_probes=false\n"
+        "memory_watch_disarm_bridge_safe_gaps=false\n"
+        "shared_memory_upload_ahead_16=false\n"
+        "shared_memory_upload_ahead_64=false\n"
+        "shared_memory_hot_blocks_shadow=false\n"
+        "shared_memory_hot_blocks_on=false\n"
+        "mcla_warp_probe=true\n"
+        "mcla_warp_watchdog=false\n"
+        "mcla_texture_budget_soft_cap_off=false\n"
+        "mcla_warp_finish_fix_off=false\n"
+        "mcla_album_probe=true\n"
+        "mcla_pursuit_probe=true\n"
+        "xam_content_stable_creation_time_off=false\n"
+        "xam_content_trace_off=false\n"
+        "audio_speaker_config_stereo=false\n"
+        "audio_speaker_config_surround=false\n"
+        "audio_downmix_itu_off=false\n"
+        "audio_channel_rms_probe=false\n"
+        "mcla_album_preview_restore=false\n";
+    const char *const kick_arms[3][3] = {{"false", "false", "false"},   // 512 (default)
+                                         {"true", "false", "false"},    // 256
+                                         {"false", "true", "false"}};   // 128
+    for (const auto &arm : kick_arms) {
+      const std::string text = triad + "readback_kick_256=" + arm[0] + "\n" +
+                               "readback_kick_128=" + arm[1] + "\n" +
+                               "readback_kick_1024=" + arm[2] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0,
+            "l72 kick arm: every key (32), nothing ignored, fits in 1 KiB");
+      Check(a.Value(Key::kReadbackKick256) == (arm[0][0] == 't') &&
+                a.Value(Key::kReadbackKick128) == (arm[1][0] == 't') &&
+                a.Value(Key::kReadbackKick1024) == false &&
+                a.Value(Key::kAlbumPreviewRestore) == false &&
+                a.Value(Key::kReadbackSyncTargeted) == true &&
+                a.Value(Key::kReadbackSyncComposite) == true,
+            "l72 kick arm values (targeted and composite on, so the kick acts)");
+    }
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.
@@ -786,6 +918,12 @@ void TestConstexpr() {
   static_assert(audio_conflict.ValueCount() == 0);
   static_assert(audio_conflict.issues[0].line == 2);
   static_assert(audio_conflict.issues[0].issue == LineIssue::kConflict);
+  constexpr Parsed kick_conflict =
+      Parse("readback_kick_256=true\nreadback_kick_128=true\nreadback_kick_1024=true\n");
+  static_assert(kick_conflict.ValueCount() == 0);
+  static_assert(kick_conflict.issue_count == 2);
+  static_assert(kick_conflict.issues[0].line == 2 && kick_conflict.issues[1].line == 3);
+  static_assert(kick_conflict.issues[1].issue == LineIssue::kConflict);
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
             "conflicting keys for one cvar (neither is applied)",
         "conflict issue name covers every pair");
