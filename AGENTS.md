@@ -112,3 +112,9 @@ of the same kind; do not ask for package-by-package confirmation again.
 Preserve the normal bundle and save lineage, review/test gates, bounded owned
 process cleanup and the owner's 30% remaining weekly usage stop threshold. This
 permission does not authorize destructive actions or unrelated external sharing.
+
+## No builds while the owner plays (2026-11-06)
+
+- The owner's PC is both the build machine and the test machine. KI-067/KI-072 showed that the project's own parallel builds and test runs (ninja/clang at 8-19 jobs, 51 test executables) halve the game's CPU under the laptop's shared 35 W power cap and were the cause of every "host slowdown" episode.
+- Before starting any build, test run, SDK ctest, archive extraction or other sustained CPU work on this PC, run `private/tools/wait-for-idle-pc.ps1` (or check for `mcla.exe` / `MCLA-Launcher.exe` yourself) and wait while a game session is running. Subagent prompts must carry this rule. The primary gate scripts already enforce it.
+- If the owner is testing and a build is urgent, say so and let the owner decide; never start it silently.
