@@ -2557,7 +2557,7 @@ Before closing a milestone, verify that this file reflects the actual repository
 
 At task/experiment boundaries also replace stale entries in `docs/current-state.md`: active goal, exact tested/pending artifact, save lineage, accepted evidence, rejected hypotheses, blockers and next action. Keep the handoff short and link history rather than appending it. A new chat should read that handoff and the relevant ledger/evidence; it must not assume that every prior chat turn remains verbatim available.
 
-## 17c. Milestone M11 (plan PROPOSED 2026-11-06; owner approval pending) — Deck saves, owner diagnostics, Deck and video-memory performance round 3
+## 17c. Milestone M11 (plan approved by the owner 2026-11-06; ACTIVE) — Deck saves, owner diagnostics, Deck and video-memory performance round 3
 
 Plan drafted 2026-11-06 after the M10 closure: [M11 priorities](docs/M11-priorities.md). Goal:
 saves that work on the Steam Deck under Proton (KI-068, S1), data-based answers to the owner's open
@@ -2623,4 +2623,4 @@ one 2160p session on the 3080 Ti or 6800 XT.
   then M11-001 (KI-068 symptom details and the l70 Deck repro).
 ```
 
-Plan file: `docs/M11-priorities.md`. Status: proposed; becomes active on the owner's approval.
+Plan file: `docs/M11-priorities.md`. Status: ACTIVE since 2026-11-06 (owner: "план влаштовує, можем робить"). First task: M11-001 KI-068 Deck saves.

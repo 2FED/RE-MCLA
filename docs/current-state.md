@@ -4,7 +4,7 @@ Updated November 5, 2026 Kyiv (M10 closed in the ledger; l70 published as the on
 
 ## Active outcome
 
-**M11 (proposed 2026-11-06, owner approval pending):** **M11 drafted on 2026-11-06; owner approval pending.** The plan is in
+**M11 ACTIVE (approved 2026-11-06):** **M11 drafted on 2026-11-06; owner approval pending.** The plan is in
 `docs/M11-priorities.md`, and the ledger will be README-AI section 17c. M10 is closed and
 pushed (`9e541e8`). Testers run l70 only (`DebugBundle` `31c806d`) on SDK `v0.20.0.8`.
 

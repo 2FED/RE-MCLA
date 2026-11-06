@@ -1,4 +1,4 @@
-# M11 (PROPOSED 2026-11-06, owner approval pending) Steam Deck saves, owner diagnostics, and Deck and video-memory performance round 3
+# M11 (ACTIVE; approved by the owner 2026-11-06) Steam Deck saves, owner diagnostics, and Deck and video-memory performance round 3
 
 Draft for the owner, 2026-11-06. Once approved, [README-AI](../README-AI) section 17c
 owns the task ledger. Inputs: the M10 closure in README-AI section 17b (task table,
