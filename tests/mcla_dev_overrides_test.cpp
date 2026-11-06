@@ -29,7 +29,47 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 32, "thirty-two whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 35, "thirty-five whitelisted names");
+  {
+    // l73 owner A/B keys (M11-016 fetch identity cache, M11-007a steady key).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    Check(FindKey("fetch_identity_off") == Key::kFetchIdentityOff &&
+              FindKey("fetch_identity_verify") == Key::kFetchIdentityVerify &&
+              FindKey("readback_steady_exempt") == Key::kReadbackSteadyExempt,
+          "l73 fetch identity and steady-exempt keys");
+    Check(!FindKey("fetch_identity") && !FindKey("fetch_identity_on") &&
+              !FindKey("fetch_identity_cache") && !FindKey("fetch_identity_cache_off") &&
+              !FindKey("fetch_identity_verif") && !FindKey("fetch_identity_verify_on") &&
+              !FindKey("d3d12_fetch_identity_cache") && !FindKey("d3d12_fetch_identity_verify") &&
+              !FindKey("readback_steady") && !FindKey("readback_steady_exempt_on") &&
+              !FindKey("readback_steady_exempt_off") && !FindKey("steady_exempt") &&
+              !FindKey("d3d12_readback_sync_steady_exempt") && !FindKey("Fetch_identity_off"),
+          "no prefix, suffix, cvar-name or case variants of the l73 keys");
+    Check(Info(Key::kFetchIdentityOff).phase == Phase::kGraphicsPlugin &&
+              Info(Key::kFetchIdentityVerify).phase == Phase::kGraphicsPlugin &&
+              Info(Key::kReadbackSteadyExempt).phase == Phase::kGraphicsPlugin,
+          "l73 keys after the plugin registered their cvars");
+    Check(CvarName(Info(Key::kFetchIdentityOff)) == "d3d12_fetch_identity_cache" &&
+              CvarText(Info(Key::kFetchIdentityOff), true) == "false" &&
+              CvarText(Info(Key::kFetchIdentityOff), false).empty(),
+          "fetch_identity_off=true writes false, false writes nothing");
+    Check(CvarName(Info(Key::kFetchIdentityVerify)) == "d3d12_fetch_identity_verify" &&
+              CvarText(Info(Key::kFetchIdentityVerify), true) == "true" &&
+              CvarText(Info(Key::kFetchIdentityVerify), false).empty(),
+          "fetch_identity_verify=true writes true, false writes nothing");
+    Check(CvarName(Info(Key::kReadbackSteadyExempt)) == "d3d12_readback_sync_steady_exempt" &&
+              CvarText(Info(Key::kReadbackSteadyExempt), true) == "true" &&
+              CvarText(Info(Key::kReadbackSteadyExempt), false).empty(),
+          "readback_steady_exempt=true writes true, false writes nothing");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key :
+           {Key::kFetchIdentityOff, Key::kFetchIdentityVerify, Key::kReadbackSteadyExempt}) {
+        Check(pair.first != key && pair.second != key, "l73 keys are in no conflict pair");
+      }
+    }
+  }
   Check(FindKey("readback_kick_256") == Key::kReadbackKick256 &&
             FindKey("readback_kick_128") == Key::kReadbackKick128 &&
             FindKey("readback_kick_1024") == Key::kReadbackKick1024,
@@ -202,7 +242,8 @@ void TestWhitelist() {
                           key == Key::kContentTraceOff || key == Key::kAudioSpeakerStereo ||
                           key == Key::kAudioSpeakerSurround || key == Key::kAudioDownmixItuOff ||
                           key == Key::kReadbackKick256 || key == Key::kReadbackKick128 ||
-                          key == Key::kReadbackKick1024;
+                          key == Key::kReadbackKick1024 || key == Key::kFetchIdentityOff ||
+                          key == Key::kFetchIdentityVerify || key == Key::kReadbackSteadyExempt;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -644,7 +685,7 @@ void TestWhitelist() {
                                "readback_kick_1024=" + arm[2] + "\n";
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
-                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0,
+                a.ValueCount() == 32 && a.ignored_lines == 0,
             "l72 kick arm: every key (32), nothing ignored, fits in 1 KiB");
       Check(a.Value(Key::kReadbackKick256) == (arm[0][0] == 't') &&
                 a.Value(Key::kReadbackKick128) == (arm[1][0] == 't') &&
@@ -654,6 +695,57 @@ void TestWhitelist() {
                 a.Value(Key::kReadbackSyncComposite) == true,
             "l72 kick arm values (targeted and composite on, so the kick acts)");
     }
+    // l73 arms: the l72 triad arm (kick-512: all three kick keys false) plus
+    // the three l73 keys explicit: every key (35), nothing ignored, within
+    // kMaxBytes (2 KiB; the full file is beyond the former 1 KiB). Verify is
+    // combined with the cache on, and both l73 A/B levers with each other.
+    const std::string triad32 = triad +
+                                "readback_kick_256=false\n"
+                                "readback_kick_128=false\n"
+                                "readback_kick_1024=false\n";
+    const char *const l73_arms[5][3] = {{"false", "false", "false"},   // base
+                                        {"true", "false", "false"},    // fetch-off
+                                        {"false", "true", "false"},    // fetch-verify
+                                        {"false", "false", "true"},    // steady
+                                        {"true", "false", "true"}};    // steady-fetch-off
+    for (const auto &arm : l73_arms) {
+      const std::string text = triad32 + "fetch_identity_off=" + arm[0] + "\n" +
+                               "fetch_identity_verify=" + arm[1] + "\n" +
+                               "readback_steady_exempt=" + arm[2] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() > 1024 && text.size() <= mcla::dev_overrides::kMaxBytes &&
+                a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l73 arm: every key (35), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kFetchIdentityOff) == (arm[0][0] == 't') &&
+                a.Value(Key::kFetchIdentityVerify) == (arm[1][0] == 't') &&
+                a.Value(Key::kReadbackSteadyExempt) == (arm[2][0] == 't') &&
+                a.Value(Key::kReadbackKick256) == false &&
+                a.Value(Key::kReadbackSyncComposite) == true,
+            "l73 arm values (composite on, so the steady exemption can act)");
+    }
+    const Parsed all_three = Parse("readback_steady_exempt=true\r\n"
+                                   "fetch_identity_verify=true\r\n"
+                                   "fetch_identity_off=true\r\n");
+    Check(all_three.ValueCount() == 3 && all_three.ignored_lines == 0 &&
+              all_three.Value(Key::kFetchIdentityOff) == true &&
+              all_three.Value(Key::kFetchIdentityVerify) == true &&
+              all_three.Value(Key::kReadbackSteadyExempt) == true,
+          "the l73 keys never conflict (three distinct cvars)");
+    const Parsed l73_bad = Parse("d3d12_fetch_identity_cache=false\n"
+                                 "fetch_identity_off=1\n"
+                                 "readback_steady_exempt=on\n"
+                                 "d3d12_readback_sync_steady_exempt=true\n"
+                                 "fetch_identity_verify=true\n"
+                                 "fetch_identity_verify=false\n");
+    Check(l73_bad.ValueCount() == 1 && l73_bad.Value(Key::kFetchIdentityVerify) == true &&
+              l73_bad.ignored_lines == 5 && l73_bad.issues[0].issue == LineIssue::kUnknownName &&
+              l73_bad.issues[1].issue == LineIssue::kMalformed &&
+              l73_bad.issues[2].issue == LineIssue::kMalformed &&
+              l73_bad.issues[3].issue == LineIssue::kUnknownName &&
+              l73_bad.issues[4].issue == LineIssue::kDuplicate,
+          "l73 near misses: cvar names, non-bool values and repeats are ignored");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.
@@ -710,7 +802,7 @@ void TestWhitelist() {
   }
   Check(mcla::dev_overrides::kFile == "mcla-dev-overrides.txt", "file name (same as l55)");
   Check(mcla::dev_overrides::kDirectory == "MCLA-R-Launcher-v1", "launcher per-user directory");
-  Check(mcla::dev_overrides::kMaxBytes == 1024, "1 KiB limit");
+  Check(mcla::dev_overrides::kMaxBytes == 2048, "2 KiB limit (l73)");
 }
 
 void TestValidFiles() {
@@ -877,13 +969,13 @@ void TestRejectedFiles() {
   {
     std::string padded = "d3d12_wrm_event_wake=true\n";
     padded += std::string(mcla::dev_overrides::kMaxBytes - padded.size(), '\n');
-    Check(padded.size() == 1024, "padded size");
+    Check(padded.size() == 2048, "padded size");
     const Parsed ok = Parse(padded);
     Check(ok.status == FileStatus::kParsed && ok.Value(Key::kWrmEventWake) == true,
-          "exactly 1 KiB accepted");
+          "exactly 2 KiB accepted");
     padded += '\n';
     const Parsed big = Parse(padded);
-    Check(big.status == FileStatus::kRejected && NoValues(big), "1025 bytes rejected");
+    Check(big.status == FileStatus::kRejected && NoValues(big), "2049 bytes rejected");
   }
 }
 

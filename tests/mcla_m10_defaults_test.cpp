@@ -180,6 +180,16 @@ void TestTable() {
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kReadbackKick1024))) &&
             Find("d3d12_readback_sync_kick_draws") == nullptr,
         "the M11-015 kick interval is never written by the M10 defaults (owner keys only)");
+  Check(IsNeverWritten("d3d12_fetch_identity_cache") &&
+            IsNeverWritten("d3d12_fetch_identity_verify") &&
+            IsNeverWritten("d3d12_readback_sync_steady_exempt") &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kFetchIdentityOff))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kFetchIdentityVerify))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kReadbackSteadyExempt))) &&
+            Find("d3d12_fetch_identity_cache") == nullptr &&
+            Find("d3d12_fetch_identity_verify") == nullptr &&
+            Find("d3d12_readback_sync_steady_exempt") == nullptr,
+        "l73 fetch identity / steady-exempt switches keep their SDK defaults (owner keys only)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
             Find("mcla_album_preview_restore") == nullptr,

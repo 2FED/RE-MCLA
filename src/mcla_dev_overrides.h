@@ -77,6 +77,17 @@
 //   changes nothing (all three false is the 512 default arm). The three form a
 //   conflict group of three pairs: two or more true in one file is
 //   contradictory and none of the true ones is applied.
+// - l73 owner A/Bs (graphics plugin, hot-reload SDK bools):
+//   fetch_identity_off=true writes false to d3d12_fetch_identity_cache
+//   (M11-016 fetch-constant identity cache, SDK default true; the A/B control
+//   arm, docs/evidence/M11-016-fetch-identity-cache-20261106.md);
+//   fetch_identity_verify=true writes true to d3d12_fetch_identity_verify (the
+//   cache's verify mode, SDK default false; may be combined with the cache on);
+//   readback_steady_exempt=true writes true to
+//   d3d12_readback_sync_steady_exempt (M11-007a steady-key exemption, SDK
+//   default false, docs/evidence/M11-007a-steady-key-exemption-20261106.md).
+//   =false changes nothing for all three. They write three different cvars,
+//   so no combination is a conflict.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -109,7 +120,9 @@ namespace mcla::dev_overrides {
 
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
-inline constexpr size_t kMaxBytes = 1024;
+// 2 KiB since l73: a full 35-key arm file (every key explicit) is about
+// 1.07 KB, beyond the former 1 KiB.
+inline constexpr size_t kMaxBytes = 2048;
 
 enum class Key : uint8_t {
   kReadbackSyncComposite,
@@ -144,8 +157,11 @@ enum class Key : uint8_t {
   kReadbackKick256,       // M11-015 A/B: d3d12_readback_sync_kick_draws=256
   kReadbackKick128,       // M11-015 A/B: d3d12_readback_sync_kick_draws=128
   kReadbackKick1024,      // M11-015 A/B control: d3d12_readback_sync_kick_draws=1024
+  kFetchIdentityOff,      // M11-016 A/B control: d3d12_fetch_identity_cache=false
+  kFetchIdentityVerify,   // M11-016: d3d12_fetch_identity_verify=true
+  kReadbackSteadyExempt,  // M11-007a A/B: d3d12_readback_sync_steady_exempt=true
 };
-inline constexpr size_t kKeyCount = 32;
+inline constexpr size_t kKeyCount = 35;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -222,6 +238,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"readback_kick_256", Phase::kGraphicsPlugin, "d3d12_readback_sync_kick_draws", "256", ""},
     {"readback_kick_128", Phase::kGraphicsPlugin, "d3d12_readback_sync_kick_draws", "128", ""},
     {"readback_kick_1024", Phase::kGraphicsPlugin, "d3d12_readback_sync_kick_draws", "1024", ""},
+    // l73 owner A/Bs: SDK bools registered by the graphics plugin
+    // (command_processor.cpp, hot-reload), so after the plugin has loaded.
+    {"fetch_identity_off", Phase::kGraphicsPlugin, "d3d12_fetch_identity_cache", "false", ""},
+    {"fetch_identity_verify", Phase::kGraphicsPlugin, "d3d12_fetch_identity_verify", "true", ""},
+    {"readback_steady_exempt", Phase::kGraphicsPlugin, "d3d12_readback_sync_steady_exempt", "true",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, or the
@@ -483,8 +505,8 @@ std::optional<bool> AppliedValue(Key key);
 
 // The value of the key's valid file line (nullopt without the option, without
 // a parsed file or without a valid line), whether or not anything was
-// written. Used for keys whose value writes nothing (upload-ahead, hot blocks
-// and read-back kick =false).
+// written. Used for keys whose value writes nothing (upload-ahead, hot blocks,
+// read-back kick and the l73 fetch-identity / steady-exempt keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides
