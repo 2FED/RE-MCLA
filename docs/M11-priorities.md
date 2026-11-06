@@ -203,3 +203,7 @@ Each job is advisory, with its receipt recorded in the task evidence. Generated-
 reading of the private game image stays with the primary agent, as in the KI-035 fix.
 
 ---
+
+## Owner priority update (2026-11-06)
+
+The owner reached the mid/late game and reports constant stutter and frame-rate collapse at 100+ mph (KI-072). Within M11 this becomes the top performance item after the l71 owner checks (KI-068 Deck saves, KI-069/070 F10 pauses, KI-071 audio A/B, M11-002 diagnostics). Plan: attribution first (existing l70 session bursts, then an l71 high-speed run with cheap F10s), then a targeted fix; KI-067 host slowdown is analysed together with it.
