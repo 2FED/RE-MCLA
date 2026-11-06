@@ -21,6 +21,16 @@
 
 #include <intrin.h>
 
+// KI-069: the SDK's log sinks are asynchronous since the l71 SDK
+// (rex/logging/async_queue.h ships with it); drain them before the crash
+// helper copies the journal. Older SDKs flush every line synchronously.
+#if __has_include(<rex/logging/async_queue.h>)
+#include <rex/logging/api.h>
+#define MCLA_HAS_FLUSH_LOGGING_FOR 1
+#else
+#define MCLA_HAS_FLUSH_LOGGING_FOR 0
+#endif
+
 namespace mcla::diagnostics::native {
 namespace {
 
@@ -86,6 +96,28 @@ void CleanupStartupFailure() {
   CloseHandleIfSet(state.stop);
 }
 
+#if MCLA_HAS_FLUSH_LOGGING_FOR
+DWORD WINAPI FlushLogsThread(void *) {
+  rex::FlushLoggingFor(500);
+  return 0;
+}
+#endif
+
+// KI-069: write the queued log lines before the crash package is taken. The
+// drain runs on a fresh thread with a bounded wait, so a crash inside the
+// logger (a held queue or write lock), a stack overflow or a held loader lock
+// can only cost this wait, never block the dump.
+void FlushLogsBeforeCrash() {
+#if MCLA_HAS_FLUSH_LOGGING_FOR
+  HANDLE thread =
+      CreateThread(nullptr, 256 * 1024, FlushLogsThread, nullptr, 0, nullptr);
+  if (thread) {
+    WaitForSingleObject(thread, 750);
+    CloseHandle(thread);
+  }
+#endif
+}
+
 void RequestCrash(EXCEPTION_POINTERS *exception) {
   if (!state.started.load(std::memory_order_acquire) || !state.shared) {
     return;
@@ -93,6 +125,7 @@ void RequestCrash(EXCEPTION_POINTERS *exception) {
   const bool first =
       InterlockedCompareExchange(&state.shared->crash_started, 1, 0) == 0;
   if (first) {
+    FlushLogsBeforeCrash();
     state.shared->crash_thread_id = GetCurrentThreadId();
     if (exception && exception->ExceptionRecord) {
       state.shared->exception_code = exception->ExceptionRecord->ExceptionCode;

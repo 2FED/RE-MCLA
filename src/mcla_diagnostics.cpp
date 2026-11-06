@@ -1433,6 +1433,12 @@ public:
               });
 #endif
     const int64_t census_ms = lap();
+    // KI-069: the SDK writes the log sinks on its writer thread; drain the
+    // queue (bounded) so the capture sink and the journal hold every line up
+    // to the snapshot. This is the diagnostics worker, never the CP thread.
+#if __has_include(<rex/logging/async_queue.h>)
+    rex::FlushLoggingFor(500);
+#endif
     std::vector<rex::LogEntry> entries;
     if (capture_sink_) {
       capture_sink_->CopyEntries(entries);
