@@ -2,19 +2,28 @@
 // See mcla_album_probe.h for the guest layout and its citations, and
 // docs/evidence/M11-002-diagnostics-triad-20261106.md.
 //
-// Four pass-through strong overrides of generated weak functions. With the
-// init-only switch mcla_album_probe off (the default) each calls the original
-// and returns; nothing is read or logged. With it on, each reads guest state
-// through the checked reader (mcla_guest_reader.h) before and after calling
-// the ORIGINAL UNCHANGED, and logs one MCLA_ALBUM v=1 line (rate-limited per
-// kind; the tick only on a state or sub-state change). No guest memory is
-// written and no guest code other than the original runs. The last values go
-// to the F10 state.json block "album" (MclaAlbumStateJson).
+// Five pass-through strong overrides of generated weak functions. With the
+// init-only switches mcla_album_probe and mcla_album_preview_restore off (the
+// defaults) each calls the original and returns; nothing is read or logged.
+// With the probe on, each reads guest state through the checked reader
+// (mcla_guest_reader.h) before and after calling the ORIGINAL UNCHANGED, and
+// logs one MCLA_ALBUM v=1 line (rate-limited per kind; the tick only on a
+// state or sub-state change). The probe writes no guest memory and runs no
+// guest code other than the original. The last values go to the F10
+// state.json block "album" (MclaAlbumStateJson).
 //
-// KI-056 fix A (re-run the new-photo decode once when the chooser opens) is
-// NOT implemented. Its seam is NewPhotoTracker::PendingRedecode (pure,
-// unit-tested): a later build would call sub_8263C8B0 once from the
-// chooser-open point behind its own init-only switch.
+// KI-056 fix A (docs/evidence/M11-ki056-l71-album-probe-20261106.md section 3,
+// docs/evidence/M11-ki056-fix-a-20261106.md): with mcla_album_preview_restore
+// on (default off; probe on or off), the hover override, after the original
+// sub_8263C9C8 returned, re-runs the game's own new-photo decode
+// sub_8263C8B0(album) when a new photo is pending (u8 +1170), the hovered slot
+// is empty by the game's rule (album::HoverValid false), an occupied hover
+// decoded over the shared preview image since the last new-photo decode
+// (NewPhotoTracker::clobbered) and *(+1148) starts with FF D8
+// (album::DecideRestore). The host writes no guest memory itself; the game
+// call writes what it always writes (the decode into +1140/+1144, the bind of
+// +1136, and 5 to *(*(0x8288B9AC) + 68)). One MCLA_ALBUM v=1 fn=restore line
+// per restore (rate-limited).
 
 #include "mcla_album_probe.h"
 
@@ -36,6 +45,12 @@ REXCVAR_DEFINE_BOOL(mcla_album_probe, false, "MCLA",
     "(MCLA_ALBUM lines; diagnostic, read-only)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_album_preview_restore, false, "MCLA",
+    "KI-056 fix A: in the photo album save chooser, re-run the game's new-photo "
+    "decode when the cursor returns to an empty slot after an occupied slot "
+    "overwrote the shared preview (quality fix, default off)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 namespace {
 
 namespace album = mcla::album;
@@ -45,6 +60,15 @@ bool ProbeOn() {
   static const bool on = REXCVAR_GET(mcla_album_probe);
   return on;
 }
+
+bool FixOn() {
+  static const bool on = REXCVAR_GET(mcla_album_preview_restore);
+  return on;
+}
+
+// Set while the hover override runs the fix A restore, so the new-photo
+// override passes that call through (a restore, not a snapshot).
+thread_local bool t_in_restore = false;
 
 uint64_t NowMs() {
   return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -193,6 +217,7 @@ struct AlbumView {
   bool read = false;
   uint32_t jpeg = 0, image_ptr = 0, pixels = 0, texture_ptr = 0, material = 0;
   uint32_t mask = 0, alt_mode = 0, alt_count = 0, slot_jpegs = 0;
+  uint32_t pending = 0, cursor = 0;  // u8 +1170, u32 +1180
   Marker marker;
   Image image;
   Crc crc;
@@ -215,6 +240,8 @@ AlbumView ReadAlbum(const Reader &read, uint32_t album_ptr, bool with_texture) {
   v.alt_mode = read.U8(album_ptr + album::kAltMode, ok);
   v.alt_count = read.U32(album_ptr + album::kAltCount, ok);
   v.slot_jpegs = read.U32(album_ptr + album::kSlotJpegs, ok);
+  v.pending = read.U8(album_ptr + album::kNewPhotoPending, ok);
+  v.cursor = read.U32(album_ptr + album::kCursorSlot, ok);
   v.read = ok;
   v.marker = ReadMarker(read, v.jpeg);
   v.image = ReadImage(read, v.image_ptr);
@@ -223,6 +250,37 @@ AlbumView ReadAlbum(const Reader &read, uint32_t album_ptr, bool with_texture) {
     v.texture = ReadTexture(read, v.texture_ptr);
   }
   return v;
+}
+
+// Fix A without the probe: only the scalar fields the hover rule and the
+// restore decision need (no image, CRC or texture reads).
+AlbumView ReadAlbumFields(const Reader &read, uint32_t album_ptr) {
+  AlbumView v;
+  v.album = album_ptr;
+  if (!album_ptr) {
+    return v;
+  }
+  bool ok = true;
+  v.jpeg = read.U32(album_ptr + album::kJpeg, ok);
+  v.pixels = read.U32(album_ptr + album::kPixels, ok);
+  v.mask = read.U32(album_ptr + album::kOccupiedMask, ok);
+  v.alt_mode = read.U8(album_ptr + album::kAltMode, ok);
+  v.alt_count = read.U32(album_ptr + album::kAltCount, ok);
+  v.slot_jpegs = read.U32(album_ptr + album::kSlotJpegs, ok);
+  v.pending = read.U8(album_ptr + album::kNewPhotoPending, ok);
+  v.cursor = read.U32(album_ptr + album::kCursorSlot, ok);
+  v.read = ok;
+  return v;
+}
+
+album::HoverInputs HoverInputsOf(const AlbumView &v, uint32_t slot) {
+  album::HoverInputs in;
+  in.slot = slot;
+  in.alt_mode = v.alt_mode != 0;
+  in.alt_count = v.alt_count;
+  in.mask = v.mask;
+  in.slot_jpegs = v.slot_jpegs;
+  return in;
 }
 
 const char *Bool01(bool value) {
@@ -257,6 +315,7 @@ struct LastHover {
   bool occupied = false;
   uint32_t mask = 0;
   uint32_t alt_mode = 0;
+  uint32_t pending = 0, cursor = 0;  // +1170, +1180 after the call
   std::string path;
   uint32_t jpeg = 0;
   std::string marker;
@@ -274,6 +333,20 @@ struct LastSave {
   uint64_t at_ms = 0;
 };
 
+struct LastThumb {
+  bool seen = false;
+  uint32_t slot = 0;
+  uint32_t pending = 0;
+  std::string crc_before, crc_after;
+  uint64_t at_ms = 0;
+};
+struct LastRestore {
+  bool seen = false;
+  uint32_t slot = 0;
+  std::string crc_before, crc_after;
+  uint64_t at_ms = 0;
+};
+
 struct ProbeState {
   std::mutex mutex;
   uint32_t album = 0;
@@ -281,8 +354,12 @@ struct ProbeState {
   LastNewPhoto new_photo;
   LastHover hover;
   LastSave save;
+  LastThumb thumb;
+  LastRestore restore;
   uint64_t ticks_logged = 0, new_photo_calls = 0, hover_calls = 0, save_calls = 0;
-  album::Pacer tick_pacer, new_photo_pacer, hover_pacer, save_pacer;
+  uint64_t thumb_calls = 0;
+  uint32_t restore_no_marker = 0;
+  album::Pacer tick_pacer, new_photo_pacer, hover_pacer, save_pacer, thumb_pacer, restore_pacer;
   album::NewPhotoTracker tracker;
 };
 
@@ -332,8 +409,27 @@ REX_EXTERN(sub_8263CB78) {
 
 // New-photo decode (state 4): r3 = album.
 REX_EXTERN(sub_8263C8B0) {
-  if (!ProbeOn()) {
+  if (t_in_restore || (!ProbeOn() && !FixOn())) {
+    // Off, or the fix A restore itself (counted and logged by the hover
+    // override as a restore, not as a snapshot).
     __imp__sub_8263C8B0(ctx, base);
+    return;
+  }
+  if (!ProbeOn()) {
+    // Fix A only: track the decode so a new photo clears `clobbered`.
+    const uint32_t album_ptr = ctx.r3.u32;
+    const Reader read = mcla::guest::HookReader(base);
+    bool ok = true;
+    const uint32_t jpeg = album_ptr ? read.U32(album_ptr + album::kJpeg, ok) : 0;
+    const Marker marker = ok ? ReadMarker(read, jpeg) : Marker{};
+    __imp__sub_8263C8B0(ctx, base);
+    const bool decoded = album::DecideNewPhotoPath(marker.read, marker.b0, marker.b1) ==
+                         album::NewPhotoPath::kDecode;
+    auto &state = State();
+    std::lock_guard lock(state.mutex);
+    state.album = album_ptr;
+    ++state.new_photo_calls;
+    state.tracker.OnNewPhoto(decoded);
     return;
   }
   const uint32_t album_ptr = ctx.r3.u32;
@@ -397,9 +493,12 @@ REX_EXTERN(sub_8263C8B0) {
   }
 }
 
-// Hover preview: r3 = album, r4 = slot.
+// Hover preview: r3 = album, r4 = slot. With mcla_album_preview_restore on,
+// also KI-056 fix A after the original returned (see the file comment).
 REX_EXTERN(sub_8263C9C8) {
-  if (!ProbeOn()) {
+  const bool probe = ProbeOn();
+  const bool fix = FixOn();
+  if (!probe && !fix) {
     __imp__sub_8263C9C8(ctx, base);
     return;
   }
@@ -407,48 +506,161 @@ REX_EXTERN(sub_8263C9C8) {
   const uint32_t slot = ctx.r4.u32;
   const uint32_t lr = static_cast<uint32_t>(ctx.lr);
   const Reader read = mcla::guest::HookReader(base);
-  const AlbumView before = ReadAlbum(read, album_ptr, false);
-  album::HoverInputs in;
-  in.slot = slot;
-  in.alt_mode = before.alt_mode != 0;
-  in.alt_count = before.alt_count;
-  in.mask = before.mask;
-  in.slot_jpegs = before.slot_jpegs;
+  const AlbumView before =
+      probe ? ReadAlbum(read, album_ptr, false) : ReadAlbumFields(read, album_ptr);
+  const album::HoverInputs in = HoverInputsOf(before, slot);
   const uint32_t jpeg = album::HoverJpeg(in);
-  const Marker marker = album::HoverValid(in) ? ReadMarker(read, jpeg) : Marker{};
+  const Marker marker = before.read && album::HoverValid(in) ? ReadMarker(read, jpeg) : Marker{};
   const album::HoverPath path = album::DecideHoverPath(in, marker.read, marker.b0, marker.b1);
+  // Only a hover whose fields were read and whose path is a decode counts as
+  // a write over the shared image.
+  const bool decoded = before.read && path == album::HoverPath::kDecode;
   __imp__sub_8263C9C8(ctx, base);
-  const AlbumView after = ReadAlbum(read, album_ptr, false);
-  const bool occupied = album::OccupiedBit(before.mask, slot);
+  bool clobbered = false;
+  if (probe) {
+    const AlbumView after = ReadAlbum(read, album_ptr, false);
+    const bool occupied = album::OccupiedBit(before.mask, slot);
+    auto &state = State();
+    std::lock_guard lock(state.mutex);
+    state.album = album_ptr;
+    ++state.hover_calls;
+    state.tracker.OnHover(decoded);
+    clobbered = state.tracker.clobbered();
+    auto &last = state.hover;
+    last.seen = true;
+    last.slot = slot;
+    last.occupied = occupied;
+    last.mask = before.mask;
+    last.alt_mode = before.alt_mode;
+    last.pending = after.pending;
+    last.cursor = after.cursor;
+    last.path = album::HoverPathName(path);
+    last.jpeg = jpeg;
+    last.marker = marker.Text();
+    last.image_after = after.image.Text();
+    last.crc_before = before.crc.Text();
+    last.crc_after = after.crc.Text();
+    last.at_ms = NowMs();
+    uint32_t suppressed = 0;
+    if (state.hover_pacer.Allow(NowMs(), suppressed)) {
+      MCLA_APP_INFO("MCLA_ALBUM v=1 fn=hover album={:08X} lr={:08X} slot={} mask860={:08X} "
+                    "occupied={} alt1225={} count1208={} pending1170={} cursor1180={} "
+                    "jpeg={:08X} marker={} path={} success={} event4={} image_after={} "
+                    "crc4k_before={} crc4k_after={} hovers_since_snapshot={} clobbered={} "
+                    "suppressed={} complete={}",
+                    album_ptr, lr, slot, before.mask, Bool01(occupied), before.alt_mode,
+                    before.alt_count, after.pending, after.cursor, jpeg, last.marker, last.path,
+                    Bool01(path == album::HoverPath::kDecode),
+                    Bool01(path == album::HoverPath::kDecode), last.image_after,
+                    last.crc_before, last.crc_after, state.tracker.hovers_since(),
+                    Bool01(clobbered), suppressed, Bool01(before.read && after.read));
+    }
+  } else {
+    auto &state = State();
+    std::lock_guard lock(state.mutex);
+    state.album = album_ptr;
+    ++state.hover_calls;
+    state.tracker.OnHover(decoded);
+    clobbered = state.tracker.clobbered();
+  }
+  if (!fix) {
+    return;
+  }
+  // KI-056 fix A. The pending flag and the new JPEG are read after the
+  // original (it changes neither); the slot rule uses the fields the original
+  // evaluated.
+  const AlbumView now = ReadAlbumFields(read, album_ptr);
+  album::RestoreInputs ri;
+  ri.fix_on = true;
+  ri.read = before.read && now.read;
+  ri.pending = now.pending;
+  ri.hover = in;
+  ri.clobbered = clobbered;
+  const Marker new_marker = now.read ? ReadMarker(read, now.jpeg) : Marker{};
+  ri.marker_read = new_marker.read;
+  ri.b0 = new_marker.b0;
+  ri.b1 = new_marker.b1;
+  const album::RestoreDecision decision = album::DecideRestore(ri);
+  if (decision == album::RestoreDecision::kNoMarker) {
+    auto &state = State();
+    std::lock_guard lock(state.mutex);
+    ++state.restore_no_marker;
+    return;
+  }
+  if (decision != album::RestoreDecision::kRestore) {
+    return;
+  }
+  const Crc crc_before = ReadCrc(read, now.pixels);
+  // The game's own new-photo decode, through the hooked symbol (its override
+  // passes it through while t_in_restore is set). It takes only r3; the
+  // callers of the hover tail-return and do not use r3, but r3 and lr are
+  // put back anyway.
+  const auto saved_r3 = ctx.r3;
+  const auto saved_lr = ctx.lr;
+  t_in_restore = true;
+  ctx.r3.u64 = album_ptr;
+  sub_8263C8B0(ctx, base);
+  t_in_restore = false;
+  ctx.r3 = saved_r3;
+  ctx.lr = saved_lr;
+  bool pixels_ok = true;
+  const uint32_t pixels_after = read.U32(album_ptr + album::kPixels, pixels_ok);
+  const Crc crc_after = pixels_ok ? ReadCrc(read, pixels_after) : Crc{};
+  auto &state = State();
+  std::lock_guard lock(state.mutex);
+  state.tracker.OnRestore();
+  auto &last = state.restore;
+  last.seen = true;
+  last.slot = slot;
+  last.crc_before = crc_before.Text();
+  last.crc_after = crc_after.Text();
+  last.at_ms = NowMs();
+  uint32_t suppressed = 0;
+  if (state.restore_pacer.Allow(NowMs(), suppressed)) {
+    MCLA_APP_INFO("MCLA_ALBUM v=1 fn=restore album={:08X} lr={:08X} slot={} pending1170={} "
+                  "jpeg1148={:08X} marker={} crc_before={} crc_after={} restores={} "
+                  "snapshot={} suppressed={}",
+                  album_ptr, lr, slot, now.pending, now.jpeg, new_marker.Text(),
+                  last.crc_before, last.crc_after, state.tracker.restores(),
+                  state.tracker.snapshots(), suppressed);
+  }
+}
+
+// Slot thumbnail load: r3 = album, r4 = slot (probe only; pass-through). It
+// decodes the slot JPEG and re-runs sub_8263C8B0 itself when +1170 is set.
+REX_EXTERN(sub_8263E1E8) {
+  if (!ProbeOn()) {
+    __imp__sub_8263E1E8(ctx, base);
+    return;
+  }
+  const uint32_t album_ptr = ctx.r3.u32;
+  const uint32_t slot = ctx.r4.u32;
+  const uint32_t lr = static_cast<uint32_t>(ctx.lr);
+  const Reader read = mcla::guest::HookReader(base);
+  const AlbumView before = ReadAlbumFields(read, album_ptr);
+  const Crc crc_before = before.read ? ReadCrc(read, before.pixels) : Crc{};
+  __imp__sub_8263E1E8(ctx, base);
+  const AlbumView after = ReadAlbumFields(read, album_ptr);
+  const Crc crc_after = after.read ? ReadCrc(read, after.pixels) : Crc{};
   auto &state = State();
   std::lock_guard lock(state.mutex);
   state.album = album_ptr;
-  ++state.hover_calls;
-  state.tracker.OnHover(path == album::HoverPath::kDecode);
-  auto &last = state.hover;
+  ++state.thumb_calls;
+  state.tracker.OnThumbLoad();
+  auto &last = state.thumb;
   last.seen = true;
   last.slot = slot;
-  last.occupied = occupied;
-  last.mask = before.mask;
-  last.alt_mode = before.alt_mode;
-  last.path = album::HoverPathName(path);
-  last.jpeg = jpeg;
-  last.marker = marker.Text();
-  last.image_after = after.image.Text();
-  last.crc_before = before.crc.Text();
-  last.crc_after = after.crc.Text();
+  last.pending = before.pending;
+  last.crc_before = crc_before.Text();
+  last.crc_after = crc_after.Text();
   last.at_ms = NowMs();
   uint32_t suppressed = 0;
-  if (state.hover_pacer.Allow(NowMs(), suppressed)) {
-    MCLA_APP_INFO("MCLA_ALBUM v=1 fn=hover album={:08X} lr={:08X} slot={} mask860={:08X} "
-                  "occupied={} alt1225={} count1208={} jpeg={:08X} marker={} path={} "
-                  "success={} event4={} image_after={} crc4k_before={} crc4k_after={} "
-                  "hovers_since_snapshot={} suppressed={} complete={}",
-                  album_ptr, lr, slot, before.mask, Bool01(occupied), before.alt_mode,
-                  before.alt_count, jpeg, last.marker, last.path,
-                  Bool01(path == album::HoverPath::kDecode),
-                  Bool01(path == album::HoverPath::kDecode), last.image_after, last.crc_before,
-                  last.crc_after, state.tracker.hovers_since(), suppressed,
+  if (state.thumb_pacer.Allow(NowMs(), suppressed)) {
+    MCLA_APP_INFO("MCLA_ALBUM v=1 fn=thumb_load album={:08X} lr={:08X} slot={} pending1170={} "
+                  "cursor1180={} mask860={:08X} crc4k_before={} crc4k_after={} snapshot={} "
+                  "suppressed={} complete={}",
+                  album_ptr, lr, slot, before.pending, before.cursor, before.mask,
+                  last.crc_before, last.crc_after, state.tracker.snapshots(), suppressed,
                   Bool01(before.read && after.read));
   }
 }
@@ -513,12 +725,31 @@ std::string HexQ(uint32_t value) {
 std::string MclaAlbumStateJson(rex::memory::Memory *memory, uint8_t *base) {
   std::ostringstream out;
   out << "{\"probe\": " << (ProbeOn() ? "true" : "false");
-  if (!ProbeOn()) {
+  if (!ProbeOn() && !FixOn()) {
     out << "}";
     return out.str();
   }
   auto &state = State();
   std::lock_guard lock(state.mutex);
+  const uint64_t now = NowMs();
+  auto age = [now](uint64_t at) { return at && now >= at ? static_cast<int64_t>(now - at) : -1; };
+  if (FixOn()) {
+    album::RestoreStats stats;
+    stats.enabled = true;
+    stats.restores = state.tracker.restores();
+    stats.no_marker = state.restore_no_marker;
+    stats.clobbered = state.tracker.clobbered();
+    stats.last_seen = state.restore.seen;
+    stats.last_slot = state.restore.slot;
+    stats.last_crc_before = state.restore.crc_before;
+    stats.last_crc_after = state.restore.crc_after;
+    stats.last_age_ms = age(state.restore.at_ms);
+    out << ", \"preview_restore\": " << album::RestoreJson(stats);
+  }
+  if (!ProbeOn()) {
+    out << "}";
+    return out.str();
+  }
   out << ", \"album\": " << HexQ(state.album);
   if (state.album && memory && base) {
     const Reader read(memory, base);
@@ -531,6 +762,7 @@ std::string MclaAlbumStateJson(rex::memory::Memory *memory, uint8_t *base) {
     out << ", \"live\": {\"state132\": " << live_state << ", \"substate136\": " << live_sub
         << ", \"frames732\": " << live_frames << ", \"mask860\": " << HexQ(v.mask)
         << ", \"alt1225\": " << v.alt_mode << ", \"count1208\": " << v.alt_count
+        << ", \"pending1170\": " << v.pending << ", \"cursor1180\": " << v.cursor
         << ", \"jpeg1148\": " << HexQ(v.jpeg) << ", \"marker\": " << Quoted(v.marker.Text())
         << ", \"image1140\": " << HexQ(v.image_ptr) << ", \"image\": " << Quoted(v.image.Text())
         << ", \"pixels1144\": " << HexQ(v.pixels)
@@ -542,8 +774,6 @@ std::string MclaAlbumStateJson(rex::memory::Memory *memory, uint8_t *base) {
                                  : std::string("n/a"))
         << ", \"complete\": " << (ok ? "true" : "false") << "}";
   }
-  const uint64_t now = NowMs();
-  auto age = [now](uint64_t at) { return at && now >= at ? static_cast<int64_t>(now - at) : -1; };
   if (state.tick.seen) {
     out << ", \"last_tick\": {\"from\": \"" << state.tick.from_state << "/" << state.tick.from_sub
         << "\", \"to\": \"" << state.tick.to_state << "/" << state.tick.to_sub
@@ -571,7 +801,8 @@ std::string MclaAlbumStateJson(rex::memory::Memory *memory, uint8_t *base) {
     const auto &h = state.hover;
     out << ", \"last_hover\": {\"slot\": " << h.slot << ", \"occupied\": "
         << (h.occupied ? "true" : "false") << ", \"mask860\": " << HexQ(h.mask)
-        << ", \"alt1225\": " << h.alt_mode << ", \"path\": " << Quoted(h.path)
+        << ", \"alt1225\": " << h.alt_mode << ", \"pending1170\": " << h.pending
+        << ", \"cursor1180\": " << h.cursor << ", \"path\": " << Quoted(h.path)
         << ", \"jpeg\": " << HexQ(h.jpeg) << ", \"marker\": " << Quoted(h.marker)
         << ", \"image_after\": " << Quoted(h.image_after)
         << ", \"crc4k_before\": " << Quoted(h.crc_before)
@@ -586,14 +817,21 @@ std::string MclaAlbumStateJson(rex::memory::Memory *memory, uint8_t *base) {
         << ", \"crc4k_after\": " << Quoted(s.crc_after) << ", \"slot_tex\": "
         << HexQ(s.slot_texture) << ", \"age_ms\": " << age(s.at_ms) << "}";
   }
+  if (state.thumb.seen) {
+    const auto &t = state.thumb;
+    out << ", \"last_thumb_load\": {\"slot\": " << t.slot << ", \"pending1170\": " << t.pending
+        << ", \"crc4k_before\": " << Quoted(t.crc_before)
+        << ", \"crc4k_after\": " << Quoted(t.crc_after) << ", \"age_ms\": " << age(t.at_ms)
+        << "}";
+  }
   out << ", \"calls\": {\"tick_lines\": " << state.ticks_logged
       << ", \"new_photo\": " << state.new_photo_calls << ", \"hover\": " << state.hover_calls
-      << ", \"save\": " << state.save_calls << "}"
+      << ", \"save\": " << state.save_calls << ", \"thumb_load\": " << state.thumb_calls << "}"
       << ", \"tracker\": {\"snapshots\": " << state.tracker.snapshots()
       << ", \"decoded\": " << (state.tracker.decoded() ? "true" : "false")
       << ", \"hovers_since\": " << state.tracker.hovers_since()
       << ", \"saved\": " << (state.tracker.saved() ? "true" : "false")
-      << ", \"fix_a_precondition\": " << (state.tracker.PendingRedecode() ? "true" : "false")
-      << "}}";
+      << ", \"clobbered\": " << (state.tracker.clobbered() ? "true" : "false")
+      << ", \"restores\": " << state.tracker.restores() << "}}";
   return out.str();
 }

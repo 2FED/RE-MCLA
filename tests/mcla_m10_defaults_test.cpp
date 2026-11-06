@@ -174,6 +174,10 @@ void TestTable() {
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kPursuitProbe))) &&
             Find("mcla_album_probe") == nullptr && Find("mcla_pursuit_probe") == nullptr,
         "the M11-002 album and pursuit probes are never volunteer defaults");
+  Check(IsNeverWritten("mcla_album_preview_restore") &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
+            Find("mcla_album_preview_restore") == nullptr,
+        "the KI-056 fix A restore is never a volunteer default (owner key only)");
   Check(IsNeverWritten("mcla_warp_finish_fix") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kWarpFinishFixOff))) &&
             Find("mcla_warp_finish_fix") == nullptr,

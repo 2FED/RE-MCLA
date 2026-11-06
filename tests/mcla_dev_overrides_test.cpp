@@ -29,7 +29,20 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 28, "twenty-eight whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 29, "twenty-nine whitelisted names");
+  Check(FindKey("mcla_album_preview_restore") == Key::kAlbumPreviewRestore,
+        "KI-056 fix A restore key");
+  Check(mcla::dev_overrides::Info(Key::kAlbumPreviewRestore).phase == Phase::kStartup &&
+            mcla::dev_overrides::CvarName(mcla::dev_overrides::Info(Key::kAlbumPreviewRestore)) ==
+                "mcla_album_preview_restore" &&
+            mcla::dev_overrides::CvarText(mcla::dev_overrides::Info(Key::kAlbumPreviewRestore),
+                                          true) == "true" &&
+            mcla::dev_overrides::CvarText(mcla::dev_overrides::Info(Key::kAlbumPreviewRestore),
+                                          false) == "false",
+        "KI-056 fix A key: host init-only bool at startup, its own cvar");
+  Check(!FindKey("mcla_album_preview") && !FindKey("mcla_album_preview_restore_on") &&
+            !FindKey("mcla_album_restore"),
+        "no prefix or variant keys for the restore");
   Check(FindKey("audio_speaker_config_stereo") == Key::kAudioSpeakerStereo &&
             FindKey("audio_speaker_config_surround") == Key::kAudioSpeakerSurround &&
             FindKey("audio_downmix_itu_off") == Key::kAudioDownmixItuOff &&
@@ -402,8 +415,8 @@ void TestWhitelist() {
         const Parsed a = Parse(text_audio);
         Check(text_audio.size() <= mcla::dev_overrides::kMaxBytes &&
                   a.status == FileStatus::kParsed &&
-                  a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0,
-              "l71 audio arm: every key (28), nothing ignored, fits in 1 KiB");
+                  a.ValueCount() == 28 && a.ignored_lines == 0,
+              "l71 audio arm: every l71 key (28), nothing ignored, fits in 1 KiB");
         Check(a.Value(Key::kAudioSpeakerStereo) == (audio[0][0] == 't') &&
                   a.Value(Key::kAudioSpeakerSurround) == (audio[1][0] == 't') &&
                   a.Value(Key::kAudioDownmixItuOff) == (audio[2][0] == 't') &&
@@ -462,6 +475,53 @@ void TestWhitelist() {
               integer.issues[0].issue == LineIssue::kMalformed &&
               integer.issues[1].issue == LineIssue::kMalformed,
           "probe values must be true or false");
+  }
+  {
+    // l72 KI-056 fix A arm: the l71 triad arm file (every l71 key, in file
+    // order) plus the restore key: every key (29), nothing ignored, fits.
+    const std::string triad =
+        "mcla_readback_sync_composite=true\n"
+        "mcla_native_d3d_refcount=true\n"
+        "mcla_native_xapi_interlocked=true\n"
+        "d3d12_wrm_event_wake=true\n"
+        "d3d12_replay_batched_wake=true\n"
+        "d3d12_readback_elide_unread=true\n"
+        "mcla_gpu_backend_vulkan=false\n"
+        "prewarm_seed_store=true\n"
+        "d3d12_readback_sync_targeted=true\n"
+        "memory_watch_census=false\n"
+        "memory_watch_probes=false\n"
+        "memory_watch_disarm_bridge_safe_gaps=false\n"
+        "shared_memory_upload_ahead_16=false\n"
+        "shared_memory_upload_ahead_64=false\n"
+        "shared_memory_hot_blocks_shadow=false\n"
+        "shared_memory_hot_blocks_on=false\n"
+        "mcla_warp_probe=true\n"
+        "mcla_warp_watchdog=false\n"
+        "mcla_texture_budget_soft_cap_off=false\n"
+        "mcla_warp_finish_fix_off=false\n"
+        "mcla_album_probe=true\n"
+        "mcla_pursuit_probe=true\n"
+        "xam_content_stable_creation_time_off=false\n"
+        "xam_content_trace_off=false\n"
+        "audio_speaker_config_stereo=false\n"
+        "audio_speaker_config_surround=false\n"
+        "audio_downmix_itu_off=false\n"
+        "audio_channel_rms_probe=false\n";
+    const Parsed l71 = Parse(triad);
+    Check(l71.ValueCount() == 28 && l71.ignored_lines == 0 &&
+              !l71.Value(Key::kAlbumPreviewRestore).has_value(),
+          "the l71 triad arm has no restore value (the cvar keeps its default off)");
+    const std::string l72 = triad + "mcla_album_preview_restore=true\n";
+    const Parsed fix = Parse(l72);
+    Check(l72.size() <= mcla::dev_overrides::kMaxBytes && fix.status == FileStatus::kParsed &&
+              fix.ValueCount() == mcla::dev_overrides::kKeyCount && fix.ignored_lines == 0 &&
+              fix.Value(Key::kAlbumPreviewRestore) == true &&
+              fix.Value(Key::kAlbumProbe) == true,
+          "l72 album fix arm: every key (29), nothing ignored, fits in 1 KiB");
+    const Parsed integer = Parse("mcla_album_preview_restore=1\n");
+    Check(integer.ValueCount() == 0 && integer.issues[0].issue == LineIssue::kMalformed,
+          "restore value must be true or false");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.

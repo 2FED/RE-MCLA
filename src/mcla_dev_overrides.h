@@ -50,6 +50,9 @@
 // - mcla_album_probe (KI-056 MCLA_ALBUM lines) and mcla_pursuit_probe (KI-066
 //   MCLA_PURSUIT lines) are plain host init-only bools (M11-002,
 //   docs/evidence/M11-002-diagnostics-triad-20261106.md).
+// - mcla_album_preview_restore (KI-056 fix A, default off) is a plain host
+//   init-only bool (mcla_album_probe.cpp,
+//   docs/evidence/M11-ki056-fix-a-20261106.md).
 // - xam_content_stable_creation_time_off=true writes false to the SDK bool
 //   cvar xam_content_stable_creation_time (M11-001 / KI-068 stable save
 //   creation time, SDK default true; the Deck A/B control arm), and
@@ -125,8 +128,9 @@ enum class Key : uint8_t {
   kAudioSpeakerSurround,  // KI-071 A/B: audio_speaker_config=surround
   kAudioDownmixItuOff,    // KI-071 A/B: audio_downmix_itu=false (legacy weights)
   kAudioChannelRmsProbe,  // KI-071: audio_channel_rms_probe (1 Hz RMS line)
+  kAlbumPreviewRestore,   // KI-056 fix A: mcla_album_preview_restore (default off)
 };
-inline constexpr size_t kKeyCount = 28;
+inline constexpr size_t kKeyCount = 29;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -194,6 +198,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"audio_speaker_config_surround", Phase::kStartup, "audio_speaker_config", "surround", ""},
     {"audio_downmix_itu_off", Phase::kStartup, "audio_downmix_itu", "false", ""},
     {"audio_channel_rms_probe", Phase::kStartup},
+    // KI-056 fix A host init-only bool (mcla_album_probe.cpp), before the
+    // guest.
+    {"mcla_album_preview_restore", Phase::kStartup},
 }};
 
 // Key pairs that write different values to one cvar (integer, or the

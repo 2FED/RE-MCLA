@@ -2,7 +2,8 @@
 
 // M11-002 / KI-056 album "Choose a slot" diagnostic: pure parts (offsets,
 // CRC-32, JPEG start marker, texture fetch-constant decoder, the hover-path
-// mirror, the line pacer and the new-photo tracker). The guest hooks are in
+// mirror, the line pacer, the new-photo tracker and the KI-056 fix A restore
+// decision). The guest hooks are in
 // mcla_album_probe.cpp; everything here is unit-tested
 // (tests/mcla_album_probe_test.cpp).
 //
@@ -31,6 +32,16 @@
 //   bl 0x8268ee10 :14448). Invalid slot or bad marker: the failure path
 //   loc_8263CB38 (:14453).
 // - sub_8263DCF8 (r3 = album, r4 = slot; save): see mcla_album_probe.cpp.
+// - sub_8263E1E8 (r3 = album, r4 = slot; slot thumbnail load): decodes the
+//   slot JPEG into the shared image, binds the slot texture +604 + slot*16,
+//   then reads the pending flag +1170 (lbz :18060) and, when set, re-runs
+//   sub_8263C8B0 (:18063) to restore the new photo. The hover path
+//   sub_8263C9C8 has no such restore (KI-056 fix A).
+// - +1170 (u8): new photo pending; cleared after the save by sub_8263E4F0
+//   (sub_8263DCF8 call, li r11,0 / stb r11,1170). +1180 (u32): cursor slot,
+//   stored by sub_8263DFC0 before its hover call.
+// - sub_8263C8B0 also stores 5 to *(*(0x8288B9AC) + 68) before its marker
+//   check (lis r10,-32119 / lwz r11,-18004(r10) / stw r9,68(r11)).
 // - Init sub_8263D2A8: +1144 = 4 KB-aligned physical allocation of 0x385000
 //   bytes, the memory behind texture +1132 and (8th argument of
 //   sub_8218DE38) image +1140; image layout (sub_8218DE38,
@@ -60,6 +71,8 @@ inline constexpr uint32_t kMaterial = 1136;
 inline constexpr uint32_t kImage = 1140;
 inline constexpr uint32_t kPixels = 1144;
 inline constexpr uint32_t kJpeg = 1148;
+inline constexpr uint32_t kNewPhotoPending = 1170;  // u8
+inline constexpr uint32_t kCursorSlot = 1180;       // u32
 inline constexpr uint32_t kAltCount = 1208;
 inline constexpr uint32_t kAltMode = 1225;
 
@@ -301,12 +314,15 @@ class Pacer {
   uint32_t suppressed_ = 0;
 };
 
-// --- new-photo tracker (seam for fix A) ------------------------------------------
+// --- new-photo tracker -------------------------------------------------------------
 // Counts new-photo decodes ("snapshots") and what replaced the shared preview
-// image +1140 since. Diagnostic now; the KI-056 fix A ("re-run the new-photo
-// decode once when the chooser opens", analysis section 4.2) would hang off
-// PendingRedecode(): at most once per snapshot, only while no hover decode
-// and no save consumed it. Nothing acts on it in this build.
+// image +1140 since. `clobbered` (KI-056 fix A, l71 album probe evidence
+// docs/evidence/M11-ki056-l71-album-probe-20261106.md section 3): an
+// occupied-slot hover decoded its slot JPEG over the shared image after the
+// last new-photo decode. It is cleared by a new-photo decode that ran and by
+// every fix A restore, so the restore bound is "while dirty": at most one
+// restore per dirtying hover, every occupied-to-empty return restores once,
+// and there is no once-per-snapshot latch.
 class NewPhotoTracker {
  public:
   void OnNewPhoto(bool decoded) {
@@ -314,32 +330,139 @@ class NewPhotoTracker {
     decoded_ = decoded;
     hovers_since_ = 0;
     saved_ = false;
-    redecoded_ = false;
+    // A skipped decode (bad marker) leaves the shared image as it was.
+    if (decoded) {
+      clobbered_ = false;
+    }
   }
   void OnHover(bool decoded) {
     if (decoded) {
       ++hovers_since_;
+      clobbered_ = true;
     }
   }
   void OnSave() { saved_ = true; }
-  void OnRedecode() { redecoded_ = true; }
-
-  // Fix A precondition (not acted on in this build): a snapshot exists, its
-  // own decode ran, it was not saved and not re-decoded yet.
-  bool PendingRedecode() const { return snapshots_ != 0 && decoded_ && !saved_ && !redecoded_; }
+  // A fix A restore (the game's new-photo decode re-run by the host); not a
+  // snapshot. Always clears `clobbered` so one dirtying hover never causes a
+  // second restore.
+  void OnRestore() {
+    ++restores_;
+    clobbered_ = false;
+  }
+  // The game's own slot thumbnail load (sub_8263E1E8; probe counter only).
+  void OnThumbLoad() { ++thumb_loads_; }
 
   uint32_t snapshots() const { return snapshots_; }
   uint32_t hovers_since() const { return hovers_since_; }
   bool saved() const { return saved_; }
   bool decoded() const { return decoded_; }
+  bool clobbered() const { return clobbered_; }
+  uint32_t restores() const { return restores_; }
+  uint32_t thumb_loads() const { return thumb_loads_; }
 
  private:
   uint32_t snapshots_ = 0;
   bool decoded_ = false;
   uint32_t hovers_since_ = 0;
   bool saved_ = false;
-  bool redecoded_ = false;
+  bool clobbered_ = false;
+  uint32_t restores_ = 0;
+  uint32_t thumb_loads_ = 0;
 };
+
+// --- KI-056 fix A: restore decision (pure) ---------------------------------------------
+// Evaluated after the original hover (sub_8263C9C8) returned. Every condition
+// must hold for a restore; the first failing one names the result.
+enum class RestoreDecision : uint8_t {
+  kOff,         // mcla_album_preview_restore is off
+  kUnread,      // the album fields could not be read
+  kNotPending,  // u8 +1170 == 0: no new photo pending (not the save chooser)
+  kOccupied,    // the hovered slot is valid by the game's rule: it shows its own photo
+  kClean,       // no occupied hover decoded over the shared image since
+  kNoMarker,    // *(+1148) does not start with FF D8 (or is unreadable)
+  kRestore,     // re-run sub_8263C8B0
+};
+
+constexpr const char *RestoreDecisionName(RestoreDecision decision) {
+  switch (decision) {
+    case RestoreDecision::kOff:
+      return "off";
+    case RestoreDecision::kUnread:
+      return "unread";
+    case RestoreDecision::kNotPending:
+      return "not-pending";
+    case RestoreDecision::kOccupied:
+      return "occupied";
+    case RestoreDecision::kClean:
+      return "clean";
+    case RestoreDecision::kNoMarker:
+      return "no-marker";
+    case RestoreDecision::kRestore:
+      return "restore";
+  }
+  return "unknown";
+}
+
+struct RestoreInputs {
+  bool fix_on = false;
+  bool read = false;        // +1170, +860, +1225, +1208 read
+  uint32_t pending = 0;     // u8 +1170
+  HoverInputs hover;        // slot and the validity fields
+  bool clobbered = false;   // NewPhotoTracker::clobbered()
+  bool marker_read = false; // the first two bytes of *(+1148) read
+  uint32_t b0 = 0, b1 = 0;
+};
+
+constexpr RestoreDecision DecideRestore(const RestoreInputs &in) {
+  if (!in.fix_on) {
+    return RestoreDecision::kOff;
+  }
+  if (!in.read) {
+    return RestoreDecision::kUnread;
+  }
+  if (in.pending == 0) {
+    return RestoreDecision::kNotPending;
+  }
+  if (HoverValid(in.hover)) {
+    return RestoreDecision::kOccupied;
+  }
+  if (!in.clobbered) {
+    return RestoreDecision::kClean;
+  }
+  if (!in.marker_read || !IsJpegStart(in.b0, in.b1)) {
+    return RestoreDecision::kNoMarker;
+  }
+  return RestoreDecision::kRestore;
+}
+
+// The F10 state.json "preview_restore" object of the album block.
+struct RestoreStats {
+  bool enabled = false;          // mcla_album_preview_restore
+  uint32_t restores = 0;         // restores run
+  uint32_t no_marker = 0;        // dirty + pending + empty, but no FF D8 at +1148
+  bool clobbered = false;        // the tracker flag now
+  bool last_seen = false;
+  uint32_t last_slot = 0;
+  std::string last_crc_before;   // CRC-32 of the first 4 KiB of *(+1144)
+  std::string last_crc_after;
+  int64_t last_age_ms = -1;
+};
+
+inline std::string RestoreJson(const RestoreStats &s) {
+  std::string out = "{\"enabled\": ";
+  out += s.enabled ? "true" : "false";
+  out += ", \"restores\": " + std::to_string(s.restores);
+  out += ", \"no_marker\": " + std::to_string(s.no_marker);
+  out += ", \"clobbered\": ";
+  out += s.clobbered ? "true" : "false";
+  if (s.last_seen) {
+    out += ", \"last\": {\"slot\": " + std::to_string(s.last_slot) + ", \"crc4k_before\": \"" +
+           s.last_crc_before + "\", \"crc4k_after\": \"" + s.last_crc_after +
+           "\", \"age_ms\": " + std::to_string(s.last_age_ms) + "}";
+  }
+  out += "}";
+  return out;
+}
 
 // --- formatting ------------------------------------------------------------------------
 inline std::string Hex8(uint32_t value) {
@@ -389,7 +512,9 @@ class Memory;
 }
 
 // Runtime (mcla_album_probe.cpp): the F10 state.json "album" object. Always a
-// JSON object: {"probe": false} while mcla_album_probe is off; otherwise the
+// JSON object: {"probe": false} while mcla_album_probe and
+// mcla_album_preview_restore are off; with only the restore on,
+// {"probe": false, "preview_restore": {...}}; with the probe on, also the
 // album pointer seen by the hooks, a live read of the album fields and the
 // last values of each hook.
 std::string MclaAlbumStateJson(rex::memory::Memory *memory, uint8_t *base);

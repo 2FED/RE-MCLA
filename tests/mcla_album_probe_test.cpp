@@ -194,22 +194,134 @@ void TestPacer() {
 
 void TestTracker() {
   album::NewPhotoTracker t;
-  Check(!t.PendingRedecode() && t.snapshots() == 0, "nothing before a photo");
-  t.OnNewPhoto(true);
-  Check(t.PendingRedecode() && t.snapshots() == 1 && t.hovers_since() == 0, "after a photo");
-  t.OnHover(false);
-  Check(t.hovers_since() == 0, "an empty hover does not count");
+  Check(t.snapshots() == 0 && !t.clobbered() && t.restores() == 0, "nothing before a photo");
   t.OnHover(true);
-  Check(t.hovers_since() == 1 && t.PendingRedecode(),
-        "an occupied hover overwrote +1140; still pending (fix A would restore)");
-  t.OnRedecode();
-  Check(!t.PendingRedecode(), "at most once per snapshot");
+  Check(t.clobbered(), "an occupied hover before any photo dirties the shared image");
   t.OnNewPhoto(true);
-  Check(t.PendingRedecode() && t.snapshots() == 2 && t.hovers_since() == 0, "next snapshot");
-  t.OnSave();
-  Check(!t.PendingRedecode() && t.saved(), "a save consumes the snapshot");
+  Check(t.snapshots() == 1 && t.hovers_since() == 0 && !t.clobbered() && t.decoded(),
+        "a new-photo decode cleans the shared image");
+  t.OnHover(false);
+  Check(t.hovers_since() == 0 && !t.clobbered(), "an empty hover decodes nothing: still clean");
+  t.OnHover(true);
+  Check(t.hovers_since() == 1 && t.clobbered(), "an occupied hover overwrote +1140: dirty");
+  t.OnRestore();
+  Check(!t.clobbered() && t.restores() == 1 && t.snapshots() == 1,
+        "a restore cleans and counts, and is not a snapshot");
+  t.OnHover(false);
+  Check(!t.clobbered(), "a second empty hover after the restore: clean, no second restore");
+  // "While dirty", not once per snapshot: each occupied-to-empty return
+  // restores once.
+  t.OnHover(true);
+  t.OnHover(true);
+  Check(t.clobbered() && t.hovers_since() == 3, "two more occupied hovers: dirty");
+  t.OnRestore();
+  Check(!t.clobbered() && t.restores() == 2 && t.snapshots() == 1,
+        "the second return to an empty slot restores again (same snapshot)");
+  t.OnHover(true);
   t.OnNewPhoto(false);
-  Check(!t.PendingRedecode() && !t.decoded(), "a skipped decode is not pending");
+  Check(t.clobbered() && !t.decoded() && t.snapshots() == 2,
+        "a skipped new-photo decode (bad marker) leaves the image dirty");
+  t.OnNewPhoto(true);
+  Check(!t.clobbered() && t.snapshots() == 3, "the game's own re-decode (thumbnail path) cleans");
+  t.OnSave();
+  Check(t.saved() && !t.clobbered(), "a save does not dirty the image");
+  t.OnThumbLoad();
+  t.OnThumbLoad();
+  Check(t.thumb_loads() == 2 && !t.clobbered(), "thumbnail loads are counted only");
+}
+
+album::RestoreInputs Restorable() {
+  album::RestoreInputs in;
+  in.fix_on = true;
+  in.read = true;
+  in.pending = 1;
+  in.hover.slot = 2;
+  in.hover.mask = 0x3u;  // slots 0 and 1 occupied, 2 empty
+  in.clobbered = true;
+  in.marker_read = true;
+  in.b0 = 0xFF;
+  in.b1 = 0xD8;
+  return in;
+}
+
+void TestRestoreDecision() {
+  using D = album::RestoreDecision;
+  Check(album::DecideRestore(Restorable()) == D::kRestore,
+        "pending + empty slot + dirty + FF D8: restore");
+  auto in = Restorable();
+  in.fix_on = false;
+  Check(album::DecideRestore(in) == D::kOff, "switch off: nothing");
+  in = Restorable();
+  in.read = false;
+  Check(album::DecideRestore(in) == D::kUnread, "unread fields: nothing");
+  in = Restorable();
+  in.pending = 0;
+  Check(album::DecideRestore(in) == D::kNotPending, "no new photo pending (+1170 == 0)");
+  in = Restorable();
+  in.hover.slot = 1;
+  Check(album::DecideRestore(in) == D::kOccupied, "occupied slot shows its own photo");
+  in = Restorable();
+  in.clobbered = false;
+  Check(album::DecideRestore(in) == D::kClean, "clean shared image: no decode");
+  in = Restorable();
+  in.b1 = 0xD9;
+  Check(album::DecideRestore(in) == D::kNoMarker, "no FF D8 at +1148 (e.g. reused buffer)");
+  in = Restorable();
+  in.marker_read = false;
+  Check(album::DecideRestore(in) == D::kNoMarker, "unreadable +1148");
+  // Alt mode (+1225 set): the game's rule is slot < +1208.
+  in = Restorable();
+  in.hover.alt_mode = true;
+  in.hover.alt_count = 3;
+  in.hover.mask = 0;
+  in.hover.slot = 2;
+  Check(album::DecideRestore(in) == D::kOccupied, "alt mode: slot < count is valid");
+  in.hover.slot = 3;
+  Check(album::DecideRestore(in) == D::kRestore, "alt mode: slot >= count is empty");
+  // The occupied bit as slw computes it: slot 32 and up is never valid.
+  in = Restorable();
+  in.hover.mask = 0xFFFFFFFFu;
+  in.hover.slot = 32;
+  Check(album::DecideRestore(in) == D::kRestore, "slw: slot 32 is empty for any mask");
+  // Every combination of the five conditions: a restore only when all hold.
+  int restores = 0;
+  for (int bits = 0; bits < 32; ++bits) {
+    album::RestoreInputs c = Restorable();
+    c.fix_on = (bits & 1) != 0;
+    c.pending = (bits & 2) ? 1u : 0u;
+    c.hover.slot = (bits & 4) ? 2u : 0u;  // 2 empty, 0 occupied
+    c.clobbered = (bits & 8) != 0;
+    c.b0 = (bits & 16) ? 0xFFu : 0x00u;
+    const bool restore = album::DecideRestore(c) == D::kRestore;
+    Check(restore == (bits == 31), "restore iff every condition holds");
+    restores += restore ? 1 : 0;
+  }
+  Check(restores == 1, "exactly one restoring combination");
+  Check(std::strcmp(album::RestoreDecisionName(D::kRestore), "restore") == 0 &&
+            std::strcmp(album::RestoreDecisionName(D::kNotPending), "not-pending") == 0 &&
+            std::strcmp(album::RestoreDecisionName(D::kNoMarker), "no-marker") == 0,
+        "decision names");
+}
+
+void TestRestoreJson() {
+  album::RestoreStats s;
+  Check(album::RestoreJson(s) ==
+            "{\"enabled\": false, \"restores\": 0, \"no_marker\": 0, \"clobbered\": false}",
+        "F10 preview_restore block, nothing yet");
+  s.enabled = true;
+  s.restores = 3;
+  s.no_marker = 1;
+  s.clobbered = true;
+  s.last_seen = true;
+  s.last_slot = 4;
+  s.last_crc_before = "049EA761";
+  s.last_crc_after = "6F46AAAF";
+  s.last_age_ms = 250;
+  Check(album::RestoreJson(s) ==
+            "{\"enabled\": true, \"restores\": 3, \"no_marker\": 1, \"clobbered\": true, "
+            "\"last\": {\"slot\": 4, \"crc4k_before\": \"049EA761\", \"crc4k_after\": "
+            "\"6F46AAAF\", \"age_ms\": 250}}",
+        "F10 preview_restore block with the last restore");
 }
 
 void TestFormat() {
@@ -328,6 +440,46 @@ void TestGenerated() {
            Store("ctx.r31", album::kSlotJpegs),
            Store("ctx.r31", album::kJpeg)},
           "init: pixels, texture, image over pixels, slot JPEGs, new JPEG");
+
+  // KI-056 fix A: the game's own restore after a thumbnail load, gated by
+  // the pending flag, which the save path clears; the cursor move stores
+  // +1180 and then hovers; the new-photo decode's global store; the hover
+  // callers return without reading r3.
+  const std::string thumb = Body(text, "sub_8263E1E8");
+  Check(!thumb.empty(), "thumbnail load body");
+  InOrder(thumb, 0,
+          {"REX_LOAD_U8" + Off("ctx.r31", album::kAltMode),
+           "REX_LOAD_U32" + Off("ctx.r31", album::kSlotJpegs), "// bl 0x8218f8d0",
+           "REX_LOAD_U8" + Off("ctx.r31", album::kNewPhotoPending), "// beq cr6,0x8263e41c",
+           "// mr r3,r31", "// bl 0x8263c8b0"},
+          "thumbnail load: slot JPEG, bind, then +1170 gates the new-photo re-decode");
+  const std::string chooser = Body(text, "sub_8263E4F0");
+  Check(!chooser.empty(), "chooser body");
+  InOrder(chooser, 0,
+          {"REX_LOAD_U8" + Off("ctx.r31", album::kNewPhotoPending), "// lwz r4,1160(r31)",
+           "// bl 0x8263dcf8", "// li r11,0",
+           "REX_STORE_U8(ctx.r31.u32 + " + std::to_string(album::kNewPhotoPending) + ", "},
+          "chooser: save when +1170 is set, then clear +1170");
+  const std::string cursor = Body(text, "sub_8263DFC0");
+  Check(!cursor.empty(), "cursor move body");
+  InOrder(cursor, 0,
+          {Store("ctx.r31", album::kCursorSlot), "// bl 0x825ee0e0", "// mr r4,r30",
+           "// mr r3,r31", "// bl 0x8263c9c8", "loc_8263E1DC:"},
+          "cursor move: store +1180, prompts, hover, return");
+  InOrder(decode, 0,
+          {"// lis r10,-32119", "// li r9,5", "// lwz r11,-18004(r10)", "// stw r9,68(r11)",
+           "REX_LOAD_U32" + Off("ctx.r31", album::kJpeg)},
+          "new-photo: stores 5 to *(*(0x8288B9AC) + 68) before the marker check");
+  static_assert((0x82890000u - 18004u) == 0x8288B9ACu, "lis -32119 / -18004");
+  for (const char *caller : {"sub_8263CDC0", "sub_8263CE88"}) {
+    const std::string body = Body(text, caller);
+    const size_t call = body.find("sub_8263C9C8(ctx, base);");
+    Check(call != std::string::npos, "hover caller calls the hover");
+    const std::string tail = body.substr(call, 400);
+    Check(tail.find("// addi r1,r1,112") != std::string::npos &&
+              tail.find("ctx.r3.") == std::string::npos,
+          "hover caller returns after the hover without reading r3");
+  }
   static_assert(album::kPixelsSize == ((56u << 16) | 20480u), "lis 56 / ori 20480 = 0x385000");
 }
 
@@ -340,6 +492,8 @@ int main() {
   TestHover();
   TestPacer();
   TestTracker();
+  TestRestoreDecision();
+  TestRestoreJson();
   TestFormat();
   TestGenerated();
   std::printf("mcla_album_probe_test: %d checks passed\n", checks);
