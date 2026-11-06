@@ -11,7 +11,7 @@ Updated November 5, 2026 Kyiv (M10 closed in the ledger; l70 published as the on
 **Owner steps, in order:**
 1. **l70 pre-share check** on the staged `private/l70-volunteer`: PC, one 1080p session with two or three garage trips after races (no freeze; `MCLA_KI035_FINISH_RACE` / `_DONE state=29` when the hook fires; `texture cache soft cap` at startup and `MCLA_VRAM v=1` lines in budget; `platform=windows applied=1` and `applied=5`); Deck, one loop (`platform=wine applied=2` and `applied=6`; the soft cap does not engage under Wine). Details in the l70 evidence, "Owner checks before sharing".
 2. Share l70 with the closed group.
-3. The result fills the closure line `[closure regression: owner result pending]` in README-AI 17b; then main is pushed (local commits since `99d6e56`) and the push commit is recorded there.
+3. The result fills the closure line `Closure regression done (owner, 2026-11-05/06): PC garage trips and 720p loop clean, Deck loop on l70 OK; l70 shared 2026-11-06.` in README-AI 17b; then main is pushed (local commits since `99d6e56`) and the push commit is recorded there.
 
 **M11 inputs** (also in README-AI 17b):
 - Hot blocks v2 (Deck): change the copy shape (batch hot copies per block per submission, or snapshot before the first draw of a submission); SDK `mcla/m10-hotblocks` `cdf469a`, local.
