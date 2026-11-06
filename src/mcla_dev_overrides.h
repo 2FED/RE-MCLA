@@ -56,6 +56,16 @@
 //   xam_content_trace_off=true writes false to the SDK bool cvar
 //   xam_content_trace (KI-068 content trace lines, SDK default true); =false
 //   changes nothing. Both are rexruntime cvars, registered before startup.
+// - KI-071 cut-scene audio A/B (docs/evidence/M11-ki071-cutscene-audio-analysis-20261106.md):
+//   audio_speaker_config_stereo=true and audio_speaker_config_surround=true
+//   write stereo or surround to the SDK string cvar audio_speaker_config
+//   (default auto: follow the host playback device). Both true in one file is a
+//   conflict (neither applied), as for the integer pairs. =false changes
+//   nothing. audio_downmix_itu_off=true writes false to the SDK bool cvar
+//   audio_downmix_itu (ITU Lo/Ro stereo downmix, default true; the A/B control
+//   arm restores the legacy weights). audio_channel_rms_probe is the plain SDK
+//   bool (1 Hz per-channel RMS log line). All are rexruntime cvars registered
+//   before startup; an SDK without them logs the keys as unavailable.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
 // non-default value (set by the command line or the config file), and logged
@@ -111,8 +121,12 @@ enum class Key : uint8_t {
   kPursuitProbe,          // M11-002 / KI-066: police pursuit transition log
   kStableCreationTimeOff, // KI-068 A/B: xam_content_stable_creation_time=false
   kContentTraceOff,       // KI-068: xam_content_trace=false
+  kAudioSpeakerStereo,    // KI-071 A/B: audio_speaker_config=stereo
+  kAudioSpeakerSurround,  // KI-071 A/B: audio_speaker_config=surround
+  kAudioDownmixItuOff,    // KI-071 A/B: audio_downmix_itu=false (legacy weights)
+  kAudioChannelRmsProbe,  // KI-071: audio_channel_rms_probe (1 Hz RMS line)
 };
-inline constexpr size_t kKeyCount = 24;
+inline constexpr size_t kKeyCount = 28;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -174,17 +188,25 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"xam_content_stable_creation_time_off", Phase::kStartup, "xam_content_stable_creation_time",
      "false", ""},
     {"xam_content_trace_off", Phase::kStartup, "xam_content_trace", "false", ""},
+    // KI-071 SDK rexruntime audio cvars, before the guest (the speaker config
+    // is read at the title's first XAudioGetSpeakerConfig call).
+    {"audio_speaker_config_stereo", Phase::kStartup, "audio_speaker_config", "stereo", ""},
+    {"audio_speaker_config_surround", Phase::kStartup, "audio_speaker_config", "surround", ""},
+    {"audio_downmix_itu_off", Phase::kStartup, "audio_downmix_itu", "false", ""},
+    {"audio_channel_rms_probe", Phase::kStartup},
 }};
 
-// Key pairs that write different values to one integer cvar: both true in one
-// file is contradictory and neither is applied.
+// Key pairs that write different values to one cvar (integer, or the
+// audio_speaker_config string): both true in one file is contradictory and
+// neither is applied.
 struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 2> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 3> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
+    {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

@@ -29,7 +29,22 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 24, "twenty-four whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 28, "twenty-eight whitelisted names");
+  Check(FindKey("audio_speaker_config_stereo") == Key::kAudioSpeakerStereo &&
+            FindKey("audio_speaker_config_surround") == Key::kAudioSpeakerSurround &&
+            FindKey("audio_downmix_itu_off") == Key::kAudioDownmixItuOff &&
+            FindKey("audio_channel_rms_probe") == Key::kAudioChannelRmsProbe,
+        "KI-071 audio keys");
+  Check(!FindKey("audio_speaker_config") && !FindKey("audio_downmix_itu") &&
+            !FindKey("audio_speaker_config_auto") && !FindKey("audio_downmix_itu_on") &&
+            !FindKey("audio_speaker_config_stere") && !FindKey("audio_channel_rms") &&
+            !FindKey("audio_device") && !FindKey("audio_volume") && !FindKey("audio_mute"),
+        "the audio cvar names, auto, prefixes and other audio cvars are not keys");
+  Check(mcla::dev_overrides::Info(Key::kAudioSpeakerStereo).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kAudioSpeakerSurround).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kAudioDownmixItuOff).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kAudioChannelRmsProbe).phase == Phase::kStartup,
+        "KI-071 keys at startup (rexruntime cvars, before the guest)");
   Check(FindKey("xam_content_stable_creation_time_off") == Key::kStableCreationTimeOff,
         "KI-068 stable creation time off key");
   Check(FindKey("xam_content_trace_off") == Key::kContentTraceOff, "KI-068 trace off key");
@@ -159,7 +174,8 @@ void TestWhitelist() {
                           key == Key::kHotBlocksShadow || key == Key::kHotBlocksOn ||
                           key == Key::kWarpWatchdog || key == Key::kTextureSoftCapOff ||
                           key == Key::kWarpFinishFixOff || key == Key::kStableCreationTimeOff ||
-                          key == Key::kContentTraceOff;
+                          key == Key::kContentTraceOff || key == Key::kAudioSpeakerStereo ||
+                          key == Key::kAudioSpeakerSurround || key == Key::kAudioDownmixItuOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -203,6 +219,22 @@ void TestWhitelist() {
               CvarText(Info(Key::kContentTraceOff), true) == "false" &&
               CvarText(Info(Key::kContentTraceOff), false).empty(),
           "trace_off=true writes false, false writes nothing");
+    Check(CvarName(Info(Key::kAudioSpeakerStereo)) == "audio_speaker_config" &&
+              CvarText(Info(Key::kAudioSpeakerStereo), true) == "stereo" &&
+              CvarText(Info(Key::kAudioSpeakerStereo), false).empty(),
+          "speaker_config_stereo=true writes stereo, false writes nothing");
+    Check(CvarName(Info(Key::kAudioSpeakerSurround)) == "audio_speaker_config" &&
+              CvarText(Info(Key::kAudioSpeakerSurround), true) == "surround" &&
+              CvarText(Info(Key::kAudioSpeakerSurround), false).empty(),
+          "speaker_config_surround=true writes surround, false writes nothing");
+    Check(CvarName(Info(Key::kAudioDownmixItuOff)) == "audio_downmix_itu" &&
+              CvarText(Info(Key::kAudioDownmixItuOff), true) == "false" &&
+              CvarText(Info(Key::kAudioDownmixItuOff), false).empty(),
+          "downmix_itu_off=true writes false, false writes nothing");
+    Check(CvarName(Info(Key::kAudioChannelRmsProbe)) == "audio_channel_rms_probe" &&
+              CvarText(Info(Key::kAudioChannelRmsProbe), true) == "true" &&
+              CvarText(Info(Key::kAudioChannelRmsProbe), false) == "false",
+          "rms probe writes its own bool cvar");
     Check(CvarName(Info(Key::kWarpProbe)) == "mcla_warp_probe" &&
               CvarText(Info(Key::kWarpProbe), true) == "true",
           "warp probe writes its own bool cvar");
@@ -222,7 +254,8 @@ void TestWhitelist() {
         Check(paired, "keys writing one cvar form a conflict pair");
       }
     }
-    Check(shared == mcla::dev_overrides::kConflictPairs.size(), "two shared-cvar pairs");
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 3,
+          "three shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -351,11 +384,32 @@ void TestWhitelist() {
                                   "xam_content_trace_off=false\n";
       const Parsed s = Parse(l71_all);
       Check(l71_all.size() <= mcla::dev_overrides::kMaxBytes && s.status == FileStatus::kParsed &&
-                s.ValueCount() == mcla::dev_overrides::kKeyCount && s.ignored_lines == 0 &&
+                s.ValueCount() == 24 && s.ignored_lines == 0 &&
                 s.Value(Key::kAlbumProbe) == true && s.Value(Key::kPursuitProbe) == true &&
                 s.Value(Key::kStableCreationTimeOff) == true &&
                 s.Value(Key::kContentTraceOff) == false,
-            "l71 arm: every key, nothing ignored, fits");
+            "l71 arm: every l71 triad key (24), nothing ignored, fits");
+      // l71 KI-071 audio arms: the triad arm plus the four audio keys: every
+      // key (28), still within 1 KiB.
+      const char *const audio_arms[3][4] = {{"false", "true", "true", "true"},     // old
+                                            {"false", "true", "false", "true"},    // itu
+                                            {"true", "false", "false", "true"}};  // stereo
+      for (const auto &audio : audio_arms) {
+        const std::string text_audio = l71_all + "audio_speaker_config_stereo=" + audio[0] + "\n" +
+                                       "audio_speaker_config_surround=" + audio[1] + "\n" +
+                                       "audio_downmix_itu_off=" + audio[2] + "\n" +
+                                       "audio_channel_rms_probe=" + audio[3] + "\n";
+        const Parsed a = Parse(text_audio);
+        Check(text_audio.size() <= mcla::dev_overrides::kMaxBytes &&
+                  a.status == FileStatus::kParsed &&
+                  a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0,
+              "l71 audio arm: every key (28), nothing ignored, fits in 1 KiB");
+        Check(a.Value(Key::kAudioSpeakerStereo) == (audio[0][0] == 't') &&
+                  a.Value(Key::kAudioSpeakerSurround) == (audio[1][0] == 't') &&
+                  a.Value(Key::kAudioDownmixItuOff) == (audio[2][0] == 't') &&
+                  a.Value(Key::kAudioChannelRmsProbe) == true,
+              "l71 audio arm values");
+      }
       Check(p.Value(Key::kHotBlocksShadow) == (arm[0][0] == 't') &&
                 p.Value(Key::kHotBlocksOn) == (arm[1][0] == 't') &&
                 p.Value(Key::kUploadAhead16) == true && p.Value(Key::kWatchCensus) == true,
@@ -427,6 +481,35 @@ void TestWhitelist() {
     const Parsed name = Parse("mcla_texture_budget_soft_cap_mb=true\n");
     Check(name.ValueCount() == 0 && name.issues[0].issue == LineIssue::kUnknownName,
           "the integer cvar name is not a key");
+  }
+  {
+    // KI-071 speaker config: one key true applies; both true is a conflict
+    // (neither applied, logged on the later line), like the integer pairs.
+    const Parsed stereo = Parse("audio_speaker_config_stereo=true\r\n"
+                                "audio_speaker_config_surround=false\r\n");
+    Check(stereo.ValueCount() == 2 && stereo.Value(Key::kAudioSpeakerStereo) == true &&
+              stereo.Value(Key::kAudioSpeakerSurround) == false && stereo.ignored_lines == 0,
+          "stereo arm; surround=false with stereo=true is not a conflict");
+    const Parsed both = Parse("audio_speaker_config_surround=true\n"
+                              "audio_channel_rms_probe=true\n"
+                              "audio_speaker_config_stereo=true\n"
+                              "audio_downmix_itu_off=true\n");
+    Check(both.ValueCount() == 2 && !both.Value(Key::kAudioSpeakerStereo) &&
+              !both.Value(Key::kAudioSpeakerSurround) &&
+              both.Value(Key::kAudioChannelRmsProbe) == true &&
+              both.Value(Key::kAudioDownmixItuOff) == true,
+          "both speaker config keys true: neither applies, the other keys do");
+    Check(both.ignored_lines == 1 && both.issue_count == 1 && both.issues[0].line == 3 &&
+              both.issues[0].issue == LineIssue::kConflict,
+          "speaker config conflict logged on the later line");
+    const Parsed text = Parse("audio_speaker_config=stereo\n"
+                              "audio_speaker_config_stereo=stereo\n"
+                              "audio_downmix_itu=false\n");
+    Check(text.ValueCount() == 0 && text.ignored_lines == 3 &&
+              text.issues[0].issue == LineIssue::kMalformed &&
+              text.issues[1].issue == LineIssue::kMalformed &&
+              text.issues[2].issue == LineIssue::kUnknownName,
+          "string values and the cvar names themselves are not accepted");
   }
   {
     const Parsed p = Parse("prewarm_seed_store=false\n");
@@ -638,9 +721,14 @@ void TestConstexpr() {
   static_assert(hot_conflict.ValueCount() == 0);
   static_assert(hot_conflict.issues[0].line == 2);
   static_assert(hot_conflict.issues[0].issue == LineIssue::kConflict);
+  constexpr Parsed audio_conflict =
+      Parse("audio_speaker_config_stereo=true\naudio_speaker_config_surround=true\n");
+  static_assert(audio_conflict.ValueCount() == 0);
+  static_assert(audio_conflict.issues[0].line == 2);
+  static_assert(audio_conflict.issues[0].issue == LineIssue::kConflict);
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
             "conflicting keys for one cvar (neither is applied)",
-        "conflict issue name covers both pairs");
+        "conflict issue name covers every pair");
 }
 }  // namespace
 

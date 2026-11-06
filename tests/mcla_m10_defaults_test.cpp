@@ -160,6 +160,15 @@ void TestTable() {
             Find("xam_content_stable_creation_time") == nullptr &&
             Find("xam_content_trace") == nullptr,
         "the KI-068 SDK switches are never written by the M10 defaults");
+  Check(IsNeverWritten("audio_speaker_config") && IsNeverWritten("audio_downmix_itu") &&
+            IsNeverWritten("audio_channel_rms_probe") &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAudioSpeakerStereo))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAudioSpeakerSurround))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAudioDownmixItuOff))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAudioChannelRmsProbe))) &&
+            Find("audio_speaker_config") == nullptr && Find("audio_downmix_itu") == nullptr &&
+            Find("audio_channel_rms_probe") == nullptr,
+        "the KI-071 SDK audio switches are never written by the M10 defaults");
   Check(IsNeverWritten("mcla_album_probe") && IsNeverWritten("mcla_pursuit_probe") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumProbe))) &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kPursuitProbe))) &&
