@@ -190,6 +190,15 @@ void TestTable() {
             Find("d3d12_fetch_identity_verify") == nullptr &&
             Find("d3d12_readback_sync_steady_exempt") == nullptr,
         "l73 fetch identity / steady-exempt switches keep their SDK defaults (owner keys only)");
+  for (const auto key : {dev::Key::kXmaSwapCarryPacket, dev::Key::kXmaValidOnlyWhenWritten,
+                         dev::Key::kXmaWorkLockRecheck, dev::Key::kXmaSwapTrace}) {
+    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) == nullptr,
+          "the KI-071 XMA fixes keep their SDK defaults (owner keys only)");
+  }
+  Check(IsNeverWritten("xma_swap_carry_packet") && IsNeverWritten("xma_valid_only_when_written") &&
+            IsNeverWritten("xma_work_lock_recheck") && IsNeverWritten("xma_swap_trace"),
+        "XMA cvar names in the never-written set");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
             Find("mcla_album_preview_restore") == nullptr,

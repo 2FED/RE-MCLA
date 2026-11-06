@@ -88,6 +88,13 @@
 //   default false, docs/evidence/M11-007a-steady-key-exemption-20261106.md).
 //   =false changes nothing for all three. They write three different cvars,
 //   so no combination is a conflict.
+// - KI-071 XMA doubling fixes (docs/evidence/M11-ki071-xma-doubling-re-20261106.md,
+//   SDK branch mcla/m11-xma-doubling): xma_swap_carry_packet (C1: carry the
+//   packet over an input-buffer swap for multi-stream waves),
+//   xma_valid_only_when_written (C2), xma_work_lock_recheck (C3) and
+//   xma_swap_trace (swap trace lines) are plain SDK rexruntime bools (default
+//   false), registered before startup: =true writes true, =false changes
+//   nothing (so an SDK default stays visible as the default).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -160,8 +167,12 @@ enum class Key : uint8_t {
   kFetchIdentityOff,      // M11-016 A/B control: d3d12_fetch_identity_cache=false
   kFetchIdentityVerify,   // M11-016: d3d12_fetch_identity_verify=true
   kReadbackSteadyExempt,  // M11-007a A/B: d3d12_readback_sync_steady_exempt=true
+  kXmaSwapCarryPacket,    // KI-071 C1: xma_swap_carry_packet=true
+  kXmaValidOnlyWhenWritten,  // KI-071 C2: xma_valid_only_when_written=true
+  kXmaWorkLockRecheck,    // KI-071 C3: xma_work_lock_recheck=true
+  kXmaSwapTrace,          // KI-071: xma_swap_trace=true (swap trace lines)
 };
-inline constexpr size_t kKeyCount = 35;
+inline constexpr size_t kKeyCount = 39;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -244,6 +255,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"fetch_identity_verify", Phase::kGraphicsPlugin, "d3d12_fetch_identity_verify", "true", ""},
     {"readback_steady_exempt", Phase::kGraphicsPlugin, "d3d12_readback_sync_steady_exempt", "true",
      ""},
+    // KI-071 XMA doubling fixes: SDK rexruntime bools (default false), before
+    // the guest; =false writes nothing.
+    {"xma_swap_carry_packet", Phase::kStartup, "", "true", ""},
+    {"xma_valid_only_when_written", Phase::kStartup, "", "true", ""},
+    {"xma_work_lock_recheck", Phase::kStartup, "", "true", ""},
+    {"xma_swap_trace", Phase::kStartup, "", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, or the
@@ -506,7 +523,8 @@ std::optional<bool> AppliedValue(Key key);
 // The value of the key's valid file line (nullopt without the option, without
 // a parsed file or without a valid line), whether or not anything was
 // written. Used for keys whose value writes nothing (upload-ahead, hot blocks,
-// read-back kick and the l73 fetch-identity / steady-exempt keys =false).
+// read-back kick, the l73 fetch-identity / steady-exempt and the KI-071 XMA
+// keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

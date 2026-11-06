@@ -29,7 +29,37 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 35, "thirty-five whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 39, "thirty-nine whitelisted names");
+  {
+    // KI-071 XMA doubling fix keys: plain SDK bools at startup, =false writes
+    // nothing.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    const Key xma_keys[] = {Key::kXmaSwapCarryPacket, Key::kXmaValidOnlyWhenWritten,
+                            Key::kXmaWorkLockRecheck, Key::kXmaSwapTrace};
+    const char *const xma_names[] = {"xma_swap_carry_packet", "xma_valid_only_when_written",
+                                     "xma_work_lock_recheck", "xma_swap_trace"};
+    for (size_t k = 0; k < 4; ++k) {
+      Check(FindKey(xma_names[k]) == xma_keys[k], "KI-071 XMA key lookup");
+      Check(Info(xma_keys[k]).phase == Phase::kStartup, "XMA keys at startup (rexruntime cvars)");
+      Check(CvarName(Info(xma_keys[k])) == xma_names[k] &&
+                CvarText(Info(xma_keys[k]), true) == "true" &&
+                CvarText(Info(xma_keys[k]), false).empty(),
+            "XMA key writes its own cvar true, false writes nothing");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != xma_keys[k] && pair.second != xma_keys[k],
+              "XMA keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("xma_swap_carry") && !FindKey("xma_swap_carry_packet_on") &&
+              !FindKey("xma_swap_carry_packet_off") && !FindKey("xma_valid_only") &&
+              !FindKey("xma_valid_only_when_written_off") && !FindKey("xma_work_lock") &&
+              !FindKey("xma_work_lock_recheck_on") && !FindKey("xma_swap") &&
+              !FindKey("xma_swap_trace_on") && !FindKey("xma_trace") &&
+              !FindKey("XMA_SWAP_TRACE") && !FindKey("xma_decoder") && !FindKey("apu"),
+          "no prefix, suffix, case or other XMA/APU keys");
+  }
   {
     // l73 owner A/B keys (M11-016 fetch identity cache, M11-007a steady key).
     using mcla::dev_overrides::CvarName;
@@ -243,7 +273,9 @@ void TestWhitelist() {
                           key == Key::kAudioSpeakerSurround || key == Key::kAudioDownmixItuOff ||
                           key == Key::kReadbackKick256 || key == Key::kReadbackKick128 ||
                           key == Key::kReadbackKick1024 || key == Key::kFetchIdentityOff ||
-                          key == Key::kFetchIdentityVerify || key == Key::kReadbackSteadyExempt;
+                          key == Key::kFetchIdentityVerify || key == Key::kReadbackSteadyExempt ||
+                          key == Key::kXmaSwapCarryPacket || key == Key::kXmaValidOnlyWhenWritten ||
+                          key == Key::kXmaWorkLockRecheck || key == Key::kXmaSwapTrace;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -715,8 +747,7 @@ void TestWhitelist() {
       const Parsed a = Parse(text);
       Check(text.size() > 1024 && text.size() <= mcla::dev_overrides::kMaxBytes &&
                 a.status == FileStatus::kParsed &&
-                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
-                a.issue_count == 0,
+                a.ValueCount() == 35 && a.ignored_lines == 0 && a.issue_count == 0,
             "l73 arm: every key (35), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kFetchIdentityOff) == (arm[0][0] == 't') &&
                 a.Value(Key::kFetchIdentityVerify) == (arm[1][0] == 't') &&
@@ -746,6 +777,43 @@ void TestWhitelist() {
               l73_bad.issues[3].issue == LineIssue::kUnknownName &&
               l73_bad.issues[4].issue == LineIssue::kDuplicate,
           "l73 near misses: cvar names, non-bool values and repeats are ignored");
+    // l73 KI-071 voice arms: every 35-key l73 arm plus the four XMA keys
+    // explicit: every key (39), nothing ignored, within kMaxBytes. voice-fix =
+    // all four true; voice-c1 = C1 + the swap trace only.
+    const char *const xma_arms[3][4] = {{"false", "false", "false", "false"},  // base
+                                        {"true", "true", "true", "true"},      // voice-fix
+                                        {"true", "false", "false", "true"}};   // voice-c1
+    for (const auto &arm : xma_arms) {
+      const std::string text = triad32 + "fetch_identity_off=false\n"
+                               "fetch_identity_verify=false\n"
+                               "readback_steady_exempt=false\n"
+                               "xma_swap_carry_packet=" + arm[0] + "\n" +
+                               "xma_valid_only_when_written=" + arm[1] + "\n" +
+                               "xma_work_lock_recheck=" + arm[2] + "\n" +
+                               "xma_swap_trace=" + arm[3] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l73 voice arm: every key (39), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kXmaSwapCarryPacket) == (arm[0][0] == 't') &&
+                a.Value(Key::kXmaValidOnlyWhenWritten) == (arm[1][0] == 't') &&
+                a.Value(Key::kXmaWorkLockRecheck) == (arm[2][0] == 't') &&
+                a.Value(Key::kXmaSwapTrace) == (arm[3][0] == 't') &&
+                a.Value(Key::kReadbackSteadyExempt) == false,
+            "l73 voice arm values");
+    }
+    const Parsed xma_bad = Parse("xma_swap_carry_packet=1\n"
+                                 "xma_swap_trace=on\n"
+                                 "xma_swap_carry=true\n"
+                                 "xma_work_lock_recheck=true\n"
+                                 "xma_work_lock_recheck=false\n");
+    Check(xma_bad.ValueCount() == 1 && xma_bad.Value(Key::kXmaWorkLockRecheck) == true &&
+              xma_bad.ignored_lines == 4 && xma_bad.issues[0].issue == LineIssue::kMalformed &&
+              xma_bad.issues[1].issue == LineIssue::kMalformed &&
+              xma_bad.issues[2].issue == LineIssue::kUnknownName &&
+              xma_bad.issues[3].issue == LineIssue::kDuplicate,
+          "XMA near misses: non-bool values, prefixes and repeats are ignored");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.
