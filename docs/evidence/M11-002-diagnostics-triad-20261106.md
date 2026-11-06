@@ -218,51 +218,89 @@ checks).
 - **Tests:** 51 executables, **0 failed** (`l71-tests.log`).
 - **ast-grep 0.50.0:** `scan src tests` rc 0; `test` 3/3 rc 0.
 
-## 7. Candidate `private/l71-int-input`
+## 7. Candidate `private/l71-int-input` (final, 2026-11-06)
+
+**Superseded:** the first l71 build (triad patch on `72f7e17`, SDK `109116b`; `mcla.exe`
+`4A0B0673...D634`) was rebuilt and is no longer staged.
+
+**Final build:**
+- **Source:** a scratch copy (`l71b-host-src`) of main `3e78c2c54bede0545c6ff03740ab746d4870101b`
+  ("host: dev-override keys for the KI-071 audio A/B"). That tree contains the triad and, since
+  then:
+  - the KI-070 F10 without live minidump (`src/mcla_diagnostic_trigger.h`,
+    `mcla_diagnostics.cpp`);
+  - the crash/F10 async log flush (`mcla_native_crash_win.cpp`, `mcla_diagnostics.cpp`);
+  - the four KI-071 audio dev keys (28 keys).
+- **SDK:** the final `private/l71-sdk-install`, d08813b (`0.20.0.3-dev.gd08813b`: KI-068 +
+  KI-069 + KI-071).
+- **Build:** `private/l71-host-build` was configured fresh with the same l69 owner options:
+  267/267 steps, rc 0, **0 warnings**. The test targets in `build.ninja` (51) equal the test
+  executables built (51).
+- **Tests:** 51 of 51 pass, 0 failed.
+- **ast-grep 0.50.0:** scan rc 0, rule tests 3/3.
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| MCLA-Launcher.exe | 1455104 | 38BA7FC40FAEFED5E5BF31876D978254D39F430E66A96C2A3D4CFDBBA408A0A2 |
-| mcla.exe | 53572608 | 4A0B06736BE63F1353B7B301167CF0253CC55BA0E9C32CC1FB91EE8CC275D634 |
-| mcla_crash_handler.exe | 211968 | 31AAB377624BBFDCCD17453EE6527B106702F841ABD4ACC6C01062E8AB039510 |
-| mcla_diagnostic_image_helper.exe | 60928 | 0B0860F13B0EACBFE350E9E87C42B6409C1EAF7112FA58C2C66495F871B261E4 |
-| rexgpu-xenos.dll | 3210240 | A79557DCA3C01D4634239BDEC0924CBC8239F79B98677ED546C068619DF14970 |
-| rexruntime.dll | 11191296 | 1EB4B1C91C4122E7F96A29CB6B453A3E76028D642765A0FCDA1B4C4ACD62420A |
+| MCLA-Launcher.exe | 1456128 | 9E2C1492E47F2150C407A1EB0C3627A08FE2AB57DFFF01F87BF53606E30DCE4E |
+| mcla.exe | 53581824 | A0FFA6C641345524C48F97273E2F128D45D1DDB554379F7863B999A64094F2D1 |
+| mcla_crash_handler.exe | 211968 | 62E9D38BA6A58FEC0A22A3B993EBDFE99E9F3511B5779C45CFD7805D31A15101 |
+| mcla_diagnostic_image_helper.exe | 60928 | AE8A0B85CBBE864425E94595A73309BE14C0FD7ECC1DF9F4ED685C7EF90456E7 |
+| rexgpu-xenos.dll | 3232768 | 3655D910427AB0643FB7785E138306A889EDF607AA4FA249CC0EE987787AF1CC |
+| rexruntime.dll | 11255808 | 259145F1436588F94530B74487353759A168CC3FB22182AFFE51BE9ECA933EFD |
 | TracyClient.dll | 246784 | 30E8AA912F64D638CCC3E67C25EF6BE03D36151901D9A72BD6F21472C2BFD37A |
 
-**Path scan** (`l71_scan.py`):
+The three DLLs are the `l71-sdk-install/bin` files. The copies in the build directory are
+byte-identical.
+
+**Path scan** (`l71b_scan.py`):
 - No build, user, temp or patch paths.
-- The remaining hits are three-byte opcode patterns (`l5x`-`l7x`), the launcher's generic
-  `AppData` strings and the `private/save-arc` entry names.
+- The remaining hits are three-byte opcode patterns (`l4x`-`l7x` inside instructions of
+  `mcla.exe`, `MCLA-Launcher.exe` and `rexruntime.dll`), the launcher's generic `AppData`
+  strings and the `private/save-arc` entry names.
 - The admission marker is present once.
 
 **String checks:** 0 failures.
-- `mcla.exe` holds all 24 keys, `MCLA_ALBUM v=1`, `MCLA_PURSUIT v=1`, `MCLA_CPU v=1`,
-  `MSAcpi_ThermalZoneTemperature`, `% Processor Performance` and the CPU-census texts.
-- `rexruntime.dll` holds `xam_content_stable_creation_time` and `xam_content_trace`.
-- Cvar names that are not referenced elsewhere, such as `mcla_cpu_census`, are not stored as
-  contiguous strings, so the scan checks the description text instead.
+- `mcla.exe` holds:
+  - all 28 whitelisted keys, read from the tree's `kKeys`;
+  - the audio cvar names `audio_speaker_config`, `audio_downmix_itu` and `audio_channel_rms_probe`
+    (key targets);
+  - `minidump_policy`, `skipped-by-default`, and the `FlushLoggingFor` import;
+  - `MCLA_ALBUM v=1`, `MCLA_PURSUIT v=1`, `MCLA_CPU v=1` and the CPU-census texts.
+- `rexruntime.dll` holds `FlushLoggingFor`, `MCLA_LOG v=1`, the three audio cvars and their
+  `[audio] speaker config: cvar=` text, `xam_content_stable_creation_time` and
+  `xam_content_trace`.
+- `rexgpu-xenos.dll` holds `MCLA_CP_FREEZE`.
 
-## 8. Owner staging
+## 8. Owner staging (final)
 
 | File | SHA-256 |
 |---|---|
-| `private/l71-internal-prepare.ps1` (from l69 by `mk_prepare_l71.py`; V1 ticket, pins, stage `private\l71-internal`, internal audit, KI-045 admission row `l71-internal`; 0 parse errors in PowerShell 7.4.22 and 5.1). V1 has no leases, so the lease probe `private\gate-host-build\mcla_build_lease_probe_win.exe` is not needed. | D71CE7DA9A674517EFA60A7D3DC5A2B91BEF11AA7D8E7E4735E5775FED0B906E |
-| `private/l71-arms/pc/triad/mcla-dev-overrides.txt`: the l69 fix arm, every key explicit, + album/pursuit probes true, warp probe true, the two xam `_off` false (748 B) | F077CC1AFC86EA9676C283C41DE9F6CE6BD7B6ABB593782F2D025A418A337045 |
-| `private/l71-arms/deck/saves-fix/mcla-dev-overrides.txt`: the l69 fix keys + album/pursuit/warp probes false, xam `_off` false (751 B) | 7B5F9EBA19CF506FC9A4846649AAF7D9C181752FB5A516B6FC4D9C3E8489CD52 |
-| `private/l71-arms/deck/saves-control/mcla-dev-overrides.txt`: saves-fix + `xam_content_stable_creation_time_off=true` (750 B) | 773FE55B9C6BC4FFDA363FB2B8E6B0E3AA4A7568FAB34D61C5423321A43DE336 |
-| `private/l71-arm-triad.cmd` | 3C6C99773CA7485C3BA07D2435438FC991D3290254A72D5ACD0EAC205CBE77A0 |
-| `private/l71-arm-clear.cmd` | 1D471F67BA65084EA71FCEB86B53E585837BCF3F1B3DEEE56D4625FE95A9D78B |
-| `private/l71-CHECKLIST.txt` | 99D56FE39195BC27A0963D5CBC48241060EE8B019C5D615977659989938924F6 |
+| `private/l71-internal-prepare.ps1` (generated by `mk_prepare_l71b.py` with the new pins; V1 ticket, stage `private\l71-internal`, internal audit, KI-045 admission row `l71-internal`; 0 parse errors in PowerShell 7.4.22 and 5.1). V1 has no leases, so the lease probe is not needed. | F220DE66F515015ECF8E89A74052B850EA26BF3116D9F91E91579950683DDE51 |
+| `private/l71-arms/pc/triad/mcla-dev-overrides.txt`: the l69 fix arm, every key explicit, + album/pursuit/warp probes true, xam `_off` false, the four audio keys false (876 B) | F0A53ED420F7BB01ED6ABFBF33BF69CC65F491CBC54C3811DBC8C6A276D84DAA |
+| `private/l71-arms/pc/audio-old/mcla-dev-overrides.txt` (coordinator; 873 B) | 6D66C0AC956D6DB0BA3D57C9839EA5F2B45CD25C5528C81DD9FE627B23E447A1 |
+| `private/l71-arms/pc/audio-itu/mcla-dev-overrides.txt` (coordinator; 874 B) | 9DF46E1FA525DD18883B2E7745E9D87926D00744797FF8A45A91E8934A8AB380 |
+| `private/l71-arms/pc/audio-stereo/mcla-dev-overrides.txt` (coordinator; 874 B) | 2006C3328A54B1ABAEF11183870C954C058F277DF69680B7584E98FD67732552 |
+| `private/l71-arms/deck/saves-fix/mcla-dev-overrides.txt`: l69 fix keys + album/pursuit/warp probes false, xam `_off` false, audio keys false (879 B) | 0ED09F73502742176D218CEC5804095151CDC8C695514AC3156F3D4A3753C349 |
+| `private/l71-arms/deck/saves-control/mcla-dev-overrides.txt`: saves-fix + `xam_content_stable_creation_time_off=true` (878 B) | 082C8ED8AE3CDC0847E8D7EDE7A88A94B618F9047DFE2AF802CE233C6DA39BFF |
+| `private/l71-arm-triad.cmd` | 369B04757BF8E0B8149CBCE59C67CD84BFF4DFB198F1CCBBAD826AD50767E4C2 |
+| `private/l71-arm-clear.cmd` | 36AFDC6F33283E35A743C3D8D76DC6E07C4D380568E448F4C99E1585BA3BB7BF |
+| `private/l71-CHECKLIST.txt` | E8545ADE7961369231C27E31587162357DE323EE3A6D7D356A600A2EED27FB18 |
 
-- **Arm check:** all three arm files were parsed with the production parser (`check_arms`):
-  status parsed, 24 values, 0 ignored, 0 mismatches.
+- **Arm check:** all six arm files (pc triad, audio-old, audio-itu, audio-stereo; deck
+  saves-fix, saves-control) were parsed with the production parser of the final tree. Each is
+  status parsed, 28 values, 0 ignored, 0 mismatches against the expected true-sets.
 - **Checklist, PC:**
   - at 1080p: photo; F10 in the chooser before moving the cursor; hover an occupied slot and
     back; F10; save, reopen and check;
   - the same at 720p;
   - a pull-over with F10 at "PULL OVER" and at the fine;
-  - one 20-minute drive for the CPU census.
+  - one 20-minute drive for the CPU census;
+  - KI-071 audio A/B on the Pier conversation with Karol (or any cut-scene): audio-old, then
+    audio-itu, then audio-stereo, one restart each. Note which sounds right and whether the
+    engine, radio or music changed, plus the Windows output format and the Spatial sound state.
+  - KI-069/KI-070: F10 must no longer pause the picture. Expected log lines:
+    `MCLA diagnostics: live minidump policy=skipped-by-default`, `MCLA_LOG v=1 kind=minute` with
+    `dropped=0`, and `MCLA_CP_FREEZE` only on real stalls.
 - **Checklist, Deck:** saves-fix with two garage saves, quit, restart and check the load
   (expected: no dialog, `save ok` twice, identical `query times class=34 creation=`); then
   saves-control (expected: the dialog on save 2).
