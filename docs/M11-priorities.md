@@ -216,3 +216,7 @@ KI-072 attribution: the lag episodes were our own builds on the play PC (KI-067 
 
 - l72 (staging): host main `060dbcf` (KI-056 Fix A default off + key; M11-015 kick keys 256/128/1024; 32 keys) + SDK `d08813b`. Owner: album Fix A check, kick A/B (3 arms), carry-over l71 items.
 - l73 (next): SDK `ae35ae3` (M11-016 fetch identity cache, default on, + `d3d12_fetch_identity_verify`) cherry-picked onto `mcla/m11-content-unmount`, with dev keys `fetch_identity_off` / `fetch_identity_verify`; owner A/B off / on / on+verify on the same route; watch liveries/vinyls/album for stale textures; `tex_memo_mismatch` must stay 0. Then M11-017 ThinLTO+PGO.
+
+## Perf benchmark route (owner, 2026-11-06)
+
+Owner proposal, adopted: performance A/B drives use a fixed Arcade race instead of free-roam loops: a long route from the east side through South Central to the west (race name to be recorded), with weather, time of day and traffic density set explicitly in the Arcade setup, the same car, one run per arm, a restart between arms, F10 once per arm at the same checkpoint, HWiNFO + proc-sampler on, no builds running. Notes per run: race name, car, weather, time, traffic. First use: the l72 kick A/B (512/256/128).
