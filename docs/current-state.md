@@ -4,6 +4,9 @@ Updated November 5, 2026 Kyiv (M10 closed in the ledger; l70 published as the on
 
 ## Active outcome
 
+**STATE AT SESSION STOP (2026-11-06, usage limit):** M11-002 triad committed on main (album probe, pursuit block, CPU census; dev keys incl. the KI-068 A/B keys). SDK branch `mcla/m11-content-unmount` at `109116b` (KI-068 stable creation time + content trace + unmount hardening, ctest 2026/2026, installed to `private/l71-sdk-install`) is NOT yet pinned or published. Owner candidate `private/l71-int-input` + `private/l71-internal-prepare.ps1` + `private/l71-CHECKLIST.txt` + arms `private/l71-arms` were staged by the triad agent against l71-sdk-install BEFORE two further changes that were still in flight when the session stopped: (a) SDK async non-blocking logging + CP freeze watchdog (KI-069) as a new commit on the same branch with a reinstall of l71-sdk-install (scratch notes `%LocalAppData%\Temp\claude\C--BDU-MCLA-Recomp\l71-sdk-log-notes.md`), and (b) host patch "F10 without live minidump by default" (KI-070) at `...\Temp\claude\C--BDU-MCLA-Recomp\l71-minidump-patch`. NEXT SESSION: check both scratch deliverables, apply (b) to main with the gate build (`private/l57-work/gate_host_build.ps1 build` + `l57_host_tests.ps1`), rebuild/relink the l71 host against the final l71-sdk-install, restage l71-int-input and the prepare script, then hand l71 to the owner (PC triad per checklist; Deck: two consecutive saves + restart with saves-fix, then saves-control). Open owner items: KI-067 cause (thermal vs foreign process; CPU census in l71), KI-056 720p check.
+
+
 **M11 ACTIVE (approved 2026-11-06):** **M11 drafted on 2026-11-06; owner approval pending.** The plan is in
 `docs/M11-priorities.md`, and the ledger will be README-AI section 17c. M10 is closed and
 pushed (`9e541e8`). Testers run l70 only (`DebugBundle` `31c806d`) on SDK `v0.20.0.8`.

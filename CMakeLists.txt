@@ -63,8 +63,10 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     target_compile_features(mcla_cursor_autohide_test PRIVATE cxx_std_23)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window; KI-035 warp probe/watchdog (l68).
+    # M11-002: KI-056 album and KI-066 pursuit diagnostics.
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
-            readback_sync native_refcount dev_overrides m10_defaults save_copy_guard warp_probe)
+            readback_sync native_refcount dev_overrides m10_defaults save_copy_guard warp_probe
+            album_probe pursuit_probe)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -74,6 +76,12 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # the generated callback and state-20 exit it mirrors.
     target_compile_definitions(mcla_warp_probe_test PRIVATE
         MCLA_WARP_GENERATED_RECOMP8="${CMAKE_CURRENT_SOURCE_DIR}/generated/default/mcla_recomp.8.cpp")
+    # M11-002: the album and pursuit tests check their offsets against the
+    # generated functions the hooks wrap or read.
+    target_compile_definitions(mcla_album_probe_test PRIVATE
+        MCLA_ALBUM_GENERATED_RECOMP49="${CMAKE_CURRENT_SOURCE_DIR}/generated/default/mcla_recomp.49.cpp")
+    target_compile_definitions(mcla_pursuit_probe_test PRIVATE
+        MCLA_PURSUIT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -209,12 +217,16 @@ set(MCLA_SOURCES
 # M9 host hooks: M9-007 menu-state cap (overrides sub_822D29E8), KI-035 F10
 # guest sampler, KI-026 F10 state block and default-off probe/watchdog,
 # KI-037 photo-capture pipeline wait (overrides sub_8263D120, sub_8263D1E0 and
-# sub_8263EAA8).
+# sub_8263EAA8). M11-002: KI-056 album diagnostic (pass-through overrides of
+# sub_8263CB78, sub_8263C8B0, sub_8263C9C8 and sub_8263DCF8; default off) and
+# KI-066 pursuit block and transition log (default off).
 list(APPEND MCLA_SOURCES
+    src/mcla_album_probe.cpp
     src/mcla_guest_sampler.cpp
     src/mcla_ki026_probe.cpp
     src/mcla_menu_state.cpp
-    src/mcla_photo_capture.cpp)
+    src/mcla_photo_capture.cpp
+    src/mcla_pursuit_probe.cpp)
 
 # M10-001 command-processor cost split (overrides sub_82411E98 and
 # sub_82412F98 when the SDK has rex/perf/perf_split.h). The option is OFF by

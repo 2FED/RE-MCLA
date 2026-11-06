@@ -47,6 +47,15 @@
 // - mcla_texture_budget_soft_cap_off=true writes 0 (off) to the host integer
 //   cvar mcla_texture_budget_soft_cap_mb (M10-007 / KI-048 A/B); =false changes
 //   nothing.
+// - mcla_album_probe (KI-056 MCLA_ALBUM lines) and mcla_pursuit_probe (KI-066
+//   MCLA_PURSUIT lines) are plain host init-only bools (M11-002,
+//   docs/evidence/M11-002-diagnostics-triad-20261106.md).
+// - xam_content_stable_creation_time_off=true writes false to the SDK bool
+//   cvar xam_content_stable_creation_time (M11-001 / KI-068 stable save
+//   creation time, SDK default true; the Deck A/B control arm), and
+//   xam_content_trace_off=true writes false to the SDK bool cvar
+//   xam_content_trace (KI-068 content trace lines, SDK default true); =false
+//   changes nothing. Both are rexruntime cvars, registered before startup.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
 // non-default value (set by the command line or the config file), and logged
@@ -98,8 +107,12 @@ enum class Key : uint8_t {
   kWarpWatchdog,          // KI-035: mcla_warp_watchdog_seconds=15
   kTextureSoftCapOff,     // M10-007: mcla_texture_budget_soft_cap_mb=0
   kWarpFinishFixOff,      // KI-035 fix A/B: mcla_warp_finish_fix=false
+  kAlbumProbe,            // M11-002 / KI-056: album preview diagnostic
+  kPursuitProbe,          // M11-002 / KI-066: police pursuit transition log
+  kStableCreationTimeOff, // KI-068 A/B: xam_content_stable_creation_time=false
+  kContentTraceOff,       // KI-068: xam_content_trace=false
 };
-inline constexpr size_t kKeyCount = 20;
+inline constexpr size_t kKeyCount = 24;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -153,6 +166,14 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // KI-035 finish-race fix (host init-only bool, default true), before the
     // guest.
     {"mcla_warp_finish_fix_off", Phase::kStartup, "mcla_warp_finish_fix", "false", ""},
+    // M11-002 host init-only bools (mcla_album_probe.cpp,
+    // mcla_pursuit_probe.cpp), before the guest.
+    {"mcla_album_probe", Phase::kStartup},
+    {"mcla_pursuit_probe", Phase::kStartup},
+    // M11-001 / KI-068 SDK rexruntime bools (default true), before the guest.
+    {"xam_content_stable_creation_time_off", Phase::kStartup, "xam_content_stable_creation_time",
+     "false", ""},
+    {"xam_content_trace_off", Phase::kStartup, "xam_content_trace", "false", ""},
 }};
 
 // Key pairs that write different values to one integer cvar: both true in one

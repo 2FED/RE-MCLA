@@ -153,6 +153,18 @@ void TestTable() {
   Check(IsNeverWritten("mcla_warp_probe") && IsNeverWritten("mcla_warp_watchdog_seconds") &&
             Find("mcla_warp_probe") == nullptr && Find("mcla_warp_watchdog_seconds") == nullptr,
         "KI-035 warp probe and watchdog are never volunteer defaults");
+  Check(IsNeverWritten("xam_content_stable_creation_time") &&
+            IsNeverWritten("xam_content_trace") &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kStableCreationTimeOff))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kContentTraceOff))) &&
+            Find("xam_content_stable_creation_time") == nullptr &&
+            Find("xam_content_trace") == nullptr,
+        "the KI-068 SDK switches are never written by the M10 defaults");
+  Check(IsNeverWritten("mcla_album_probe") && IsNeverWritten("mcla_pursuit_probe") &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumProbe))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kPursuitProbe))) &&
+            Find("mcla_album_probe") == nullptr && Find("mcla_pursuit_probe") == nullptr,
+        "the M11-002 album and pursuit probes are never volunteer defaults");
   Check(IsNeverWritten("mcla_warp_finish_fix") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kWarpFinishFixOff))) &&
             Find("mcla_warp_finish_fix") == nullptr,

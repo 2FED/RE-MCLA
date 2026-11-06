@@ -1096,6 +1096,12 @@ BuildStateJson(std::string_view reason, const SnapshotTrigger &trigger,
   if (!runtime.guest_ki026_json.empty()) {
     out << "  \"guest_ki026\": " << runtime.guest_ki026_json << ",\n";
   }
+  if (!runtime.guest_album_json.empty()) {
+    out << "  \"album\": " << runtime.guest_album_json << ",\n";
+  }
+  if (!runtime.guest_pursuit_json.empty()) {
+    out << "  \"pursuit\": " << runtime.guest_pursuit_json << ",\n";
+  }
   if (!runtime.perf_split_json.empty()) {
     out << "  \"perf_split\": " << runtime.perf_split_json << ",\n";
   }

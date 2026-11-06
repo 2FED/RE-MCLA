@@ -19,6 +19,9 @@
 // - The D3DKMT calls sit behind KmtApi; GpuPerfReader owns the
 //   open/query/close policy (never under Wine, disabled after repeated
 //   failures, never fails the game).
+// - M11-002 / KI-067: one MCLA_CPU v=1 line next to each MCLA_VRAM line
+//   (CpuReader / CpuWindow below; effective CPU clock, system and process CPU
+//   load, ACPI thermal zone temperature when readable).
 //
 // Everything in this header is pure and unit-tested
 // (tests/mcla_vram_census_win_test.cpp); the DXGI and D3DKMT calls are in
@@ -455,5 +458,432 @@ class CensusWindow {
 // The Windows D3DKMT implementation (gdi32 entry points resolved at run time;
 // nullptr when they are missing). mcla_vram_census_win.cpp.
 std::unique_ptr<KmtApi> CreateSystemKmtApi();
+
+// ---------------------------------------------------------------------------
+// M11-002 / KI-067 CPU census: one MCLA_CPU v=1 line next to each MCLA_VRAM
+// line (same monitor thread, same reasons) while mcla_cpu_census is on (default
+// on; only while the VRAM census runs, so never under Wine/Proton, where one
+// "cpu=wine" line is logged at start instead). Sources, each optional and
+// never fatal:
+// - load: GetSystemTimes (system busy %) and GetProcessTimes (the game
+//   process, % of all logical processors and in cores), 1 Hz deltas;
+// - clock: PDH "\Processor Information(_Total)\% Processor Performance" x
+//   "...\Processor Frequency" (nominal MHz) = effective MHz (what Task
+//   Manager shows), 1 Hz; CallNtPowerInformation(ProcessorInformation)
+//   CurrentMhz, MaxMhz and MhzLimit averaged over the logical processors as a
+//   cross-check (CurrentMhz is often pinned to the nominal clock on Windows
+//   10/11; MhzLimit drops under a power or thermal limit);
+// - temperature: WMI ROOT\WMI MSAcpi_ThermalZoneTemperature, tried once at
+//   start (usually needs administrator rights; often absent), the highest
+//   thermal zone every 10 s when available. An ACPI thermal zone is not
+//   necessarily the CPU package sensor (temp_src=acpi_tz says so).
+// Each source is disabled after kMaxConsecutiveFailures failed samples.
+
+struct CpuTimes {
+  // GetSystemTimes, 100 ns units; kernel includes idle.
+  uint64_t idle = 0, kernel = 0, user = 0;
+  // GetProcessTimes of the game process, 100 ns units.
+  uint64_t process_kernel = 0, process_user = 0;
+  // Monotonic wall clock, 100 ns units.
+  uint64_t wall = 0;
+};
+
+struct CpuLoad {
+  bool valid = false;
+  double system_pct = 0;     // 100 x (1 - idle / (kernel + user))
+  double process_pct = 0;    // the process, % of all logical processors
+  double process_cores = 0;  // the process, in logical processors
+};
+
+constexpr CpuLoad ComputeCpuLoad(const CpuTimes &prev, const CpuTimes &cur, uint32_t logical) {
+  CpuLoad load;
+  if (cur.idle < prev.idle || cur.kernel < prev.kernel || cur.user < prev.user ||
+      cur.process_kernel < prev.process_kernel || cur.process_user < prev.process_user ||
+      cur.wall <= prev.wall || logical == 0) {
+    return load;
+  }
+  const uint64_t idle = cur.idle - prev.idle;
+  const uint64_t total = (cur.kernel - prev.kernel) + (cur.user - prev.user);
+  if (total == 0 || idle > total) {
+    return load;
+  }
+  const uint64_t process =
+      (cur.process_kernel - prev.process_kernel) + (cur.process_user - prev.process_user);
+  const double wall = double(cur.wall - prev.wall);
+  load.system_pct = 100.0 * double(total - idle) / double(total);
+  load.process_cores = double(process) / wall;
+  load.process_pct = 100.0 * load.process_cores / double(logical);
+  load.valid = true;
+  return load;
+}
+
+// Effective clock from the PDH pair (0 when either is missing).
+constexpr double EffectiveMhz(double performance_pct, double nominal_mhz) {
+  return performance_pct > 0 && nominal_mhz > 0 ? performance_pct * nominal_mhz / 100.0 : 0.0;
+}
+
+// ACPI thermal zone CurrentTemperature (tenths of a kelvin) to Celsius; -1000
+// (not a temperature) for 0 or implausible values (below -50 C or above
+// 150 C).
+inline constexpr double kNoTemperature = -1000.0;
+constexpr double ThermalZoneCelsius(uint32_t tenths_kelvin) {
+  const double c = double(tenths_kelvin) / 10.0 - 273.15;
+  return tenths_kelvin != 0 && c > -50.0 && c < 150.0 ? c : kNoTemperature;
+}
+
+struct PowerInfo {
+  double current_mhz = 0;  // averages over the logical processors
+  double max_mhz = 0;
+  double limit_mhz = 0;
+};
+
+// The Windows calls behind an interface (fake in the tests).
+class CpuApi {
+ public:
+  virtual ~CpuApi() = default;
+  virtual uint32_t LogicalProcessors() = 0;
+  virtual bool Times(CpuTimes &out) = 0;
+  // PDH query with the two counters (OpenPdh also primes it).
+  virtual bool OpenPdh() = 0;
+  virtual bool QueryPdh(double &performance_pct, double &nominal_mhz) = 0;
+  virtual void ClosePdh() = 0;
+  virtual bool QueryPower(PowerInfo &out) = 0;
+  // WMI; `status` receives the HRESULT of the failing step for the log.
+  virtual bool OpenTemperature(uint32_t &status) = 0;
+  // The highest valid thermal zone in Celsius.
+  virtual bool QueryTemperature(double &celsius) = 0;
+  virtual void CloseTemperature() = 0;
+};
+
+enum class SourceState : uint8_t {
+  kOff,          // not started
+  kUnavailable,  // the open or the first query failed
+  kOk,
+  kFailed,       // disabled after repeated failures
+};
+
+constexpr const char *SourceStateName(SourceState state) {
+  switch (state) {
+    case SourceState::kOff:
+      return "off";
+    case SourceState::kUnavailable:
+      return "unavailable";
+    case SourceState::kOk:
+      return "ok";
+    case SourceState::kFailed:
+      return "failed";
+  }
+  return "unknown";
+}
+
+enum class CpuState : uint8_t {
+  kOff,   // census off or no API
+  kWine,  // Wine/Proton: never called
+  kOk,
+};
+
+constexpr const char *CpuStateName(CpuState state) {
+  switch (state) {
+    case CpuState::kOff:
+      return "off";
+    case CpuState::kWine:
+      return "wine";
+    case CpuState::kOk:
+      return "ok";
+  }
+  return "unknown";
+}
+
+struct CpuSample {
+  bool load_ok = false;
+  CpuLoad load;
+  bool pdh_ok = false;
+  double performance_pct = 0;
+  double nominal_mhz = 0;
+  bool power_ok = false;
+  PowerInfo power;
+  bool temperature_ok = false;
+  double temperature_c = 0;
+};
+
+class CpuReader {
+ public:
+  static constexpr uint32_t kMaxConsecutiveFailures = 5;
+  static constexpr uint64_t kTemperatureEveryTicks = 10;  // 10 s at 1 Hz
+
+  explicit CpuReader(CpuApi *api) : api_(api) {}
+  CpuReader(const CpuReader &) = delete;
+  CpuReader &operator=(const CpuReader &) = delete;
+  ~CpuReader() { Stop(); }
+
+  CpuState Start(bool wine) {
+    Stop();
+    if (wine) {
+      return state_ = CpuState::kWine;
+    }
+    if (!api_) {
+      return state_ = CpuState::kOff;
+    }
+    logical_ = api_->LogicalProcessors();
+    have_prev_ = api_->Times(prev_);
+    times_ = have_prev_ ? SourceState::kOk : SourceState::kUnavailable;
+    pdh_open_ = api_->OpenPdh();
+    pdh_ = pdh_open_ ? SourceState::kOk : SourceState::kUnavailable;
+    PowerInfo probe;
+    power_ = api_->QueryPower(probe) ? SourceState::kOk : SourceState::kUnavailable;
+    temperature_status_ = 0;
+    temperature_ = SourceState::kUnavailable;
+    if (api_->OpenTemperature(temperature_status_)) {
+      temperature_open_ = true;
+      double c = 0;
+      if (api_->QueryTemperature(c) && c > kNoTemperature) {
+        temperature_ = SourceState::kOk;
+      } else {
+        api_->CloseTemperature();
+        temperature_open_ = false;
+      }
+    }
+    times_failures_ = pdh_failures_ = power_failures_ = temperature_failures_ = 0;
+    ticks_ = 0;
+    return state_ = CpuState::kOk;
+  }
+
+  // Once per second on the monitor thread.
+  CpuSample Sample() {
+    CpuSample s;
+    if (state_ != CpuState::kOk) {
+      return s;
+    }
+    ++ticks_;
+    if (times_ == SourceState::kOk || times_ == SourceState::kUnavailable) {
+      CpuTimes cur;
+      if (api_->Times(cur)) {
+        if (have_prev_) {
+          s.load = ComputeCpuLoad(prev_, cur, logical_);
+          s.load_ok = s.load.valid;
+        }
+        prev_ = cur;
+        have_prev_ = true;
+        times_ = SourceState::kOk;
+        times_failures_ = 0;
+      } else {
+        Fail(times_, times_failures_);
+      }
+    }
+    if (pdh_ == SourceState::kOk) {
+      if (api_->QueryPdh(s.performance_pct, s.nominal_mhz)) {
+        s.pdh_ok = true;
+        pdh_failures_ = 0;
+      } else {
+        s.performance_pct = s.nominal_mhz = 0;
+        if (Fail(pdh_, pdh_failures_)) {
+          api_->ClosePdh();
+          pdh_open_ = false;
+        }
+      }
+    }
+    if (power_ == SourceState::kOk) {
+      if (api_->QueryPower(s.power)) {
+        s.power_ok = true;
+        power_failures_ = 0;
+      } else {
+        s.power = {};
+        Fail(power_, power_failures_);
+      }
+    }
+    if (temperature_ == SourceState::kOk && ticks_ % kTemperatureEveryTicks == 1) {
+      double c = 0;
+      if (api_->QueryTemperature(c) && c > kNoTemperature) {
+        s.temperature_ok = true;
+        s.temperature_c = c;
+        temperature_failures_ = 0;
+      } else if (Fail(temperature_, temperature_failures_)) {
+        api_->CloseTemperature();
+        temperature_open_ = false;
+      }
+    }
+    return s;
+  }
+
+  void Stop() {
+    if (pdh_open_) {
+      api_->ClosePdh();
+      pdh_open_ = false;
+    }
+    if (temperature_open_) {
+      api_->CloseTemperature();
+      temperature_open_ = false;
+    }
+  }
+
+  CpuState state() const { return state_; }
+  uint32_t logical() const { return logical_; }
+  SourceState times() const { return times_; }
+  SourceState pdh() const { return pdh_; }
+  SourceState power() const { return power_; }
+  SourceState temperature() const { return temperature_; }
+  uint32_t temperature_status() const { return temperature_status_; }
+
+ private:
+  // Counts a failure; true when the source was just disabled.
+  static bool Fail(SourceState &state, uint32_t &failures) {
+    if (++failures >= kMaxConsecutiveFailures) {
+      state = SourceState::kFailed;
+      return true;
+    }
+    return false;
+  }
+
+  CpuApi *api_ = nullptr;
+  CpuState state_ = CpuState::kOff;
+  uint32_t logical_ = 0;
+  CpuTimes prev_;
+  bool have_prev_ = false;
+  bool pdh_open_ = false, temperature_open_ = false;
+  SourceState times_ = SourceState::kOff, pdh_ = SourceState::kOff, power_ = SourceState::kOff,
+              temperature_ = SourceState::kOff;
+  uint32_t times_failures_ = 0, pdh_failures_ = 0, power_failures_ = 0,
+           temperature_failures_ = 0;
+  uint32_t temperature_status_ = 0;
+  uint64_t ticks_ = 0;
+};
+
+// min/avg/max of values >= 0 (a CPU load can be 0; Stat drops zeros).
+struct StatZero {
+  double min = 0, max = 0, sum = 0;
+  uint64_t count = 0;
+  void Add(double value) {
+    if (!(value >= 0) || value > 1e12) {
+      return;
+    }
+    min = count ? std::min(min, value) : value;
+    max = count ? std::max(max, value) : value;
+    sum += value;
+    ++count;
+  }
+  std::string Format(int decimals) const {
+    if (!count) {
+      return "n/a";
+    }
+    char text[96];
+    std::snprintf(text, sizeof(text), "%.*f/%.*f/%.*f", decimals, min, decimals,
+                  sum / double(count), decimals, max);
+    return text;
+  }
+};
+
+struct CpuSources {
+  CpuState state = CpuState::kOff;
+  uint32_t logical = 0;
+  SourceState times = SourceState::kOff;
+  SourceState pdh = SourceState::kOff;
+  SourceState power = SourceState::kOff;
+  SourceState temperature = SourceState::kOff;
+};
+
+inline CpuSources SourcesOf(const CpuReader &reader) {
+  CpuSources src;
+  src.state = reader.state();
+  src.logical = reader.logical();
+  src.times = reader.times();
+  src.pdh = reader.pdh();
+  src.power = reader.power();
+  src.temperature = reader.temperature();
+  return src;
+}
+
+class CpuWindow {
+ public:
+  void Add(const CpuSample &s) {
+    ++samples_;
+    if (s.load_ok) {
+      system_pct_.Add(s.load.system_pct);
+      process_pct_.Add(s.load.process_pct);
+      process_cores_.Add(s.load.process_cores);
+    }
+    if (s.pdh_ok) {
+      performance_pct_.Add(s.performance_pct);
+      const double mhz = EffectiveMhz(s.performance_pct, s.nominal_mhz);
+      if (mhz > 0) {
+        effective_mhz_.Add(mhz);
+      }
+      if (s.nominal_mhz > 0) {
+        nominal_mhz_ = s.nominal_mhz;
+      }
+    }
+    if (s.power_ok) {
+      if (s.power.current_mhz > 0) {
+        power_mhz_.Add(s.power.current_mhz);
+      }
+      if (s.power.limit_mhz > 0) {
+        power_limit_mhz_.Add(s.power.limit_mhz);
+      }
+      if (s.power.max_mhz > 0) {
+        power_max_mhz_ = s.power.max_mhz;
+      }
+    }
+    if (s.temperature_ok) {
+      temperature_c_.Add(s.temperature_c);
+    }
+  }
+
+  // Formats the line and starts the next window.
+  std::string TakeLine(std::string_view reason, uint64_t seq, double window_s,
+                       const CpuSources &src) {
+    std::string line = "MCLA_CPU v=1 reason=" + SanitizeReason(reason) +
+                       " seq=" + std::to_string(seq);
+    char window[32];
+    std::snprintf(window, sizeof(window), "%.1f", window_s);
+    line += std::string(" window_s=") + window;
+    line += " samples=" + std::to_string(samples_);
+    line += std::string(" cpu=") + CpuStateName(src.state);
+    line += " logical=" + (src.logical ? std::to_string(src.logical) : std::string("n/a"));
+    line += std::string(" times=") + SourceStateName(src.times);
+    line += std::string(" pdh=") + SourceStateName(src.pdh);
+    line += std::string(" power=") + SourceStateName(src.power);
+    line += std::string(" temp=") + SourceStateName(src.temperature);
+    line += " nominal_mhz=" + Number(nominal_mhz_);
+    line += " eff_mhz=" + effective_mhz_.Format(0);
+    line += " perf_pct=" + performance_pct_.Format(1);
+    line += " ntpi_mhz=" + power_mhz_.Format(0);
+    line += " ntpi_max_mhz=" + Number(power_max_mhz_);
+    line += " ntpi_limit_mhz=" + power_limit_mhz_.Format(0);
+    line += " sys_pct=" + system_pct_.Format(1);
+    line += " proc_pct=" + process_pct_.Format(1);
+    line += " proc_cores=" + process_cores_.Format(2);
+    line += " temp_src=acpi_tz temp_c=" + temperature_c_.Format(1);
+    *this = CpuWindow{};
+    return line;
+  }
+
+ private:
+  static std::string Number(double value) {
+    if (!(value > 0)) {
+      return "n/a";
+    }
+    char text[32];
+    std::snprintf(text, sizeof(text), "%.0f", value);
+    return text;
+  }
+
+  uint64_t samples_ = 0;
+  StatZero system_pct_, process_pct_, process_cores_, performance_pct_, effective_mhz_,
+      power_mhz_, power_limit_mhz_, temperature_c_;
+  double nominal_mhz_ = 0, power_max_mhz_ = 0;
+};
+
+// The single line logged when no CPU census runs (Wine/Proton, no monitor).
+inline std::string CpuUnavailableLine(std::string_view reason, CpuState state) {
+  CpuWindow empty;
+  CpuSources src;
+  src.state = state;
+  return empty.TakeLine(reason, 0, 0.0, src);
+}
+
+// The Windows implementation (kernel32 times; pdh.dll and powrprof.dll entry
+// points resolved at run time; WMI through COM on the calling thread, which
+// must be the monitor thread). Never nullptr; each call fails cleanly when
+// its source is missing. mcla_vram_census_win.cpp.
+std::unique_ptr<CpuApi> CreateSystemCpuApi();
 
 }  // namespace mcla::vram

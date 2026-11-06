@@ -315,6 +315,17 @@ int RunTests() {
           "guest_ki026 never reaches the exported metadata");
   }
   {
+    // M11-002: the F10 blocks album (KI-056) and pursuit (KI-066) are
+    // diagnostic-only; the projection is identical with and without them.
+    Fixture f;
+    f.state["album"] = {{"probe",true},{"album","BC123450"},
+        {"last_new_photo",{{"path","decode-bind"},{"crc4k_before","1234ABCD"}}},{"note",kPrivate}};
+    f.state["pursuit"] = {{"probe",true},{"verified",false},{"note",kPrivate}};
+    const auto with_blocks = Accept(f,"extra album and pursuit state blocks accepted");
+    Check(with_blocks == Accept(Fixture{},"baseline without album and pursuit"),
+          "album and pursuit never reach the exported metadata");
+  }
+  {
     // M10-001: the owner-internal perf_split totals block is diagnostic-only;
     // the projection is byte-for-byte identical with and without it.
     Fixture f;

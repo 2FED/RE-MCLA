@@ -71,7 +71,9 @@
 #include "mcla_shader_store_log.h"
 #include "mcla_readback_sync.h"
 #include "mcla_perf_split.h"
+#include "mcla_album_probe.h"
 #include "mcla_ki026_probe.h"
+#include "mcla_pursuit_probe.h"
 #include "mcla_menu_state.h"
 #include "mcla_photo_capture.h"
 // End M9 host hooks.
@@ -3663,6 +3665,11 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
   if (active_runtime) {
     state.guest_ki026_json = MclaKi026StateJson(active_runtime->memory(),
                                                 active_runtime->virtual_membase());
+    // M11-002: KI-056 album and KI-066 pursuit blocks (read-only).
+    state.guest_album_json = MclaAlbumStateJson(active_runtime->memory(),
+                                                active_runtime->virtual_membase());
+    state.guest_pursuit_json = MclaPursuitStateJson(active_runtime->memory(),
+                                                    active_runtime->virtual_membase());
   }
   // M10-001: cumulative cost-split totals (empty without the SDK split).
   state.perf_split_json = mcla::perf_split::StateJson();

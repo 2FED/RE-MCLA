@@ -27,6 +27,11 @@
 // - census: one MCLA_VRAM v=1 line per minute, at each accepted F10 and at exit
 //   (mcla_vram_census, default on; log only). When the user set the limits the
 //   monitor runs for the census only and never changes them.
+// - M11-002 / KI-067 CPU census: one MCLA_CPU v=1 line next to each MCLA_VRAM
+//   line (mcla_cpu_census, default on; needs the VRAM census): effective CPU
+//   clock, system and process CPU load, ACPI thermal zone temperature when
+//   readable (mcla_vram_census_win.h CpuReader/CpuWindow). Under Wine/Proton
+//   (no monitor) one "cpu=wine" line at start says the fields are unavailable.
 
 #include "mcla_texture_budget.h"
 
@@ -49,6 +54,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -67,6 +73,13 @@ REXCVAR_DEFINE_BOOL(
     mcla_vram_census, true, "MCLA",
     "M10-007: log one MCLA_VRAM line per minute, at each F10 and at exit (DXGI local/non-local "
     "memory, texture cache limits, GPU clocks/temperature/power from D3DKMT; log only)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(
+    mcla_cpu_census, true, "MCLA",
+    "M11-002 / KI-067: with the video-memory census, log one MCLA_CPU line per minute, at each F10 "
+    "and at exit (effective CPU clock, system and process CPU load, ACPI temperature if readable; "
+    "log only)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace mcla {
@@ -159,6 +172,7 @@ class Monitor {
     steps_ = steps;
     scale_ = scale;
     census_ = census;
+    cpu_census_ = census && REXCVAR_GET(mcla_cpu_census);
     last_step_ = std::chrono::steady_clock::now() - kStepInterval;
     thread_ = std::thread([this] { Run(); });
     running_.store(true, std::memory_order_release);
@@ -217,6 +231,14 @@ class Monitor {
     const double window_s = std::chrono::duration<double>(now - census_window_start_).count();
     const std::string line =
         census_window_.TakeLine(reason, census_seq_ + 1, window_s, View(), gpu_->state());
+    if (cpu_) {
+      // The CPU window follows the VRAM window; its line does not need a DXGI
+      // sample.
+      const double cpu_window_s = std::chrono::duration<double>(now - cpu_window_start_).count();
+      MCLA_GPU_INFO("{}", cpu_window_.TakeLine(reason, ++cpu_seq_, cpu_window_s,
+                                               vram::SourcesOf(*cpu_)));
+      cpu_window_start_ = now;
+    }
     if (line.empty()) return;
     ++census_seq_;
     census_window_start_ = now;
@@ -243,8 +265,27 @@ class Monitor {
     } else if (census_) {
       MCLA_GPU_INFO("MCLA graphics: video-memory census on; D3DKMT entry points unavailable");
     }
+    // M11-002 / KI-067: the CPU sources live on this thread (WMI uses COM
+    // initialised for this thread only).
+    std::unique_ptr<vram::CpuApi> cpu_api;
+    std::unique_ptr<vram::CpuReader> cpu;
+    if (cpu_census_) {
+      cpu_api = vram::CreateSystemCpuApi();
+      cpu = std::make_unique<vram::CpuReader>(cpu_api.get());
+      const vram::CpuState state = cpu->Start(RunningUnderWine());
+      MCLA_GPU_INFO("MCLA graphics: CPU census {}; {} logical processors; times {}, PDH {}, "
+                    "power information {}, ACPI temperature {} (status {:08X})",
+                    vram::CpuStateName(state), cpu->logical(),
+                    vram::SourceStateName(cpu->times()), vram::SourceStateName(cpu->pdh()),
+                    vram::SourceStateName(cpu->power()),
+                    vram::SourceStateName(cpu->temperature()), cpu->temperature_status());
+      if (state == vram::CpuState::kOk) {
+        cpu_ = cpu.get();
+      }
+    }
     auto last_report = std::chrono::steady_clock::now();
     census_window_start_ = last_report;
+    cpu_window_start_ = last_report;
     std::vector<std::string> marks;
     std::unique_lock lock(mutex_);
     for (;;) {
@@ -282,6 +323,7 @@ class Monitor {
           census_window_.AddMemory(Sample(info));
           if (tick) census_window_.AddGpu(gpu.Sample());
         }
+        if (cpu_ && tick) cpu_window_.Add(cpu_->Sample());
         if (tick && now - last_report >= std::chrono::seconds(60)) {
           last_report = now;
           MCLA_GPU_INFO("MCLA graphics: video memory {} MB (peak {} MB) of {} MB budget", usage_mb,
@@ -300,6 +342,8 @@ class Monitor {
     lock.unlock();
     gpu.Stop();
     gpu_ = nullptr;
+    cpu_ = nullptr;
+    if (cpu) cpu->Stop();
   }
 
   Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter_;
@@ -313,10 +357,15 @@ class Monitor {
   uint64_t soft_mb_ = 0, hard_mb_ = 0, floor_mb_ = 0, peak_mb_ = 0, last_budget_mb_ = 0;
   uint64_t steps_taken_ = 0, near_seconds_ = 0, census_seq_ = 0;
   uint32_t scale_ = 1;
-  bool steps_ = true, census_ = false;
+  bool steps_ = true, census_ = false, cpu_census_ = false;
   vram::GpuPerfReader* gpu_ = nullptr;
   vram::CensusWindow census_window_;
   std::chrono::steady_clock::time_point last_step_{}, census_window_start_{};
+  // M11-002 / KI-067 CPU census (monitor thread only).
+  vram::CpuReader* cpu_ = nullptr;
+  vram::CpuWindow cpu_window_;
+  uint64_t cpu_seq_ = 0;
+  std::chrono::steady_clock::time_point cpu_window_start_{};
 };
 
 Monitor monitor;
@@ -338,12 +387,19 @@ void ApplyTextureCacheBudget() {
   switch (vram::DecideBudgetAction(wine, user_set, budget_available)) {
     case vram::BudgetAction::kWine:
       MCLA_GPU_INFO("MCLA graphics: Wine/Proton detected; keeping SDK texture cache limits");
+      // KI-067: no census monitor here; the CPU fields are marked unavailable.
+      if (census && REXCVAR_GET(mcla_cpu_census)) {
+        MCLA_GPU_INFO("{}", vram::CpuUnavailableLine("start", vram::CpuState::kWine));
+      }
       return;
     case vram::BudgetAction::kUnavailable:
       if (user_set) {
         MCLA_GPU_INFO("MCLA graphics: texture cache limits set by the user; keeping them");
       }
       MCLA_GPU_INFO("MCLA graphics: video-memory budget unavailable; keeping SDK texture cache limits");
+      if (census && REXCVAR_GET(mcla_cpu_census)) {
+        MCLA_GPU_INFO("{}", vram::CpuUnavailableLine("start", vram::CpuState::kOff));
+      }
       return;
     case vram::BudgetAction::kUserSet: {
       MCLA_GPU_INFO("MCLA graphics: texture cache limits set by the user; keeping them");

@@ -29,7 +29,25 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 20, "twenty whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 24, "twenty-four whitelisted names");
+  Check(FindKey("xam_content_stable_creation_time_off") == Key::kStableCreationTimeOff,
+        "KI-068 stable creation time off key");
+  Check(FindKey("xam_content_trace_off") == Key::kContentTraceOff, "KI-068 trace off key");
+  Check(!FindKey("xam_content_stable_creation_time") && !FindKey("xam_content_trace") &&
+            !FindKey("xam_content_close_host_handles_on_unmount") &&
+            !FindKey("xam_content_move_aside_on_delete_failure"),
+        "the SDK cvar names themselves are not keys");
+  Check(mcla::dev_overrides::Info(Key::kStableCreationTimeOff).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kContentTraceOff).phase == Phase::kStartup,
+        "KI-068 keys at startup (rexruntime cvars, before the guest)");
+  Check(FindKey("mcla_album_probe") == Key::kAlbumProbe, "KI-056 album probe key");
+  Check(FindKey("mcla_pursuit_probe") == Key::kPursuitProbe, "KI-066 pursuit probe key");
+  Check(!FindKey("mcla_album") && !FindKey("mcla_pursuit") && !FindKey("mcla_album_probe_on") &&
+            !FindKey("mcla_cpu_census") && !FindKey("mcla_vram_census"),
+        "no prefix keys; the census switches stay command-line only");
+  Check(mcla::dev_overrides::Info(Key::kAlbumProbe).phase == Phase::kStartup &&
+            mcla::dev_overrides::Info(Key::kPursuitProbe).phase == Phase::kStartup,
+        "M11-002 probes at startup (host init-only cvars, before the guest)");
   Check(FindKey("mcla_warp_finish_fix_off") == Key::kWarpFinishFixOff,
         "KI-035 finish-race fix off key");
   Check(!FindKey("mcla_warp_finish_fix") && !FindKey("mcla_warp_finish_fix_on"),
@@ -140,7 +158,8 @@ void TestWhitelist() {
       const bool mapped = key == Key::kUploadAhead16 || key == Key::kUploadAhead64 ||
                           key == Key::kHotBlocksShadow || key == Key::kHotBlocksOn ||
                           key == Key::kWarpWatchdog || key == Key::kTextureSoftCapOff ||
-                          key == Key::kWarpFinishFixOff;
+                          key == Key::kWarpFinishFixOff || key == Key::kStableCreationTimeOff ||
+                          key == Key::kContentTraceOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -176,6 +195,14 @@ void TestWhitelist() {
               CvarText(Info(Key::kWarpFinishFixOff), true) == "false" &&
               CvarText(Info(Key::kWarpFinishFixOff), false).empty(),
           "warp_finish_fix_off=true writes false, false writes nothing");
+    Check(CvarName(Info(Key::kStableCreationTimeOff)) == "xam_content_stable_creation_time" &&
+              CvarText(Info(Key::kStableCreationTimeOff), true) == "false" &&
+              CvarText(Info(Key::kStableCreationTimeOff), false).empty(),
+          "stable_creation_time_off=true writes false, false writes nothing");
+    Check(CvarName(Info(Key::kContentTraceOff)) == "xam_content_trace" &&
+              CvarText(Info(Key::kContentTraceOff), true) == "false" &&
+              CvarText(Info(Key::kContentTraceOff), false).empty(),
+          "trace_off=true writes false, false writes nothing");
     Check(CvarName(Info(Key::kWarpProbe)) == "mcla_warp_probe" &&
               CvarText(Info(Key::kWarpProbe), true) == "true",
           "warp probe writes its own bool cvar");
@@ -315,9 +342,20 @@ void TestWhitelist() {
       const std::string l69 = l68 + "mcla_warp_finish_fix_off=true\n";
       const Parsed r = Parse(l69);
       Check(l69.size() <= mcla::dev_overrides::kMaxBytes && r.status == FileStatus::kParsed &&
-                r.ValueCount() == mcla::dev_overrides::kKeyCount && r.ignored_lines == 0 &&
+                r.ValueCount() == 20 && r.ignored_lines == 0 &&
                 r.Value(Key::kWarpFinishFixOff) == true,
-            "l69 arm: every key, nothing ignored");
+            "l69 arm: every l69 key (20), nothing ignored");
+      // l71 (M11-002 triad): the l69 arm plus the album and pursuit probes.
+      const std::string l71 = l69 + "mcla_album_probe=true\nmcla_pursuit_probe=true\n";
+      const std::string l71_all = l71 + "xam_content_stable_creation_time_off=true\n" +
+                                  "xam_content_trace_off=false\n";
+      const Parsed s = Parse(l71_all);
+      Check(l71_all.size() <= mcla::dev_overrides::kMaxBytes && s.status == FileStatus::kParsed &&
+                s.ValueCount() == mcla::dev_overrides::kKeyCount && s.ignored_lines == 0 &&
+                s.Value(Key::kAlbumProbe) == true && s.Value(Key::kPursuitProbe) == true &&
+                s.Value(Key::kStableCreationTimeOff) == true &&
+                s.Value(Key::kContentTraceOff) == false,
+            "l71 arm: every key, nothing ignored, fits");
       Check(p.Value(Key::kHotBlocksShadow) == (arm[0][0] == 't') &&
                 p.Value(Key::kHotBlocksOn) == (arm[1][0] == 't') &&
                 p.Value(Key::kUploadAhead16) == true && p.Value(Key::kWatchCensus) == true,
@@ -358,6 +396,18 @@ void TestWhitelist() {
     const Parsed cvar = Parse("mcla_warp_finish_fix=false\n");
     Check(cvar.ValueCount() == 0 && cvar.issues[0].issue == LineIssue::kUnknownName,
           "the cvar name itself is not a key");
+  }
+  {
+    // The M11-002 triad probes: plain bools, integer values refused.
+    const Parsed on = Parse("mcla_album_probe=true\r\nmcla_pursuit_probe=false\r\n");
+    Check(on.status == FileStatus::kParsed && on.ValueCount() == 2 &&
+              on.Value(Key::kAlbumProbe) == true && on.Value(Key::kPursuitProbe) == false,
+          "album on, pursuit off parses");
+    const Parsed integer = Parse("mcla_album_probe=1\nmcla_pursuit_probe=on\n");
+    Check(integer.ValueCount() == 0 && integer.ignored_lines == 2 &&
+              integer.issues[0].issue == LineIssue::kMalformed &&
+              integer.issues[1].issue == LineIssue::kMalformed,
+          "probe values must be true or false");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.

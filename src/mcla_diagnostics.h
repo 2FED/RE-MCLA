@@ -88,6 +88,10 @@ struct RuntimeState {
   uint64_t race_back_apply_calls = 0;
   // KI-026 guest warp/camera-pause snapshot (JSON object; empty if unavailable).
   std::string guest_ki026_json;
+  // M11-002: KI-056 "album" and KI-066 "pursuit" objects (pre-rendered JSON;
+  // empty if unavailable).
+  std::string guest_album_json;
+  std::string guest_pursuit_json;
   // M10-001: "perf_split" object (pre-rendered JSON), empty when absent.
   std::string perf_split_json;
 };

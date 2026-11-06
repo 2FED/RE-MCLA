@@ -315,6 +315,247 @@ void TestLine() {
   }
 }
 
+
+// --- M11-002 / KI-067 CPU census ---------------------------------------------
+
+class FakeCpu final : public CpuApi {
+ public:
+  uint32_t logical = 16;
+  bool times_ok = true;
+  CpuTimes times;
+  bool pdh_open_ok = true, pdh_ok = true;
+  double perf = 80.0, nominal = 2900.0;
+  bool power_ok = true;
+  PowerInfo power{2900.0, 2900.0, 2900.0};
+  bool temp_open_ok = false;
+  uint32_t temp_status = 0x80041003u;  // WBEM_E_ACCESS_DENIED
+  bool temp_ok = true;
+  double temp = 71.5;
+  int pdh_opens = 0, pdh_closes = 0, temp_opens = 0, temp_closes = 0, temp_queries = 0;
+
+  uint32_t LogicalProcessors() override { return logical; }
+  bool Times(CpuTimes &out) override {
+    if (!times_ok) return false;
+    out = times;
+    return true;
+  }
+  bool OpenPdh() override {
+    ++pdh_opens;
+    return pdh_open_ok;
+  }
+  bool QueryPdh(double &p, double &n) override {
+    if (!pdh_ok) return false;
+    p = perf;
+    n = nominal;
+    return true;
+  }
+  void ClosePdh() override { ++pdh_closes; }
+  bool QueryPower(PowerInfo &out) override {
+    if (!power_ok) return false;
+    out = power;
+    return true;
+  }
+  bool OpenTemperature(uint32_t &status) override {
+    ++temp_opens;
+    status = temp_open_ok ? 0 : temp_status;
+    return temp_open_ok;
+  }
+  bool QueryTemperature(double &c) override {
+    ++temp_queries;
+    if (!temp_ok) return false;
+    c = temp;
+    return true;
+  }
+  void CloseTemperature() override { ++temp_closes; }
+
+  // One second: the system 25 % busy on 16 logical processors, the process
+  // using 2.5 logical processors.
+  void Advance(uint64_t busy_pct = 25, uint64_t process_tenths = 25) {
+    const uint64_t second = 10000000ull;
+    const uint64_t total = second * logical;
+    const uint64_t busy = total * busy_pct / 100;
+    times.idle += total - busy;
+    times.kernel += (total - busy) + busy / 4;  // kernel includes idle
+    times.user += busy - busy / 4;
+    times.process_user += second * process_tenths / 10;
+    times.wall += second;
+  }
+};
+
+void TestCpuLoad() {
+  CpuTimes a, b;
+  a.wall = 0;
+  b = a;
+  b.idle = 750;
+  b.kernel = 750 + 50;
+  b.user = 200;
+  b.process_user = 100;
+  b.process_kernel = 25;
+  b.wall = 100;
+  const CpuLoad l = ComputeCpuLoad(a, b, 4);
+  Check(l.valid && l.system_pct > 24.99 && l.system_pct < 25.01, "system 25 % busy");
+  Check(l.process_cores > 1.249 && l.process_cores < 1.251, "process 1.25 cores");
+  Check(l.process_pct > 31.24 && l.process_pct < 31.26, "process 31.25 % of 4");
+  Check(!ComputeCpuLoad(b, a, 4).valid, "time going backwards");
+  Check(!ComputeCpuLoad(a, b, 0).valid, "no logical processors");
+  CpuTimes same = a;
+  same.wall = 100;
+  Check(!ComputeCpuLoad(a, same, 4).valid, "no system time elapsed");
+  CpuTimes idle_only = a;
+  idle_only.idle = 100;
+  idle_only.kernel = 100;
+  idle_only.wall = 100;
+  const CpuLoad idle = ComputeCpuLoad(a, idle_only, 4);
+  Check(idle.valid && idle.system_pct == 0.0 && idle.process_pct == 0.0, "an idle second is 0 %");
+  Check(EffectiveMhz(80.0, 2900.0) > 2319.9 && EffectiveMhz(80.0, 2900.0) < 2320.1,
+        "80 % of 2900 MHz");
+  Check(EffectiveMhz(120.0, 2900.0) > 3479.9, "turbo above 100 %");
+  Check(EffectiveMhz(0, 2900.0) == 0 && EffectiveMhz(80.0, 0) == 0, "missing PDH value");
+  Check(ThermalZoneCelsius(3232) > 49.99 && ThermalZoneCelsius(3232) < 50.11, "3232 dK = 50.05 C");
+  Check(ThermalZoneCelsius(0) == kNoTemperature, "0 is not a temperature");
+  Check(ThermalZoneCelsius(2000) == kNoTemperature, "-73 C is implausible");
+  Check(ThermalZoneCelsius(4300) == kNoTemperature, "157 C is implausible");
+}
+
+void TestCpuReader() {
+  {
+    CpuReader reader(nullptr);
+    Check(reader.Start(false) == CpuState::kOff && !reader.Sample().load_ok, "no API: off");
+  }
+  {
+    FakeCpu fake;
+    CpuReader reader(&fake);
+    Check(reader.Start(true) == CpuState::kWine, "Wine: never called");
+    Check(fake.pdh_opens == 0 && fake.temp_opens == 0 && !reader.Sample().pdh_ok,
+          "Wine: no PDH, no WMI, no samples");
+  }
+  {
+    FakeCpu fake;
+    CpuReader reader(&fake);
+    Check(reader.Start(false) == CpuState::kOk && reader.logical() == 16, "start");
+    Check(reader.times() == SourceState::kOk && reader.pdh() == SourceState::kOk &&
+              reader.power() == SourceState::kOk,
+          "times, PDH, power ok");
+    Check(reader.temperature() == SourceState::kUnavailable &&
+              reader.temperature_status() == 0x80041003u && fake.temp_opens == 1,
+          "WMI tried once; access denied: unavailable with the status");
+    fake.Advance();
+    CpuSample s = reader.Sample();
+    Check(s.load_ok && s.load.system_pct > 24.9 && s.load.system_pct < 25.1, "load sample");
+    Check(s.load.process_cores > 2.49 && s.load.process_cores < 2.51, "process cores sample");
+    Check(s.pdh_ok && s.performance_pct == 80.0 && s.nominal_mhz == 2900.0, "PDH sample");
+    Check(s.power_ok && s.power.limit_mhz == 2900.0, "power sample");
+    Check(!s.temperature_ok && fake.temp_queries == 0, "no temperature queries when unavailable");
+    // PDH fails five times in a row: closed and disabled.
+    fake.pdh_ok = false;
+    for (uint32_t i = 0; i < CpuReader::kMaxConsecutiveFailures; ++i) {
+      fake.Advance();
+      s = reader.Sample();
+      Check(!s.pdh_ok && s.load_ok, "PDH failure does not stop the load");
+    }
+    Check(reader.pdh() == SourceState::kFailed && fake.pdh_closes == 1, "PDH disabled and closed");
+    fake.pdh_ok = true;
+    fake.Advance();
+    Check(!reader.Sample().pdh_ok, "a disabled source stays off");
+    reader.Stop();
+    Check(fake.pdh_closes == 1, "no double close");
+  }
+  {
+    // WMI available: sampled every 10 s, at the first tick and then each 10th.
+    FakeCpu fake;
+    fake.temp_open_ok = true;
+    CpuReader reader(&fake);
+    reader.Start(false);
+    Check(reader.temperature() == SourceState::kOk && fake.temp_queries == 1,
+          "WMI open and first query at start");
+    uint32_t with_temp = 0;
+    for (int i = 0; i < 30; ++i) {
+      fake.Advance();
+      with_temp += reader.Sample().temperature_ok ? 1 : 0;
+    }
+    Check(with_temp == 3 && fake.temp_queries == 4, "three temperature samples in 30 s");
+    reader.Stop();
+    Check(fake.temp_closes == 1, "WMI closed at stop");
+  }
+  {
+    // WMI opens but the class has no rows: unavailable, closed at once.
+    FakeCpu fake;
+    fake.temp_open_ok = true;
+    fake.temp_ok = false;
+    CpuReader reader(&fake);
+    reader.Start(false);
+    Check(reader.temperature() == SourceState::kUnavailable && fake.temp_closes == 1,
+          "no thermal zone rows: unavailable and closed");
+  }
+  {
+    // Everything missing except the times.
+    FakeCpu fake;
+    fake.pdh_open_ok = false;
+    fake.power_ok = false;
+    CpuReader reader(&fake);
+    reader.Start(false);
+    Check(reader.pdh() == SourceState::kUnavailable &&
+              reader.power() == SourceState::kUnavailable,
+          "no PDH, no power information");
+    fake.Advance();
+    const CpuSample s = reader.Sample();
+    Check(s.load_ok && !s.pdh_ok && !s.power_ok, "load only");
+  }
+}
+
+void TestCpuLine() {
+  FakeCpu fake;
+  fake.temp_open_ok = true;
+  CpuReader reader(&fake);
+  reader.Start(false);
+  CpuWindow window;
+  const double perf[3] = {60.0, 80.0, 100.0};
+  for (int i = 0; i < 3; ++i) {
+    fake.perf = perf[i];
+    fake.power.limit_mhz = 2900.0 - 100.0 * i;
+    fake.Advance(10 + 10 * i, 20 + 5 * i);
+    window.Add(reader.Sample());
+  }
+  const std::string line = window.TakeLine("minute", 7, 60.0, SourcesOf(reader));
+  std::printf("%s\n", line.c_str());
+  Check(line.rfind("MCLA_CPU v=1 reason=minute seq=7 window_s=60.0 samples=3 ", 0) == 0,
+        "line head");
+  Check(Has(line, "cpu=ok") && Has(line, "logical=16") && Has(line, "times=ok") &&
+            Has(line, "pdh=ok") && Has(line, "power=ok") && Has(line, "temp=ok"),
+        "source states");
+  Check(Has(line, "nominal_mhz=2900") && Has(line, "eff_mhz=1740/2320/2900") &&
+            Has(line, "perf_pct=60.0/80.0/100.0"),
+        "effective clock min/avg/max");
+  Check(Has(line, "ntpi_mhz=2900/2900/2900") && Has(line, "ntpi_max_mhz=2900") &&
+            Has(line, "ntpi_limit_mhz=2700/2800/2900"),
+        "power information");
+  Check(Has(line, "sys_pct=10.0/20.0/30.0") && Has(line, "proc_cores=2.00/2.50/3.00"),
+        "load min/avg/max");
+  Check(Has(line, "proc_pct=12.5/15.6/18.8"), "process % of 16");
+  Check(Has(line, "temp_src=acpi_tz") && Has(line, "temp_c=71.5/71.5/71.5"),
+        "temperature (first tick only within 3 s)");
+  for (const char c : line) {
+    Check(c >= 32 && c < 127, "ASCII single line");
+  }
+  const std::string next = window.TakeLine("exit", 8, 1.0, SourcesOf(reader));
+  Check(Has(next, "samples=0") && Has(next, "eff_mhz=n/a") && Has(next, "sys_pct=n/a") &&
+            Has(next, "temp_c=n/a") && Has(next, "nominal_mhz=n/a"),
+        "the next window starts empty");
+
+  const std::string wine = CpuUnavailableLine("start", CpuState::kWine);
+  std::printf("%s\n", wine.c_str());
+  Check(wine.rfind("MCLA_CPU v=1 reason=start seq=0 window_s=0.0 samples=0 cpu=wine ", 0) == 0,
+        "Wine line head");
+  Check(Has(wine, "logical=n/a") && Has(wine, "pdh=off") && Has(wine, "temp=off") &&
+            Has(wine, "eff_mhz=n/a") && Has(wine, "sys_pct=n/a") && Has(wine, "proc_pct=n/a") &&
+            Has(wine, "temp_c=n/a"),
+        "Wine: every field marked unavailable");
+  StatZero zero;
+  zero.Add(0.0);
+  zero.Add(-1.0);
+  Check(zero.count == 1 && zero.Format(1) == "0.0/0.0/0.0", "zeros count, negatives do not");
+}
+
 }  // namespace
 
 int main() {
@@ -323,6 +564,9 @@ int main() {
   TestBudgetAction();
   TestReader();
   TestLine();
+  TestCpuLoad();
+  TestCpuReader();
+  TestCpuLine();
   std::printf("VRAM census: %d checks, 0 failures\n", checks);
   return 0;
 }
