@@ -11,6 +11,7 @@
 #endif
 
 #include <rex/crypto/sha256.h>
+#include <rex/cvar.h>
 #include <rex/filesystem/file.h>
 #include <rex/logging.h>
 #include <rex/logging/sink.h>
@@ -67,6 +68,15 @@ extern "C" uint32_t rex_xam_content_transactions_active(void);
 #else
 extern "C" __attribute__((weak)) uint32_t rex_xam_content_transactions_active(void);
 #endif
+
+// KI-070: F10/wheel/pad snapshots skip the process-suspending live minidump
+// unless this is on (see DecideLiveMinidump in mcla_diagnostic_trigger.h).
+REXCVAR_DEFINE_BOOL(
+    mcla_diagnostics_live_minidump, false, "MCLA Diagnostics",
+    "Also write the live minidump for F10, wheel and pad snapshots (it "
+    "suspends the game for about 0.3-0.6 s); probe, unexpected guest exit "
+    "and hang snapshots always write it")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace mcla::diagnostics {
 namespace {
@@ -1174,6 +1184,12 @@ public:
       REXLOG_WARN("MCLA diagnostics: native crash helper unavailable: {}",
                   native_error);
     }
+    // KI-070: init-only switch, read once.
+    live_minidump_switch_ = REXCVAR_GET(mcla_diagnostics_live_minidump);
+    REXLOG_INFO("MCLA diagnostics: live minidump for user snapshots {} "
+                "(mcla_diagnostics_live_minidump; probe, unexpected guest "
+                "exit and hang snapshots always dump)",
+                live_minidump_switch_ ? "on" : "off (skipped-by-default)");
     worker_ =
         std::jthread([this](std::stop_token token) { WorkerMain(token); });
     snapshot_status_.store(SnapshotStatus::kIdle, std::memory_order_release);
@@ -1313,6 +1329,19 @@ public:
       return false;
     }
 
+    // KI-070: per-step wall time of this package, logged once at the end.
+    const auto capture_start = std::chrono::steady_clock::now();
+    auto step_start = capture_start;
+    const auto lap = [&step_start]() -> int64_t {
+      const auto now = std::chrono::steady_clock::now();
+      const auto ms =
+          std::chrono::duration_cast<std::chrono::milliseconds>(now -
+                                                                step_start)
+              .count();
+      step_start = now;
+      return static_cast<int64_t>(ms);
+    };
+
     RuntimeState runtime_state;
     try {
       if (provider_) {
@@ -1324,6 +1353,7 @@ public:
       REXLOG_ERROR(
           "MCLA diagnostics: state provider failed with unknown exception");
     }
+    const int64_t provider_ms = lap();
 
     // No in-process GPU readback/fence wait. The experimental image helper is
     // isolated/cancellable; this does not bound all package or OS operations.
@@ -1346,6 +1376,7 @@ public:
     }
     if (token.stop_requested()) return false;
     const bool frame_written = frame.written;
+    const int64_t frame_ms = lap();
 
     uint64_t working_set = 0;
     uint64_t creation_time_100ns = 0;
@@ -1401,6 +1432,7 @@ public:
                 return a.id < b.id;
               });
 #endif
+    const int64_t census_ms = lap();
     std::vector<rex::LogEntry> entries;
     if (capture_sink_) {
       capture_sink_->CopyEntries(entries);
@@ -1442,6 +1474,7 @@ public:
     if (journal_sink_) {
       journal_sink_->flush();
     }
+    const int64_t state_log_ms = lap();
 
     if (token.stop_requested()) return false;
     // KI-065: wait (at most 2 s) until no save transaction is open; skip the
@@ -1513,13 +1546,20 @@ public:
       REXLOG_ERROR("MCLA diagnostics: private save inventory write failed");
       return false;
     }
+    const int64_t save_ms = lap();
 
     if (token.stop_requested()) return false;
+    // KI-070: MiniDumpWriteDump in the helper suspends every game thread
+    // while it runs; user snapshots skip it unless the switch is on.
+    const LiveMinidumpPolicy dump_policy =
+        DecideLiveMinidump(reason, live_minidump_switch_);
     std::string dump_error;
-    bool dump_written =
-        native_ready_ &&
-        native::WriteLiveMiniDump(partial / "process-private.dmp",
-                                  std::chrono::seconds(20), dump_error);
+    bool dump_written = false;
+    if (ShouldWriteLiveMinidump(dump_policy) && native_ready_) {
+      dump_written = native::WriteLiveMiniDump(
+          partial / "process-private.dmp", std::chrono::seconds(20),
+          dump_error);
+    }
     if (dump_written) {
       const auto dump_bytes =
           std::filesystem::file_size(partial / "process-private.dmp", ec);
@@ -1531,6 +1571,15 @@ public:
         ec.clear();
       }
     }
+    // The helper reports no suspend/resume times; the request round trip is
+    // an upper bound of the time the game threads were suspended.
+    const int64_t dump_ms = lap();
+    const int64_t stall_upper_bound_ms =
+        ShouldWriteLiveMinidump(dump_policy) && native_ready_ ? dump_ms : 0;
+    REXLOG_INFO("MCLA diagnostics: live minidump policy={} written={} ms={} "
+                "game_stall_upper_bound_ms={}",
+                LiveMinidumpPolicyName(dump_policy), dump_written ? 1 : 0,
+                dump_ms, stall_upper_bound_ms);
 
     std::vector<Artifact> artifacts;
     if (!AddArtifact(artifacts, partial, "state.json", true) ||
@@ -1612,12 +1661,20 @@ public:
              << ", \"helper_failure\": " << static_cast<unsigned>(frame.helper.metadata.failure) << "}"
 #endif
              << ", \"minidump\": " << (dump_written ? "true" : "false")
+             << ", \"minidump_policy\": \""
+             << LiveMinidumpPolicyName(dump_policy) << "\""
              << ", \"save_copy_skipped\": "
              << (save_copy_skipped ? "true" : "false")
              << ", \"save_found\": " << (save.found ? "true" : "false")
              << ", \"save_files\": " << save.files
              << ", \"save_bytes\": " << save.bytes << ", \"minidump_error\": \""
              << JsonEscape(dump_error) << "\"},\n"
+             << "  \"timing_ms\": {\"state_provider\": " << provider_ms
+             << ", \"frame\": " << frame_ms << ", \"process_census\": "
+             << census_ms << ", \"state_and_log\": " << state_log_ms
+             << ", \"save\": " << save_ms << ", \"minidump\": " << dump_ms
+             << ", \"game_stall_upper_bound\": " << stall_upper_bound_ms
+             << "},\n"
              << "  \"artifacts\": [\n";
     for (size_t i = 0; i < artifacts.size(); ++i) {
       const auto &artifact = artifacts[i];
@@ -1643,6 +1700,19 @@ public:
     const bool pointer_written =
         WriteTextAtomic(diagnostics_root_ / "latest-live.txt", name + "\n");
     PruneDirectories(live_root_, kLiveRetentionCount, kLiveRetentionBytes);
+    const int64_t publish_ms = lap();
+    REXLOG_INFO(
+        "MCLA diagnostics: package timing source={} state_provider_ms={} "
+        "frame_ms={} process_census_ms={} state_and_log_ms={} save_ms={} "
+        "minidump_ms={} publish_ms={} total_ms={} minidump_policy={} "
+        "game_stall_upper_bound_ms={}",
+        trigger.source, provider_ms, frame_ms, census_ms, state_log_ms,
+        save_ms, dump_ms, publish_ms,
+        static_cast<int64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                step_start - capture_start)
+                .count()),
+        LiveMinidumpPolicyName(dump_policy), stall_upper_bound_ms);
     if (pointer_written) {
       REXLOG_INFO("MCLA diagnostics: snapshot complete: "
                   "<user-data>/diagnostics/live/{} category={} source={}",
@@ -1679,6 +1749,7 @@ public:
   std::atomic<SnapshotStatus> snapshot_status_{SnapshotStatus::kIdle};
   std::atomic<uint64_t> sequence_{0};
   bool native_ready_ = false;
+  bool live_minidump_switch_ = false;
 };
 
 Manager::Manager() : impl_(std::make_unique<Impl>()) {}

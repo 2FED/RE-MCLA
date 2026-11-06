@@ -366,6 +366,49 @@ void TestGuestExitSnapshotPolicy() {
     Check(!ShouldSnapshotGuestExit(close, true, true), "both probes");
   }
 }
+
+void TestLiveMinidumpPolicy() {
+  // KI-070: user-requested snapshots skip the process-suspending dump unless
+  // the switch is on; probe, unexpected guest exit and hang always dump.
+  for (const std::string_view user :
+       {kSourceF10, kSourceWheelR2, kSourceWheelL2, kSourcePad}) {
+    Check(DecideLiveMinidump(user, false) ==
+              LiveMinidumpPolicy::kSkippedByDefault,
+          "user snapshot skips the live minidump by default");
+    Check(!ShouldWriteLiveMinidump(DecideLiveMinidump(user, false)),
+          "skipped policy writes no dump");
+    Check(DecideLiveMinidump(user, true) ==
+              LiveMinidumpPolicy::kEnabledBySwitch,
+          "switch restores the live minidump for user snapshots");
+    Check(ShouldWriteLiveMinidump(DecideLiveMinidump(user, true)),
+          "switch policy writes the dump");
+  }
+  for (const std::string_view required :
+       {kReasonProbe, kReasonUnexpectedGuestExit, kReasonHang}) {
+    for (const bool on : {false, true}) {
+      Check(DecideLiveMinidump(required, on) ==
+                LiveMinidumpPolicy::kRequiredByReason,
+            "probe, unexpected exit and hang always dump");
+      Check(ShouldWriteLiveMinidump(DecideLiveMinidump(required, on)),
+            "required policy writes the dump");
+    }
+  }
+  for (const std::string_view other :
+       {"", "F10", "Hang", "hang ", "probe2", "unexpected-guest-exit\n"}) {
+    Check(DecideLiveMinidump(other, false) ==
+              LiveMinidumpPolicy::kSkippedByDefault,
+          "only exact required reasons force a dump");
+  }
+  Check(LiveMinidumpPolicyName(LiveMinidumpPolicy::kSkippedByDefault) ==
+            "skipped-by-default",
+        "manifest name of the default policy");
+  Check(LiveMinidumpPolicyName(LiveMinidumpPolicy::kEnabledBySwitch) ==
+            "enabled-by-switch",
+        "manifest name of the switch policy");
+  Check(LiveMinidumpPolicyName(LiveMinidumpPolicy::kRequiredByReason) ==
+            "required-by-reason",
+        "manifest name of the required policy");
+}
 } // namespace
 
 int main() {
@@ -377,5 +420,6 @@ int main() {
   TestJson();
   TestPackageReport();
   TestGuestExitSnapshotPolicy();
+  TestLiveMinidumpPolicy();
   std::printf("PASS: %d diagnostic trigger checks\n", checks);
 }

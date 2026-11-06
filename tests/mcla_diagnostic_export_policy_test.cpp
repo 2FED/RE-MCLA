@@ -339,6 +339,30 @@ int RunTests() {
           "perf_split never reaches the exported metadata (byte-for-byte)");
   }
   {
+    // KI-070: F10 packages without the live minidump record
+    // capture.minidump=false, capture.minidump_policy and a timing_ms block;
+    // the projection is byte-for-byte identical to the baseline, and a
+    // package that still carries the dump (switch on) projects the same.
+    Fixture skipped;
+    skipped.manifest["capture"]["minidump"] = false;
+    skipped.manifest["capture"]["minidump_policy"] = "skipped-by-default";
+    skipped.manifest["capture"]["minidump_error"] = "";
+    skipped.manifest["timing_ms"] = {{"state_provider",1},{"frame",20},{"process_census",3},
+        {"state_and_log",4},{"save",90},{"minidump",0},{"game_stall_upper_bound",0}};
+    const auto without_dump = Accept(skipped,"package without live minidump accepted");
+    const auto baseline = Accept(Fixture{},"baseline for the minidump policy");
+    Check(without_dump.dump() == baseline.dump(),
+          "minidump policy and timing never reach the exported metadata (byte-for-byte)");
+    Fixture dumped = skipped;
+    dumped.manifest["capture"]["minidump"] = true;
+    dumped.manifest["capture"]["minidump_policy"] = "enabled-by-switch";
+    dumped.manifest["timing_ms"]["minidump"] = 420;
+    dumped.manifest["timing_ms"]["game_stall_upper_bound"] = 420;
+    dumped.manifest["artifacts"].push_back({{"name","process-private.dmp"},{"bytes",1},{"sha256",kHash}});
+    Check(Accept(dumped,"package with live minidump accepted").dump() == baseline.dump(),
+          "the dump artifact changes nothing in the exported metadata");
+  }
+  {
     Fixture f; f.manifest["capture"]["frame"] = true;
     f.manifest["artifacts"].push_back({{"name","frame.bmp"},{"sha256",kPrivate},{"safe_to_share",true}});
     f.manifest["artifacts"].push_back({{"name","process-private.dmp"},{"bytes",kPrivate}});

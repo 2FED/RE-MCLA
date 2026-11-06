@@ -342,6 +342,58 @@ inline bool ShouldSnapshotGuestExit(bool close_requested, bool snapshot_probe,
   return !close_requested && !snapshot_probe && !native_crash_probe;
 }
 
+// KI-070: the live minidump is written by the out-of-process crash helper with
+// MiniDumpWriteDump, which suspends every thread of the game while it runs
+// (0.3-0.6 s per package in the l70 Hills session). A tester pressing F10 to
+// report a freeze must not cause another one, so user-requested snapshots (F10,
+// wheel R2/L2, pad Start+Back, and any other reason not listed below) skip the
+// dump by default. Reasons that need the thread stacks keep it: the startup
+// snapshot probe (diagnostics smoke contract), an unexpected guest exit and an
+// explicit "hang" report. The init-only cvar mcla_diagnostics_live_minidump
+// (default false) restores the dump for every live snapshot. Native crash
+// packages use a separate path and always dump.
+inline constexpr std::string_view kReasonProbe = "probe";
+inline constexpr std::string_view kReasonUnexpectedGuestExit =
+    "unexpected-guest-exit";
+inline constexpr std::string_view kReasonHang = "hang";
+
+enum class LiveMinidumpPolicy : uint8_t {
+  kRequiredByReason,
+  kEnabledBySwitch,
+  kSkippedByDefault,
+};
+
+inline bool LiveMinidumpRequiredByReason(std::string_view reason) {
+  return reason == kReasonProbe || reason == kReasonUnexpectedGuestExit ||
+         reason == kReasonHang;
+}
+
+inline LiveMinidumpPolicy DecideLiveMinidump(std::string_view reason,
+                                             bool live_minidump_switch) {
+  if (LiveMinidumpRequiredByReason(reason)) {
+    return LiveMinidumpPolicy::kRequiredByReason;
+  }
+  return live_minidump_switch ? LiveMinidumpPolicy::kEnabledBySwitch
+                              : LiveMinidumpPolicy::kSkippedByDefault;
+}
+
+inline bool ShouldWriteLiveMinidump(LiveMinidumpPolicy policy) {
+  return policy != LiveMinidumpPolicy::kSkippedByDefault;
+}
+
+// Value of manifest.json capture.minidump_policy.
+inline std::string_view LiveMinidumpPolicyName(LiveMinidumpPolicy policy) {
+  switch (policy) {
+  case LiveMinidumpPolicy::kRequiredByReason:
+    return "required-by-reason";
+  case LiveMinidumpPolicy::kEnabledBySwitch:
+    return "enabled-by-switch";
+  case LiveMinidumpPolicy::kSkippedByDefault:
+    return "skipped-by-default";
+  }
+  return "skipped-by-default";
+}
+
 inline constexpr size_t kMaxSdkLogLinesPerKind = 32;
 inline constexpr size_t kMaxSdkLogLineBytes = 512;
 
