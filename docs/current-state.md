@@ -4,6 +4,30 @@ Updated November 5, 2026 Kyiv (M10 closed in the ledger; l70 published as the on
 
 ## Active outcome
 
+**M11 (proposed 2026-11-06, owner approval pending):** **M11 drafted on 2026-11-06; owner approval pending.** The plan is in
+`docs/M11-priorities.md`, and the ledger will be README-AI section 17c. M10 is closed and
+pushed (`9e541e8`). Testers run l70 only (`DebugBundle` `31c806d`) on SDK `v0.20.0.8`.
+
+The first task is M11-001, KI-068: saves on the Steam Deck under Proton do not work (S1).
+The owner details the symptoms, then runs a Deck repro on l70: save from the pause menu,
+quit, restart, plus one autosave after a fine or purchase. He sends the session folder. The
+agent reads the SDK `[content]` WARN lines, the launcher before/after snapshots and the F10
+save-copy lines, then fixes the cause. The same session also yields the Deck seeding line
+(M11-008) and the first-run fullscreen state (KI-057). The KI-065 dialog evidence folds
+into this task.
+
+Next comes M11-002, one owner-internal build with three items:
+- KI-056 album preview: the owner's 720p vs 1080p check first, then the `MCLA_ALBUM`
+  diagnostic and a fix A/B;
+- KI-066 pursuit/heat state in the F10 guest block;
+- KI-067 CPU clock, temperature and load in the census.
+
+Then the Deck performance group (M11-003 core freeing with KI-060, M11-004 hot blocks v2,
+the M11-005 gate). Alongside it, the video-memory budget steering (M11-006) and read-back
+steps 2-5 (M11-007). No game run happens without announcing it to the owner. Each SDK
+delta needs the owner's approval to publish.
+
+
 **M10 CLOSED on 2026-11-05 (closure regression on l70 pending).** Ledger: README-AI section 17b. Done: M10-001 (PC and Deck verdicts), M10-003 (local union store; PC confirmed, Deck seeding unverified because the Deck sessions used the l56 launcher), M10-008 (triage round 2; KI-035 garage freeze root-caused and fixed, KI-065 mitigated, nine rows closed), M10-009 (l56, l65, l67, l70); partially done: M10-002 (read-back elision shipped; steps 2-5 to M11), M10-005 (Proton defaults: +15% fps and far better pacing on the Deck; hot blocks negative; stable 30 not reached, best about 14.7-14.9 fps driving) and M10-007 (1080p measurement done and the 2048 MB texture-cache soft cap shipped; 2160p and real budget steering to M11); closed as not justified now: M10-006; shelved: M10-004 (Vulkan slower, KI-062/063).
 
 **Volunteer l70 is published as the ONLY allowed build** (`DebugBundle` `31c806d`, one entry, issued 1793897517; l48, l49, l52, l56, l65 and l67 are refused at their next online check, so testers must move to l70 promptly). Clean clone of main `4f69018` (build inputs `dba3e58`) on SDK `v0.20.0.8`; adds the KI-035 fix and the KI-048 soft cap over l67. [Evidence](evidence/M9-005-volunteer-candidate-l70-20261105.md), [changelog](volunteer-changelog-l70.txt).

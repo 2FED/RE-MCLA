@@ -2556,3 +2556,71 @@ Update this document when any of the following changes:
 Before closing a milestone, verify that this file reflects the actual repository rather than the intended repository.
 
 At task/experiment boundaries also replace stale entries in `docs/current-state.md`: active goal, exact tested/pending artifact, save lineage, accepted evidence, rejected hypotheses, blockers and next action. Keep the handoff short and link history rather than appending it. A new chat should read that handoff and the relevant ledger/evidence; it must not assume that every prior chat turn remains verbatim available.
+
+## 17c. Milestone M11 (plan PROPOSED 2026-11-06; owner approval pending) — Deck saves, owner diagnostics, Deck and video-memory performance round 3
+
+Plan drafted 2026-11-06 after the M10 closure: [M11 priorities](docs/M11-priorities.md). Goal:
+saves that work on the Steam Deck under Proton (KI-068, S1), data-based answers to the owner's open
+observations (KI-056 album preview, KI-066 pursuit state, KI-067 host CPU slowdown) in one owner
+build, and a measurably faster Deck (core freeing with KI-060, hot blocks v2, the M10-006 gate
+re-checked only if a core is free) with steadier PC video memory (M10-007 remainder, read-back steps
+2-5, pre-warm a1 and the Deck seeding check). Not in M11: Vulkan (shelved, KI-062/063),
+decompilation, public release hardening (section 17a), new platforms.
+
+**Status: DRAFT, owner approval pending.**
+
+**Estimate:** about 34-64 agent-days without the M10-006 implementation and the stretch item
+(plus 10-15 if the M11-005 gate opens), plus owner Deck sessions, 30-minute PC budget sessions and
+one 2160p session on the 3080 Ti or 6800 XT.
+
+### Prerequisites
+
+- M10 closed and pushed (`9e541e8`); testers on l70 only (`DebugBundle` `31c806d`); SDK pin
+  `v0.20.0.8` = `c63895c`.
+- KI-068 symptoms detailed by the owner; the Deck test profile named (the Deck profile copy has the
+  MAIN id; bench and Deck copies never sync).
+
+### Tasks
+
+- [ ] **M11-001** KI-068 Steam Deck saves under Proton (S1): Deck repro on l70, `[content]` lines and
+  launcher snapshots, root cause, fix, two Deck sessions with saves surviving restart; KI-065 folded.
+- [ ] **M11-002** Owner diagnostics triad in one owner build: KI-056 (720p/1080p check, `MCLA_ALBUM`
+  diagnostic, fix A or B), KI-066 (pursuit state in the F10 guest block with logged transitions),
+  KI-067 (CPU effective MHz, temperature and load in the per-minute census).
+- [ ] **M11-003** Deck core freeing and KI-060: polling thread `F800068C`, audio-side thread
+  `F8000534`, kick-interval A/B.
+- [ ] **M11-004** Hot blocks v2: batched or snapshot copy shape on `mcla/m10-hotblocks` `cdf469a`;
+  Deck re-measure; close negative if no gain.
+- [ ] **M11-005** M10-006 gate re-check on the M11-003/004 numbers; design and implementation only if
+  a Deck core is free and the owner approves.
+- [ ] **M11-006** Video-memory budget steering (KI-048): census accessors, soft-limit control,
+  residency, render-target trim, conditional bounded KI-047 wait, 2160p census and 8 GB recommendation.
+- [ ] **M11-007** Read-back steps 2-5: read-watch census, skip untouched keys, conditional fallback,
+  batching decision; named photo, livery and album checks.
+- [ ] **M11-008** Pre-warm: Deck seeding check on the current launcher, a1 derived-hint `.xpso` after a
+  source-data-policy amendment, a2 effect-loader spike (timeboxed 2 days).
+- [ ] **M11-009** KI-054 dt-smoothing study under Unlocked timing.
+- [ ] **M11-010** KI-059 D3D12 F10 graphics block in the SDK.
+- [ ] **M11-011** KI-052 prefilled launcher names for the Deck.
+- [ ] **M11-012** KI-035 refinement: state-20 exit one frame earlier (LOD pop).
+- [ ] **M11-013** Volunteer cadence (one candidate per closed group, allowance trimmed to the current
+  build), build-script fixes, carried confirmations (KI-022, KI-047, KI-057, KI-064), closure
+  regression.
+- [ ] **M11-014** (stretch) CPU codegen items: published function scope, interrupt-idiom elision.
+
+### Exit criteria
+
+- KI-068 fixed with Deck evidence (saves survive restart in two sessions, no `[content]` failures).
+- KI-056, KI-066 and KI-067 fixed or re-dispositioned on data from the triad build.
+- Each performance task closed on counters per the M10 harness rules (win, neutral or negative,
+  with numbers); the M10-006 gate decided on Deck data.
+- A clean-clone volunteer candidate carrying the closed groups, owner pre-share check passed;
+  closure regression on PC (both modes) and Deck.
+
+### Checkpoint log
+
+- 2026-11-06 — Plan drafted (docs/M11-priorities.md). Health: `NOT STARTED`. Next: owner approval,
+  then M11-001 (KI-068 symptom details and the l70 Deck repro).
+```
+
+Plan file: `docs/M11-priorities.md`. Status: proposed; becomes active on the owner's approval.
