@@ -10,7 +10,7 @@ owner builds l71-l78 and the SDK lineage: README-AI section 17c.
 **Now: l78, the defaults build.** Host main `f86da9d` (62 dev keys, including the off-keys
 `readback_steady_exempt_off`, `fence_write_deferred_off` and the Deck arm `fence_defer_gap_2000`) on SDK
 `d61c597` (`mcla/m11-defaults`, install `private/l78-sdk-install`, `0.20.0.14-dev.gd61c597`, ctest
-2137/2137). Staging was in progress at the time of writing: arms `private/l78-arms` and steps
+2137/2137). Staged 2026-11-07 late: candidate `private/l78-int-input` (mcla.exe 3E37F985...), sign `private/l78-internal-prepare.ps1`, arms `private/l78-arms` (9), steps `private/l78-CHECKLIST.txt`; evidence M11-l78-owner-build. Staging note at the time of the rewrite was: arms `private/l78-arms` and steps
 `private/l78-CHECKLIST.txt` exist, but no candidate folder yet. Next: finish the candidate, then the owner
 regression routine on the PC and the Deck. The routine covers the KI-047 livery check, KI-035 garage trips,
 one Locked run, a Deck loop, a cold shader cache and photo mode, with the new fence, CP-lead and
