@@ -2,6 +2,8 @@
 
 Implementation by an Opus subagent on 2026-11-07 as SDK commits `ca2e332` (bounded wait, `d3d12_readback_sync_steady_fast_wait_ms` default 20; 0 = the l75 cadence as an A/B control) and `1e65cc8` (`rex::gpu::ReadbackSyncQueryRange` / `ReadbackSyncEnsureRange` / `SetReadbackRangeProvider`, exported from rexruntime.dll, header include/rex/graphics/readback_range.h, pending-copy table, CP OnIdlePoll hook) on local branch `mcla/m11-steady3` (parent `bd9314f`); accepted by the primary agent as code: ctest 2112/2112 (4 skipped), no new warnings. Merged into the l76 SDK together with `mcla/m11-xma-walk`.
 
+**l76 SDK final (2026-11-07):** `a4a5309` on `mcla/m11-steady3` = 1e65cc8 + cherry-pick of b6d361e (KI-071 W1); version 0.20.0.10-dev.ga4a5309; ctest 2122/2122 (4 skipped); installed as `private/l76-sdk-install`: rexruntime.dll a7e5a4c42452f0f3ba58951cb436bf6943207be250c614d45f9f0d37c402e1b7, rexgpu-xenos.dll e11a37551d6fa77c8f962b54e0cc72fcea911e657ada4e524bc3173c0d0cddbf, TracyClient.dll eb3f04d497b60892013c1e50a04cf310d5b80e6c8ecd285e4acc1edefcf6434b; the three readback_range exports verified in rexruntime.dll.
+
 ---
 
 # M11-007c l76-sdk-steady3: draft evidence notes (Opus subagent, 2026-11-07)
