@@ -218,8 +218,25 @@ void TestTable() {
   }
   Check(IsNeverWritten("xma_honor_frame_trim") && IsNeverWritten("xma_frame_trim_block_granular") &&
             IsNeverWritten("xma_dump_contexts") && IsNeverWritten("xma_dump_all_rates") &&
-            kNeverWrittenCvars.size() == 40,
-        "KI-071 step 3 cvar names in the never-written set (40)");
+            kNeverWrittenCvars.size() == 45,
+        "KI-071 step 3 cvar names in the never-written set");
+  for (const auto key : {dev::Key::kXmaFrameWalkTrace, dev::Key::kXmaFrameWalkFix,
+                         dev::Key::kXmaDumpInput}) {
+    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) == nullptr,
+          "the KI-071 step 4 switches keep their defaults (owner keys only)");
+  }
+  Check(IsNeverWritten("xma_frame_walk_trace") && IsNeverWritten("xma_frame_walk_fix") &&
+            IsNeverWritten("xma_dump_input"),
+        "KI-071 step 4 cvar names in the never-written set");
+  for (const auto key : {dev::Key::kLockProbe, dev::Key::kLockReadbackEnsure}) {
+    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) == nullptr,
+          "the M11-007d lock switches keep their defaults (owner keys only)");
+  }
+  Check(IsNeverWritten("mcla_lock_probe") && IsNeverWritten("mcla_lock_readback_ensure") &&
+            kNeverWrittenCvars.size() == 45,
+        "M11-007d cvar names in the never-written set (45)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
             Find("mcla_album_preview_restore") == nullptr,

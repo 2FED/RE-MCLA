@@ -64,10 +64,10 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # M9 host hooks: pure logic of the M9-007 cap, the KI-035 sampler and the
     # KI-037 photo-capture window; KI-035 warp probe/watchdog (l68).
     # M11-002: KI-056 album and KI-066 pursuit diagnostics. KI-071: guest XMA
-    # consume ledger.
+    # consume ledger. M11-007d: guest lock probe / read-back completion at the lock.
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
             readback_sync native_refcount dev_overrides m10_defaults save_copy_guard warp_probe
-            album_probe pursuit_probe xma_consume_probe)
+            album_probe pursuit_probe xma_consume_probe lock_probe)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -87,6 +87,10 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # consume, create and pump functions.
     target_compile_definitions(mcla_xma_consume_probe_test PRIVATE
         MCLA_XMA_CONSUME_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
+    # M11-007d: the lock probe test checks the lock core's registers and stack
+    # layout against the generated code.
+    target_compile_definitions(mcla_lock_probe_test PRIVATE
+        MCLA_LOCK_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -226,10 +230,13 @@ set(MCLA_SOURCES
 # sub_8263CB78, sub_8263C8B0, sub_8263C9C8 and sub_8263DCF8; default off) and
 # KI-066 pursuit block and transition log (default off). KI-071: guest XMA
 # consume ledger (pass-through override of sub_823ED700; default off).
+# M11-007d: guest lock probe and read-back completion at the lock
+# (pass-through override of sub_82421CA0; default off).
 list(APPEND MCLA_SOURCES
     src/mcla_album_probe.cpp
     src/mcla_guest_sampler.cpp
     src/mcla_ki026_probe.cpp
+    src/mcla_lock_probe.cpp
     src/mcla_menu_state.cpp
     src/mcla_photo_capture.cpp
     src/mcla_pursuit_probe.cpp

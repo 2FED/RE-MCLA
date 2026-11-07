@@ -30,7 +30,66 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 48, "forty-eight whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 53, "fifty-three whitelisted names");
+  {
+    // M11-007d keys: host init-only bools at startup, true/false written.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    const Key lock_keys[] = {Key::kLockProbe, Key::kLockReadbackEnsure};
+    const char *const lock_names[] = {"mcla_lock_probe", "mcla_lock_readback_ensure"};
+    for (size_t k = 0; k < 2; ++k) {
+      Check(FindKey(lock_names[k]) == lock_keys[k], "M11-007d key lookup");
+      Check(Info(lock_keys[k]).phase == Phase::kStartup,
+            "M11-007d keys at startup (host init-only cvars, before the guest)");
+      Check(CvarName(Info(lock_keys[k])) == lock_names[k] &&
+                CvarText(Info(lock_keys[k]), true) == "true" &&
+                CvarText(Info(lock_keys[k]), false) == "false",
+            "M11-007d key writes its own cvar true/false");
+    }
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key : lock_keys) {
+        Check(pair.first != key && pair.second != key, "M11-007d keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("mcla_lock") && !FindKey("lock_probe") && !FindKey("mcla_lock_probe_on") &&
+              !FindKey("mcla_lock_ensure") && !FindKey("mcla_lock_readback") &&
+              !FindKey("lock_readback_ensure") && !FindKey("MCLA_LOCK_PROBE") &&
+              !FindKey("mcla_lock_readback_ensure_on") && !FindKey("readback_ensure"),
+          "no prefix, suffix or case variants of the M11-007d keys");
+  }
+  {
+    // KI-071 step 4 keys: three SDK bools at startup (=false writes nothing).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const Key walk_keys[] = {Key::kXmaFrameWalkTrace, Key::kXmaFrameWalkFix,
+                             Key::kXmaDumpInput};
+    const char *const walk_names[] = {"xma_frame_walk_trace", "xma_frame_walk_fix",
+                                      "xma_dump_input"};
+    for (size_t k = 0; k < 3; ++k) {
+      Check(FindKey(walk_names[k]) == walk_keys[k], "KI-071 step 4 key lookup");
+      Check(Info(walk_keys[k]).phase == Phase::kStartup,
+            "step 4 SDK keys at startup (rexruntime cvars)");
+      Check(CvarName(Info(walk_keys[k])) == walk_names[k] &&
+                CvarText(Info(walk_keys[k]), true) == "true" &&
+                CvarText(Info(walk_keys[k]), false).empty() &&
+                Info(walk_keys[k]).true_source == TextSource::kLiteral,
+            "step 4 SDK key writes its own cvar true, false writes nothing");
+    }
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key : walk_keys) {
+        Check(pair.first != key && pair.second != key, "step 4 keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("xma_frame_walk") && !FindKey("xma_frame_walk_trace_on") &&
+              !FindKey("xma_frame_walk_fix_on") && !FindKey("xma_walk_trace") &&
+              !FindKey("xma_walk_fix") && !FindKey("XMA_FRAME_WALK_FIX") &&
+              !FindKey("xma_dump_input_on") && !FindKey("xma_dump_inputs") &&
+              !FindKey("xma_input_dump") && !FindKey("xma_frame_walk_tracer"),
+          "no prefix, suffix or case variants of the step 4 keys");
+  }
   {
     // KI-071 step 3 keys: three SDK bools at startup (=false writes nothing)
     // and the dump directory key for the SDK string cvar xma_dump_contexts.
@@ -395,7 +454,9 @@ void TestWhitelist() {
                           key == Key::kXmaHonorStartSkip || key == Key::kXmaResetCodecOnClear ||
                           key == Key::kXmaHonorFrameTrim ||
                           key == Key::kXmaFrameTrimBlockGranular ||
-                          key == Key::kXmaDumpAllRates || key == Key::kXmaDumpContextsOn;
+                          key == Key::kXmaDumpAllRates || key == Key::kXmaDumpContextsOn ||
+                          key == Key::kXmaFrameWalkTrace || key == Key::kXmaFrameWalkFix ||
+                          key == Key::kXmaDumpInput;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1004,9 +1065,8 @@ void TestWhitelist() {
                                "xma_dump_contexts_on=" + arm[5] + "\n";
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
-                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
-                a.issue_count == 0,
-            "l75 arm: every key (48), nothing ignored, fits in kMaxBytes");
+                a.ValueCount() == 48 && a.ignored_lines == 0 && a.issue_count == 0,
+            "l75 arm: every l75 key (48), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kXmaSiblingTrace) == (arm[0][0] == 't') &&
                 a.Value(Key::kXmaConsumeProbe) == (arm[1][0] == 't') &&
                 a.Value(Key::kXmaHonorFrameTrim) == (arm[2][0] == 't') &&
@@ -1032,6 +1092,65 @@ void TestWhitelist() {
               l75_bad.issues[3].issue == LineIssue::kUnknownName &&
               l75_bad.issues[4].issue == LineIssue::kDuplicate,
           "l75 near misses: a path value, non-bool values, prefixes and repeats are ignored");
+    // l76 arms: the l75 base (48 keys) plus the three KI-071 step 4 keys and
+    // the two M11-007d keys explicit: every key (53), nothing ignored, within
+    // kMaxBytes. walk-trace = sibling trace + consume probe + dump + input
+    // dump + walk trace; walk-fix = + walk fix; steady-probe = lock probe;
+    // steady-ensure = + read-back completion at the lock.
+    const char *const l76_arms[5][8] = {
+        // sibling, consume, dump_on, walk_trace, walk_fix, dump_input, lock_probe, ensure
+        {"false", "false", "false", "false", "false", "false", "false", "false"},  // base
+        {"true", "true", "true", "true", "false", "true", "false", "false"},  // walk-trace
+        {"true", "true", "true", "true", "true", "true", "false", "false"},   // walk-fix
+        {"false", "false", "false", "false", "false", "false", "true", "false"},  // probe
+        {"false", "false", "false", "false", "false", "false", "true", "true"}};  // ensure
+    for (const auto &arm : l76_arms) {
+      const std::string text = base39 + "xma_sibling_trace=" + arm[0] + "\n" +
+                               "xma_stall_on_invalid_next=false\n"
+                               "xma_honor_start_skip=false\n"
+                               "xma_reset_codec_on_clear=false\n"
+                               "mcla_xma_consume_probe=" + arm[1] + "\n" +
+                               "xma_honor_frame_trim=false\n"
+                               "xma_frame_trim_block_granular=false\n"
+                               "xma_dump_all_rates=false\n"
+                               "xma_dump_contexts_on=" + arm[2] + "\n" +
+                               "xma_frame_walk_trace=" + arm[3] + "\n" +
+                               "xma_frame_walk_fix=" + arm[4] + "\n" +
+                               "xma_dump_input=" + arm[5] + "\n" +
+                               "mcla_lock_probe=" + arm[6] + "\n" +
+                               "mcla_lock_readback_ensure=" + arm[7] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l76 arm: every key (53), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kLockProbe) == (arm[6][0] == 't') &&
+                a.Value(Key::kLockReadbackEnsure) == (arm[7][0] == 't'),
+            "l76 arm lock values");
+      Check(a.Value(Key::kXmaSiblingTrace) == (arm[0][0] == 't') &&
+                a.Value(Key::kXmaConsumeProbe) == (arm[1][0] == 't') &&
+                a.Value(Key::kXmaDumpContextsOn) == (arm[2][0] == 't') &&
+                a.Value(Key::kXmaFrameWalkTrace) == (arm[3][0] == 't') &&
+                a.Value(Key::kXmaFrameWalkFix) == (arm[4][0] == 't') &&
+                a.Value(Key::kXmaDumpInput) == (arm[5][0] == 't') &&
+                a.Value(Key::kXmaHonorFrameTrim) == false &&
+                a.Value(Key::kXmaFrameTrimBlockGranular) == false,
+            "l76 arm values (frame trim off in every arm)");
+    }
+    const Parsed l76_bad = Parse("xma_frame_walk_trace=1\n"
+                                 "xma_frame_walk_fix=on\n"
+                                 "xma_walk_fix=true\n"
+                                 "xma_dump_input=true\n"
+                                 "xma_dump_input=false\n"
+                                 "xma_frame_walk_fix=true\n");
+    Check(l76_bad.ValueCount() == 2 && l76_bad.Value(Key::kXmaDumpInput) == true &&
+              l76_bad.Value(Key::kXmaFrameWalkFix) == true &&
+              !l76_bad.Value(Key::kXmaFrameWalkTrace) && l76_bad.ignored_lines == 4 &&
+              l76_bad.issues[0].issue == LineIssue::kMalformed &&
+              l76_bad.issues[1].issue == LineIssue::kMalformed &&
+              l76_bad.issues[2].issue == LineIssue::kUnknownName &&
+              l76_bad.issues[3].issue == LineIssue::kDuplicate,
+          "l76 near misses: non-bool values, prefixes and repeats are ignored");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.

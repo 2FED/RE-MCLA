@@ -114,6 +114,16 @@
 //   <diagnostics>/xma-dump/<yyyyMMdd-HHmmss> (XmaDumpDirectory below; UTC
 //   start time) and write its path to xma_dump_contexts, logged once;
 //   =false changes nothing.
+// - KI-071 step 4 (docs/evidence/M11-ki071-xma-frame-walk-sdk-20261107.md,
+//   SDK branch mcla/m11-xma-walk): xma_frame_walk_trace (walk anomaly lines),
+//   xma_frame_walk_fix (W1 split-header claim and dup guard) and
+//   xma_dump_input (input packet / walk dump next to each PCM dump; needs
+//   xma_dump_contexts_on) are plain SDK rexruntime bools (default false) of
+//   the same kind: =true writes true, =false changes nothing.
+// - M11-007d / KI-047 (src/mcla_lock_probe.cpp): mcla_lock_probe (MCLA_LOCK
+//   lines for guest locks overlapping a read-back key) and
+//   mcla_lock_readback_ensure (complete a pending read-back copy before the
+//   lock returns) are plain host init-only bools: true/false written as is.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -149,7 +159,7 @@ namespace mcla::dev_overrides {
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
 // 2 KiB since l73: a full 35-key arm file (every key explicit) is about
-// 1.07 KB, beyond the former 1 KiB (a full 48-key arm is about 1.5 KB).
+// 1.07 KB, beyond the former 1 KiB (a full 53-key arm is about 1.6 KB).
 inline constexpr size_t kMaxBytes = 2048;
 
 enum class Key : uint8_t {
@@ -201,8 +211,13 @@ enum class Key : uint8_t {
   kXmaFrameTrimBlockGranular,  // KI-071 step 3: xma_frame_trim_block_granular=true
   kXmaDumpAllRates,       // KI-071 step 3: xma_dump_all_rates=true
   kXmaDumpContextsOn,     // KI-071 step 3: xma_dump_contexts=<diagnostics>/xma-dump/<stamp>
+  kXmaFrameWalkTrace,     // KI-071 step 4: xma_frame_walk_trace=true (walk lines)
+  kXmaFrameWalkFix,       // KI-071 step 4: xma_frame_walk_fix=true (W1 fix)
+  kXmaDumpInput,          // KI-071 step 4: xma_dump_input=true (input/walk dump)
+  kLockProbe,             // M11-007d: mcla_lock_probe (host, MCLA_LOCK)
+  kLockReadbackEnsure,    // M11-007d: mcla_lock_readback_ensure (host)
 };
-inline constexpr size_t kKeyCount = 48;
+inline constexpr size_t kKeyCount = 53;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -319,6 +334,15 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // only the description); =false writes nothing.
     {"xma_dump_contexts_on", Phase::kStartup, "xma_dump_contexts",
      "<diagnostics>/xma-dump/<yyyyMMdd-HHmmss>", "", TextSource::kXmaDumpDirectory},
+    // KI-071 step 4: SDK rexruntime bools (default false), before the guest;
+    // =false writes nothing.
+    {"xma_frame_walk_trace", Phase::kStartup, "", "true", ""},
+    {"xma_frame_walk_fix", Phase::kStartup, "", "true", ""},
+    {"xma_dump_input", Phase::kStartup, "", "true", ""},
+    // M11-007d lock probe and read-back completion at the lock: host
+    // init-only bools (mcla_lock_probe.cpp), before the guest.
+    {"mcla_lock_probe", Phase::kStartup},
+    {"mcla_lock_readback_ensure", Phase::kStartup},
 }};
 
 // Key pairs that write different values to one cvar (integer, or the
