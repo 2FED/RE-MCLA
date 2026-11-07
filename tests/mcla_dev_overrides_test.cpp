@@ -29,7 +29,47 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 39, "thirty-nine whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 44, "forty-four whitelisted names");
+  {
+    // KI-071 step 2 keys: the four SDK bools at startup (=false writes
+    // nothing) and the host consume probe (a plain init-only bool).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    const Key sdk_keys[] = {Key::kXmaSiblingTrace, Key::kXmaStallOnInvalidNext,
+                            Key::kXmaHonorStartSkip, Key::kXmaResetCodecOnClear};
+    const char *const sdk_names[] = {"xma_sibling_trace", "xma_stall_on_invalid_next",
+                                     "xma_honor_start_skip", "xma_reset_codec_on_clear"};
+    for (size_t k = 0; k < 4; ++k) {
+      Check(FindKey(sdk_names[k]) == sdk_keys[k], "KI-071 step 2 key lookup");
+      Check(Info(sdk_keys[k]).phase == Phase::kStartup,
+            "step 2 SDK keys at startup (rexruntime cvars)");
+      Check(CvarName(Info(sdk_keys[k])) == sdk_names[k] &&
+                CvarText(Info(sdk_keys[k]), true) == "true" &&
+                CvarText(Info(sdk_keys[k]), false).empty(),
+            "step 2 SDK key writes its own cvar true, false writes nothing");
+    }
+    Check(FindKey("mcla_xma_consume_probe") == Key::kXmaConsumeProbe &&
+              Info(Key::kXmaConsumeProbe).phase == Phase::kStartup &&
+              CvarName(Info(Key::kXmaConsumeProbe)) == "mcla_xma_consume_probe" &&
+              CvarText(Info(Key::kXmaConsumeProbe), true) == "true" &&
+              CvarText(Info(Key::kXmaConsumeProbe), false) == "false",
+          "consume probe: host init-only bool at startup, writes true/false");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key : {Key::kXmaSiblingTrace, Key::kXmaStallOnInvalidNext,
+                            Key::kXmaHonorStartSkip, Key::kXmaResetCodecOnClear,
+                            Key::kXmaConsumeProbe}) {
+        Check(pair.first != key && pair.second != key, "step 2 keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("xma_sibling") && !FindKey("xma_sibling_trace_on") &&
+              !FindKey("xma_stall") && !FindKey("xma_stall_on_invalid_next_off") &&
+              !FindKey("xma_start_skip") && !FindKey("xma_honor_start_skip_on") &&
+              !FindKey("xma_reset_codec") && !FindKey("xma_codec_reset") &&
+              !FindKey("xma_consume_probe") && !FindKey("mcla_xma_consume") &&
+              !FindKey("MCLA_XMA_CONSUME_PROBE") && !FindKey("mcla_xma_consume_probe_on"),
+          "no prefix, suffix or case variants of the step 2 keys");
+  }
   {
     // KI-071 XMA doubling fix keys: plain SDK bools at startup, =false writes
     // nothing.
@@ -275,7 +315,9 @@ void TestWhitelist() {
                           key == Key::kReadbackKick1024 || key == Key::kFetchIdentityOff ||
                           key == Key::kFetchIdentityVerify || key == Key::kReadbackSteadyExempt ||
                           key == Key::kXmaSwapCarryPacket || key == Key::kXmaValidOnlyWhenWritten ||
-                          key == Key::kXmaWorkLockRecheck || key == Key::kXmaSwapTrace;
+                          key == Key::kXmaWorkLockRecheck || key == Key::kXmaSwapTrace ||
+                          key == Key::kXmaSiblingTrace || key == Key::kXmaStallOnInvalidNext ||
+                          key == Key::kXmaHonorStartSkip || key == Key::kXmaResetCodecOnClear;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -793,8 +835,7 @@ void TestWhitelist() {
                                "xma_swap_trace=" + arm[3] + "\n";
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
-                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
-                a.issue_count == 0,
+                a.ValueCount() == 39 && a.ignored_lines == 0 && a.issue_count == 0,
             "l73 voice arm: every key (39), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kXmaSwapCarryPacket) == (arm[0][0] == 't') &&
                 a.Value(Key::kXmaValidOnlyWhenWritten) == (arm[1][0] == 't') &&
@@ -814,6 +855,56 @@ void TestWhitelist() {
               xma_bad.issues[2].issue == LineIssue::kUnknownName &&
               xma_bad.issues[3].issue == LineIssue::kDuplicate,
           "XMA near misses: non-bool values, prefixes and repeats are ignored");
+    // l74 KI-071 step 2 arms: the l73 base arm (39 keys, XMA fixes off) plus
+    // the five step 2 keys explicit: every key (44), nothing ignored, within
+    // kMaxBytes. trace = sibling trace + consume probe; d2, d1 = trace + one
+    // fix; all = trace + both fixes + the codec reset.
+    const std::string base39 = triad32 + "fetch_identity_off=false\n"
+                               "fetch_identity_verify=false\n"
+                               "readback_steady_exempt=false\n"
+                               "xma_swap_carry_packet=false\n"
+                               "xma_valid_only_when_written=false\n"
+                               "xma_work_lock_recheck=false\n"
+                               "xma_swap_trace=false\n";
+    const char *const l74_arms[5][5] = {
+        {"false", "false", "false", "false", "false"},  // base
+        {"true", "false", "false", "false", "true"},    // trace
+        {"true", "true", "false", "false", "true"},     // d2
+        {"true", "false", "true", "false", "true"},     // d1
+        {"true", "true", "true", "true", "true"}};      // all
+    for (const auto &arm : l74_arms) {
+      const std::string text = base39 + "xma_sibling_trace=" + arm[0] + "\n" +
+                               "xma_stall_on_invalid_next=" + arm[1] + "\n" +
+                               "xma_honor_start_skip=" + arm[2] + "\n" +
+                               "xma_reset_codec_on_clear=" + arm[3] + "\n" +
+                               "mcla_xma_consume_probe=" + arm[4] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l74 arm: every key (44), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kXmaSiblingTrace) == (arm[0][0] == 't') &&
+                a.Value(Key::kXmaStallOnInvalidNext) == (arm[1][0] == 't') &&
+                a.Value(Key::kXmaHonorStartSkip) == (arm[2][0] == 't') &&
+                a.Value(Key::kXmaResetCodecOnClear) == (arm[3][0] == 't') &&
+                a.Value(Key::kXmaConsumeProbe) == (arm[4][0] == 't') &&
+                a.Value(Key::kXmaSwapCarryPacket) == false &&
+                a.Value(Key::kXmaSwapTrace) == false,
+            "l74 arm values (the 4a3aea1 XMA fixes off in every arm)");
+    }
+    const Parsed l74_bad = Parse("xma_sibling_trace=1\n"
+                                 "mcla_xma_consume_probe=yes\n"
+                                 "xma_consume_probe=true\n"
+                                 "xma_honor_start_skip=true\n"
+                                 "xma_honor_start_skip=false\n"
+                                 "mcla_xma_consume_probe=true\n");
+    Check(l74_bad.ValueCount() == 2 && l74_bad.Value(Key::kXmaHonorStartSkip) == true &&
+              l74_bad.Value(Key::kXmaConsumeProbe) == true && l74_bad.ignored_lines == 4 &&
+              l74_bad.issues[0].issue == LineIssue::kMalformed &&
+              l74_bad.issues[1].issue == LineIssue::kMalformed &&
+              l74_bad.issues[2].issue == LineIssue::kUnknownName &&
+              l74_bad.issues[3].issue == LineIssue::kDuplicate,
+          "l74 near misses: non-bool values, prefixes and repeats are ignored");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.

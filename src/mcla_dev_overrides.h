@@ -95,6 +95,14 @@
 //   xma_swap_trace (swap trace lines) are plain SDK rexruntime bools (default
 //   false), registered before startup: =true writes true, =false changes
 //   nothing (so an SDK default stays visible as the default).
+// - KI-071 step 2 (docs/evidence/M11-ki071-xma-sibling-trace-sdk-20261107.md,
+//   SDK branch mcla/m11-xma-sibling): xma_sibling_trace (sibling group and
+//   MCLA_XMA_SIB lines), xma_stall_on_invalid_next (D2),
+//   xma_honor_start_skip (D1) and xma_reset_codec_on_clear are plain SDK
+//   rexruntime bools (default false) of the same kind: =true writes true,
+//   =false changes nothing. mcla_xma_consume_probe is a plain host init-only
+//   bool (MCLA_XMA_CONSUME lines, mcla_xma_consume_probe.cpp,
+//   docs/evidence/M11-ki071-xma-consume-probe-20261107.md).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -171,8 +179,13 @@ enum class Key : uint8_t {
   kXmaValidOnlyWhenWritten,  // KI-071 C2: xma_valid_only_when_written=true
   kXmaWorkLockRecheck,    // KI-071 C3: xma_work_lock_recheck=true
   kXmaSwapTrace,          // KI-071: xma_swap_trace=true (swap trace lines)
+  kXmaSiblingTrace,       // KI-071 step 2: xma_sibling_trace=true (group lines)
+  kXmaStallOnInvalidNext,  // KI-071 D2: xma_stall_on_invalid_next=true
+  kXmaHonorStartSkip,     // KI-071 D1: xma_honor_start_skip=true
+  kXmaResetCodecOnClear,  // KI-071: xma_reset_codec_on_clear=true
+  kXmaConsumeProbe,       // KI-071: mcla_xma_consume_probe (host, MCLA_XMA_CONSUME)
 };
-inline constexpr size_t kKeyCount = 39;
+inline constexpr size_t kKeyCount = 44;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -261,6 +274,15 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"xma_valid_only_when_written", Phase::kStartup, "", "true", ""},
     {"xma_work_lock_recheck", Phase::kStartup, "", "true", ""},
     {"xma_swap_trace", Phase::kStartup, "", "true", ""},
+    // KI-071 step 2: SDK rexruntime bools (default false), before the guest;
+    // =false writes nothing.
+    {"xma_sibling_trace", Phase::kStartup, "", "true", ""},
+    {"xma_stall_on_invalid_next", Phase::kStartup, "", "true", ""},
+    {"xma_honor_start_skip", Phase::kStartup, "", "true", ""},
+    {"xma_reset_codec_on_clear", Phase::kStartup, "", "true", ""},
+    // KI-071 guest consume probe: host init-only bool
+    // (mcla_xma_consume_probe.cpp), before the guest.
+    {"mcla_xma_consume_probe", Phase::kStartup},
 }};
 
 // Key pairs that write different values to one cvar (integer, or the
@@ -524,7 +546,7 @@ std::optional<bool> AppliedValue(Key key);
 // a parsed file or without a valid line), whether or not anything was
 // written. Used for keys whose value writes nothing (upload-ahead, hot blocks,
 // read-back kick, the l73 fetch-identity / steady-exempt and the KI-071 XMA
-// keys =false).
+// SDK keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides
