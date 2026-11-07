@@ -150,7 +150,8 @@ void ApplyPhase(Phase phase) {
     }
     const bool registered = rex::cvar::GetFlagInfo(name) != nullptr;
     const bool non_default = registered && rex::cvar::HasNonDefaultValue(name);
-    switch (DecideApply(registered, non_default)) {
+    const std::string replaced = non_default ? rex::cvar::GetFlagByName(name) : std::string();
+    switch (DecideApply(registered, non_default, info.overrides_user)) {
       case ApplyAction::kUnavailable:
         REXLOG_CAT_INFO(category, "MCLA dev overrides: {} unavailable in this build; {}={} ignored",
                         name, key_name, *value);
@@ -161,6 +162,7 @@ void ApplyPhase(Phase phase) {
                         "value {}={} ignored",
                         name, rex::cvar::GetFlagByName(name), key_name, *value);
         break;
+      case ApplyAction::kReplaceUserSet:
       case ApplyAction::kApply:
         if (*value && info.true_source == TextSource::kXmaDumpDirectory) {
           text = PrepareXmaDumpDirectory(category);
@@ -170,7 +172,12 @@ void ApplyPhase(Phase phase) {
         }
         if (rex::cvar::SetFlagByName(name, text)) {
           g_applied[i] = *value;
-          if (key_name == name) {
+          if (!replaced.empty()) {
+            REXLOG_CAT_INFO(category,
+                            "MCLA dev override: {}={} ({}={}, replaces the command-line or "
+                            "config value {})",
+                            key_name, *value, name, text, replaced);
+          } else if (key_name == name) {
             REXLOG_CAT_INFO(category, "MCLA dev override: {}={}", name, *value);
           } else {
             REXLOG_CAT_INFO(category, "MCLA dev override: {}={} ({}={})", key_name, *value, name,

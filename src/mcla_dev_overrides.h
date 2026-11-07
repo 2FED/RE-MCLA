@@ -135,14 +135,28 @@
 //   arm, before the guest); =false changes nothing. xma_frame_walk_fix=true
 //   together with xma_frame_walk_fix_off=true is contradictory (a conflict
 //   pair: neither is applied).
+// - l77 KI-074 experiments (docs/evidence/M11-ki074-framerate-re-20261107.md
+//   sections 5 and 6): raw_timer_off=true writes false to the host init-only
+//   mcla_raw_timer (mcla_raw_timer.cpp, read on the first guest timer tick,
+//   so the startup write is in time): the stock fixed 1/30 s step, E1,
+//   diagnostic only (the game runs about 1.35x fast at 40 fps); =false
+//   changes nothing. vblank_hz_72, vblank_hz_80 and vblank_hz_88 write 72,
+//   80 or 88 to the SDK int mcla_guest_vblank_hz (graphics plugin,
+//   graphics_system.cpp, hot-reload, read on every vblank tick): frame caps
+//   of 36, 40 and 44 fps (E2); =false changes nothing. The three form a
+//   conflict group like the kick keys. The launcher's Unlocked mode passes
+//   --mcla_guest_vblank_hz=240 on the command line, so these three keys are
+//   marked overrides_user: they replace a command-line or config value
+//   (logged with the value replaced) instead of yielding to it.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
 //   lines except the earliest of its group.
 //
 // Each accepted value is applied to its cvar unless that cvar already holds a
-// non-default value (set by the command line or the config file), and logged
-// once as "MCLA dev override: name=value". Host init-only cvars are applied at
+// non-default value (set by the command line or the config file; keys marked
+// overrides_user replace that value instead), and logged once as
+// "MCLA dev override: name=value". Host init-only cvars are applied at
 // startup (before the guest runs); SDK cvars of the graphics plugin are applied
 // when the plugin has been loaded (they are registered by the plugin DLL).
 // Without the option nothing is read or written, and the single-line l55 file
@@ -170,7 +184,7 @@ namespace mcla::dev_overrides {
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
 // 2 KiB since l73: a full 35-key arm file (every key explicit) is about
-// 1.07 KB, beyond the former 1 KiB (a full 55-key arm is about 1.65 KB).
+// 1.07 KB, beyond the former 1 KiB (a full 59-key arm is about 1.7 KB).
 inline constexpr size_t kMaxBytes = 2048;
 
 enum class Key : uint8_t {
@@ -229,8 +243,12 @@ enum class Key : uint8_t {
   kLockReadbackEnsure,    // M11-007d: mcla_lock_readback_ensure (host)
   kFenceWriteDeferred,    // M11-007e: d3d12_fence_write_deferred=true
   kXmaFrameWalkFixOff,    // KI-071 control: xma_frame_walk_fix=false (SDK default true)
+  kRawTimerOff,           // KI-074 E1: mcla_raw_timer=false (stock fixed 1/30 s step)
+  kVblankHz72,            // KI-074 E2: mcla_guest_vblank_hz=72 (36 fps cap)
+  kVblankHz80,            // KI-074 E2: mcla_guest_vblank_hz=80 (40 fps cap)
+  kVblankHz88,            // KI-074 E2: mcla_guest_vblank_hz=88 (44 fps cap)
 };
-inline constexpr size_t kKeyCount = 55;
+inline constexpr size_t kKeyCount = 59;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -258,6 +276,9 @@ struct KeyInfo {
   std::string_view true_text = "true";
   std::string_view false_text = "false";
   TextSource true_source = TextSource::kLiteral;
+  // The value replaces a command-line or config value of the cvar (the
+  // launcher's own --mcla_guest_vblank_hz) instead of yielding to it.
+  bool overrides_user = false;
 };
 
 // The whitelist, indexed by Key.
@@ -363,6 +384,18 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // l77: the KI-071 walk fix control (SDK rexruntime bool, default true
     // since l77), before the guest; =false writes nothing.
     {"xma_frame_walk_fix_off", Phase::kStartup, "xma_frame_walk_fix", "false", ""},
+    // l77 KI-074 E1: the host init-only raw timer switch (default on in owner
+    // builds), before the guest; =false writes nothing.
+    {"raw_timer_off", Phase::kStartup, "mcla_raw_timer", "false", ""},
+    // l77 KI-074 E2: frame caps through the SDK int registered by the graphics
+    // plugin (hot-reload), after the plugin has loaded; =false writes nothing.
+    // They win over the launcher's Unlocked --mcla_guest_vblank_hz=240.
+    {"vblank_hz_72", Phase::kGraphicsPlugin, "mcla_guest_vblank_hz", "72", "",
+     TextSource::kLiteral, true},
+    {"vblank_hz_80", Phase::kGraphicsPlugin, "mcla_guest_vblank_hz", "80", "",
+     TextSource::kLiteral, true},
+    {"vblank_hz_88", Phase::kGraphicsPlugin, "mcla_guest_vblank_hz", "88", "",
+     TextSource::kLiteral, true},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
@@ -374,7 +407,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 7> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 10> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -382,6 +415,9 @@ inline constexpr std::array<ConflictPair, 7> kConflictPairs = {{
     {Key::kReadbackKick256, Key::kReadbackKick1024},
     {Key::kReadbackKick128, Key::kReadbackKick1024},
     {Key::kXmaFrameWalkFix, Key::kXmaFrameWalkFixOff},
+    {Key::kVblankHz72, Key::kVblankHz80},
+    {Key::kVblankHz72, Key::kVblankHz88},
+    {Key::kVblankHz80, Key::kVblankHz88},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -638,17 +674,20 @@ constexpr const char *LineIssueName(LineIssue issue) {
 }
 
 enum class ApplyAction : uint8_t {
-  kApply,        // write the cvar
-  kUnavailable,  // the cvar is not registered (e.g. an SDK without it)
-  kUserSet,      // the command line or config set the cvar: left alone
+  kApply,          // write the cvar
+  kUnavailable,    // the cvar is not registered (e.g. an SDK without it)
+  kUserSet,        // the command line or config set the cvar: left alone
+  kReplaceUserSet, // the command line or config set the cvar; an
+                   // overrides_user key replaces that value
 };
 
-constexpr ApplyAction DecideApply(bool cvar_registered, bool cvar_non_default) {
+constexpr ApplyAction DecideApply(bool cvar_registered, bool cvar_non_default,
+                                  bool overrides_user = false) {
   if (!cvar_registered) {
     return ApplyAction::kUnavailable;
   }
   if (cvar_non_default) {
-    return ApplyAction::kUserSet;
+    return overrides_user ? ApplyAction::kReplaceUserSet : ApplyAction::kUserSet;
   }
   return ApplyAction::kApply;
 }

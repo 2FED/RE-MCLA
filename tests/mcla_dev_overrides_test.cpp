@@ -30,7 +30,57 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 55, "fifty-five whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 59, "fifty-nine whitelisted names");
+  {
+    // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
+    // caps (graphics plugin, a conflict group, replacing the launcher value).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &raw = Info(Key::kRawTimerOff);
+    Check(FindKey("raw_timer_off") == Key::kRawTimerOff && raw.phase == Phase::kStartup &&
+              CvarName(raw) == "mcla_raw_timer" && CvarText(raw, true) == "false" &&
+              CvarText(raw, false).empty() && raw.true_source == TextSource::kLiteral &&
+              !raw.overrides_user,
+          "raw_timer_off=true writes false to mcla_raw_timer at startup, false writes nothing");
+    const Key cap_keys[] = {Key::kVblankHz72, Key::kVblankHz80, Key::kVblankHz88};
+    const char *const cap_names[] = {"vblank_hz_72", "vblank_hz_80", "vblank_hz_88"};
+    const char *const cap_values[] = {"72", "80", "88"};
+    for (size_t k = 0; k < 3; ++k) {
+      const auto &cap = Info(cap_keys[k]);
+      Check(FindKey(cap_names[k]) == cap_keys[k] && cap.phase == Phase::kGraphicsPlugin &&
+                CvarName(cap) == "mcla_guest_vblank_hz" && CvarText(cap, true) == cap_values[k] &&
+                CvarText(cap, false).empty() && cap.true_source == TextSource::kLiteral &&
+                cap.overrides_user,
+            "vblank_hz_N=true writes N after the plugin loaded (replacing the launcher value), "
+            "false writes nothing");
+    }
+    size_t overriding = 0;
+    for (const auto &info : mcla::dev_overrides::kKeys) {
+      overriding += info.overrides_user ? 1 : 0;
+    }
+    Check(overriding == 3, "only the three vblank keys replace a command-line value");
+    size_t cap_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kRawTimerOff && pair.second != Key::kRawTimerOff,
+            "the raw timer key is in no conflict pair");
+      const bool first_cap = pair.first == Key::kVblankHz72 || pair.first == Key::kVblankHz80 ||
+                             pair.first == Key::kVblankHz88;
+      const bool second_cap = pair.second == Key::kVblankHz72 ||
+                              pair.second == Key::kVblankHz80 || pair.second == Key::kVblankHz88;
+      Check(first_cap == second_cap, "vblank keys pair only with each other");
+      cap_pairs += first_cap ? 1 : 0;
+    }
+    Check(cap_pairs == 3, "the vblank group is listed as its three pairs");
+    Check(!FindKey("raw_timer") && !FindKey("raw_timer_on") && !FindKey("mcla_raw_timer") &&
+              !FindKey("mcla_raw_timer_off") && !FindKey("RAW_TIMER_OFF") &&
+              !FindKey("vblank_hz_60") && !FindKey("vblank_hz_120") &&
+              !FindKey("vblank_hz_240") && !FindKey("vblank_hz_7") && !FindKey("vblank_hz") &&
+              !FindKey("mcla_guest_vblank_hz") && !FindKey("vblank_hz_72_on") &&
+              !FindKey("VBLANK_HZ_72") && !FindKey("vblank_72"),
+          "no prefix, suffix, cvar-name, case or other numeric variants of the KI-074 keys");
+  }
   {
     // l77 keys: M11-007e deferred fence writes (graphics plugin) and the
     // KI-071 walk fix control (startup); =false writes nothing for both.
@@ -505,7 +555,9 @@ void TestWhitelist() {
                           key == Key::kXmaDumpAllRates || key == Key::kXmaDumpContextsOn ||
                           key == Key::kXmaFrameWalkTrace || key == Key::kXmaFrameWalkFix ||
                           key == Key::kXmaDumpInput || key == Key::kFenceWriteDeferred ||
-                          key == Key::kXmaFrameWalkFixOff;
+                          key == Key::kXmaFrameWalkFixOff || key == Key::kRawTimerOff ||
+                          key == Key::kVblankHz72 || key == Key::kVblankHz80 ||
+                          key == Key::kVblankHz88;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -595,10 +647,10 @@ void TestWhitelist() {
         Check(paired, "keys writing one cvar form a conflict pair");
       }
     }
-    // Four pairs (l77: the walk fix and its control) plus the kick group of
-    // three (listed as its three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 7,
-          "seven shared-cvar pairs");
+    // Four pairs (l77: the walk fix and its control) plus the kick and the
+    // vblank groups of three (each listed as its three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 10,
+          "ten shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -1203,13 +1255,19 @@ void TestWhitelist() {
     // l77 arms: the l76 base / steady arm plus the two l77 keys explicit:
     // every key (55), nothing ignored, within kMaxBytes. walk-off = base +
     // xma_frame_walk_fix_off (KI-071 control); *-fence = + fence_write_deferred.
-    const char *const l77_arms[5][3] = {
-        // steady_exempt, fence_deferred, walk_fix_off
-        {"false", "false", "false"},  // base
-        {"false", "false", "true"},   // walk-off
-        {"true", "false", "false"},   // steady
-        {"true", "true", "false"},    // steady-fence
-        {"false", "true", "false"}};  // base-fence
+    // Second l77 patch: + raw_timer_off and the three vblank caps (59 keys).
+    const char *const l77_arms[10][7] = {
+        // steady_exempt, fence_deferred, walk_fix_off, raw_off, hz72, hz80, hz88
+        {"false", "false", "false", "false", "false", "false", "false"},  // base
+        {"false", "false", "true", "false", "false", "false", "false"},   // walk-off
+        {"true", "false", "false", "false", "false", "false", "false"},   // steady
+        {"true", "true", "false", "false", "false", "false", "false"},    // steady-fence
+        {"false", "true", "false", "false", "false", "false", "false"},   // base-fence
+        {"true", "false", "false", "true", "false", "false", "false"},    // steady-rawoff
+        {"true", "false", "false", "false", "true", "false", "false"},    // steady-cap36
+        {"true", "false", "false", "false", "false", "true", "false"},    // steady-cap40
+        {"true", "false", "false", "false", "false", "false", "true"},    // steady-cap44
+        {"false", "false", "false", "false", "true", "false", "false"}};  // base-cap36
     for (const auto &arm : l77_arms) {
       std::string l76_text = base39 +
                              "xma_sibling_trace=false\n"
@@ -1235,12 +1293,21 @@ void TestWhitelist() {
       l76_text.replace(at, exempt_false.size(),
                        std::string("readback_steady_exempt=") + arm[0] + "\n");
       const std::string text = l76_text + "fence_write_deferred=" + arm[1] + "\n" +
-                               "xma_frame_walk_fix_off=" + arm[2] + "\n";
+                               "xma_frame_walk_fix_off=" + arm[2] + "\n" +
+                               "raw_timer_off=" + arm[3] + "\n" +
+                               "vblank_hz_72=" + arm[4] + "\n" +
+                               "vblank_hz_80=" + arm[5] + "\n" +
+                               "vblank_hz_88=" + arm[6] + "\n";
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l77 arm: every key (55), nothing ignored, fits in kMaxBytes");
+            "l77 arm: every key (59), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kRawTimerOff) == (arm[3][0] == 't') &&
+                a.Value(Key::kVblankHz72) == (arm[4][0] == 't') &&
+                a.Value(Key::kVblankHz80) == (arm[5][0] == 't') &&
+                a.Value(Key::kVblankHz88) == (arm[6][0] == 't'),
+            "l77 arm KI-074 values");
       Check(a.Value(Key::kReadbackSteadyExempt) == (arm[0][0] == 't') &&
                 a.Value(Key::kFenceWriteDeferred) == (arm[1][0] == 't') &&
                 a.Value(Key::kXmaFrameWalkFixOff) == (arm[2][0] == 't') &&
@@ -1278,6 +1345,36 @@ void TestWhitelist() {
               l77_bad.issues[2].issue == LineIssue::kMalformed &&
               l77_bad.issues[3].issue == LineIssue::kDuplicate,
           "l77 near misses: non-bool values, the cvar name and repeats are ignored");
+    // The vblank caps: one true applies; two or three true is a conflict for
+    // the whole group (none applied), logged on every later true line.
+    const Parsed cap = Parse("vblank_hz_72=false\nvblank_hz_80=true\nvblank_hz_88=false\n"
+                             "raw_timer_off=true\n");
+    Check(cap.ValueCount() == 4 && cap.Value(Key::kVblankHz80) == true &&
+              cap.Value(Key::kRawTimerOff) == true && cap.issue_count == 0,
+          "cap 40 arm; the other two false is not a conflict; raw_timer_off combines");
+    const Parsed caps = Parse("vblank_hz_88=true\n"
+                              "raw_timer_off=false\n"
+                              "vblank_hz_72=true\n"
+                              "vblank_hz_80=true\n");
+    Check(caps.ValueCount() == 1 && !caps.Value(Key::kVblankHz72) &&
+              !caps.Value(Key::kVblankHz80) && !caps.Value(Key::kVblankHz88) &&
+              caps.Value(Key::kRawTimerOff) == false && caps.issue_count == 2 &&
+              caps.issues[0].line == 3 && caps.issues[0].issue == LineIssue::kConflict &&
+              caps.issues[1].line == 4 && caps.issues[1].issue == LineIssue::kConflict,
+          "three vblank caps true: none applies, conflicts on the two later lines");
+    const Parsed cap_bad = Parse("vblank_hz_72=72\n"
+                                 "mcla_guest_vblank_hz=true\n"
+                                 "vblank_hz_76=true\n"
+                                 "raw_timer_off=off\n"
+                                 "vblank_hz_72=true\n"
+                                 "vblank_hz_72=false\n");
+    Check(cap_bad.ValueCount() == 1 && cap_bad.Value(Key::kVblankHz72) == true &&
+              cap_bad.ignored_lines == 5 && cap_bad.issues[0].issue == LineIssue::kMalformed &&
+              cap_bad.issues[1].issue == LineIssue::kUnknownName &&
+              cap_bad.issues[2].issue == LineIssue::kUnknownName &&
+              cap_bad.issues[3].issue == LineIssue::kMalformed &&
+              cap_bad.issues[4].issue == LineIssue::kDuplicate,
+          "KI-074 near misses: integer values, the cvar name, other rates and repeats");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.
@@ -1517,6 +1614,16 @@ void TestApplyDecision() {
   Check(DecideApply(true, true) == ApplyAction::kUserSet, "command line wins over the file");
   Check(DecideApply(true, false) == ApplyAction::kApply, "default value: apply");
   static_assert(DecideApply(true, false) == ApplyAction::kApply);
+  // overrides_user keys (the vblank caps) replace a command-line value.
+  Check(DecideApply(true, true, true) == ApplyAction::kReplaceUserSet,
+        "an overrides_user key replaces the command-line value");
+  Check(DecideApply(true, false, true) == ApplyAction::kApply,
+        "an overrides_user key at the default: plain apply");
+  Check(DecideApply(false, true, true) == ApplyAction::kUnavailable,
+        "an overrides_user key with the cvar missing: unavailable");
+  Check(DecideApply(true, true, false) == ApplyAction::kUserSet,
+        "other keys still yield to the command line");
+  static_assert(DecideApply(true, true, true) == ApplyAction::kReplaceUserSet);
 }
 
 void TestConstexpr() {
@@ -1553,6 +1660,10 @@ void TestConstexpr() {
   static_assert(walk_conflict.ValueCount() == 0);
   static_assert(walk_conflict.issues[0].line == 2);
   static_assert(walk_conflict.issues[0].issue == LineIssue::kConflict);
+  constexpr Parsed cap_conflict = Parse("vblank_hz_80=true\nvblank_hz_72=true\n");
+  static_assert(cap_conflict.ValueCount() == 0);
+  static_assert(cap_conflict.issues[0].line == 2);
+  static_assert(cap_conflict.issues[0].issue == LineIssue::kConflict);
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
             "conflicting keys for one cvar (neither is applied)",
         "conflict issue name covers every pair");
