@@ -256,3 +256,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **M11-018 plan (2026-11-07):** l77 gets dev keys for the flag experiments (`raw_timer_off`, `vblank_hz_72/80/88`) and arms steady-rawoff, steady-cap36/40/44; E4 probe in l78 after E1/E2 name the subsystem; the real fix = game-side dt/step handling behind a hook (goal 60+ fps correct).
 
 **M11-018 after the l77 experiments (2026-11-07):** flicker = uncapped GPU-saturated pacing (>=90 % GPU), not dt; E3 is the decisive split (720p CP-bound 45+ fps vs 1440p GPU-saturated <36 fps); then a texture-cache arm and eviction/creation counters (l78); the floating car / despawn branch keeps E4.
+
+**M11-007e first owner result (2026-11-07):** steady-fence 40-41 fps WITHOUT flicker (1 of 1; previous uncapped steady: flicker 7 of 7), base-fence 36.9 fps clean; deferred fences cost no fps here (max 1 frame deferred, no stalls). Pending: 2 more steady-fence runs; if clean, candidate defaults = steady exemption ON + deferred fences ON (then re-check KI-047 livery routine, Deck, and the E3 split becomes optional).
