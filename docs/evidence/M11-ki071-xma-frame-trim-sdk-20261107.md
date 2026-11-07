@@ -2,6 +2,8 @@
 
 Implementation by an Opus subagent on 2026-11-07 as SDK commit `c526cb3` on local branch `mcla/m11-xma-trim` (parent `8f949f7`); accepted by the primary agent as code: ctest 2090/2090 (4 skipped), no new warnings. Installed as `private/l75-sdk-install` 0.20.0.5-dev.gc526cb3: rexruntime.dll c8df5cca5c7928dc57c2058e7eb9af48c393f6d002fbd7f51535e63b283b73c4 (11,410,944 B), rexgpu-xenos.dll 0fcb9a808acf3be87632c30b84396e2a258a68e2242e5db81d637dd68f0bc292, TracyClient.dll 2387d4b6161ad02666666dda861478bdb6d4ab5d7e31504b650584b86207b4c4. Format change: the `[xma] group:` `id=` is now a stable serial per scene (not the lowest ctx id); `MCLA_XMA_SIB` is v=2.
 
+**Follow-up 2026-11-07 (SDK `bd9314f` on `mcla/m11-steady2`):** the owner's trim-trace run exhausted the 64-file cap with menu SFX before the cut-scene, so no dialogue was dumped. `xma_dump_burst_only` (default true) now dumps only contexts whose first decode falls in a burst of 3+ same-rate starts within 50 ms (plus siblings joining by start-kick id when the trace is on), holding back the first siblings' blocks until the 4th starts so every file begins at its first sample; caps 128 files / 90 s; file names `ctx<id>-g<burst serial>-<rate>Hz-...`. ctest 2100/2100. Installed over `private/l75-sdk-install` (0.20.0.7-dev.gbd9314f: rexruntime.dll 30a31cc44203f3ee9391fb5547c55d72ee3a8a9b3bcddfb7045625396ff60377, rexgpu-xenos.dll 01aecc557bafd3d7d0e4f5f26cb22f59499bc7cde54d76b6aef56d32b153ec6d). NOTE: the staged l75 candidate still carries 4bb8c02; the dump fix needs a re-stage (l76).
+
 ---
 
 # KI-071 step 3: XMA per-frame trim counters, `xma_honor_frame_trim`, per-context PCM dump, trace budgets (SDK notes, draft)
