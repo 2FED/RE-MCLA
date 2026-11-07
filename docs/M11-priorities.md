@@ -264,3 +264,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **E3 (2026-11-07):** 720p steady 52-55 fps clean, 1440p base 34 fps clean; confirms the CP-lead discriminator. Next build l78: SDK defaults flipped (steady exemption ON + deferred fences ON + W1 ON) with off-keys for A/B, plus fence/CP-lead instrumentation; regression routine on PC and Deck.
 
 **M11-007e confirmed (2026-11-07):** steady-fence 3 of 3 clean at ~40 fps vs 7 of 7 flickering without the fence. Process note: one of the confirmation runs was contaminated for two minutes by an SDK configure/build my agent started between the owner's runs (the idle guard checks only at start); rule tightened: during an owner test session all builds are held by explicit coordinator "hold/resume", not by the guard alone.
+
+**l78 SDK (2026-11-07):** `d61c597` on `mcla/m11-defaults` = l77 SDK + defaults ON (steady exemption, deferred fences; W1 already on) + fence-lateness histogram + CP-lead gauge + submissions by end reason (`subm_primary_end` suspected for the extra submissions) + `d3d12_fence_defer_min_gap_us` (Deck arm 2000). [SDK](evidence/M11-l78-sdk-defaults-20261107.md).
