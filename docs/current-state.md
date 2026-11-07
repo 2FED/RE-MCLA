@@ -1,89 +1,157 @@
 # Current state and handoff
 
-Updated November 5, 2026 Kyiv (M10 closed in the ledger; l70 published as the only allowed build; owner pre-share check and the push of main pending).
+Updated November 7, 2026 Kyiv (M11 active; l78 defaults build in preparation).
 
 ## Active outcome
 
-**ACTIVE (2026-11-07 night): l77 staged for the owner; main pushed.** Day results: KI-071 (cut-scene doubled voice, since the start of the port) FIXED: the host XMA frame walk skipped frames whose 15-bit length header straddles a packet end (W1); owner PASS on l76 walk-fix, offline verification (every skip = a straddling frame; fix 0 skips; siblings 3630 frames each); SDK `f6fc975` makes the fix default. M11-007a..d steady-key exemption: +6 ms/frame (34 -> 41 fps) and proven DATA-SAFE (Locked-mode control: no flicker at equal fps with the exemption active), but in Unlocked mode it lifts fps above ~36 where the game itself misbehaves (KI-074: texture flicker, despawns, floating traffic): the game was built for a fixed 1/30 s step and gets the raw timer's unbounded dt (24-25 ms at 41 fps). Owner goal: fix KI-074 properly (correct at 60+ fps). l77 = host main `afadfa6` (59 dev keys incl. raw_timer_off, vblank_hz_72/80/88 that override the launcher value, fence_write_deferred, xma_frame_walk_fix_off control) + SDK `590c484` (`mcla/m11-fence` = l76 SDK + W1 default on + M11-007e deferred fences [default off]); candidate `private/l77-int-input` (mcla.exe 845BBA6E...), sign `private/l77-internal-prepare.ps1`, arms `private/l77-arms` (14), steps `private/l77-CHECKLIST.txt`: (2) KI-074 experiments: steady-cap36/40/44, steady-rawoff (diagnostic, game 1.35x fast), base-cap36 on South Central Tour Unlocked; (3) KI-071 confirmation: base (fix default) vs walk-off; (4) optional fence arms. Next: E4 probe (traffic spawn-failure / sector paging printf hook + per-frame timer ring) in l78 once E1/E2 name the subsystem; then the game-side dt fix behind a hook. Then: SDK publication (v0.20.0.10+: W1 default on, M11-016 fetch identity still unverified by A/B: consider default off for publication), steady default decision with KI-074, M11-017 ThinLTO+PGO, KI-073 backlog. Submodule pin unmoved. Evidence 2026-11-07: M11-l77-owner-build, M11-ki074-framerate-re, M11-007d-l76-analysis, M11-007e-deferred-fences-sdk, M11-ki071-w1-verification.
+**M11 ACTIVE since 2026-11-06** (approved by the owner). Plan: `docs/M11-priorities.md`. Ledger,
+owner builds l71-l78 and the SDK lineage: README-AI section 17c.
 
+**Now: l78, the defaults build.** Host main `f86da9d` (62 dev keys, including the off-keys
+`readback_steady_exempt_off`, `fence_write_deferred_off` and the Deck arm `fence_defer_gap_2000`) on SDK
+`d61c597` (`mcla/m11-defaults`, install `private/l78-sdk-install`, `0.20.0.14-dev.gd61c597`, ctest
+2137/2137). Staging was in progress at the time of writing: arms `private/l78-arms` and steps
+`private/l78-CHECKLIST.txt` exist, but no candidate folder yet. Next: finish the candidate, then the owner
+regression routine on the PC and the Deck. The routine covers the KI-047 livery check, KI-035 garage trips,
+one Locked run, a Deck loop, a cold shader cache and photo mode, with the new fence, CP-lead and
+submission counters.
 
-**M11 ACTIVE (approved 2026-11-06):** **M11 drafted on 2026-11-06; owner approval pending.** The plan is in
-`docs/M11-priorities.md`, and the ledger will be README-AI section 17c. M10 is closed and
-pushed (`9e541e8`). Testers run l70 only (`DebugBundle` `31c806d`) on SDK `v0.20.0.8`.
+**Decisions already taken (in the l78 SDK defaults):**
+- **Steady exemption on.** This is M11-007a, narrowed by 007b/c. It gives +6 ms/frame (about 34 -> 40 fps
+  on South Central Tour 1080p). The Locked-mode control showed it is data-safe.
+- **Deferred fence writes on (M11-007e).** Steady-fence runs were clean 3 of 3 at about 40 fps, against 7 of
+  7 flickering without deferred fences. There was no fps cost.
+- **KI-071 frame-walk fix (W1) on.** Since `f6fc975`.
 
-The first task is M11-001, KI-068: saves on the Steam Deck under Proton do not work (S1).
-The owner details the symptoms, then runs a Deck repro on l70: save from the pause menu,
-quit, restart, plus one autosave after a fine or purchase. He sends the session folder. The
-agent reads the SDK `[content]` WARN lines, the launcher before/after snapshots and the F10
-save-copy lines, then fixes the cause. The same session also yields the Deck seeding line
-(M11-008) and the first-run fullscreen state (KI-057). The KI-065 dialog evidence folds
-into this task.
+**State of the issues behind those decisions:**
+- **KI-074** (flicker, despawns and floating traffic above about 36 fps in Unlocked) is mitigated by the
+  deferred fences. The discriminator is the GPU running a frame behind the CP; dt size is not the cause.
+  The owner's goal of correct behaviour at 60+ fps stays open.
+- **KI-074b** (despawns, also seen at 1440p without the exemption) is open.
+- **KI-067/KI-072:** the lag episodes were the project's own builds on the play PC. Rule: builds are held
+  during owner sessions (see the rules below). The CP-headroom line continues: M11-016 (unmeasured) and
+  M11-017 ThinLTO+PGO.
 
-Next comes M11-002, one owner-internal build with three items:
-- KI-056 album preview: the owner's 720p vs 1080p check first, then the `MCLA_ALBUM`
-  diagnostic and a fix A/B;
-- KI-066 pursuit/heat state in the F10 guest block;
-- KI-067 CPU clock, temperature and load in the census.
+**After l78:**
+1. SDK publication `v0.20.0.10`+ after the owner's approval. Open choices: the fetch identity default and
+   the steady/fence defaults after the regression.
+2. M11-017.
+3. KI-074b.
+4. The Deck items (plan M11-003/004: core freeing with KI-060, hot blocks v2).
+5. KI-073 stays backlog.
 
-Then the Deck performance group (M11-003 core freeing with KI-060, M11-004 hot blocks v2,
-the M11-005 gate). Alongside it, the video-memory budget steering (M11-006) and read-back
-steps 2-5 (M11-007). No game run happens without announcing it to the owner. Each SDK
-delta needs the owner's approval to publish.
+**Open for the owner:**
+- The l78 regression on the PC and the Deck.
+- The KI-071 by-ear check of the new default (l77 `base` vs `walk-off` is not recorded).
+- The M11-016 fetch identity A/B (never run).
+- A KI-068 PC save/reload smoke test (not recorded).
+- The KI-056 Fix A default (`mcla_album_preview_restore`, off).
+- Carried: the KI-067 re-test with no build running; KI-064 stray-file check; tester confirmation of KI-022
+  and KI-047; the canonical save copy if the Deck profile copy (MAIN id) is played on.
 
-
-**M10 CLOSED on 2026-11-05 (closure regression on l70 pending).** Ledger: README-AI section 17b. Done: M10-001 (PC and Deck verdicts), M10-003 (local union store; PC confirmed, Deck seeding unverified because the Deck sessions used the l56 launcher), M10-008 (triage round 2; KI-035 garage freeze root-caused and fixed, KI-065 mitigated, nine rows closed), M10-009 (l56, l65, l67, l70); partially done: M10-002 (read-back elision shipped; steps 2-5 to M11), M10-005 (Proton defaults: +15% fps and far better pacing on the Deck; hot blocks negative; stable 30 not reached, best about 14.7-14.9 fps driving) and M10-007 (1080p measurement done and the 2048 MB texture-cache soft cap shipped; 2160p and real budget steering to M11); closed as not justified now: M10-006; shelved: M10-004 (Vulkan slower, KI-062/063).
-
-**Volunteer l70 is published as the ONLY allowed build** (`DebugBundle` `31c806d`, one entry, issued 1793897517; l48, l49, l52, l56, l65 and l67 are refused at their next online check, so testers must move to l70 promptly). Clean clone of main `4f69018` (build inputs `dba3e58`) on SDK `v0.20.0.8`; adds the KI-035 fix and the KI-048 soft cap over l67. [Evidence](evidence/M9-005-volunteer-candidate-l70-20261105.md), [changelog](volunteer-changelog-l70.txt).
-
-**Owner steps, in order:**
-1. **l70 pre-share check** on the staged `private/l70-volunteer`: PC, one 1080p session with two or three garage trips after races (no freeze; `MCLA_KI035_FINISH_RACE` / `_DONE state=29` when the hook fires; `texture cache soft cap` at startup and `MCLA_VRAM v=1` lines in budget; `platform=windows applied=1` and `applied=5`); Deck, one loop (`platform=wine applied=2` and `applied=6`; the soft cap does not engage under Wine). Details in the l70 evidence, "Owner checks before sharing".
-2. Share l70 with the closed group.
-3. Done 2026-11-06: the closure line is filled in README-AI 17b, the M10 closure commit is `9e541e8`, and main is pushed to origin.
-
-**M11 inputs** (also in README-AI 17b):
-- Hot blocks v2 (Deck): change the copy shape (batch hot copies per block per submission, or snapshot before the first draw of a submission); SDK `mcla/m10-hotblocks` `cdf469a`, local.
-- Deck core freeing and KI-060 (audio underruns): polling thread F800068C and audio-side thread F8000534 (about 1.6 cores together); kick-interval A/B; CP draw phases.
-- M10-006 (multi-threaded CP) revisit once a Deck core is free.
-- M10-007 continued: budget steering of the soft limit against the live budget, residency priorities, render-target trim; the 2160p footprint run on the 3080 Ti or 6800 XT; one long cap-on session to close KI-048.
-- Read-back steps 2-5 of the M10-002 design (with first photo, livery and album checks).
-- Pre-warm a1 (derived-hint `.xpso` after a source-data-policy amendment) and a2 (engine effect-loader hook spike); Deck seeding check on a current launcher.
-- KI-052: prefilled launcher names so the Deck needs no typing.
-- KI-059: fill the D3D12 F10 graphics block in the SDK.
-- KI-054: frame-pacing or dt-smoothing study (varying time steps under Unlocked timing).
-- KI-066 / KI-067: police/pursuit state in the F10 guest block with logged transitions; CPU effective clock, temperature and system load in the per-minute census.
-- KI-035 refinement: exit state 20 one frame earlier so the hook (and its brief LOD pop) is rarely needed.
-- Build-script quirk: the automatic "every `*_test` target" check of the l66b/l67b host build script matches 0 help lines; use an explicit list with a cross-check (as l70 did) or fix the regex.
-- Gate build note: prepare scripts must use `private/gate-host-build/mcla_build_lease_probe_win.exe` (or build that target first); the old `private/l35-launcher-build` probe was removed by the 2026-11-05 cleanup.
-
-**Open for the owner (not blocking):** KI-056 album preview check, KI-064 stray-file check, KI-065 Deck repro (F10 at the start of a pull-over); tester confirmation of KI-022 (wheel centering) and KI-047 (police livery); name the canonical save copy if the Deck profile copy (same id as MAIN) is played on.
+**M10 CLOSED** (2026-11-05; closure regression done 2026-11-05/06; closure commit `9e541e8`, pushed).
+Ledger: README-AI 17b. l70 was shared with the testers on 2026-11-06.
 
 ## Builds (private, owner PC)
 
-- **Volunteer: l70 only** (`private/l70-volunteer`, `mcla.exe` `146FBBB5...`, V2 kill-switch ticket with `capabilities 1080p,1440p,unlocked`; lease valid until about 2026-12-05). l67 (`private/l67-volunteer`) and older are withdrawn.
-- **Owner builds:** l68 (`private/l68-internal`: KI-035 warp probe and watchdog arms, KI-048 census and soft-cap A/B) and l69 (`private/l69-internal`: l68 plus the KI-035 fix; arms `private/l69-arm-fix.cmd`, `l69-arm-fix-off.cmd`, `l69-arm-clear.cmd`). Owner builds use V1 14-day tickets without the online check.
-- **SDK:** pin `v0.20.0.8` = `c63895c`. Volunteer install `private/l67v-sdk-install` (l67 clean clone, D3D12 only, ctest 2014/2014; reused read-only for l70); dev install `private/l67-sdk-install` (used by l68/l69).
-- **Gate build:** `private/gate-host-build` (holds the rebuilt `mcla_build_lease_probe_win.exe` used by the prepare scripts' signed-list verification).
+- **Volunteer: l70 only** (`private/l70-volunteer`, `mcla.exe` `146FBBB5...`, `DebugBundle` `31c806d`, one
+  entry; lease valid until about 2026-12-05). Older volunteer builds are withdrawn.
+- **Owner-internal builds** use V1 tickets. Candidates are `private/l7x-int-input`, with arms
+  `private/l7x-arms` and steps `private/l7x-CHECKLIST.txt`.
+
+| Build | Host | SDK (install) | Purpose |
+|---|---|---|---|
+| l71 | `3e78c2c` | `d08813b` (`l71-sdk-install`) | KI-068 fix, triad, KI-069/070, KI-071 audio |
+| l72 | `060dbcf` | `d08813b` (`l71-sdk-install`) | KI-056 Fix A, kick A/B |
+| l73 | `1dec761` | `4a3aea1` (`l73-sdk-install`) | XMA fixes, fetch identity, steady key |
+| l74 | `c03a1df` | `8f949f7` (`l74-sdk-install`) | XMA sibling trace, first steady A/B |
+| l75 | `60c6b93` | `4bb8c02`, install later `bd9314f` (`l75-sdk-install`) | XMA trim, steady narrowing |
+| l76 | `406ee7e` | `a4a5309` (`l76-sdk-install`) | W1 frame walk, lock probe |
+| l77 | `afadfa6` | `590c484` (`l77-sdk-install`) | KI-074 experiments, deferred fences |
+| l78 | `f86da9d` | `d61c597` (`l78-sdk-install`) | Defaults on, fence/CP-lead counters (in preparation) |
+
+- **SDK:** `v0.20.0.9` = `d08813b` (KI-068, KI-069, KI-071 speaker config) is published on the fork. The
+  host submodule pin is unmoved at `c63895c` (`v0.20.0.8`). Everything after `d08813b` is local.
+- **Gate build:** `private/gate-host-build` (holds `mcla_build_lease_probe_win.exe` for the prepare
+  scripts' signed-list verification).
 
 ## Where the work lives
 
-- **Project:** branch `main` in the main checkout; local commits since `99d6e56` are unpushed and are pushed at the M10 closure. The pre-M9 uncommitted main tree is preserved on local branch `wip/main-dirty-m8-20261101` (`f65ea53`); branch `claude/admiring-jang-24d485` (`99d6e56`) is on origin.
-- **SDK fork:** `2FED/rexglue-sdk` `mcla/mcla-r-hotfixes` at `c63895c` (`v0.20.0.8`); SDL fork `2FED/SDL` `422c186`. The submodule checkout under `third_party/rexglue-sdk` still holds the old dirty `5dd58f8` tree (gitlink `c63895c`); builds use private clean clones.
-- **Local SDK branches** (in `private/l39-sdk-src`): published (reachable from the fork branch): `mcla/m10-perf-split` `483458d`, `mcla/m10-cpu-waits` `62cd66d`, `mcla/m10-readback` `141e13f`, `mcla/m10-prewarm` `9d8ede4`, `mcla/m10-ki047-targeted` `561a737`, `mcla/m10-watch` `43577c8`, `mcla/m10-content-logs` `c63895c` (worktree `private/l67-sdk-wt`), plus the M9 branches `mcla/ki-022-ffb-rearm` `daa1ae5`, `mcla/ki-040-xinput-rescan` `f519dd5`, `mcla/ki-047-diag` `851f03b`. Unpublished: `mcla/m10-hotblocks` `cdf469a` (worktree `private/l66-sdk-wt`).
+- **Project:** branch `main`. At the time of writing origin/main is `70823b5` and local main is `723dd24`
+  (9 commits ahead, unpushed). The pre-M9 dirty tree is kept on local branch
+  `wip/main-dirty-m8-20261101` (`f65ea53`).
+- **SDK fork:** `2FED/rexglue-sdk` `mcla/mcla-r-hotfixes` at `d08813b` (`v0.20.0.9`); SDL `2FED/SDL`
+  `422c186`. The checkout `third_party/rexglue-sdk` still holds an old dirty tree; builds use private
+  worktrees of `private/l39-sdk-src`.
+- **Local M11 SDK branches** (one linear chain; worktree in brackets):
+
+| Branch | Commit | Worktree |
+|---|---|---|
+| `mcla/m11-content-unmount` | `d08813b`, published | `private/l71-sdk-wt` |
+| `mcla/m11-audio` | `dbe6d54`, picked as `d08813b` | `private/l71-sdk-audio-wt` |
+| `mcla/m11-fetch-identity` | `ae35ae3` | `private/l72-sdk-fetch-wt` |
+| `mcla/m11-steady-key` | `e412c5c` | `private/l73-sdk-steady-wt` |
+| `mcla/m11-xma-doubling` | `4a3aea1` | `private/l73-sdk-xma-wt` |
+| `mcla/m11-xma-sibling` | `8f949f7` | `private/l74-sdk-xma2-wt` |
+| `mcla/m11-xma-trim` | `c526cb3` | `private/l75-sdk-xma3-wt` |
+| `mcla/m11-steady2` | `bd9314f` | `private/l75-sdk-steady2-wt` |
+| `mcla/m11-steady3` | `a4a5309` | `private/l76-sdk-steady3-wt` |
+| `mcla/m11-xma-walk` | `b6d361e` | `private/l76-sdk-xma4-wt` |
+| `mcla/m11-fence` | `590c484` | `private/l77-sdk-fence-wt` |
+| `mcla/m11-defaults` | `d61c597` | `private/l78-sdk-defaults-wt` |
+
+  The M10 branches are unchanged (see README-AI 17b). `mcla/m10-hotblocks` `cdf469a` is unpublished.
 - **Published allowance:** `DebugBundle` of `2FED/RE-MCLA` at `31c806d` (l70 only).
-- **Host source:** raw timer `src/mcla_raw_timer.cpp`; texture budget and soft cap `src/mcla_texture_budget_win.cpp`; `MCLA_VRAM` census `src/mcla_vram_census_win.*`; M10 speed-up and Proton defaults `src/mcla_m10_defaults.*`; KI-035 warp probe and finish hook `src/mcla_warp_probe.h`, `src/mcla_ki026_probe.*`; read-back sync `src/mcla_readback_sync.*`.
-- **Logged statistics** (once a minute): frame pacing, GPU busy, perf split, replay and write-watch, read-back, pipeline waits, `MCLA_VRAM`.
+- **Host source:**
+
+| Area | Files |
+|---|---|
+| Dev-override keys | `src/mcla_dev_overrides.*` |
+| Album probe and Fix A | `src/mcla_album_probe.*` |
+| Pursuit probe | `src/mcla_pursuit_probe.*` |
+| Texture-lock probe and ensure hook | `src/mcla_lock_probe.*` |
+| XMA consume probe | `src/mcla_xma_consume_probe.*` |
+| F10 minidump policy | `src/mcla_diagnostic_trigger.h` |
+| Raw timer | `src/mcla_raw_timer.cpp` |
+| Texture budget and soft cap | `src/mcla_texture_budget_win.cpp` |
+| `MCLA_VRAM` census | `src/mcla_vram_census_win.*` |
+| M10 and Proton defaults | `src/mcla_m10_defaults.*` |
+| KI-035 hook | `src/mcla_warp_probe.h`, `src/mcla_ki026_probe.*` |
+| Read-back sync | `src/mcla_readback_sync.*` |
 
 ## Known issues to carry
 
-Open: KI-013, KI-026, KI-032, KI-033 (extra sharpness), KI-036, KI-038, KI-041, KI-043, KI-048 (mitigated by the soft cap), KI-052, KI-054, KI-056, KI-059, KI-060, KI-062/063 (shelved with Vulkan), KI-065 (mitigated), KI-067. Fixed, confirmation pending: KI-022 and KI-047 (testers), KI-057 (Deck fullscreen; verify on the Deck), KI-064 (owner check). Fixed and owner-confirmed in M10: KI-035, KI-061. Unlocked-mode limits:
+| Issue | Status |
+|---|---|
+| KI-056 album preview | Fixed by Fix A (owner PASS on l72); default off pending the owner's decision |
+| KI-065 Deck save dialog | Folded into KI-068 (fixed) |
+| KI-066 police fines | Closed (console-accurate) |
+| KI-067 host slowdown | Cause found (own builds); re-test pending |
+| KI-068 Deck saves | Fixed (owner PASS on the Deck, l71) |
+| KI-069 picture freezes | Fixed (async logging; SDK `v0.20.0.9`) |
+| KI-070 F10 minidump | Fixed (no live dump on F10) |
+| KI-071 doubled cut-scene voice | Fixed (W1); default on in the local SDK; unpublished |
+| KI-072 high-speed stutter | Attributed to KI-067; CP headroom work continues |
+| KI-073 album export | Backlog (design ready) |
+| KI-074 Unlocked flicker | Mitigated by deferred fences |
+| KI-074b despawns | Open |
 
-- Menus drawn over the world run fast.
-- Heavy intersections drop to about 30-40 FPS (1440p GPU-bound on the RTX 5060).
-- One `DEVICE_HUNG` in eight l29 title runs.
+Still open from earlier milestones: KI-013, KI-026, KI-032, KI-033, KI-036, KI-038, KI-041, KI-043,
+KI-048 (mitigated by the soft cap), KI-052, KI-054, KI-059, KI-060, KI-062/063 (shelved with Vulkan).
+Confirmation pending: KI-022 and KI-047 (testers), KI-057 (Deck), KI-064 (owner).
 
 ## Rules that still apply
 
 - Never touch MAIN saves except through the owner's launcher.
 - Announce every game run to the owner.
-- Commit after each closed task; review and push after each milestone (owner workflow 2026-11-01).
-- Volunteer builds come from a clean clone at a published SDK pin; publishing a signed list needs the owner's explicit yes.
+- **No builds or test runs on the play PC while the owner plays.** The coordinator gives an explicit
+  "hold" before an owner session and "resume" after it. The idle guard
+  `private/tools/wait-for-idle-pc.ps1` (checked only at the start of a step) is not enough on its own.
+- **Owner-side measurement tools:**
+  - `private/tools/proc-sampler.ps1` for per-process CPU every 2 s (CSV under the launcher's LocalAppData
+    folder). Instructions are in `private/tools/proc-sampler-README.txt`.
+  - An HWiNFO64 sensor CSV log for clocks, power and temperature.
+  - Both run during performance A/Bs on the fixed Arcade race "South Central Tour".
+- Commit after each closed task; review and push after each milestone.
+- SDK publication and signed-list publication need the owner's explicit yes. Volunteer builds come from a
+  clean clone at a published SDK pin.
