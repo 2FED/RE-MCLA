@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 59, "fifty-nine whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 62, "sixty-two whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -108,8 +108,11 @@ void TestWhitelist() {
           "the walk fix key and its control write one cvar in one phase");
     size_t walk_pairs = 0;
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-      Check(pair.first != Key::kFenceWriteDeferred && pair.second != Key::kFenceWriteDeferred,
-            "the fence key is in no conflict pair");
+      if (pair.first == Key::kFenceWriteDeferred || pair.second == Key::kFenceWriteDeferred) {
+        Check(pair.first == Key::kFenceWriteDeferred &&
+                  pair.second == Key::kFenceWriteDeferredOff,
+              "the fence key pairs only with its l78 control");
+      }
       if (pair.first == Key::kXmaFrameWalkFixOff || pair.second == Key::kXmaFrameWalkFixOff) {
         Check(pair.first == Key::kXmaFrameWalkFix && pair.second == Key::kXmaFrameWalkFixOff,
               "the walk fix control pairs only with the walk fix key");
@@ -117,13 +120,81 @@ void TestWhitelist() {
       }
     }
     Check(walk_pairs == 1, "one walk fix conflict pair");
-    Check(!FindKey("fence_write_deferred_on") && !FindKey("fence_write_deferred_off") &&
-              !FindKey("fence_deferred") && !FindKey("fence_write") &&
+    Check(!FindKey("fence_write_deferred_on") && !FindKey("fence_deferred") &&
+              !FindKey("fence_write") &&
               !FindKey("d3d12_fence_write_deferred") && !FindKey("FENCE_WRITE_DEFERRED") &&
               !FindKey("fence_writes_deferred") && !FindKey("xma_frame_walk_fix_of") &&
               !FindKey("xma_frame_walk_fix_off_on") && !FindKey("xma_walk_fix_off") &&
               !FindKey("XMA_FRAME_WALK_FIX_OFF") && !FindKey("xma_frame_walk_off"),
           "no prefix, suffix, cvar-name or case variants of the l77 keys");
+  }
+  {
+    // l78 keys: the controls of the two SDK defaults turned on in l78 (steady
+    // exemption, deferred fences) and the fence deferral gap, all graphics
+    // plugin; =false writes nothing.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &exempt_off = Info(Key::kReadbackSteadyExemptOff);
+    Check(FindKey("readback_steady_exempt_off") == Key::kReadbackSteadyExemptOff &&
+              exempt_off.phase == Phase::kGraphicsPlugin &&
+              CvarName(exempt_off) == "d3d12_readback_sync_steady_exempt" &&
+              CvarText(exempt_off, true) == "false" && CvarText(exempt_off, false).empty() &&
+              exempt_off.true_source == TextSource::kLiteral && !exempt_off.overrides_user,
+          "readback_steady_exempt_off=true writes false to d3d12_readback_sync_steady_exempt "
+          "after the plugin loaded, false writes nothing");
+    Check(Info(Key::kReadbackSteadyExempt).phase == exempt_off.phase &&
+              CvarName(Info(Key::kReadbackSteadyExempt)) == CvarName(exempt_off),
+          "the steady key and its control write one cvar in one phase");
+    const auto &fence_off = Info(Key::kFenceWriteDeferredOff);
+    Check(FindKey("fence_write_deferred_off") == Key::kFenceWriteDeferredOff &&
+              fence_off.phase == Phase::kGraphicsPlugin &&
+              CvarName(fence_off) == "d3d12_fence_write_deferred" &&
+              CvarText(fence_off, true) == "false" && CvarText(fence_off, false).empty() &&
+              fence_off.true_source == TextSource::kLiteral && !fence_off.overrides_user,
+          "fence_write_deferred_off=true writes false to d3d12_fence_write_deferred after the "
+          "plugin loaded, false writes nothing");
+    Check(Info(Key::kFenceWriteDeferred).phase == fence_off.phase &&
+              CvarName(Info(Key::kFenceWriteDeferred)) == CvarName(fence_off),
+          "the fence key and its control write one cvar in one phase");
+    const auto &gap = Info(Key::kFenceDeferGap2000);
+    Check(FindKey("fence_defer_gap_2000") == Key::kFenceDeferGap2000 &&
+              gap.phase == Phase::kGraphicsPlugin &&
+              CvarName(gap) == "d3d12_fence_defer_min_gap_us" && CvarText(gap, true) == "2000" &&
+              CvarText(gap, false).empty() && gap.true_source == TextSource::kLiteral &&
+              !gap.overrides_user,
+          "fence_defer_gap_2000=true writes 2000 to d3d12_fence_defer_min_gap_us after the "
+          "plugin loaded, false writes nothing");
+    size_t exempt_pairs = 0;
+    size_t fence_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kFenceDeferGap2000 && pair.second != Key::kFenceDeferGap2000,
+            "the fence gap key is in no conflict pair");
+      if (pair.first == Key::kReadbackSteadyExemptOff ||
+          pair.second == Key::kReadbackSteadyExemptOff) {
+        Check(pair.first == Key::kReadbackSteadyExempt &&
+                  pair.second == Key::kReadbackSteadyExemptOff,
+              "the steady control pairs only with the steady key");
+        ++exempt_pairs;
+      }
+      if (pair.first == Key::kFenceWriteDeferredOff || pair.second == Key::kFenceWriteDeferredOff) {
+        Check(pair.first == Key::kFenceWriteDeferred && pair.second == Key::kFenceWriteDeferredOff,
+              "the fence control pairs only with the fence key");
+        ++fence_pairs;
+      }
+    }
+    Check(exempt_pairs == 1 && fence_pairs == 1, "one conflict pair for each l78 control");
+    Check(!FindKey("readback_steady_exempt_of") && !FindKey("readback_steady_exempt_off_on") &&
+              !FindKey("READBACK_STEADY_EXEMPT_OFF") && !FindKey("steady_exempt_off") &&
+              !FindKey("readback_steady_off") && !FindKey("fence_write_deferred_of") &&
+              !FindKey("fence_write_deferred_off_on") && !FindKey("fence_deferred_off") &&
+              !FindKey("FENCE_WRITE_DEFERRED_OFF") && !FindKey("fence_write_off") &&
+              !FindKey("fence_defer_gap") && !FindKey("fence_defer_gap_1000") &&
+              !FindKey("fence_defer_gap_0") && !FindKey("fence_defer_gap_2000_on") &&
+              !FindKey("d3d12_fence_defer_min_gap_us") && !FindKey("fence_defer_min_gap_us") &&
+              !FindKey("FENCE_DEFER_GAP_2000") && !FindKey("fence_gap_2000"),
+          "no prefix, suffix, cvar-name, case or other numeric variants of the l78 keys");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -346,7 +417,7 @@ void TestWhitelist() {
               !FindKey("fetch_identity_verif") && !FindKey("fetch_identity_verify_on") &&
               !FindKey("d3d12_fetch_identity_cache") && !FindKey("d3d12_fetch_identity_verify") &&
               !FindKey("readback_steady") && !FindKey("readback_steady_exempt_on") &&
-              !FindKey("readback_steady_exempt_off") && !FindKey("steady_exempt") &&
+              !FindKey("steady_exempt") &&
               !FindKey("d3d12_readback_sync_steady_exempt") && !FindKey("Fetch_identity_off"),
           "no prefix, suffix, cvar-name or case variants of the l73 keys");
     Check(Info(Key::kFetchIdentityOff).phase == Phase::kGraphicsPlugin &&
@@ -366,10 +437,15 @@ void TestWhitelist() {
               CvarText(Info(Key::kReadbackSteadyExempt), false).empty(),
           "readback_steady_exempt=true writes true, false writes nothing");
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-      for (const Key key :
-           {Key::kFetchIdentityOff, Key::kFetchIdentityVerify, Key::kReadbackSteadyExempt}) {
-        Check(pair.first != key && pair.second != key, "l73 keys are in no conflict pair");
+      for (const Key key : {Key::kFetchIdentityOff, Key::kFetchIdentityVerify}) {
+        Check(pair.first != key && pair.second != key,
+              "l73 fetch identity keys are in no conflict pair");
       }
+      Check((pair.first != Key::kReadbackSteadyExempt &&
+             pair.second != Key::kReadbackSteadyExempt) ||
+                (pair.first == Key::kReadbackSteadyExempt &&
+                 pair.second == Key::kReadbackSteadyExemptOff),
+            "the steady key pairs only with its l78 control");
     }
   }
   Check(FindKey("readback_kick_256") == Key::kReadbackKick256 &&
@@ -557,7 +633,8 @@ void TestWhitelist() {
                           key == Key::kXmaDumpInput || key == Key::kFenceWriteDeferred ||
                           key == Key::kXmaFrameWalkFixOff || key == Key::kRawTimerOff ||
                           key == Key::kVblankHz72 || key == Key::kVblankHz80 ||
-                          key == Key::kVblankHz88;
+                          key == Key::kVblankHz88 || key == Key::kReadbackSteadyExemptOff ||
+                          key == Key::kFenceWriteDeferredOff || key == Key::kFenceDeferGap2000;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -647,10 +724,11 @@ void TestWhitelist() {
         Check(paired, "keys writing one cvar form a conflict pair");
       }
     }
-    // Four pairs (l77: the walk fix and its control) plus the kick and the
-    // vblank groups of three (each listed as its three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 10,
-          "ten shared-cvar pairs");
+    // Six pairs (l77: the walk fix and its control; l78: the steady key and
+    // the fence key with their controls) plus the kick and the vblank groups
+    // of three (each listed as its three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 12,
+          "twelve shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -1268,7 +1346,9 @@ void TestWhitelist() {
         {"true", "false", "false", "false", "false", "true", "false"},    // steady-cap40
         {"true", "false", "false", "false", "false", "false", "true"},    // steady-cap44
         {"false", "false", "false", "false", "true", "false", "false"}};  // base-cap36
-    for (const auto &arm : l77_arms) {
+    // The l77 arm text for one l77_arms row (empty if the l76 base text lost
+    // its steady key line).
+    const auto l77_text = [&base39](const char *const *arm) -> std::string {
       std::string l76_text = base39 +
                              "xma_sibling_trace=false\n"
                              "xma_stall_on_invalid_next=false\n"
@@ -1286,23 +1366,28 @@ void TestWhitelist() {
                              "mcla_lock_readback_ensure=false\n";
       const std::string_view exempt_false = "readback_steady_exempt=false\n";
       const size_t at = l76_text.find(exempt_false);
-      Check(at != std::string::npos, "the l76 base text holds the steady key");
       if (at == std::string::npos) {
-        continue;
+        return {};
       }
       l76_text.replace(at, exempt_false.size(),
                        std::string("readback_steady_exempt=") + arm[0] + "\n");
-      const std::string text = l76_text + "fence_write_deferred=" + arm[1] + "\n" +
-                               "xma_frame_walk_fix_off=" + arm[2] + "\n" +
-                               "raw_timer_off=" + arm[3] + "\n" +
-                               "vblank_hz_72=" + arm[4] + "\n" +
-                               "vblank_hz_80=" + arm[5] + "\n" +
-                               "vblank_hz_88=" + arm[6] + "\n";
+      return l76_text + "fence_write_deferred=" + arm[1] + "\n" + "xma_frame_walk_fix_off=" +
+             arm[2] + "\n" + "raw_timer_off=" + arm[3] + "\n" + "vblank_hz_72=" + arm[4] +
+             "\n" + "vblank_hz_80=" + arm[5] + "\n" + "vblank_hz_88=" + arm[6] + "\n";
+    };
+    // l78: the l77 arms with the three l78 keys explicit false (62 keys).
+    const std::string l78_false = "readback_steady_exempt_off=false\n"
+                                  "fence_write_deferred_off=false\n"
+                                  "fence_defer_gap_2000=false\n";
+    for (const auto &arm : l77_arms) {
+      const std::string l77 = l77_text(arm);
+      Check(!l77.empty(), "the l76 base text holds the steady key");
+      const std::string text = l77 + l78_false;
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l77 arm: every key (59), nothing ignored, fits in kMaxBytes");
+            "l77 arm: every key (62), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kRawTimerOff) == (arm[3][0] == 't') &&
                 a.Value(Key::kVblankHz72) == (arm[4][0] == 't') &&
                 a.Value(Key::kVblankHz80) == (arm[5][0] == 't') &&
@@ -1345,6 +1430,83 @@ void TestWhitelist() {
               l77_bad.issues[2].issue == LineIssue::kMalformed &&
               l77_bad.issues[3].issue == LineIssue::kDuplicate,
           "l77 near misses: non-bool values, the cvar name and repeats are ignored");
+    // l78 arms (private/l78-arms): default = the l77 base arm plus the three
+    // l78 keys false (the l78 SDK defaults give the steady exemption, the
+    // deferred fences and the W1 walk fix); exempt-off, fence-off and both-off
+    // add the controls (both-off = the l70-style behaviour); walk-off adds
+    // xma_frame_walk_fix_off; the Deck gap2000 arm adds fence_defer_gap_2000.
+    const char *const l78_arms[6][4] = {
+        // walk_fix_off, exempt_off, fence_off, gap2000
+        {"false", "false", "false", "false"},  // default
+        {"false", "true", "false", "false"},   // exempt-off
+        {"false", "false", "true", "false"},   // fence-off
+        {"false", "true", "true", "false"},    // both-off
+        {"true", "false", "false", "false"},   // walk-off
+        {"false", "false", "false", "true"}};  // gap2000
+    for (const auto &arm : l78_arms) {
+      const char *const l77_row[7] = {"false", "false", arm[0], "false",
+                                      "false", "false", "false"};
+      const std::string l77 = l77_text(l77_row);
+      Check(!l77.empty(), "the l76 base text holds the steady key");
+      const std::string text = l77 + "readback_steady_exempt_off=" + arm[1] + "\n" +
+                               "fence_write_deferred_off=" + arm[2] + "\n" +
+                               "fence_defer_gap_2000=" + arm[3] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l78 arm: every key (62), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kReadbackSteadyExempt) == false &&
+                a.Value(Key::kFenceWriteDeferred) == false &&
+                a.Value(Key::kXmaFrameWalkFix) == false &&
+                a.Value(Key::kXmaFrameWalkFixOff) == (arm[0][0] == 't') &&
+                a.Value(Key::kReadbackSteadyExemptOff) == (arm[1][0] == 't') &&
+                a.Value(Key::kFenceWriteDeferredOff) == (arm[2][0] == 't') &&
+                a.Value(Key::kFenceDeferGap2000) == (arm[3][0] == 't'),
+            "l78 arm values (on keys false: the l78 SDK defaults apply)");
+    }
+    // The l78 controls with their on keys: both true is a conflict (neither
+    // applies, logged on the later line); one true with the other false is not.
+    const Parsed exempt_both = Parse("readback_steady_exempt=true\n"
+                                     "fence_defer_gap_2000=true\n"
+                                     "readback_steady_exempt_off=true\n");
+    Check(exempt_both.ValueCount() == 1 && !exempt_both.Value(Key::kReadbackSteadyExempt) &&
+              !exempt_both.Value(Key::kReadbackSteadyExemptOff) &&
+              exempt_both.Value(Key::kFenceDeferGap2000) == true &&
+              exempt_both.issue_count == 1 && exempt_both.issues[0].line == 3 &&
+              exempt_both.issues[0].issue == LineIssue::kConflict,
+          "steady key with its control both true: neither applies, conflict on the later line");
+    const Parsed fence_both = Parse("fence_write_deferred_off=true\nfence_write_deferred=true\n");
+    Check(fence_both.ValueCount() == 0 && fence_both.issue_count == 1 &&
+              fence_both.issues[0].line == 2 &&
+              fence_both.issues[0].issue == LineIssue::kConflict,
+          "fence key with its control both true: neither applies, conflict on the later line");
+    const Parsed both_off = Parse("readback_steady_exempt=false\n"
+                                  "readback_steady_exempt_off=true\n"
+                                  "fence_write_deferred=false\n"
+                                  "fence_write_deferred_off=true\n");
+    Check(both_off.ValueCount() == 4 && both_off.issue_count == 0 &&
+              both_off.Value(Key::kReadbackSteadyExemptOff) == true &&
+              both_off.Value(Key::kFenceWriteDeferredOff) == true &&
+              both_off.Value(Key::kReadbackSteadyExempt) == false &&
+              both_off.Value(Key::kFenceWriteDeferred) == false,
+          "both-off: on keys false with the controls true is not a conflict");
+    const Parsed l78_bad = Parse("fence_defer_gap_2000=2000\n"
+                                 "d3d12_fence_defer_min_gap_us=true\n"
+                                 "fence_defer_gap_1000=true\n"
+                                 "readback_steady_exempt_off=off\n"
+                                 "fence_write_deferred_off=true\n"
+                                 "fence_write_deferred_off=false\n"
+                                 "fence_defer_gap_2000=true\n");
+    Check(l78_bad.ValueCount() == 2 && l78_bad.Value(Key::kFenceWriteDeferredOff) == true &&
+              l78_bad.Value(Key::kFenceDeferGap2000) == true &&
+              !l78_bad.Value(Key::kReadbackSteadyExemptOff) && l78_bad.ignored_lines == 5 &&
+              l78_bad.issues[0].issue == LineIssue::kMalformed &&
+              l78_bad.issues[1].issue == LineIssue::kUnknownName &&
+              l78_bad.issues[2].issue == LineIssue::kUnknownName &&
+              l78_bad.issues[3].issue == LineIssue::kMalformed &&
+              l78_bad.issues[4].issue == LineIssue::kDuplicate,
+          "l78 near misses: integer values, the cvar name, other gaps and repeats are ignored");
     // The vblank caps: one true applies; two or three true is a conflict for
     // the whole group (none applied), logged on every later true line.
     const Parsed cap = Parse("vblank_hz_72=false\nvblank_hz_80=true\nvblank_hz_88=false\n"
@@ -1664,6 +1826,15 @@ void TestConstexpr() {
   static_assert(cap_conflict.ValueCount() == 0);
   static_assert(cap_conflict.issues[0].line == 2);
   static_assert(cap_conflict.issues[0].issue == LineIssue::kConflict);
+  constexpr Parsed fence_conflict =
+      Parse("fence_write_deferred=true\nfence_write_deferred_off=true\n");
+  static_assert(fence_conflict.ValueCount() == 0);
+  static_assert(fence_conflict.issues[0].line == 2);
+  static_assert(fence_conflict.issues[0].issue == LineIssue::kConflict);
+  constexpr Parsed exempt_conflict =
+      Parse("readback_steady_exempt_off=true\nreadback_steady_exempt=true\n");
+  static_assert(exempt_conflict.ValueCount() == 0);
+  static_assert(exempt_conflict.issues[0].line == 2);
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
             "conflicting keys for one cvar (neither is applied)",
         "conflict issue name covers every pair");

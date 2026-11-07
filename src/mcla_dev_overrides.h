@@ -85,9 +85,10 @@
 //   cache's verify mode, SDK default false; may be combined with the cache on);
 //   readback_steady_exempt=true writes true to
 //   d3d12_readback_sync_steady_exempt (M11-007a steady-key exemption, SDK
-//   default false, docs/evidence/M11-007a-steady-key-exemption-20261106.md).
-//   =false changes nothing for all three. They write three different cvars,
-//   so no combination is a conflict.
+//   default false until l77, true since the l78 SDK, so the key's true now
+//   writes the default; docs/evidence/M11-007a-steady-key-exemption-20261106.md).
+//   =false changes nothing for all three. They write three different cvars;
+//   the steady key pairs only with its l78 control readback_steady_exempt_off.
 // - KI-071 XMA doubling fixes (docs/evidence/M11-ki071-xma-doubling-re-20261106.md,
 //   SDK branch mcla/m11-xma-doubling): xma_swap_carry_packet (C1: carry the
 //   packet over an input-buffer swap for multi-stream waves),
@@ -129,7 +130,8 @@
 // - l77 (docs/evidence/M11-007e-deferred-fences-sdk-20261107.md):
 //   fence_write_deferred=true writes true to d3d12_fence_write_deferred
 //   (M11-007e deferred EVENT_WRITE_SHD fence writes, graphics plugin,
-//   hot-reload, SDK default false); =false changes nothing.
+//   hot-reload, SDK default false until l77, true since the l78 SDK; the
+//   control is fence_write_deferred_off below); =false changes nothing.
 //   xma_frame_walk_fix_off=true writes false to xma_frame_walk_fix (the
 //   KI-071 W1 walk fix, SDK default true since l77; the upstream-walk control
 //   arm, before the guest); =false changes nothing. xma_frame_walk_fix=true
@@ -148,6 +150,16 @@
 //   --mcla_guest_vblank_hz=240 on the command line, so these three keys are
 //   marked overrides_user: they replace a command-line or config value
 //   (logged with the value replaced) instead of yielding to it.
+// - l78 (docs/evidence/M11-007e-l77-fence-analysis-20261107.md section 5): the
+//   l78 SDK turns d3d12_readback_sync_steady_exempt and
+//   d3d12_fence_write_deferred on by default and adds the int
+//   d3d12_fence_defer_min_gap_us (default 0). readback_steady_exempt_off=true
+//   writes false to d3d12_readback_sync_steady_exempt and
+//   fence_write_deferred_off=true writes false to d3d12_fence_write_deferred
+//   (the A/B controls, graphics plugin, hot-reload); each forms a conflict
+//   pair with its l73 / l77 on key (both true: neither applied).
+//   fence_defer_gap_2000=true writes 2000 to d3d12_fence_defer_min_gap_us
+//   (graphics plugin); =false changes nothing for all three.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -247,8 +259,11 @@ enum class Key : uint8_t {
   kVblankHz72,            // KI-074 E2: mcla_guest_vblank_hz=72 (36 fps cap)
   kVblankHz80,            // KI-074 E2: mcla_guest_vblank_hz=80 (40 fps cap)
   kVblankHz88,            // KI-074 E2: mcla_guest_vblank_hz=88 (44 fps cap)
+  kReadbackSteadyExemptOff,  // l78 control: d3d12_readback_sync_steady_exempt=false
+  kFenceWriteDeferredOff,    // l78 control: d3d12_fence_write_deferred=false
+  kFenceDeferGap2000,        // l78 A/B: d3d12_fence_defer_min_gap_us=2000
 };
-inline constexpr size_t kKeyCount = 59;
+inline constexpr size_t kKeyCount = 62;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -396,18 +411,28 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
      TextSource::kLiteral, true},
     {"vblank_hz_88", Phase::kGraphicsPlugin, "mcla_guest_vblank_hz", "88", "",
      TextSource::kLiteral, true},
+    // l78: controls for the two SDK defaults turned on in l78 (steady-key
+    // exemption, deferred fence writes) and the fence deferral minimum gap,
+    // all registered by the graphics plugin (hot-reload), so after the plugin
+    // has loaded; =false writes nothing.
+    {"readback_steady_exempt_off", Phase::kGraphicsPlugin, "d3d12_readback_sync_steady_exempt",
+     "false", ""},
+    {"fence_write_deferred_off", Phase::kGraphicsPlugin, "d3d12_fence_write_deferred", "false",
+     ""},
+    {"fence_defer_gap_2000", Phase::kGraphicsPlugin, "d3d12_fence_defer_min_gap_us", "2000", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
-// audio_speaker_config string, or the xma_frame_walk_fix bool): both true in
-// one file is contradictory and
+// audio_speaker_config string, or the xma_frame_walk_fix,
+// d3d12_readback_sync_steady_exempt and d3d12_fence_write_deferred bools):
+// both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
 struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 10> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 12> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -418,6 +443,8 @@ inline constexpr std::array<ConflictPair, 10> kConflictPairs = {{
     {Key::kVblankHz72, Key::kVblankHz80},
     {Key::kVblankHz72, Key::kVblankHz88},
     {Key::kVblankHz80, Key::kVblankHz88},
+    {Key::kReadbackSteadyExempt, Key::kReadbackSteadyExemptOff},
+    {Key::kFenceWriteDeferred, Key::kFenceWriteDeferredOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

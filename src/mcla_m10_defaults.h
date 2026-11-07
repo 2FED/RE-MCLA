@@ -107,7 +107,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 48> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 49> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -148,9 +148,9 @@ inline constexpr std::array<std::string_view, 48> kNeverWrittenCvars = {
     // mcla_album_preview_restore only until the owner accepts it).
     "mcla_album_preview_restore",
     // l73 owner A/Bs: the SDK defaults (fetch identity cache on, verify off,
-    // steady-key exemption off) stay for everyone else; only the owner keys
-    // fetch_identity_off / fetch_identity_verify / readback_steady_exempt
-    // change them until an owner A/B accepts another value.
+    // steady-key exemption on since the l78 SDK) stay for everyone else; only
+    // the owner keys fetch_identity_off / fetch_identity_verify /
+    // readback_steady_exempt / readback_steady_exempt_off change them.
     "d3d12_fetch_identity_cache",
     "d3d12_fetch_identity_verify",
     "d3d12_readback_sync_steady_exempt",
@@ -185,14 +185,17 @@ inline constexpr std::array<std::string_view, 48> kNeverWrittenCvars = {
     // (host defaults false); owner keys only until an owner A/B accepts them.
     "mcla_lock_probe",
     "mcla_lock_readback_ensure",
-    // l77 M11-007e deferred fence writes (SDK default false); owner key
-    // fence_write_deferred only until an owner A/B accepts it.
+    // l77 M11-007e deferred fence writes (SDK default true since l78); owner
+    // keys fence_write_deferred / fence_write_deferred_off only.
     "d3d12_fence_write_deferred",
     // l77 KI-074 experiments: the raw timer (host default on in owner builds)
     // and the guest vblank rate (launcher-owned: Locked = default, Unlocked =
     // 240); owner keys raw_timer_off / vblank_hz_72/_80/_88 only.
     "mcla_raw_timer",
     "mcla_guest_vblank_hz",
+    // l78 fence deferral minimum gap (SDK int, default 0); owner key
+    // fence_defer_gap_2000 only until an owner A/B accepts another value.
+    "d3d12_fence_defer_min_gap_us",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
