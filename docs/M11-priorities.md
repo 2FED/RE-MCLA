@@ -254,3 +254,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **Owner direction (2026-11-07):** "36 fps is still rubbish, we should fix it properly: playing at 60+ fps would be great." M11-018 goal = correct game behaviour in Unlocked mode at 60+ fps (traffic/LOD/streaming/visibility independent of the frame rate) via game-side fixes behind host hooks; a frame cap is at most a temporary experiment arm, not the deliverable.
 
 **M11-018 plan (2026-11-07):** l77 gets dev keys for the flag experiments (`raw_timer_off`, `vblank_hz_72/80/88`) and arms steady-rawoff, steady-cap36/40/44; E4 probe in l78 after E1/E2 name the subsystem; the real fix = game-side dt/step handling behind a hook (goal 60+ fps correct).
+
+**M11-018 after the l77 experiments (2026-11-07):** flicker = uncapped GPU-saturated pacing (>=90 % GPU), not dt; E3 is the decisive split (720p CP-bound 45+ fps vs 1440p GPU-saturated <36 fps); then a texture-cache arm and eviction/creation counters (l78); the floating car / despawn branch keeps E4.
