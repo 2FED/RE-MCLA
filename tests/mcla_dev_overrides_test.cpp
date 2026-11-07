@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 
 namespace {
@@ -29,7 +30,81 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 44, "forty-four whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 48, "forty-eight whitelisted names");
+  {
+    // KI-071 step 3 keys: three SDK bools at startup (=false writes nothing)
+    // and the dump directory key for the SDK string cvar xma_dump_contexts.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const Key sdk_keys[] = {Key::kXmaHonorFrameTrim, Key::kXmaFrameTrimBlockGranular,
+                            Key::kXmaDumpAllRates};
+    const char *const sdk_names[] = {"xma_honor_frame_trim", "xma_frame_trim_block_granular",
+                                     "xma_dump_all_rates"};
+    for (size_t k = 0; k < 3; ++k) {
+      Check(FindKey(sdk_names[k]) == sdk_keys[k], "KI-071 step 3 key lookup");
+      Check(Info(sdk_keys[k]).phase == Phase::kStartup,
+            "step 3 SDK keys at startup (rexruntime cvars)");
+      Check(CvarName(Info(sdk_keys[k])) == sdk_names[k] &&
+                CvarText(Info(sdk_keys[k]), true) == "true" &&
+                CvarText(Info(sdk_keys[k]), false).empty() &&
+                Info(sdk_keys[k]).true_source == TextSource::kLiteral,
+            "step 3 SDK key writes its own cvar true, false writes nothing");
+    }
+    const auto &dump = Info(Key::kXmaDumpContextsOn);
+    Check(FindKey("xma_dump_contexts_on") == Key::kXmaDumpContextsOn &&
+              dump.phase == Phase::kStartup && CvarName(dump) == "xma_dump_contexts" &&
+              dump.true_source == TextSource::kXmaDumpDirectory &&
+              !CvarText(dump, true).empty() && CvarText(dump, false).empty(),
+          "dump key: writes the composed directory to xma_dump_contexts, false writes nothing");
+    size_t composed = 0;
+    for (const auto &info : mcla::dev_overrides::kKeys) {
+      composed += info.true_source == TextSource::kXmaDumpDirectory ? 1 : 0;
+    }
+    Check(composed == 1, "only the dump key has a composed text");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key : {Key::kXmaHonorFrameTrim, Key::kXmaFrameTrimBlockGranular,
+                            Key::kXmaDumpAllRates, Key::kXmaDumpContextsOn}) {
+        Check(pair.first != key && pair.second != key, "step 3 keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("xma_dump_contexts") && !FindKey("xma_dump") && !FindKey("xma_dump_on") &&
+              !FindKey("xma_dump_contexts_off") && !FindKey("xma_dump_context_on") &&
+              !FindKey("XMA_DUMP_CONTEXTS_ON") && !FindKey("xma_dump_all_rates_on") &&
+              !FindKey("xma_dump_all") && !FindKey("xma_honor_frame_trim_on") &&
+              !FindKey("xma_frame_trim") && !FindKey("xma_honor_trim") &&
+              !FindKey("xma_frame_trim_block") && !FindKey("xma_frame_trim_block_granular_on"),
+          "no prefix, suffix or case variants of the step 3 keys; the string cvar stays out");
+  }
+  {
+    // KI-071 step 3 dump directory composition (pure).
+    using mcla::dev_overrides::FormatDumpStamp;
+    using mcla::dev_overrides::XmaDumpDirectory;
+    Check(FormatDumpStamp(2026, 11, 7, 9, 5, 3) == "20261107-090503", "stamp format");
+    Check(FormatDumpStamp(1999, 1, 31, 23, 59, 60) == "19990131-235960", "stamp upper bounds");
+    Check(FormatDumpStamp(2026, 13, 7, 9, 5, 3).empty() &&
+              FormatDumpStamp(2026, 0, 7, 9, 5, 3).empty() &&
+              FormatDumpStamp(2026, 11, 0, 9, 5, 3).empty() &&
+              FormatDumpStamp(2026, 11, 7, 24, 5, 3).empty() &&
+              FormatDumpStamp(2026, 11, 7, 9, 60, 3).empty() &&
+              FormatDumpStamp(1969, 11, 7, 9, 5, 3).empty() &&
+              FormatDumpStamp(10000, 11, 7, 9, 5, 3).empty(),
+          "stamp out of range is empty");
+    const std::filesystem::path user("C:/profile/user");
+    const std::filesystem::path session("C:/profile/diagnostics/S-0001");
+    Check(XmaDumpDirectory(user, {}, "20261107-090503").generic_string() ==
+              "C:/profile/user/diagnostics/xma-dump/20261107-090503",
+          "direct start: <user-data>/diagnostics/xma-dump/<stamp>");
+    Check(XmaDumpDirectory(user, session, "20261107-090503").generic_string() ==
+              "C:/profile/diagnostics/S-0001/xma-dump/20261107-090503",
+          "launcher session: <diagnostics root>/xma-dump/<stamp>");
+    Check(XmaDumpDirectory({}, session, "20261107-090503").generic_string() ==
+              "C:/profile/diagnostics/S-0001/xma-dump/20261107-090503",
+          "diagnostics root alone is enough");
+    Check(XmaDumpDirectory(user, session, "").empty() && XmaDumpDirectory({}, {}, "x").empty(),
+          "no stamp or no root: empty");
+  }
   {
     // KI-071 step 2 keys: the four SDK bools at startup (=false writes
     // nothing) and the host consume probe (a plain init-only bool).
@@ -317,7 +392,10 @@ void TestWhitelist() {
                           key == Key::kXmaSwapCarryPacket || key == Key::kXmaValidOnlyWhenWritten ||
                           key == Key::kXmaWorkLockRecheck || key == Key::kXmaSwapTrace ||
                           key == Key::kXmaSiblingTrace || key == Key::kXmaStallOnInvalidNext ||
-                          key == Key::kXmaHonorStartSkip || key == Key::kXmaResetCodecOnClear;
+                          key == Key::kXmaHonorStartSkip || key == Key::kXmaResetCodecOnClear ||
+                          key == Key::kXmaHonorFrameTrim ||
+                          key == Key::kXmaFrameTrimBlockGranular ||
+                          key == Key::kXmaDumpAllRates || key == Key::kXmaDumpContextsOn;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -880,9 +958,8 @@ void TestWhitelist() {
                                "mcla_xma_consume_probe=" + arm[4] + "\n";
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
-                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
-                a.issue_count == 0,
-            "l74 arm: every key (44), nothing ignored, fits in kMaxBytes");
+                a.ValueCount() == 44 && a.ignored_lines == 0 && a.issue_count == 0,
+            "l74 arm: every l74 key (44), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kXmaSiblingTrace) == (arm[0][0] == 't') &&
                 a.Value(Key::kXmaStallOnInvalidNext) == (arm[1][0] == 't') &&
                 a.Value(Key::kXmaHonorStartSkip) == (arm[2][0] == 't') &&
@@ -905,6 +982,56 @@ void TestWhitelist() {
               l74_bad.issues[2].issue == LineIssue::kUnknownName &&
               l74_bad.issues[3].issue == LineIssue::kDuplicate,
           "l74 near misses: non-bool values, prefixes and repeats are ignored");
+    // l75 KI-071 step 3 arms: the l74 base (44 keys) plus the four step 3
+    // keys explicit: every key (48), nothing ignored, within kMaxBytes.
+    // trim-trace = sibling trace + consume probe + dump; trim-fix = + trim
+    // fix; trim-block = + block-granular trim.
+    const char *const l75_arms[4][6] = {
+        // sibling, consume, honor_trim, block, all_rates, dump_on
+        {"false", "false", "false", "false", "false", "false"},  // base
+        {"true", "true", "false", "false", "false", "true"},     // trim-trace
+        {"true", "true", "true", "false", "false", "true"},      // trim-fix
+        {"true", "true", "true", "true", "false", "true"}};      // trim-block
+    for (const auto &arm : l75_arms) {
+      const std::string text = base39 + "xma_sibling_trace=" + arm[0] + "\n" +
+                               "xma_stall_on_invalid_next=false\n"
+                               "xma_honor_start_skip=false\n"
+                               "xma_reset_codec_on_clear=false\n"
+                               "mcla_xma_consume_probe=" + arm[1] + "\n" +
+                               "xma_honor_frame_trim=" + arm[2] + "\n" +
+                               "xma_frame_trim_block_granular=" + arm[3] + "\n" +
+                               "xma_dump_all_rates=" + arm[4] + "\n" +
+                               "xma_dump_contexts_on=" + arm[5] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l75 arm: every key (48), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kXmaSiblingTrace) == (arm[0][0] == 't') &&
+                a.Value(Key::kXmaConsumeProbe) == (arm[1][0] == 't') &&
+                a.Value(Key::kXmaHonorFrameTrim) == (arm[2][0] == 't') &&
+                a.Value(Key::kXmaFrameTrimBlockGranular) == (arm[3][0] == 't') &&
+                a.Value(Key::kXmaDumpAllRates) == (arm[4][0] == 't') &&
+                a.Value(Key::kXmaDumpContextsOn) == (arm[5][0] == 't') &&
+                a.Value(Key::kXmaHonorStartSkip) == false &&
+                a.Value(Key::kXmaStallOnInvalidNext) == false,
+            "l75 arm values (D1/D2 off in every arm)");
+    }
+    const Parsed l75_bad = Parse("xma_dump_contexts=C:/dump\n"
+                                 "xma_dump_contexts_on=1\n"
+                                 "xma_honor_frame_trim=on\n"
+                                 "xma_frame_trim=true\n"
+                                 "xma_dump_contexts_on=true\n"
+                                 "xma_dump_contexts_on=false\n"
+                                 "xma_dump_all_rates=true\n");
+    Check(l75_bad.ValueCount() == 2 && l75_bad.Value(Key::kXmaDumpContextsOn) == true &&
+              l75_bad.Value(Key::kXmaDumpAllRates) == true && l75_bad.ignored_lines == 5 &&
+              l75_bad.issues[0].issue == LineIssue::kMalformed &&
+              l75_bad.issues[1].issue == LineIssue::kMalformed &&
+              l75_bad.issues[2].issue == LineIssue::kMalformed &&
+              l75_bad.issues[3].issue == LineIssue::kUnknownName &&
+              l75_bad.issues[4].issue == LineIssue::kDuplicate,
+          "l75 near misses: a path value, non-bool values, prefixes and repeats are ignored");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.

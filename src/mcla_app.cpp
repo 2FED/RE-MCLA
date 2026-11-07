@@ -1201,7 +1201,9 @@ void MclaApp::OnPostInitLogging() {
   }
   // Owner-internal A/B overrides (MCLA_DEV_OVERRIDES builds only): host
   // init-only switches must be written before the guest runs.
-  mcla::dev_overrides::OnStartup();
+  // The diagnostics roots are for the KI-071 XMA dump directory key.
+  mcla::dev_overrides::OnStartup(user_data_root(),
+                                 rex::to_path(REXCVAR_GET(mcla_diagnostics_root)));
   // M10 volunteer speed-up defaults (MCLA_M10_SPEEDUP_DEFAULTS builds only),
   // after the override file so owner A/B arms win.
   mcla::m10_defaults::OnStartup();

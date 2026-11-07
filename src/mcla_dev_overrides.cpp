@@ -6,7 +6,10 @@
 
 #include <rex/cvar.h>
 
+#include <ctime>
+#include <filesystem>
 #include <string>
+#include <system_error>
 
 #ifndef MCLA_DEV_OVERRIDES
 #define MCLA_DEV_OVERRIDES 0
@@ -25,6 +28,64 @@ namespace {
 // Written on the main thread by OnStartup before any reader runs.
 Parsed g_parsed;
 std::array<std::optional<bool>, kKeyCount> g_applied{};
+// The diagnostics manager's roots, for xma_dump_contexts_on (OnStartup).
+std::filesystem::path g_user_data_root;
+std::filesystem::path g_diagnostics_root;
+
+// UTF-8 text of a path, for log lines.
+std::string LogPath(const std::filesystem::path &path) {
+  const std::u8string text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+
+// KI-071 step 3: composes and creates the per-session XMA dump directory and
+// returns the text for the SDK string cvar xma_dump_contexts (empty on
+// failure, logged). The directory is made like the diagnostics manager's
+// folders (create_directories under the same root, inheriting its ACL); an
+// existing reparse point there is refused. The cvar text is path::string(),
+// the inverse of the SDK's std::filesystem::path(std::string).
+std::string PrepareXmaDumpDirectory(rex::LogCategoryId category) {
+  const std::time_t now = std::time(nullptr);
+  std::tm utc{};
+#if defined(_WIN32)
+  const bool have_time = gmtime_s(&utc, &now) == 0;
+#else
+  const bool have_time = gmtime_r(&now, &utc) != nullptr;
+#endif
+  const std::string stamp =
+      have_time ? FormatDumpStamp(utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour,
+                                  utc.tm_min, utc.tm_sec)
+                : std::string();
+  std::error_code ec;
+  std::filesystem::path dir = XmaDumpDirectory(g_user_data_root, g_diagnostics_root, stamp);
+  if (dir.empty()) {
+    REXLOG_CAT_ERROR(category, "MCLA dev overrides: no XMA dump directory (no root or clock); "
+                               "xma_dump_contexts_on=true ignored");
+    return {};
+  }
+  dir = std::filesystem::absolute(dir, ec).lexically_normal();
+  if (!ec) {
+    std::filesystem::create_directories(dir, ec);
+  }
+  const std::filesystem::file_status status =
+      ec ? std::filesystem::file_status{} : std::filesystem::symlink_status(dir, ec);
+  if (ec || status.type() != std::filesystem::file_type::directory) {
+    REXLOG_CAT_ERROR(category,
+                     "MCLA dev overrides: could not create the XMA dump directory {} ({}); "
+                     "xma_dump_contexts_on=true ignored",
+                     LogPath(dir), ec ? ec.message() : std::string("not a plain directory"));
+    return {};
+  }
+  try {
+    return dir.string();
+  } catch (const std::exception &) {
+    REXLOG_CAT_ERROR(category,
+                     "MCLA dev overrides: XMA dump directory {} is not representable in the "
+                     "process code page; xma_dump_contexts_on=true ignored",
+                     LogPath(dir));
+    return {};
+  }
+}
 
 #if defined(_WIN32)
 // Reads the per-user override file. Only a regular file (no directory, no
@@ -81,7 +142,7 @@ void ApplyPhase(Phase phase) {
     }
     const std::string key_name(info.name);
     const std::string name(CvarName(info));
-    const std::string text(CvarText(info, *value));
+    std::string text(CvarText(info, *value));
     if (text.empty()) {
       REXLOG_CAT_INFO(category, "MCLA dev overrides: {}={} leaves {} unchanged", key_name, *value,
                       name);
@@ -101,6 +162,12 @@ void ApplyPhase(Phase phase) {
                         name, rex::cvar::GetFlagByName(name), key_name, *value);
         break;
       case ApplyAction::kApply:
+        if (*value && info.true_source == TextSource::kXmaDumpDirectory) {
+          text = PrepareXmaDumpDirectory(category);
+          if (text.empty()) {
+            break;
+          }
+        }
         if (rex::cvar::SetFlagByName(name, text)) {
           g_applied[i] = *value;
           if (key_name == name) {
@@ -125,8 +192,11 @@ bool Enabled() {
   return MCLA_DEV_OVERRIDES != 0;
 }
 
-void OnStartup() {
+void OnStartup(const std::filesystem::path &user_data_root,
+               const std::filesystem::path &diagnostics_root) {
 #if MCLA_DEV_OVERRIDES
+  g_user_data_root = user_data_root;
+  g_diagnostics_root = diagnostics_root;
   g_parsed = ReadOverrideFile();
   switch (g_parsed.status) {
     case FileStatus::kAbsent:
@@ -147,6 +217,9 @@ void OnStartup() {
                   LineIssueName(g_parsed.issues[i].issue));
   }
   ApplyPhase(Phase::kStartup);
+#else
+  (void)user_data_root;
+  (void)diagnostics_root;
 #endif
 }
 

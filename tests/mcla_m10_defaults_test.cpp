@@ -210,6 +210,16 @@ void TestTable() {
             IsNeverWritten("xma_honor_start_skip") && IsNeverWritten("xma_reset_codec_on_clear") &&
             IsNeverWritten("mcla_xma_consume_probe"),
         "KI-071 step 2 cvar names in the never-written set");
+  for (const auto key : {dev::Key::kXmaHonorFrameTrim, dev::Key::kXmaFrameTrimBlockGranular,
+                         dev::Key::kXmaDumpAllRates, dev::Key::kXmaDumpContextsOn}) {
+    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) == nullptr,
+          "the KI-071 step 3 switches keep their defaults (owner keys only)");
+  }
+  Check(IsNeverWritten("xma_honor_frame_trim") && IsNeverWritten("xma_frame_trim_block_granular") &&
+            IsNeverWritten("xma_dump_contexts") && IsNeverWritten("xma_dump_all_rates") &&
+            kNeverWrittenCvars.size() == 40,
+        "KI-071 step 3 cvar names in the never-written set (40)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
             Find("mcla_album_preview_restore") == nullptr,

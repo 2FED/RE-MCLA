@@ -103,6 +103,17 @@
 //   =false changes nothing. mcla_xma_consume_probe is a plain host init-only
 //   bool (MCLA_XMA_CONSUME lines, mcla_xma_consume_probe.cpp,
 //   docs/evidence/M11-ki071-xma-consume-probe-20261107.md).
+// - KI-071 step 3 (docs/evidence/M11-ki071-xma-frame-trim-sdk-20261107.md,
+//   SDK branch mcla/m11-xma-trim; host keys
+//   docs/evidence/M11-ki071-xma-dump-keys-20261107.md): xma_honor_frame_trim,
+//   xma_frame_trim_block_granular and xma_dump_all_rates are plain SDK
+//   rexruntime bools (default false) of the same kind: =true writes true,
+//   =false changes nothing. The SDK cvar xma_dump_contexts is a string (a
+//   directory), which a name=true|false line cannot carry:
+//   xma_dump_contexts_on=true makes the host create the directory
+//   <diagnostics>/xma-dump/<yyyyMMdd-HHmmss> (XmaDumpDirectory below; UTC
+//   start time) and write its path to xma_dump_contexts, logged once;
+//   =false changes nothing.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -128,7 +139,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace mcla::dev_overrides {
@@ -136,7 +149,7 @@ namespace mcla::dev_overrides {
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
 // 2 KiB since l73: a full 35-key arm file (every key explicit) is about
-// 1.07 KB, beyond the former 1 KiB.
+// 1.07 KB, beyond the former 1 KiB (a full 48-key arm is about 1.5 KB).
 inline constexpr size_t kMaxBytes = 2048;
 
 enum class Key : uint8_t {
@@ -184,8 +197,12 @@ enum class Key : uint8_t {
   kXmaHonorStartSkip,     // KI-071 D1: xma_honor_start_skip=true
   kXmaResetCodecOnClear,  // KI-071: xma_reset_codec_on_clear=true
   kXmaConsumeProbe,       // KI-071: mcla_xma_consume_probe (host, MCLA_XMA_CONSUME)
+  kXmaHonorFrameTrim,     // KI-071 step 3: xma_honor_frame_trim=true
+  kXmaFrameTrimBlockGranular,  // KI-071 step 3: xma_frame_trim_block_granular=true
+  kXmaDumpAllRates,       // KI-071 step 3: xma_dump_all_rates=true
+  kXmaDumpContextsOn,     // KI-071 step 3: xma_dump_contexts=<diagnostics>/xma-dump/<stamp>
 };
-inline constexpr size_t kKeyCount = 44;
+inline constexpr size_t kKeyCount = 48;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -196,6 +213,14 @@ enum class Phase : uint8_t {
   kLauncher,
 };
 
+// Where the text written for true comes from: the literal true_text, or (one
+// key) the per-session XMA dump directory composed by the runtime
+// (XmaDumpDirectory), which a fixed text cannot express.
+enum class TextSource : uint8_t {
+  kLiteral,
+  kXmaDumpDirectory,
+};
+
 struct KeyInfo {
   std::string_view name;
   Phase phase;
@@ -204,6 +229,7 @@ struct KeyInfo {
   std::string_view cvar = {};
   std::string_view true_text = "true";
   std::string_view false_text = "false";
+  TextSource true_source = TextSource::kLiteral;
 };
 
 // The whitelist, indexed by Key.
@@ -283,6 +309,16 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // KI-071 guest consume probe: host init-only bool
     // (mcla_xma_consume_probe.cpp), before the guest.
     {"mcla_xma_consume_probe", Phase::kStartup},
+    // KI-071 step 3: SDK rexruntime bools (default false), before the guest;
+    // =false writes nothing.
+    {"xma_honor_frame_trim", Phase::kStartup, "", "true", ""},
+    {"xma_frame_trim_block_granular", Phase::kStartup, "", "true", ""},
+    {"xma_dump_all_rates", Phase::kStartup, "", "true", ""},
+    // The SDK string cvar xma_dump_contexts (default empty, rexruntime):
+    // =true writes the directory the host composed and created (true_text is
+    // only the description); =false writes nothing.
+    {"xma_dump_contexts_on", Phase::kStartup, "xma_dump_contexts",
+     "<diagnostics>/xma-dump/<yyyyMMdd-HHmmss>", "", TextSource::kXmaDumpDirectory},
 }};
 
 // Key pairs that write different values to one cvar (integer, or the
@@ -314,6 +350,53 @@ constexpr std::string_view CvarName(const KeyInfo &info) {
 // The text written to the cvar for a value; empty: nothing is written.
 constexpr std::string_view CvarText(const KeyInfo &info, bool value) {
   return value ? info.true_text : info.false_text;
+}
+
+// KI-071 step 3 dump directory. The diagnostics root is the one the
+// diagnostics manager uses (mcla_diagnostics_root; empty = <user-data>/
+// diagnostics). The launcher passes <profile>/diagnostics/<session-id> there,
+// so a managed session's dumps sit in its own session folder; a direct start
+// uses <user-data>/diagnostics. The UTC start stamp keeps sessions that share
+// a root apart (the SDK numbers its files per session from 0).
+inline constexpr std::string_view kXmaDumpSubdirectory = "xma-dump";
+
+// "yyyyMMdd-HHmmss"; empty when a field is out of range.
+inline std::string FormatDumpStamp(int year, int month, int day, int hour, int minute,
+                                   int second) {
+  if (year < 1970 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 ||
+      hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 60) {
+    return {};
+  }
+  std::string out;
+  const auto digits = [&out](int value, int width) {
+    char buffer[4] = {};
+    for (int i = width - 1; i >= 0; --i) {
+      buffer[i] = static_cast<char>('0' + value % 10);
+      value /= 10;
+    }
+    out.append(buffer, static_cast<size_t>(width));
+  };
+  digits(year, 4);
+  digits(month, 2);
+  digits(day, 2);
+  out.push_back('-');
+  digits(hour, 2);
+  digits(minute, 2);
+  digits(second, 2);
+  return out;
+}
+
+// <diagnostics root>/xma-dump/<stamp>; empty when the stamp is empty or no
+// root is known (both roots empty).
+inline std::filesystem::path XmaDumpDirectory(const std::filesystem::path &user_data_root,
+                                              const std::filesystem::path &diagnostics_root,
+                                              std::string_view stamp) {
+  if (stamp.empty() || (diagnostics_root.empty() && user_data_root.empty())) {
+    return {};
+  }
+  const std::filesystem::path root =
+      diagnostics_root.empty() ? user_data_root / "diagnostics" : diagnostics_root;
+  return root / std::filesystem::path(kXmaDumpSubdirectory) / std::filesystem::path(stamp);
 }
 
 constexpr std::optional<Key> FindKey(std::string_view name) {
@@ -531,8 +614,10 @@ constexpr ApplyAction DecideApply(bool cvar_registered, bool cvar_non_default) {
 bool Enabled();
 
 // Reads and parses the file once and applies the Phase::kStartup keys. Call
-// after logging is set up and before the guest starts.
-void OnStartup();
+// after logging is set up and before the guest starts. The roots are those of
+// the diagnostics manager (XmaDumpDirectory; xma_dump_contexts_on only).
+void OnStartup(const std::filesystem::path &user_data_root,
+               const std::filesystem::path &diagnostics_root);
 
 // Applies the Phase::kGraphicsPlugin keys. Call once after the graphics plugin
 // has been loaded.
@@ -546,7 +631,7 @@ std::optional<bool> AppliedValue(Key key);
 // a parsed file or without a valid line), whether or not anything was
 // written. Used for keys whose value writes nothing (upload-ahead, hot blocks,
 // read-back kick, the l73 fetch-identity / steady-exempt and the KI-071 XMA
-// SDK keys =false).
+// SDK keys =false, also xma_dump_contexts_on=false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides
