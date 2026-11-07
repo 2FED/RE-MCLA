@@ -2559,6 +2559,12 @@ At task/experiment boundaries also replace stale entries in `docs/current-state.
 
 ## 17c. Milestone M11 (plan approved by the owner 2026-11-06; ACTIVE) — Deck saves, owner diagnostics, Deck and video-memory performance round 3
 
+**Status: ACTIVE since 2026-11-06** (owner approval: "план влаштовує, можем робить"). The plan as approved
+is kept below unchanged; the ledger after it records what was done (to 2026-11-07). Plan file:
+`docs/M11-priorities.md` (dated entries carry the details).
+
+### Plan (2026-11-06, as approved)
+
 Plan drafted 2026-11-06 after the M10 closure: [M11 priorities](docs/M11-priorities.md). Goal:
 saves that work on the Steam Deck under Proton (KI-068, S1), data-based answers to the owner's open
 observations (KI-056 album preview, KI-066 pursuit state, KI-067 host CPU slowdown) in one owner
@@ -2567,20 +2573,18 @@ re-checked only if a core is free) with steadier PC video memory (M10-007 remain
 2-5, pre-warm a1 and the Deck seeding check). Not in M11: Vulkan (shelved, KI-062/063),
 decompilation, public release hardening (section 17a), new platforms.
 
-**Status: DRAFT, owner approval pending.**
-
 **Estimate:** about 34-64 agent-days without the M10-006 implementation and the stretch item
 (plus 10-15 if the M11-005 gate opens), plus owner Deck sessions, 30-minute PC budget sessions and
 one 2160p session on the 3080 Ti or 6800 XT.
 
-### Prerequisites
+#### Prerequisites
 
 - M10 closed and pushed (`9e541e8`); testers on l70 only (`DebugBundle` `31c806d`); SDK pin
   `v0.20.0.8` = `c63895c`.
 - KI-068 symptoms detailed by the owner; the Deck test profile named (the Deck profile copy has the
   MAIN id; bench and Deck copies never sync).
 
-### Tasks
+#### Tasks
 
 - [ ] **M11-001** KI-068 Steam Deck saves under Proton (S1): Deck repro on l70, `[content]` lines and
   launcher snapshots, root cause, fix, two Deck sessions with saves surviving restart; KI-065 folded.
@@ -2608,7 +2612,7 @@ one 2160p session on the 3080 Ti or 6800 XT.
   regression.
 - [ ] **M11-014** (stretch) CPU codegen items: published function scope, interrupt-idiom elision.
 
-### Exit criteria
+#### Exit criteria
 
 - KI-068 fixed with Deck evidence (saves survive restart in two sessions, no `[content]` failures).
 - KI-056, KI-066 and KI-067 fixed or re-dispositioned on data from the triad build.
@@ -2617,10 +2621,79 @@ one 2160p session on the 3080 Ti or 6800 XT.
 - A clean-clone volunteer candidate carrying the closed groups, owner pre-share check passed;
   closure regression on PC (both modes) and Deck.
 
+### Ledger (status 2026-11-07)
+
+Task ids follow the task commits, not the plan list: `M11-003` and `M11-004` were used for KI-070 and the
+KI-056 Fix A; the plan items of those numbers (Deck core freeing with KI-060, hot blocks v2) are not
+started and keep their plan scope. M11-015 to M11-018 were added during execution
+([M11 priorities](docs/M11-priorities.md), dated entries). Plan items M11-005 to M11-014 are not started.
+Statuses: Fixed/owner PASS = fixed and confirmed by an owner run; Fixed in code = built and unit-tested,
+no owner confirmation of the shipped default; Mitigated = defect avoided, root cause not removed.
+
+| Id | Item | Status | Build | Evidence | Substance |
+|---|---|---|---|---|---|
+| M11-001 | KI-068 Deck saves under Proton (S1); KI-065 folded | Fixed, owner PASS (Deck) | l71 | [prep](docs/evidence/M11-001-ki068-deck-saves-prep-20261106.md), [l70 Deck sessions](docs/evidence/M11-001-ki068-l70-deck-sessions-20261106.md), [SDK fix](docs/evidence/M11-001-ki068-sdk-fix-20261106.md) | Every second Deck save showed "storage device removed": under Wine on ext4 the SDK reported a creation time that followed the write time, so the game's creation-time check failed. SDK `109116b` keeps a process-wide stable creation-time table (`xam_content_stable_creation_time`, default on) plus a content trace and unmount hardening. Owner l71 Deck: arm saves-fix, consecutive saves and restart OK; arm saves-control, the dialog returns. In SDK `v0.20.0.9`. |
+| M11-002 | Diagnostics triad: KI-056 album probe, KI-066 pursuit block, KI-067 CPU census | Done (data collected) | l71 | [triad](docs/evidence/M11-002-diagnostics-triad-20261106.md) | Host `b670849`: `MCLA_ALBUM` probe, F10 pursuit block with transition lines, CPU effective clock, temperature and load in the per-minute census. The l71 data located KI-056, closed KI-066 and attributed KI-067. |
+| M11-003 | KI-070 F10 live-minidump freeze | Fixed (confirmed by the l71 log line) | l71 | [KI-070](docs/evidence/M11-ki070-f10-minidump-20261106.md) | Each F10 asked the helper for a live `MiniDumpWriteDump`, which suspended the game for 0.3-0.6 s. Host `ad67eb3` skips the live dump for user snapshots (kept for the probe, unexpected guest exit, hang, or a switch). l71: `live minidump policy=skipped-by-default written=0`. |
+| M11-004 | KI-056 album preview, Fix A | Fixed, owner PASS; default off pending the owner's decision | l72 | [l71 probe](docs/evidence/M11-ki056-l71-album-probe-20261106.md), [Fix A](docs/evidence/M11-ki056-fix-a-20261106.md) | Game-side, resolution-independent: hovering decodes an occupied slot into the one shared preview image and decodes nothing for an empty slot. Host `375bd37` re-runs the game's own new-photo decode after a hover on an empty slot while a new photo is pending (`mcla_album_preview_restore`, init-only, default off). Owner l72: "the photo fix works". |
+| M11-015 | Read-back kick-interval A/B | Closed (negative; keep 512) | l72 | [A/B](docs/evidence/M11-015-kick-interval-ab-20261106.md), [CP cost plan](docs/evidence/M11-cp-cost-plan-20261106.md) | South Central Tour 1080p: 512/256/128 = 36.0/35.9/35.8 fps; the wait fell only 0.4-0.6 ms while CP CPU rose 0.9 ms. At the forced wait the GPU is still busy with already submitted work. |
+| M11-016 | Fetch-constant identity cache | Fixed in code; effect not measured | l73-l78 (SDK default on) | [SDK](docs/evidence/M11-016-fetch-identity-cache-20261106.md) | SDK `ae35ae3` compares fetch constants before invalidating (`d3d12_fetch_identity_cache`, default on; off and verify keys). No owner A/B recorded; consider default off before publication. |
+| M11-007a | Steady-key exemption (KI-047 rule c false positive) | Superseded by 007b-007e | l73 (off), A/B on l74 | [design](docs/evidence/M11-007-steady-key-design-20261106.md), [SDK](docs/evidence/M11-007a-steady-key-exemption-20261106.md), [l74 A/B](docs/evidence/M11-007a-steady-ab-l74-20261107.md) | The one forced read-back wait per frame (6.3-6.5 ms PC, 7.1 ms Deck) is a steady 256x256 resolve (039CA000 PC, 03702000 Deck), not the livery. SDK `e412c5c` exempts a key resolved in each of the last 30 frames. l74: 34.8 -> 40.2 fps, CP busy 27.7 -> 23.7 ms, the GPU becomes the limit; texture flicker in the second half of the route (KI-074). |
+| M11-007b | Exemption narrowing and fast delivery | Superseded | l75 | [SDK](docs/evidence/M11-007b-steady-narrowing-20261107.md), [l75 analysis](docs/evidence/M11-007b-steady-l75-analysis-20261107.md) | SDK `4bb8c02`: sticky rule a/b exclusion, mip-chain shape filter, single-key cap, a 1-frame-old copy. l75: flicker persists; delivery bimodal (48-57 % fast, the rest 3-6 frames stale or torn). |
+| M11-007c | Bounded fence wait and the read-back range API | Superseded | l76 | [SDK](docs/evidence/M11-007c-steady-bounded-wait-and-range-api-20261107.md) | SDK `ca2e332`: fenced 1-frame-old delivery with a bounded 20 ms wait; `1e65cc8`: `ReadbackSyncQueryRange` / `ReadbackSyncEnsureRange`. l76: flicker in every steady arm. |
+| M11-007d | Lock probe and read-back completion at the lock | Closed (hypothesis refuted) | l76 | [lock/fence RE](docs/evidence/M11-ki047-lock-fence-re-20261107.md), [l76 analysis](docs/evidence/M11-007d-l76-analysis-20261107.md) | RE: every CPU texture lock goes through `sub_82421CA0`; the KI-047 root mechanism is the CP writing the EVENT_WRITE_SHD fence before the host GPU finishes. Host `406ee7e` lock probe and ensure hook: 039CA000 is never CPU-locked during a race, so the CPU-reader hypothesis is refuted. Locked-mode control (about 29 fps): no flicker with the exemption active, so the exemption is data-safe. |
+| M11-007e | Deferred fence writes | Fixed in code; defaults on in the l78 SDK; l78 owner regression pending | l77 (arm), l78 (default) | [SDK](docs/evidence/M11-007e-deferred-fences-sdk-20261107.md), [l77 analysis](docs/evidence/M11-007e-l77-fence-analysis-20261107.md), [l78 SDK](docs/evidence/M11-l78-sdk-defaults-20261107.md) | SDK `590c484` writes a guest fence only after the GPU completed its submission (`d3d12_fence_write_deferred`). l77: steady-fence 3 of 3 clean at about 40 fps (uncapped steady without it: flicker 7 of 7); fast-wait share 35-48 % -> 5-14 %; no fps cost. `636927c` turns the steady exemption and deferred fences on; `d61c597` adds a fence-lateness histogram, a CP-lead gauge, submissions by end reason and `d3d12_fence_defer_min_gap_us`; ctest 2137/2137. Host `f86da9d`: off-keys for the control arms (62 keys). |
+| M11-018 | KI-074 Unlocked flicker, despawns and floating traffic above about 36 fps | Mitigated (deferred fences) | l77 | [frame-rate RE](docs/evidence/M11-ki074-framerate-re-20261107.md), [l77 experiments](docs/evidence/M11-ki074-l77-experiments-20261107.md), [fence analysis](docs/evidence/M11-007e-l77-fence-analysis-20261107.md) | RE: the game was built for a fixed 1/30 s step and gets the raw timer's variable dt. l77: caps 36 and 44 clean, raw timer off still flickers (dt size is not the cause); flicker only in uncapped GPU-saturated runs with the exemption. E3: 720p steady 52-55 fps clean, 1440p base 34 fps clean; the discriminator is the GPU running a frame behind the CP, which deferred fences remove. Owner goal (correct behaviour at 60+ fps) stays open. |
+| KI-074b | Object despawns | Open | l77 | KI-074 row | A traffic car vanished mid-race at 1440p base (no exemption, 34 fps): not tied to the exemption or to fps. The floating-car case stays with the dt/E4 branch. |
+| KI-069 | Picture freezes while the simulation runs (S1) | Fixed in code; no recurrence on l71 | l71 | [analysis](docs/evidence/M11-ki069-hills-freezes-20261106.md), [SDK](docs/evidence/M11-ki069-sdk-async-logging-20261106.md) | The 5.5 s Hills freeze was a blocked synchronous log write on the GPU-command thread. SDK `5207195`: asynchronous logging (bounded queue, writer thread), slow-write timer, CP freeze watchdog; host `71ad56a` flushes the log before crash and F10 capture. l71: `mode=async dropped=0 write_max_ms=0.6`, no `MCLA_CP_FREEZE`. In SDK `v0.20.0.9`. |
+| KI-071 | Cut-scene voice doubled ("from a barrel") since the start of the port | Fixed, owner PASS (l76 arm); default on in the SDK since `f6fc975` (unpublished); the by-ear check of the default (l77 base vs walk-off) is not recorded | l71-l77 | [first fix](docs/evidence/M11-ki071-sdk-audio-fix-20261106.md), [frame walk](docs/evidence/M11-ki071-xma-frame-walk-sdk-20261107.md), [W1 verification](docs/evidence/M11-ki071-w1-verification-20261107.md) | Speaker config and ITU downmix `d08813b` (l71: stereo slightly better, doubling remains); XMA swap/valid/lock fixes `4a3aea1` (l73: none fired); sibling trace and D1/D2/codec reset `8f949f7` (l74: siblings in lock-step, excluded); frame trim `c526cb3` (l75: rejected, a +512 slip found); frame walk `a4a5309` (W1): the host walk skipped frames whose 15-bit length header straddles a packet end. Owner l76 walk-fix: doubling gone; offline: every skip a straddling frame, fix 0 skips, voice siblings 3630 frames each. |
+| KI-066 | Police fines while standing still | Closed (console-accurate) | l71 | [pursuit probe](docs/evidence/M11-ki066-l71-pursuit-probe-20261106.md) | The game's block-traffic rule witnessed by a police car: +50, then +25 per second, threshold 250 reached in 8.0 s. |
+| KI-067 / KI-072 | Host CPU slowdown; high-speed stutter | KI-067 cause found, re-test pending; KI-072 Open (CP headroom) | l70, l71 | [HWiNFO](docs/evidence/M11-ki067-hwinfo-baseline-20261106.md), [l70 session](docs/evidence/M11-ki072-stutter-l70-session-20261106.md), [l71 South Central](docs/evidence/M11-ki072-l71-southcentral-20261106.md), [CP cost plan](docs/evidence/M11-cp-cost-plan-20261106.md) | Every lag episode matches the project's own parallel builds on the play PC (shared 35 W STAPM cap; unit costs x1.5-2). Rule: no builds or test runs during owner sessions (idle guard; since 2026-11-07 an explicit coordinator hold/resume). Project line: the CP thread is 95-96 % busy even at a healthy 36-40 fps (M11-015/016/007/017). |
+| KI-073 | Album: no delete, "Publish Album" needs Live | Backlog (design ready) | - | [design](docs/evidence/M11-ki073-album-publish-design-20261106.md) | `PHOTO_ALBUM` holds 16 full 1280x720 JPEGs; Publish calls a dead Rockstar service and never clears the album. Next: a no-hook extractor, then a save-time export behind a key. |
+| M11-017 | ThinLTO + PGO for the SDK runtime and host | Planned, not started | - | [CP cost plan](docs/evidence/M11-cp-cost-plan-20261106.md) | Expected -5 to -15 % CP user time. |
+
+### Owner builds
+
+All are owner-internal (V1 tickets). Testers stay on l70 (`DebugBundle` `31c806d`).
+
+| Build | Host (main) | SDK | Carried | Owner result |
+|---|---|---|---|---|
+| l71 | `3e78c2c` | `d08813b` | KI-068 fix; triad (M11-002); KI-070; KI-069 async log and host flush; KI-071 audio keys (28 keys) | KI-068 PASS on the Deck; album mechanism found; KI-066 verdict; CPU census live; async log live; minidump skipped; KI-071 slightly better, doubling remains |
+| l72 | `060dbcf` | `d08813b` | KI-056 Fix A arm; kick keys 256/128/1024 (32 keys) | Fix A PASS; kick A/B flat, keep 512 |
+| l73 | `1dec761` | `4a3aea1` | Fetch identity (on), steady exemption (off), XMA fixes (off) (39 keys) | KI-071: none of the three XMA defects fired; fetch A/B not recorded |
+| l74 | `c03a1df` | `8f949f7` | XMA sibling trace, D1/D2/codec reset, consume probe (44 keys) | KI-071 siblings in lock-step; first steady A/B: +6 fps with flicker |
+| l75 | `60c6b93` | `4bb8c02` (install later `bd9314f`) | XMA trim and PCM dump; steady narrowing and fast delivery (48 keys) | Trim rejected; steady flicker persists |
+| l76 | `406ee7e` | `a4a5309` | XMA frame walk (arm); bounded wait; range API; lock probe and ensure (53 keys) | KI-071 PASS; flicker in all steady arms; 039CA000 never locked; Locked-mode control clean |
+| l77 | `afadfa6` | `590c484` | W1 default on; deferred fences (arm, default off); raw timer off, vblank 72/80/88 (59 keys) | KI-074 cap and timer arms; E3; steady-fence 3 of 3 clean at about 40 fps |
+| l78 | `f86da9d` | `d61c597` | Steady exemption and deferred fences on by default; fence and CP-lead counters; off-keys and fence gap 2000 (62 keys) | In preparation; owner regression pending (KI-047 livery, KI-035 garage, Locked run, Deck loop, cold shader cache, photo) |
+
+### SDK lineage (`2FED/rexglue-sdk`)
+
+One linear chain from `v0.20.0.8`; the host submodule pin is still `c63895c`.
+
+- Published on `mcla/mcla-r-hotfixes`: `c63895c` (`v0.20.0.8`) -> `109116b` (KI-068) -> `5207195`
+  (KI-069) -> `d08813b` (KI-071 speaker config; cherry-pick of `dbe6d54`) = **`v0.20.0.9`**, published
+  2026-11-06 (ctest 2054/2054).
+- Local, unpublished: `ae35ae3` (M11-016) -> `e412c5c` (M11-007a) -> `4a3aea1` (KI-071 XMA fixes) ->
+  `8f949f7` (sibling trace) -> `c526cb3` (frame trim, PCM dump) -> `4bb8c02` (M11-007b) -> `bd9314f`
+  (burst-only dump) -> `ca2e332` / `1e65cc8` (M11-007c, range API) -> `a4a5309` (W1 frame walk; from
+  `b6d361e` on `mcla/m11-xma-walk`) -> `f6fc975` / `590c484` (W1 default on; deferred fences) ->
+  `636927c` / `d61c597` (l78 defaults and counters; ctest 2137/2137).
+- Publishing `v0.20.0.10` or later needs the owner's approval; open choices: the fetch identity
+  default and the steady/fence defaults after the l78 regression.
+
 ### Checkpoint log
 
-- 2026-11-06 — Plan drafted (docs/M11-priorities.md). Health: `NOT STARTED`. Next: owner approval,
-  then M11-001 (KI-068 symptom details and the l70 Deck repro).
-```
-
-Plan file: `docs/M11-priorities.md`. Status: ACTIVE since 2026-11-06 (owner: "план влаштовує, можем робить"). First task: M11-001 KI-068 Deck saves.
+- 2026-11-06 — Plan drafted (docs/M11-priorities.md) and approved by the owner the same day ("план
+  влаштовує, можем робить"). M11-001: KI-068 root-caused (creation time under Wine) and fixed in the SDK;
+  KI-069 and KI-070 found in the l70 Hills session and fixed; KI-071 opened; M11-002 triad built. l71: KI-068
+  owner PASS on the Deck; KI-066 closed; KI-056 mechanism found; KI-067/KI-072 traced to our own builds on
+  the play PC (rule: no builds during owner sessions). SDK `v0.20.0.9` = `d08813b` published. l72: KI-056
+  Fix A PASS; M11-015 closed negative. M11-016 and M11-007a added to the SDK; l73 staged. Health: `GREEN`.
+- 2026-11-07 — KI-071 traced through l73-l76 to the XMA frame walk (W1); owner PASS on l76 and offline
+  verification; default on in `f6fc975`. Steady exemption: +6 ms/frame but flicker (KI-074); M11-007b/c/d
+  narrowed it down and refuted the CPU-reader idea; the Locked-mode control showed it data-safe; KI-074 RE
+  and the l77 experiments; deferred fences (M11-007e) 3 of 3 clean at about 40 fps. l78 SDK `d61c597` turns
+  both on by default; host `f86da9d` adds the control keys. origin/main at `70823b5` (l77 staging) when this
+  ledger was written. Health: `GREEN`. Next: l78 candidate and the owner regression routine; then the SDK
+  publication decision (owner approval), M11-017, KI-074b, and the Deck items (plan M11-003/004).
