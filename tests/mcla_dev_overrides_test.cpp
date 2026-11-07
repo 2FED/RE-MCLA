@@ -30,7 +30,51 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 53, "fifty-three whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 55, "fifty-five whitelisted names");
+  {
+    // l77 keys: M11-007e deferred fence writes (graphics plugin) and the
+    // KI-071 walk fix control (startup); =false writes nothing for both.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &fence = Info(Key::kFenceWriteDeferred);
+    Check(FindKey("fence_write_deferred") == Key::kFenceWriteDeferred &&
+              fence.phase == Phase::kGraphicsPlugin &&
+              CvarName(fence) == "d3d12_fence_write_deferred" &&
+              CvarText(fence, true) == "true" && CvarText(fence, false).empty() &&
+              fence.true_source == TextSource::kLiteral,
+          "fence_write_deferred=true writes true to d3d12_fence_write_deferred after the "
+          "plugin loaded, false writes nothing");
+    const auto &walk_off = Info(Key::kXmaFrameWalkFixOff);
+    Check(FindKey("xma_frame_walk_fix_off") == Key::kXmaFrameWalkFixOff &&
+              walk_off.phase == Phase::kStartup && CvarName(walk_off) == "xma_frame_walk_fix" &&
+              CvarText(walk_off, true) == "false" && CvarText(walk_off, false).empty() &&
+              walk_off.true_source == TextSource::kLiteral,
+          "xma_frame_walk_fix_off=true writes false to xma_frame_walk_fix at startup, false "
+          "writes nothing");
+    Check(Info(Key::kXmaFrameWalkFix).phase == walk_off.phase &&
+              CvarName(Info(Key::kXmaFrameWalkFix)) == CvarName(walk_off),
+          "the walk fix key and its control write one cvar in one phase");
+    size_t walk_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kFenceWriteDeferred && pair.second != Key::kFenceWriteDeferred,
+            "the fence key is in no conflict pair");
+      if (pair.first == Key::kXmaFrameWalkFixOff || pair.second == Key::kXmaFrameWalkFixOff) {
+        Check(pair.first == Key::kXmaFrameWalkFix && pair.second == Key::kXmaFrameWalkFixOff,
+              "the walk fix control pairs only with the walk fix key");
+        ++walk_pairs;
+      }
+    }
+    Check(walk_pairs == 1, "one walk fix conflict pair");
+    Check(!FindKey("fence_write_deferred_on") && !FindKey("fence_write_deferred_off") &&
+              !FindKey("fence_deferred") && !FindKey("fence_write") &&
+              !FindKey("d3d12_fence_write_deferred") && !FindKey("FENCE_WRITE_DEFERRED") &&
+              !FindKey("fence_writes_deferred") && !FindKey("xma_frame_walk_fix_of") &&
+              !FindKey("xma_frame_walk_fix_off_on") && !FindKey("xma_walk_fix_off") &&
+              !FindKey("XMA_FRAME_WALK_FIX_OFF") && !FindKey("xma_frame_walk_off"),
+          "no prefix, suffix, cvar-name or case variants of the l77 keys");
+  }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
@@ -79,9 +123,13 @@ void TestWhitelist() {
             "step 4 SDK key writes its own cvar true, false writes nothing");
     }
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-      for (const Key key : walk_keys) {
-        Check(pair.first != key && pair.second != key, "step 4 keys are in no conflict pair");
+      for (const Key key : {Key::kXmaFrameWalkTrace, Key::kXmaDumpInput}) {
+        Check(pair.first != key && pair.second != key,
+              "step 4 trace / input dump keys are in no conflict pair");
       }
+      Check((pair.first != Key::kXmaFrameWalkFix && pair.second != Key::kXmaFrameWalkFix) ||
+                (pair.first == Key::kXmaFrameWalkFix && pair.second == Key::kXmaFrameWalkFixOff),
+            "the walk fix key pairs only with its l77 control");
     }
     Check(!FindKey("xma_frame_walk") && !FindKey("xma_frame_walk_trace_on") &&
               !FindKey("xma_frame_walk_fix_on") && !FindKey("xma_walk_trace") &&
@@ -456,7 +504,8 @@ void TestWhitelist() {
                           key == Key::kXmaFrameTrimBlockGranular ||
                           key == Key::kXmaDumpAllRates || key == Key::kXmaDumpContextsOn ||
                           key == Key::kXmaFrameWalkTrace || key == Key::kXmaFrameWalkFix ||
-                          key == Key::kXmaDumpInput;
+                          key == Key::kXmaDumpInput || key == Key::kFenceWriteDeferred ||
+                          key == Key::kXmaFrameWalkFixOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -546,9 +595,10 @@ void TestWhitelist() {
         Check(paired, "keys writing one cvar form a conflict pair");
       }
     }
-    // Three pairs plus the kick group of three (listed as its three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 6,
-          "six shared-cvar pairs");
+    // Four pairs (l77: the walk fix and its control) plus the kick group of
+    // three (listed as its three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 7,
+          "seven shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -1121,9 +1171,8 @@ void TestWhitelist() {
                                "mcla_lock_readback_ensure=" + arm[7] + "\n";
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
-                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
-                a.issue_count == 0,
-            "l76 arm: every key (53), nothing ignored, fits in kMaxBytes");
+                a.ValueCount() == 53 && a.ignored_lines == 0 && a.issue_count == 0,
+            "l76 arm: every l76 key (53), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kLockProbe) == (arm[6][0] == 't') &&
                 a.Value(Key::kLockReadbackEnsure) == (arm[7][0] == 't'),
             "l76 arm lock values");
@@ -1151,6 +1200,84 @@ void TestWhitelist() {
               l76_bad.issues[2].issue == LineIssue::kUnknownName &&
               l76_bad.issues[3].issue == LineIssue::kDuplicate,
           "l76 near misses: non-bool values, prefixes and repeats are ignored");
+    // l77 arms: the l76 base / steady arm plus the two l77 keys explicit:
+    // every key (55), nothing ignored, within kMaxBytes. walk-off = base +
+    // xma_frame_walk_fix_off (KI-071 control); *-fence = + fence_write_deferred.
+    const char *const l77_arms[5][3] = {
+        // steady_exempt, fence_deferred, walk_fix_off
+        {"false", "false", "false"},  // base
+        {"false", "false", "true"},   // walk-off
+        {"true", "false", "false"},   // steady
+        {"true", "true", "false"},    // steady-fence
+        {"false", "true", "false"}};  // base-fence
+    for (const auto &arm : l77_arms) {
+      std::string l76_text = base39 +
+                             "xma_sibling_trace=false\n"
+                             "xma_stall_on_invalid_next=false\n"
+                             "xma_honor_start_skip=false\n"
+                             "xma_reset_codec_on_clear=false\n"
+                             "mcla_xma_consume_probe=false\n"
+                             "xma_honor_frame_trim=false\n"
+                             "xma_frame_trim_block_granular=false\n"
+                             "xma_dump_all_rates=false\n"
+                             "xma_dump_contexts_on=false\n"
+                             "xma_frame_walk_trace=false\n"
+                             "xma_frame_walk_fix=false\n"
+                             "xma_dump_input=false\n"
+                             "mcla_lock_probe=false\n"
+                             "mcla_lock_readback_ensure=false\n";
+      const std::string_view exempt_false = "readback_steady_exempt=false\n";
+      const size_t at = l76_text.find(exempt_false);
+      Check(at != std::string::npos, "the l76 base text holds the steady key");
+      if (at == std::string::npos) {
+        continue;
+      }
+      l76_text.replace(at, exempt_false.size(),
+                       std::string("readback_steady_exempt=") + arm[0] + "\n");
+      const std::string text = l76_text + "fence_write_deferred=" + arm[1] + "\n" +
+                               "xma_frame_walk_fix_off=" + arm[2] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l77 arm: every key (55), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kReadbackSteadyExempt) == (arm[0][0] == 't') &&
+                a.Value(Key::kFenceWriteDeferred) == (arm[1][0] == 't') &&
+                a.Value(Key::kXmaFrameWalkFixOff) == (arm[2][0] == 't') &&
+                a.Value(Key::kXmaFrameWalkFix) == false && a.Value(Key::kLockProbe) == false,
+            "l77 arm values (walk fix key false: the SDK default applies the fix)");
+    }
+    // The walk fix key and its control: both true is a conflict (neither
+    // applies, logged on the later line); one true with the other false is not.
+    const Parsed walk_both = Parse("xma_frame_walk_fix_off=true\n"
+                                   "fence_write_deferred=true\n"
+                                   "xma_frame_walk_fix=true\n");
+    Check(walk_both.ValueCount() == 1 && !walk_both.Value(Key::kXmaFrameWalkFix) &&
+              !walk_both.Value(Key::kXmaFrameWalkFixOff) &&
+              walk_both.Value(Key::kFenceWriteDeferred) == true && walk_both.issue_count == 1 &&
+              walk_both.issues[0].line == 3 && walk_both.issues[0].issue == LineIssue::kConflict,
+          "walk fix with its control both true: neither applies, conflict on the later line");
+    const Parsed walk_off = Parse("xma_frame_walk_fix=false\nxma_frame_walk_fix_off=true\n");
+    Check(walk_off.ValueCount() == 2 && walk_off.Value(Key::kXmaFrameWalkFixOff) == true &&
+              walk_off.Value(Key::kXmaFrameWalkFix) == false && walk_off.issue_count == 0,
+          "walk-off arm: fix=false with fix_off=true is not a conflict");
+    const Parsed walk_on = Parse("xma_frame_walk_fix=true\nxma_frame_walk_fix_off=false\n");
+    Check(walk_on.ValueCount() == 2 && walk_on.Value(Key::kXmaFrameWalkFix) == true &&
+              walk_on.Value(Key::kXmaFrameWalkFixOff) == false && walk_on.issue_count == 0,
+          "fix=true with fix_off=false is not a conflict");
+    const Parsed l77_bad = Parse("fence_write_deferred=1\n"
+                                 "d3d12_fence_write_deferred=true\n"
+                                 "xma_frame_walk_fix_off=off\n"
+                                 "fence_write_deferred=true\n"
+                                 "fence_write_deferred=false\n"
+                                 "xma_frame_walk_fix_off=true\n");
+    Check(l77_bad.ValueCount() == 2 && l77_bad.Value(Key::kFenceWriteDeferred) == true &&
+              l77_bad.Value(Key::kXmaFrameWalkFixOff) == true && l77_bad.ignored_lines == 4 &&
+              l77_bad.issues[0].issue == LineIssue::kMalformed &&
+              l77_bad.issues[1].issue == LineIssue::kUnknownName &&
+              l77_bad.issues[2].issue == LineIssue::kMalformed &&
+              l77_bad.issues[3].issue == LineIssue::kDuplicate,
+          "l77 near misses: non-bool values, the cvar name and repeats are ignored");
   }
   {
     // The M10-007 / KI-048 owner A/B: cap off versus the build default.
@@ -1421,6 +1548,11 @@ void TestConstexpr() {
   static_assert(kick_conflict.issue_count == 2);
   static_assert(kick_conflict.issues[0].line == 2 && kick_conflict.issues[1].line == 3);
   static_assert(kick_conflict.issues[1].issue == LineIssue::kConflict);
+  constexpr Parsed walk_conflict =
+      Parse("xma_frame_walk_fix=true\nxma_frame_walk_fix_off=true\n");
+  static_assert(walk_conflict.ValueCount() == 0);
+  static_assert(walk_conflict.issues[0].line == 2);
+  static_assert(walk_conflict.issues[0].issue == LineIssue::kConflict);
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
             "conflicting keys for one cvar (neither is applied)",
         "conflict issue name covers every pair");

@@ -119,11 +119,22 @@
 //   xma_frame_walk_fix (W1 split-header claim and dup guard) and
 //   xma_dump_input (input packet / walk dump next to each PCM dump; needs
 //   xma_dump_contexts_on) are plain SDK rexruntime bools (default false) of
-//   the same kind: =true writes true, =false changes nothing.
+//   the same kind: =true writes true, =false changes nothing. Since the l77
+//   SDK (f6fc975) xma_frame_walk_fix defaults to true: the key's true now
+//   writes the default; the control is xma_frame_walk_fix_off below.
 // - M11-007d / KI-047 (src/mcla_lock_probe.cpp): mcla_lock_probe (MCLA_LOCK
 //   lines for guest locks overlapping a read-back key) and
 //   mcla_lock_readback_ensure (complete a pending read-back copy before the
 //   lock returns) are plain host init-only bools: true/false written as is.
+// - l77 (docs/evidence/M11-007e-deferred-fences-sdk-20261107.md):
+//   fence_write_deferred=true writes true to d3d12_fence_write_deferred
+//   (M11-007e deferred EVENT_WRITE_SHD fence writes, graphics plugin,
+//   hot-reload, SDK default false); =false changes nothing.
+//   xma_frame_walk_fix_off=true writes false to xma_frame_walk_fix (the
+//   KI-071 W1 walk fix, SDK default true since l77; the upstream-walk control
+//   arm, before the guest); =false changes nothing. xma_frame_walk_fix=true
+//   together with xma_frame_walk_fix_off=true is contradictory (a conflict
+//   pair: neither is applied).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -159,7 +170,7 @@ namespace mcla::dev_overrides {
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
 // 2 KiB since l73: a full 35-key arm file (every key explicit) is about
-// 1.07 KB, beyond the former 1 KiB (a full 53-key arm is about 1.6 KB).
+// 1.07 KB, beyond the former 1 KiB (a full 55-key arm is about 1.65 KB).
 inline constexpr size_t kMaxBytes = 2048;
 
 enum class Key : uint8_t {
@@ -216,8 +227,10 @@ enum class Key : uint8_t {
   kXmaDumpInput,          // KI-071 step 4: xma_dump_input=true (input/walk dump)
   kLockProbe,             // M11-007d: mcla_lock_probe (host, MCLA_LOCK)
   kLockReadbackEnsure,    // M11-007d: mcla_lock_readback_ensure (host)
+  kFenceWriteDeferred,    // M11-007e: d3d12_fence_write_deferred=true
+  kXmaFrameWalkFixOff,    // KI-071 control: xma_frame_walk_fix=false (SDK default true)
 };
-inline constexpr size_t kKeyCount = 53;
+inline constexpr size_t kKeyCount = 55;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -343,23 +356,32 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // init-only bools (mcla_lock_probe.cpp), before the guest.
     {"mcla_lock_probe", Phase::kStartup},
     {"mcla_lock_readback_ensure", Phase::kStartup},
+    // l77: M11-007e deferred fence writes, an SDK bool registered by the
+    // graphics plugin (command_processor.cpp, hot-reload), so after the
+    // plugin has loaded; =false writes nothing.
+    {"fence_write_deferred", Phase::kGraphicsPlugin, "d3d12_fence_write_deferred", "true", ""},
+    // l77: the KI-071 walk fix control (SDK rexruntime bool, default true
+    // since l77), before the guest; =false writes nothing.
+    {"xma_frame_walk_fix_off", Phase::kStartup, "xma_frame_walk_fix", "false", ""},
 }};
 
-// Key pairs that write different values to one cvar (integer, or the
-// audio_speaker_config string): both true in one file is contradictory and
+// Key pairs that write different values to one cvar (integer, the
+// audio_speaker_config string, or the xma_frame_walk_fix bool): both true in
+// one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
 struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 6> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 7> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
     {Key::kReadbackKick256, Key::kReadbackKick128},
     {Key::kReadbackKick256, Key::kReadbackKick1024},
     {Key::kReadbackKick128, Key::kReadbackKick1024},
+    {Key::kXmaFrameWalkFix, Key::kXmaFrameWalkFixOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

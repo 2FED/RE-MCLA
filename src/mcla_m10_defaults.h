@@ -107,7 +107,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 45> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 46> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -176,7 +176,8 @@ inline constexpr std::array<std::string_view, 45> kNeverWrittenCvars = {
     "xma_dump_contexts",
     "xma_dump_all_rates",
     // KI-071 step 4: frame-walk trace, W1 fix and input dump (SDK defaults
-    // false); owner keys only until an owner A/B accepts them.
+    // false; the W1 fix defaults to true in the SDK since l77); owner keys
+    // only (xma_frame_walk_fix / xma_frame_walk_fix_off).
     "xma_frame_walk_trace",
     "xma_frame_walk_fix",
     "xma_dump_input",
@@ -184,6 +185,9 @@ inline constexpr std::array<std::string_view, 45> kNeverWrittenCvars = {
     // (host defaults false); owner keys only until an owner A/B accepts them.
     "mcla_lock_probe",
     "mcla_lock_readback_ensure",
+    // l77 M11-007e deferred fence writes (SDK default false); owner key
+    // fence_write_deferred only until an owner A/B accepts it.
+    "d3d12_fence_write_deferred",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
