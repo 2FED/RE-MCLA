@@ -280,3 +280,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l79 staged (2026-11-08):** host main `7c349e6` (66 keys) + SDK `0755836` (l78 defaults + Canary XMA fixes / timer blocking wait / placed texture heaps, all default off); candidate `private/l79-int-input` (mcla.exe 1180C3DC...), sign `private/l79-internal-prepare.ps1`, arms `private/l79-arms` (pc default/heaps/timer/xma/all3; deck default/timer/heaps64/all3), steps `private/l79-CHECKLIST.txt`. [Build](evidence/M11-l79-owner-build-20261108.md).
 
 **l79 perf A/B result (2026-11-08, owner):** stutters at traversal/intersections much lower with the new switches (freeway exit 28-24 -> 32 fps on all3), peak fps unchanged. Analysis of which switch carries it (MCLA_TEXHEAP create time, MCLA_TIMERQ lateness, frame-interval p99 at the known spots) in progress.
+
+**l79 xma arm (2026-11-08, owner):** cut-scene + radio by ear "fine": the Canary XMA fixes cause no audible regression. Remaining l79 owner items: Deck loops (default, timer, heaps64, all3) and the l78 Deck regression.
