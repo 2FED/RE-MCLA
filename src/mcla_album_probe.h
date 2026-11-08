@@ -371,6 +371,12 @@ class NewPhotoTracker {
 };
 
 // --- KI-056 fix A: restore decision (pure) ---------------------------------------------
+// The default of the host init-only cvar mcla_album_preview_restore: off until
+// l80, on since l81 (owner decision 2026-11-08, after the l72-l80 owner runs;
+// docs/M11-priorities.md). The owner control key album_preview_restore_off
+// (mcla_dev_overrides.h) turns it off for one arm.
+inline constexpr bool kPreviewRestoreDefault = true;
+
 // Evaluated after the original hover (sub_8263C9C8) returned. Every condition
 // must hold for a restore; the first failing one names the result.
 enum class RestoreDecision : uint8_t {

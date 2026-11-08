@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 71, "seventy-one whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 75, "seventy-five whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -310,10 +310,10 @@ void TestWhitelist() {
     size_t heap_pairs = 0;
     size_t timer_pairs = 0;
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-      for (const Key key :
-           {Key::kBlendMinmaxFix, Key::kShortSleepNative, Key::kApuPriorityNormal}) {
+      // Since l81 the blend key pairs with its control blend_minmax_fix_off.
+      for (const Key key : {Key::kShortSleepNative, Key::kApuPriorityNormal}) {
         Check(pair.first != key && pair.second != key,
-              "the blend fix and the KI-060 controls are in no conflict pair");
+              "the KI-060 controls are in no conflict pair");
       }
       if (pair.first == Key::kTexturePlacedHeapsOff || pair.second == Key::kTexturePlacedHeapsOff ||
           pair.first == Key::kTexturePlacedHeaps || pair.second == Key::kTexturePlacedHeaps) {
@@ -371,6 +371,129 @@ void TestWhitelist() {
               controls.Value(Key::kTexturePlacedHeaps) == false &&
               controls.Value(Key::kTimerQueueBlockingWait) == false,
           "l80 controls with the on keys false, and all five l80 keys true: no conflict");
+  }
+  {
+    // l81 keys: the two KI-060 controls (rexruntime strings at startup), the
+    // KI-013 blend fix control (graphics plugin) and the KI-056 fix A control
+    // (host init-only, startup); =false writes nothing; the two default-on
+    // controls pair with their on keys.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &zero = Info(Key::kZeroDelayNative);
+    Check(FindKey("zero_delay_native") == Key::kZeroDelayNative &&
+              zero.phase == Phase::kStartup && CvarName(zero) == "ke_delay_zero_mode" &&
+              CvarText(zero, true) == "native" && CvarText(zero, false).empty() &&
+              zero.true_source == TextSource::kLiteral && !zero.overrides_user,
+          "zero_delay_native=true writes native to ke_delay_zero_mode at startup, false "
+          "writes nothing");
+    const auto &prio = Info(Key::kGuestAudioPrioNormal);
+    Check(FindKey("guest_audio_prio_normal") == Key::kGuestAudioPrioNormal &&
+              prio.phase == Phase::kStartup && CvarName(prio) == "guest_audio_thread_priority" &&
+              CvarText(prio, true) == "normal" && CvarText(prio, false).empty() &&
+              prio.true_source == TextSource::kLiteral && !prio.overrides_user,
+          "guest_audio_prio_normal=true writes normal to guest_audio_thread_priority at "
+          "startup, false writes nothing");
+    const auto &blend_off = Info(Key::kBlendMinmaxFixOff);
+    Check(FindKey("blend_minmax_fix_off") == Key::kBlendMinmaxFixOff &&
+              blend_off.phase == Phase::kGraphicsPlugin &&
+              CvarName(blend_off) == "d3d12_blend_minmax_fix" &&
+              CvarText(blend_off, true) == "false" && CvarText(blend_off, false).empty() &&
+              blend_off.true_source == TextSource::kLiteral && !blend_off.overrides_user,
+          "blend_minmax_fix_off=true writes false to d3d12_blend_minmax_fix after the plugin "
+          "loaded, false writes nothing");
+    const auto &album_off = Info(Key::kAlbumPreviewRestoreOff);
+    Check(FindKey("album_preview_restore_off") == Key::kAlbumPreviewRestoreOff &&
+              album_off.phase == Phase::kStartup &&
+              CvarName(album_off) == "mcla_album_preview_restore" &&
+              CvarText(album_off, true) == "false" && CvarText(album_off, false).empty() &&
+              album_off.true_source == TextSource::kLiteral && !album_off.overrides_user,
+          "album_preview_restore_off=true writes false to mcla_album_preview_restore at "
+          "startup, false writes nothing");
+    const auto &album = Info(Key::kAlbumPreviewRestore);
+    Check(CvarName(album) == "mcla_album_preview_restore" && CvarText(album, true) == "true" &&
+              CvarText(album, false).empty(),
+          "mcla_album_preview_restore=true writes the l81 default, false writes nothing");
+    Check(Info(Key::kBlendMinmaxFix).phase == blend_off.phase &&
+              CvarName(Info(Key::kBlendMinmaxFix)) == CvarName(blend_off) &&
+              album.phase == album_off.phase && CvarName(album) == CvarName(album_off),
+          "each l81 control and its on key write one cvar in one phase");
+    size_t blend_pairs = 0;
+    size_t album_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key : {Key::kZeroDelayNative, Key::kGuestAudioPrioNormal}) {
+        Check(pair.first != key && pair.second != key,
+              "the l81 KI-060 controls are in no conflict pair");
+      }
+      if (pair.first == Key::kBlendMinmaxFixOff || pair.second == Key::kBlendMinmaxFixOff ||
+          pair.first == Key::kBlendMinmaxFix || pair.second == Key::kBlendMinmaxFix) {
+        Check(pair.first == Key::kBlendMinmaxFix && pair.second == Key::kBlendMinmaxFixOff,
+              "the blend control pairs only with the blend key");
+        ++blend_pairs;
+      }
+      if (pair.first == Key::kAlbumPreviewRestoreOff ||
+          pair.second == Key::kAlbumPreviewRestoreOff ||
+          pair.first == Key::kAlbumPreviewRestore || pair.second == Key::kAlbumPreviewRestore) {
+        Check(pair.first == Key::kAlbumPreviewRestore &&
+                  pair.second == Key::kAlbumPreviewRestoreOff,
+              "the album control pairs only with the restore key");
+        ++album_pairs;
+      }
+    }
+    Check(blend_pairs == 1 && album_pairs == 1, "one conflict pair for each l81 control");
+    Check(!FindKey("ke_delay_zero_mode") && !FindKey("zero_delay_backoff") &&
+              !FindKey("zero_delay") && !FindKey("ZERO_DELAY_NATIVE") &&
+              !FindKey("zero_delay_native_on") && !FindKey("zero_delay_native_off") &&
+              !FindKey("ke_delay_zero_backoff_after") && !FindKey("ke_delay_zero_backoff_max_us") &&
+              !FindKey("ke_delay_zero_gap_us") && !FindKey("guest_audio_thread_priority") &&
+              !FindKey("guest_audio_prio") && !FindKey("guest_audio_prio_above_normal") &&
+              !FindKey("GUEST_AUDIO_PRIO_NORMAL") && !FindKey("guest_audio_prio_normal_on") &&
+              !FindKey("guest_thread_priority_boost_start") &&
+              !FindKey("blend_minmax_fix_of") && !FindKey("blend_minmax_fix_off_on") &&
+              !FindKey("BLEND_MINMAX_FIX_OFF") && !FindKey("d3d12_blend_minmax_fix_off") &&
+              !FindKey("album_preview_restore") && !FindKey("album_preview_restore_of") &&
+              !FindKey("mcla_album_preview_restore_off") &&
+              !FindKey("ALBUM_PREVIEW_RESTORE_OFF") && !FindKey("album_preview_restore_off_on"),
+          "no prefix, suffix, cvar-name, case or other value variants of the l81 keys");
+    // Both members of a control pair true: neither applies, the later line is
+    // logged; with the on key false the control applies.
+    const Parsed both = Parse("blend_minmax_fix=true\n"
+                              "album_preview_restore_off=true\n"
+                              "blend_minmax_fix_off=true\n"
+                              "mcla_album_preview_restore=true\n");
+    Check(both.ValueCount() == 0 && both.issue_count == 2 && both.issues[0].line == 3 &&
+              both.issues[0].issue == LineIssue::kConflict && both.issues[1].line == 4 &&
+              both.issues[1].issue == LineIssue::kConflict,
+          "l81 controls with their on keys: neither applied, conflicts on the later lines");
+    const Parsed controls = Parse("blend_minmax_fix=false\n"
+                                  "blend_minmax_fix_off=true\n"
+                                  "mcla_album_preview_restore=false\n"
+                                  "album_preview_restore_off=true\n"
+                                  "zero_delay_native=true\n"
+                                  "guest_audio_prio_normal=true\n");
+    Check(controls.ValueCount() == 6 && controls.issue_count == 0 &&
+              controls.Value(Key::kBlendMinmaxFixOff) == true &&
+              controls.Value(Key::kAlbumPreviewRestoreOff) == true &&
+              controls.Value(Key::kZeroDelayNative) == true &&
+              controls.Value(Key::kGuestAudioPrioNormal) == true &&
+              controls.Value(Key::kBlendMinmaxFix) == false &&
+              controls.Value(Key::kAlbumPreviewRestore) == false,
+          "l81 controls with the on keys false: no conflict");
+    const Parsed bad = Parse("zero_delay_native=native\n"
+                             "ke_delay_zero_mode=true\n"
+                             "guest_audio_prio_normal=1\n"
+                             "blend_minmax_fix_off=true\n"
+                             "blend_minmax_fix_off=false\n"
+                             "album_preview_restore_off=true\n");
+    Check(bad.ValueCount() == 2 && bad.Value(Key::kBlendMinmaxFixOff) == true &&
+              bad.Value(Key::kAlbumPreviewRestoreOff) == true &&
+              !bad.Value(Key::kZeroDelayNative) && !bad.Value(Key::kGuestAudioPrioNormal) &&
+              bad.ignored_lines == 4 && bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kMalformed &&
+              bad.issues[3].issue == LineIssue::kDuplicate,
+          "l81 near misses: string values, the cvar name, integers and repeats are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -644,8 +767,10 @@ void TestWhitelist() {
             mcla::dev_overrides::CvarText(mcla::dev_overrides::Info(Key::kAlbumPreviewRestore),
                                           true) == "true" &&
             mcla::dev_overrides::CvarText(mcla::dev_overrides::Info(Key::kAlbumPreviewRestore),
-                                          false) == "false",
-        "KI-056 fix A key: host init-only bool at startup, its own cvar");
+                                          false)
+                .empty(),
+        "KI-056 fix A key: host init-only bool at startup, its own cvar; since l81 (default "
+        "on) =false writes nothing");
   Check(!FindKey("mcla_album_preview") && !FindKey("mcla_album_preview_restore_on") &&
             !FindKey("mcla_album_restore"),
         "no prefix or variant keys for the restore");
@@ -815,7 +940,9 @@ void TestWhitelist() {
                           key == Key::kTexturePlacedHeaps || key == Key::kTextureHeap64Mb ||
                           key == Key::kBlendMinmaxFix || key == Key::kShortSleepNative ||
                           key == Key::kApuPriorityNormal || key == Key::kTexturePlacedHeapsOff ||
-                          key == Key::kTimerBlockingOff;
+                          key == Key::kTimerBlockingOff || key == Key::kAlbumPreviewRestore ||
+                          key == Key::kZeroDelayNative || key == Key::kGuestAudioPrioNormal ||
+                          key == Key::kBlendMinmaxFixOff || key == Key::kAlbumPreviewRestoreOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -905,12 +1032,13 @@ void TestWhitelist() {
         Check(paired, "keys writing one cvar form a conflict pair");
       }
     }
-    // Eight pairs (l77: the walk fix and its control; l78: the steady key and
+    // Ten pairs (l77: the walk fix and its control; l78: the steady key and
     // the fence key with their controls; l80: the timer and heaps keys with
-    // their controls) plus the kick and the vblank groups of three (each
-    // listed as its three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 14,
-          "fourteen shared-cvar pairs");
+    // their controls; l81: the album restore and blend keys with their
+    // controls) plus the kick and the vblank groups of three (each listed as
+    // its three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 16,
+          "sixteen shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -1154,7 +1282,7 @@ void TestWhitelist() {
     const Parsed l71 = Parse(triad);
     Check(l71.ValueCount() == 28 && l71.ignored_lines == 0 &&
               !l71.Value(Key::kAlbumPreviewRestore).has_value(),
-          "the l71 triad arm has no restore value (the cvar keeps its default off)");
+          "the l71 triad arm has no restore value (the cvar keeps its default)");
     const std::string l72 = triad + "mcla_album_preview_restore=true\n";
     const Parsed fix = Parse(l72);
     Check(l72.size() <= mcla::dev_overrides::kMaxBytes && fix.status == FileStatus::kParsed &&
@@ -1559,12 +1687,18 @@ void TestWhitelist() {
     };
     // l78: the l77 arms with the three l78 keys explicit false (62 keys);
     // l79: plus the four l79 keys explicit false (66 keys); l80: plus the
-    // five l80 keys explicit false (71 keys).
+    // five l80 keys explicit false (71 keys); l81: plus the four l81 keys
+    // explicit false (75 keys; beyond the former 2 KiB limit).
+    const std::string l81_false = "zero_delay_native=false\n"
+                                  "guest_audio_prio_normal=false\n"
+                                  "blend_minmax_fix_off=false\n"
+                                  "album_preview_restore_off=false\n";
     const std::string l80_false = "blend_minmax_fix=false\n"
                                   "short_sleep_native=false\n"
                                   "apu_priority_normal=false\n"
                                   "texture_placed_heaps_off=false\n"
-                                  "timer_blocking_off=false\n";
+                                  "timer_blocking_off=false\n" +
+                                  l81_false;
     const std::string l79_false = "xma_canary_fixes=false\n"
                                   "timer_queue_blocking_wait=false\n"
                                   "texture_placed_heaps=false\n"
@@ -1582,7 +1716,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l77 arm: every key (71), nothing ignored, fits in kMaxBytes");
+            "l77 arm: every key (75), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kRawTimerOff) == (arm[3][0] == 't') &&
                 a.Value(Key::kVblankHz72) == (arm[4][0] == 't') &&
                 a.Value(Key::kVblankHz80) == (arm[5][0] == 't') &&
@@ -1650,7 +1784,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l78 arm: every key (71), nothing ignored, fits in kMaxBytes");
+            "l78 arm: every key (75), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kReadbackSteadyExempt) == false &&
                 a.Value(Key::kFenceWriteDeferred) == false &&
                 a.Value(Key::kXmaFrameWalkFix) == false &&
@@ -1731,7 +1865,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l79 arm: every key (71), nothing ignored, fits in kMaxBytes");
+            "l79 arm: every key (75), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kXmaCanaryFixes) == (arm[0][0] == 't') &&
                 a.Value(Key::kTimerQueueBlockingWait) == (arm[1][0] == 't') &&
                 a.Value(Key::kTexturePlacedHeaps) == (arm[2][0] == 't') &&
@@ -1804,12 +1938,12 @@ void TestWhitelist() {
                                arm[1] + "\n" + "short_sleep_native=" + arm[2] + "\n" +
                                "apu_priority_normal=" + arm[3] + "\n" +
                                "texture_placed_heaps_off=" + arm[4] + "\n" +
-                               "timer_blocking_off=" + arm[5] + "\n";
+                               "timer_blocking_off=" + arm[5] + "\n" + l81_false;
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l80 arm: every key (71), nothing ignored, fits in kMaxBytes");
+            "l80 arm: every key (75), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kWatchCensus) == (arm[0][0] == 't') &&
                 a.Value(Key::kBlendMinmaxFix) == (arm[1][0] == 't') &&
                 a.Value(Key::kShortSleepNative) == (arm[2][0] == 't') &&
@@ -1837,6 +1971,51 @@ void TestWhitelist() {
               l80_bad.issues[3].issue == LineIssue::kMalformed &&
               l80_bad.issues[4].issue == LineIssue::kDuplicate,
           "l80 near misses: string values, the cvar name, other values and repeats are ignored");
+    // l81 arms (private/l81-arms): only the keys that differ from the build
+    // defaults, so the M10 Wine defaults (upload-ahead 16, disarm bridging)
+    // stay with mcla_m10_defaults on the Deck: no upload-ahead, bridge, hot
+    // block or other =false line; memory_watch_census=false keeps the census
+    // (SDK default on in owner builds) off except in the census arm. The pc
+    // arms keep the l80 pc probes (warp, album, pursuit).
+    {
+      const std::string base = "mcla_readback_sync_composite=true\n"
+                               "mcla_native_d3d_refcount=true\n"
+                               "mcla_native_xapi_interlocked=true\n"
+                               "d3d12_wrm_event_wake=true\n"
+                               "d3d12_replay_batched_wake=true\n"
+                               "d3d12_readback_elide_unread=true\n"
+                               "prewarm_seed_store=true\n"
+                               "d3d12_readback_sync_targeted=true\n";
+      const std::string pc = base +
+                             "memory_watch_census=false\n"
+                             "mcla_warp_probe=true\n"
+                             "mcla_album_probe=true\n"
+                             "mcla_pursuit_probe=true\n";
+      const std::string arms[] = {pc,
+                                  pc + "blend_minmax_fix_off=true\n",
+                                  base + "memory_watch_census=false\n",
+                                  base + "memory_watch_census=true\n",
+                                  base + "memory_watch_census=false\n"
+                                         "zero_delay_native=true\n"
+                                         "guest_audio_prio_normal=true\n"};
+      for (const std::string &text : arms) {
+        const Parsed a = Parse(text);
+        Check(text.size() < 1024 && a.status == FileStatus::kParsed && a.ignored_lines == 0 &&
+                  a.issue_count == 0 && a.ValueCount() >= 9 && a.ValueCount() <= 13,
+              "l81 arm parses, nothing ignored");
+        Check(!a.Value(Key::kUploadAhead16) && !a.Value(Key::kUploadAhead64) &&
+                  !a.Value(Key::kWatchDisarmBridge) && !a.Value(Key::kHotBlocksShadow) &&
+                  !a.Value(Key::kHotBlocksOn) && !a.Value(Key::kAlbumPreviewRestore) &&
+                  !a.Value(Key::kBlendMinmaxFix) && a.Value(Key::kWatchCensus).has_value(),
+              "l81 arm: no line for the Wine watch defaults or the default-on fixes");
+        size_t false_lines = 0;
+        for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
+          false_lines += a.values[i] == false ? 1 : 0;
+        }
+        Check(false_lines == (a.Value(Key::kWatchCensus) == false ? 1u : 0u),
+              "l81 arm: the census line is the only =false line");
+      }
+    }
     // The vblank caps: one true applies; two or three true is a conflict for
     // the whole group (none applied), logged on every later true line.
     const Parsed cap = Parse("vblank_hz_72=false\nvblank_hz_80=true\nvblank_hz_88=false\n"
@@ -1923,7 +2102,7 @@ void TestWhitelist() {
   }
   Check(mcla::dev_overrides::kFile == "mcla-dev-overrides.txt", "file name (same as l55)");
   Check(mcla::dev_overrides::kDirectory == "MCLA-R-Launcher-v1", "launcher per-user directory");
-  Check(mcla::dev_overrides::kMaxBytes == 2048, "2 KiB limit (l73)");
+  Check(mcla::dev_overrides::kMaxBytes == 4096, "4 KiB limit (l81; 2 KiB l73-l80)");
 }
 
 void TestValidFiles() {
@@ -2090,13 +2269,28 @@ void TestRejectedFiles() {
   {
     std::string padded = "d3d12_wrm_event_wake=true\n";
     padded += std::string(mcla::dev_overrides::kMaxBytes - padded.size(), '\n');
-    Check(padded.size() == 2048, "padded size");
+    Check(padded.size() == 4096, "padded size");
     const Parsed ok = Parse(padded);
     Check(ok.status == FileStatus::kParsed && ok.Value(Key::kWrmEventWake) == true,
-          "exactly 2 KiB accepted");
+          "exactly 4 KiB accepted");
     padded += '\n';
     const Parsed big = Parse(padded);
-    Check(big.status == FileStatus::kRejected && NoValues(big), "2049 bytes rejected");
+    Check(big.status == FileStatus::kRejected && NoValues(big), "4097 bytes rejected");
+  }
+  {
+    // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
+    // former 2 KiB and accepted since l81.
+    std::string full;
+    for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
+      full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
+    }
+    Check(full.size() < 2900, "full arm size");
+    full += "# " + std::string(3000 - full.size() - 4, 'x') + "\r\n";
+    const Parsed p = Parse(full);
+    Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
+              p.status == FileStatus::kParsed &&
+              p.ValueCount() == mcla::dev_overrides::kKeyCount && p.ignored_lines == 0,
+          "full CRLF arm with a comment, between 2 and 4 KiB: accepted, every key");
   }
 }
 
@@ -2165,6 +2359,15 @@ void TestConstexpr() {
       Parse("readback_steady_exempt_off=true\nreadback_steady_exempt=true\n");
   static_assert(exempt_conflict.ValueCount() == 0);
   static_assert(exempt_conflict.issues[0].line == 2);
+  constexpr Parsed blend_conflict = Parse("blend_minmax_fix_off=true\nblend_minmax_fix=true\n");
+  static_assert(blend_conflict.ValueCount() == 0);
+  static_assert(blend_conflict.issues[0].line == 2);
+  static_assert(blend_conflict.issues[0].issue == LineIssue::kConflict);
+  constexpr Parsed album_conflict =
+      Parse("mcla_album_preview_restore=true\nalbum_preview_restore_off=true\n");
+  static_assert(album_conflict.ValueCount() == 0);
+  static_assert(album_conflict.issues[0].line == 2);
+  static_assert(album_conflict.issues[0].issue == LineIssue::kConflict);
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
             "conflicting keys for one cvar (neither is applied)",
         "conflict issue name covers every pair");

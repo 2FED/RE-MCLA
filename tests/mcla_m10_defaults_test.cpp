@@ -218,7 +218,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("xma_honor_frame_trim") && IsNeverWritten("xma_frame_trim_block_granular") &&
             IsNeverWritten("xma_dump_contexts") && IsNeverWritten("xma_dump_all_rates") &&
-            kNeverWrittenCvars.size() == 57,
+            kNeverWrittenCvars.size() == 63,
         "KI-071 step 3 cvar names in the never-written set");
   for (const auto key : {dev::Key::kXmaFrameWalkTrace, dev::Key::kXmaFrameWalkFix,
                          dev::Key::kXmaDumpInput}) {
@@ -235,7 +235,7 @@ void TestTable() {
           "the M11-007d lock switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_lock_probe") && IsNeverWritten("mcla_lock_readback_ensure") &&
-            kNeverWrittenCvars.size() == 57,
+            kNeverWrittenCvars.size() == 63,
         "M11-007d cvar names in the never-written set");
   for (const auto key : {dev::Key::kFenceWriteDeferred, dev::Key::kXmaFrameWalkFixOff}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -243,7 +243,7 @@ void TestTable() {
           "the l77 switches keep their SDK defaults (owner keys only)");
   }
   Check(IsNeverWritten("d3d12_fence_write_deferred") && IsNeverWritten("xma_frame_walk_fix") &&
-            kNeverWrittenCvars.size() == 57,
+            kNeverWrittenCvars.size() == 63,
         "l77 cvar names in the never-written set");
   for (const auto key : {dev::Key::kRawTimerOff, dev::Key::kVblankHz72, dev::Key::kVblankHz80,
                          dev::Key::kVblankHz88}) {
@@ -253,8 +253,8 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_raw_timer") && IsNeverWritten("mcla_guest_vblank_hz") &&
             Find("mcla_raw_timer") == nullptr && Find("mcla_guest_vblank_hz") == nullptr &&
-            kNeverWrittenCvars.size() == 57,
-        "KI-074 cvar names in the never-written set (57)");
+            kNeverWrittenCvars.size() == 63,
+        "KI-074 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kReadbackSteadyExemptOff, dev::Key::kFenceWriteDeferredOff,
                          dev::Key::kFenceDeferGap2000}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -264,8 +264,8 @@ void TestTable() {
   Check(IsNeverWritten("d3d12_fence_defer_min_gap_us") &&
             Find("d3d12_fence_defer_min_gap_us") == nullptr &&
             IsNeverWritten("d3d12_readback_sync_steady_exempt") &&
-            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 57,
-        "l78 cvar names in the never-written set (57)");
+            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 63,
+        "l78 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kXmaCanaryFixes, dev::Key::kTimerQueueBlockingWait,
                          dev::Key::kTexturePlacedHeaps, dev::Key::kTextureHeap64Mb}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -276,8 +276,8 @@ void TestTable() {
             IsNeverWritten("d3d12_texture_placed_heaps") &&
             IsNeverWritten("d3d12_texture_heap_block_mb") &&
             Find("d3d12_texture_placed_heaps") == nullptr &&
-            Find("d3d12_texture_heap_block_mb") == nullptr && kNeverWrittenCvars.size() == 57,
-        "l79 cvar names in the never-written set (57)");
+            Find("d3d12_texture_heap_block_mb") == nullptr && kNeverWrittenCvars.size() == 63,
+        "l79 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kBlendMinmaxFix, dev::Key::kShortSleepNative,
                          dev::Key::kApuPriorityNormal, dev::Key::kTexturePlacedHeapsOff,
                          dev::Key::kTimerBlockingOff}) {
@@ -291,12 +291,71 @@ void TestTable() {
             Find("d3d12_blend_minmax_fix") == nullptr &&
             Find("ke_delay_short_sleep_mode") == nullptr &&
             Find("apu_worker_priority") == nullptr &&
-            Find("d3d12_texture_heap_precreate") == nullptr && kNeverWrittenCvars.size() == 57,
-        "l80 cvar names in the never-written set (57)");
+            Find("d3d12_texture_heap_precreate") == nullptr && kNeverWrittenCvars.size() == 63,
+        "l80 cvar names in the never-written set (63)");
+  for (const auto key : {dev::Key::kZeroDelayNative, dev::Key::kGuestAudioPrioNormal,
+                         dev::Key::kBlendMinmaxFixOff, dev::Key::kAlbumPreviewRestoreOff}) {
+    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) == nullptr,
+          "the l81 controls write SDK / host-owned defaults only (owner keys only)");
+  }
+  Check(IsNeverWritten("ke_delay_zero_mode") && IsNeverWritten("ke_delay_zero_backoff_after") &&
+            IsNeverWritten("ke_delay_zero_backoff_max_us") &&
+            IsNeverWritten("ke_delay_zero_gap_us") &&
+            IsNeverWritten("guest_audio_thread_priority") &&
+            IsNeverWritten("guest_thread_priority_boost_start") &&
+            Find("ke_delay_zero_mode") == nullptr &&
+            Find("ke_delay_zero_backoff_after") == nullptr &&
+            Find("ke_delay_zero_backoff_max_us") == nullptr &&
+            Find("ke_delay_zero_gap_us") == nullptr &&
+            Find("guest_audio_thread_priority") == nullptr &&
+            Find("guest_thread_priority_boost_start") == nullptr &&
+            kNeverWrittenCvars.size() == 63,
+        "l81 cvar names in the never-written set (63)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
+            IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestoreOff))) &&
             Find("mcla_album_preview_restore") == nullptr,
-        "the KI-056 fix A restore is never a volunteer default (owner key only)");
+        "the KI-056 fix A restore is host-owned (default on since l81), never an M10 default");
+  // l81 arm rule: an arm without upload-ahead and bridge lines leaves the Wine
+  // defaults to this module (decision applied on Wine, not on Windows); an
+  // explicit =false line of those keys is the owner's off arm (the l71-l80
+  // Deck template defect, docs/evidence/M11-l80-deck-analysis-20261108.md
+  // section 4.1).
+  {
+    const dev::Parsed sparse = dev::Parse("memory_watch_census=false\nmcla_warp_probe=true\n");
+    const dev::Parsed l80 = dev::Parse("memory_watch_disarm_bridge_safe_gaps=false\n"
+                                       "shared_memory_upload_ahead_16=false\n"
+                                       "shared_memory_upload_ahead_64=false\n");
+    for (const auto *cvar : {"memory_watch_disarm_bridge_safe_gaps",
+                             "shared_memory_upload_ahead_pages"}) {
+      const Default *entry = Find(cvar);
+      Check(entry != nullptr && WineOnly(*entry), "Wine-only entry present");
+      if (entry == nullptr) {
+        continue;
+      }
+      bool sparse_line = false;
+      bool l80_line = false;
+      for (size_t i = 0; i < dev::kKeyCount; ++i) {
+        if (dev::CvarName(dev::kKeys[i]) != entry->cvar) {
+          continue;
+        }
+        sparse_line = sparse_line || sparse.values[i].has_value();
+        l80_line = l80_line || l80.values[i].has_value();
+      }
+      Inputs in = Fresh(true);
+      in.measurement_build = true;
+      in.dev_override_applied = sparse_line;
+      Check(!sparse_line && Decide(*entry, in) == Action::kApply,
+            "sparse l81 Deck arm: the Wine default applies in an owner build");
+      in.dev_override_applied = l80_line;
+      Check(l80_line && Decide(*entry, in) == Action::kDevOverride,
+            "explicit =false line: the owner's off arm wins (the l80 Deck defect)");
+      Inputs win = Fresh(false);
+      win.measurement_build = true;
+      Check(Decide(*entry, win) == Action::kNotThisPlatform, "never on Windows");
+    }
+  }
   Check(IsNeverWritten("mcla_warp_finish_fix") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kWarpFinishFixOff))) &&
             Find("mcla_warp_finish_fix") == nullptr,

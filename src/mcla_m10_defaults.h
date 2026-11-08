@@ -107,7 +107,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 57> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 63> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -144,8 +144,9 @@ inline constexpr std::array<std::string_view, 57> kNeverWrittenCvars = {
     "audio_speaker_config",
     "audio_downmix_itu",
     "audio_channel_rms_probe",
-    // KI-056 fix A (host mcla_album_probe.cpp; default off, owner key
-    // mcla_album_preview_restore only until the owner accepts it).
+    // KI-056 fix A (host mcla_album_probe.cpp; default on in the host itself
+    // since l81, owner decision 2026-11-08; only the owner key
+    // album_preview_restore_off turns it off).
     "mcla_album_preview_restore",
     // l73 owner A/Bs: the SDK defaults (fetch identity cache on, verify off,
     // steady-key exemption on since the l78 SDK) stay for everyone else; only
@@ -214,6 +215,16 @@ inline constexpr std::array<std::string_view, 57> kNeverWrittenCvars = {
     "ke_delay_short_sleep_mode",
     "apu_worker_priority",
     "d3d12_texture_heap_precreate",
+    // l81 SDK KI-060: the zero-duration delay mode and its backoff tuning, the
+    // guest audio thread priority (platform defaults) and the guest thread
+    // priority boost start stay SDK-owned; owner keys zero_delay_native /
+    // guest_audio_prio_normal only.
+    "ke_delay_zero_mode",
+    "ke_delay_zero_backoff_after",
+    "ke_delay_zero_backoff_max_us",
+    "ke_delay_zero_gap_us",
+    "guest_audio_thread_priority",
+    "guest_thread_priority_boost_start",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {

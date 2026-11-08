@@ -333,7 +333,18 @@ int main() {
     Check(!StoreSeedSwitch(Parse("prewarm_seed_store=false\n"), true), "file switch off");
     Check(StoreSeedSwitch(Parse("prewarm_seed_store=true\n"), false), "file switch on");
     Check(StoreSeedSwitch(Parse("# nothing\n"), true), "no line: default");
-    Check(StoreSeedSwitch(Parse(std::string(2000, 'a')), true), "rejected file: default");
+    Check(StoreSeedSwitch(Parse(std::string(5000, 'a')), true), "rejected file: default");
+    // l81: the launcher parses the same file with the host parser, so the
+    // 4 KiB limit is the same: exactly 4096 bytes are read, 4097 rejected.
+    {
+      std::string at_limit = "prewarm_seed_store=false\n";
+      at_limit += std::string(mcla::dev_overrides::kMaxBytes - at_limit.size(), '\n');
+      Check(at_limit.size() == 4096 && !StoreSeedSwitch(Parse(at_limit), true),
+            "4096-byte file: the switch line applies");
+      at_limit += '\n';
+      Check(StoreSeedSwitch(Parse(at_limit), true) && !StoreSeedSwitch(Parse(at_limit), false),
+            "4097-byte file: rejected, the default applies");
+    }
     Check(StoreSeedSwitch(Parse("prewarm_seed_store=0\n"), true), "malformed: default");
     const auto launcher_dir = root + L"\\launcher";
     MakeDirs(launcher_dir);
@@ -345,6 +356,22 @@ int main() {
     Check(dir && mcla::launcher::StoreSeedEnabled(*dir) ==
                      (MCLA_DEV_OVERRIDES ? false : (MCLA_PREWARM_SEED_DEFAULT != 0)),
           "file read only in dev-override launcher builds");
+    // l81: a 4096-byte file (beyond the former 2 KiB) is read through the
+    // launcher's own file path; 4097 bytes are rejected (the default applies).
+    for (const size_t size : {size_t{4096}, size_t{4097}}) {
+      const auto sized_dir = root + L"\\launcher-" + std::to_wstring(size);
+      MakeDirs(sized_dir);
+      const std::string line = "prewarm_seed_store=false\n";
+      Bytes bytes(line.begin(), line.end());
+      bytes.resize(size, '\n');
+      const bool written = Write(sized_dir + L"\\mcla-dev-overrides.txt", bytes);
+      auto sized = fs::OpenDirectory(sized_dir);
+      const bool expected =
+          MCLA_DEV_OVERRIDES && size <= mcla::dev_overrides::kMaxBytes ? false
+                                                                       : (MCLA_PREWARM_SEED_DEFAULT != 0);
+      Check(written && sized && mcla::launcher::StoreSeedEnabled(*sized) == expected,
+            size == 4096 ? "launcher reads a 4096-byte override file" : "launcher rejects 4097 bytes");
+    }
   }
 
   std::cout << "Launcher shader store seeding: " << checks << " checks, " << failures << " failures\n";

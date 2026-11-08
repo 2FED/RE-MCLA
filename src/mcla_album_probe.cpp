@@ -4,7 +4,8 @@
 //
 // Five pass-through strong overrides of generated weak functions. With the
 // init-only switches mcla_album_probe and mcla_album_preview_restore off (the
-// defaults) each calls the original and returns; nothing is read or logged.
+// probe's default; the restore defaults to on since l81) each calls the
+// original and returns; nothing is read or logged.
 // With the probe on, each reads guest state through the checked reader
 // (mcla_guest_reader.h) before and after calling the ORIGINAL UNCHANGED, and
 // logs one MCLA_ALBUM v=1 line (rate-limited per kind; the tick only on a
@@ -14,7 +15,8 @@
 //
 // KI-056 fix A (docs/evidence/M11-ki056-l71-album-probe-20261106.md section 3,
 // docs/evidence/M11-ki056-fix-a-20261106.md): with mcla_album_preview_restore
-// on (default off; probe on or off), the hover override, after the original
+// on (default on since l81, album::kPreviewRestoreDefault; probe on or off),
+// the hover override, after the original
 // sub_8263C9C8 returned, re-runs the game's own new-photo decode
 // sub_8263C8B0(album) when a new photo is pending (u8 +1170), the hovered slot
 // is empty by the game's rule (album::HoverValid false), an occupied hover
@@ -45,10 +47,10 @@ REXCVAR_DEFINE_BOOL(mcla_album_probe, false, "MCLA",
     "(MCLA_ALBUM lines; diagnostic, read-only)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REXCVAR_DEFINE_BOOL(mcla_album_preview_restore, false, "MCLA",
+REXCVAR_DEFINE_BOOL(mcla_album_preview_restore, mcla::album::kPreviewRestoreDefault, "MCLA",
     "KI-056 fix A: in the photo album save chooser, re-run the game's new-photo "
     "decode when the cursor returns to an empty slot after an occupied slot "
-    "overwrote the shared preview (quality fix, default off)")
+    "overwrote the shared preview (quality fix, default on since l81)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace {

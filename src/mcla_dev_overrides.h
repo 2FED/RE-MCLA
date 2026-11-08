@@ -19,8 +19,9 @@
 // once at game start, because the launcher cannot pass extra command-line
 // flags. The file holds lines "name=true" or "name=false":
 //
-// - at most kMaxBytes bytes, ASCII only (no BOM); otherwise the whole file is
-//   rejected and nothing is applied;
+// - at most kMaxBytes (4 KiB since l81) bytes, ASCII only (no BOM); otherwise
+//   the whole file is rejected and nothing is applied (the launcher parses the
+//   same file with the same Parse, so the limit is the same there);
 // - lines end in LF or CRLF; empty lines and lines starting with '#' are
 //   skipped;
 // - a line must be exactly name=true or name=false (no spaces); the name must
@@ -50,9 +51,12 @@
 // - mcla_album_probe (KI-056 MCLA_ALBUM lines) and mcla_pursuit_probe (KI-066
 //   MCLA_PURSUIT lines) are plain host init-only bools (M11-002,
 //   docs/evidence/M11-002-diagnostics-triad-20261106.md).
-// - mcla_album_preview_restore (KI-056 fix A, default off) is a plain host
-//   init-only bool (mcla_album_probe.cpp,
-//   docs/evidence/M11-ki056-fix-a-20261106.md).
+// - mcla_album_preview_restore (KI-056 fix A) is a host init-only bool
+//   (mcla_album_probe.cpp, docs/evidence/M11-ki056-fix-a-20261106.md); default
+//   off until l80, on since l81 (owner decision 2026-11-08,
+//   album::kPreviewRestoreDefault): =true writes true (the default now),
+//   =false changes nothing (so an old arm line =false no longer turns the fix
+//   off); the control is album_preview_restore_off below.
 // - xam_content_stable_creation_time_off=true writes false to the SDK bool
 //   cvar xam_content_stable_creation_time (M11-001 / KI-068 stable save
 //   creation time, SDK default true; the Deck A/B control arm), and
@@ -195,6 +199,22 @@
 //   timer_queue_blocking_wait (startup): the controls for the l80 platform
 //   defaults; each forms a conflict pair with its l79 on key (both true:
 //   neither applied). =false changes nothing for all five.
+// - l81 (docs/evidence/M11-l80-deck-analysis-20261108.md section 4; owner
+//   decisions 2026-11-08; fix design section 3): zero_delay_native=true
+//   writes native to the SDK string ke_delay_zero_mode (KI-060 non-alertable
+//   zero-duration guest delays, the F800068C Sleep(0) loop; platform default
+//   backoff under Wine/Proton, native on Windows) and
+//   guest_audio_prio_normal=true writes normal to the SDK string
+//   guest_audio_thread_priority (the host priority of the guest audio engine
+//   thread F8000534, set when that guest thread is created), both rexruntime
+//   cvars at startup: the Deck control arm for the l81 KI-060 defaults. blend_minmax_fix_off=true
+//   writes false to d3d12_blend_minmax_fix (KI-013 fix, default on since the
+//   l81 SDK; graphics plugin): the control, a conflict pair with
+//   blend_minmax_fix. album_preview_restore_off=true writes false to the host
+//   bool mcla_album_preview_restore (KI-056 fix A, default on since l81;
+//   startup): the control, a conflict pair with mcla_album_preview_restore.
+//   =false changes nothing for all four; an SDK without the l81 cvars logs
+//   the two KI-060 keys as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -230,11 +250,12 @@ namespace mcla::dev_overrides {
 
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
-// 2 KiB since l73: a full 35-key arm file (every key explicit) is about
-// 1.07 KB, beyond the former 1 KiB (a full 59-key arm is about 1.7 KB, a full
-// 66-key l79 arm about 1.9 KB, a full 71-key l80 arm about 2.02 KB: close to
-// the limit; later arms drop redundant =false lines rather than raise it).
-inline constexpr size_t kMaxBytes = 2048;
+// 4 KiB since l81 (2 KiB l73-l80, 1 KiB before): a full 71-key l80 arm (every
+// key explicit) was about 2.02 KB, so an editor re-save with CRLF would have
+// pushed it past 2 KiB and the whole file would have been rejected; a full
+// 75-key arm with CRLF is about 2.3 KB. Since l81 arms list only the keys
+// that differ from the defaults (private/l81-CHECKLIST.txt).
+inline constexpr size_t kMaxBytes = 4096;
 
 enum class Key : uint8_t {
   kReadbackSyncComposite,
@@ -265,7 +286,7 @@ enum class Key : uint8_t {
   kAudioSpeakerSurround,  // KI-071 A/B: audio_speaker_config=surround
   kAudioDownmixItuOff,    // KI-071 A/B: audio_downmix_itu=false (legacy weights)
   kAudioChannelRmsProbe,  // KI-071: audio_channel_rms_probe (1 Hz RMS line)
-  kAlbumPreviewRestore,   // KI-056 fix A: mcla_album_preview_restore (default off)
+  kAlbumPreviewRestore,   // KI-056 fix A: mcla_album_preview_restore (default on since l81)
   kReadbackKick256,       // M11-015 A/B: d3d12_readback_sync_kick_draws=256
   kReadbackKick128,       // M11-015 A/B: d3d12_readback_sync_kick_draws=128
   kReadbackKick1024,      // M11-015 A/B control: d3d12_readback_sync_kick_draws=1024
@@ -308,8 +329,12 @@ enum class Key : uint8_t {
   kApuPriorityNormal,        // l80 KI-060 control: apu_worker_priority=normal
   kTexturePlacedHeapsOff,    // l80 control: d3d12_texture_placed_heaps=false
   kTimerBlockingOff,         // l80 control: timer_queue_blocking_wait=false
+  kZeroDelayNative,          // l81 KI-060 control: ke_delay_zero_mode=native
+  kGuestAudioPrioNormal,     // l81 KI-060 control: guest_audio_thread_priority=normal
+  kBlendMinmaxFixOff,        // l81 KI-013 control: d3d12_blend_minmax_fix=false
+  kAlbumPreviewRestoreOff,   // l81 KI-056 control: mcla_album_preview_restore=false
 };
-inline constexpr size_t kKeyCount = 71;
+inline constexpr size_t kKeyCount = 75;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -389,9 +414,10 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"audio_speaker_config_surround", Phase::kStartup, "audio_speaker_config", "surround", ""},
     {"audio_downmix_itu_off", Phase::kStartup, "audio_downmix_itu", "false", ""},
     {"audio_channel_rms_probe", Phase::kStartup},
-    // KI-056 fix A host init-only bool (mcla_album_probe.cpp), before the
-    // guest.
-    {"mcla_album_preview_restore", Phase::kStartup},
+    // KI-056 fix A host init-only bool (mcla_album_probe.cpp, default on since
+    // l81), before the guest; =false writes nothing (the control is
+    // album_preview_restore_off).
+    {"mcla_album_preview_restore", Phase::kStartup, "", "true", ""},
     // M11-015 kick-interval A/B: the integer SDK cvar is registered by the
     // graphics plugin (command_processor.cpp, hot-reload), so after the plugin
     // has loaded.
@@ -489,12 +515,23 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"texture_placed_heaps_off", Phase::kGraphicsPlugin, "d3d12_texture_placed_heaps", "false",
      ""},
     {"timer_blocking_off", Phase::kStartup, "timer_queue_blocking_wait", "false", ""},
+    // l81 KI-060 controls: SDK rexruntime strings, latched at the first guest
+    // delay / when the guest audio thread is created, so before the guest;
+    // =false writes nothing.
+    {"zero_delay_native", Phase::kStartup, "ke_delay_zero_mode", "native", ""},
+    {"guest_audio_prio_normal", Phase::kStartup, "guest_audio_thread_priority", "normal", ""},
+    // l81 controls for the new defaults: the KI-013 blend fix (graphics
+    // plugin) and KI-056 fix A (host init-only, startup); =false writes
+    // nothing.
+    {"blend_minmax_fix_off", Phase::kGraphicsPlugin, "d3d12_blend_minmax_fix", "false", ""},
+    {"album_preview_restore_off", Phase::kStartup, "mcla_album_preview_restore", "false", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
 // audio_speaker_config string, or the xma_frame_walk_fix,
 // d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
-// d3d12_texture_placed_heaps and timer_queue_blocking_wait bools):
+// d3d12_texture_placed_heaps, timer_queue_blocking_wait,
+// d3d12_blend_minmax_fix and mcla_album_preview_restore bools):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -502,7 +539,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 14> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 16> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -517,6 +554,8 @@ inline constexpr std::array<ConflictPair, 14> kConflictPairs = {{
     {Key::kFenceWriteDeferred, Key::kFenceWriteDeferredOff},
     {Key::kTimerQueueBlockingWait, Key::kTimerBlockingOff},
     {Key::kTexturePlacedHeaps, Key::kTexturePlacedHeapsOff},
+    {Key::kAlbumPreviewRestore, Key::kAlbumPreviewRestoreOff},
+    {Key::kBlendMinmaxFix, Key::kBlendMinmaxFixOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -815,7 +854,8 @@ std::optional<bool> AppliedValue(Key key);
 // a parsed file or without a valid line), whether or not anything was
 // written. Used for keys whose value writes nothing (upload-ahead, hot blocks,
 // read-back kick, the l73 fetch-identity / steady-exempt and the KI-071 XMA
-// SDK keys =false, also xma_dump_contexts_on=false).
+// SDK keys =false, also xma_dump_contexts_on=false and, since l81,
+// mcla_album_preview_restore=false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

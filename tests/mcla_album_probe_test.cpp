@@ -304,6 +304,10 @@ void TestRestoreDecision() {
 }
 
 void TestRestoreJson() {
+  // l81: KI-056 fix A is on by default (owner decision 2026-11-08); the owner
+  // control key album_preview_restore_off turns it off for one arm.
+  static_assert(album::kPreviewRestoreDefault, "fix A default on since l81");
+  Check(album::kPreviewRestoreDefault, "KI-056 fix A restore default on (l81)");
   album::RestoreStats s;
   Check(album::RestoreJson(s) ==
             "{\"enabled\": false, \"restores\": 0, \"no_marker\": 0, \"clobbered\": false}",
