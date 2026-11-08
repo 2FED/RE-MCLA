@@ -1,5 +1,7 @@
 # Current state and handoff
 
+**Update 2026-11-08:** l78 PC regression PASS (default runs, Locked, cut-scene, cold cache; Deck part not yet reported). l79 staged for the owner A/B of three new SDK switches (placed texture heaps, timer blocking wait, Canary XMA fixes), all off by default: see docs/M11-priorities.md "l79 staged". External repos surveyed (docs/evidence/M11-external-repos-survey-20261108.md): code only from permissive upstreams; the in-game menu needs the LARecomp author's permission.
+
 Updated November 7, 2026 Kyiv (M11 active; l78 defaults build in preparation).
 
 ## Active outcome
