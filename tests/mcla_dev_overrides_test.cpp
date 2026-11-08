@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 66, "sixty-six whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 71, "seventy-one whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -234,10 +234,11 @@ void TestWhitelist() {
               !block.overrides_user,
           "texture_heap_64mb=true writes 64 to d3d12_texture_heap_block_mb after the plugin "
           "loaded, false writes nothing");
+    // Since l80 the timer and heaps keys pair with their l80 controls only.
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-      for (const Key key : {Key::kXmaCanaryFixes, Key::kTimerQueueBlockingWait,
-                            Key::kTexturePlacedHeaps, Key::kTextureHeap64Mb}) {
-        Check(pair.first != key && pair.second != key, "the l79 keys are in no conflict pair");
+      for (const Key key : {Key::kXmaCanaryFixes, Key::kTextureHeap64Mb}) {
+        Check(pair.first != key && pair.second != key,
+              "the l79 XMA and heap-size keys are in no conflict pair");
       }
     }
     Check(!FindKey("xma_canary_fix") && !FindKey("xma_canary_fixes_on") &&
@@ -252,6 +253,124 @@ void TestWhitelist() {
               !FindKey("texture_heap_128mb") && !FindKey("texture_heap_256mb") &&
               !FindKey("texture_heap_64mb_on") && !FindKey("TEXTURE_HEAP_64MB"),
           "no prefix, suffix, cvar-name, case or other numeric variants of the l79 keys");
+  }
+  {
+    // l80 keys: the KI-013 blend fix (graphics plugin bool), the two KI-060
+    // controls (rexruntime strings at startup) and the controls for the l80
+    // platform defaults (placed heaps after the plugin loaded, timer wait at
+    // startup); =false writes nothing; the two controls pair with their l79
+    // on keys.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &blend = Info(Key::kBlendMinmaxFix);
+    Check(FindKey("blend_minmax_fix") == Key::kBlendMinmaxFix &&
+              blend.phase == Phase::kGraphicsPlugin &&
+              CvarName(blend) == "d3d12_blend_minmax_fix" && CvarText(blend, true) == "true" &&
+              CvarText(blend, false).empty() && blend.true_source == TextSource::kLiteral &&
+              !blend.overrides_user,
+          "blend_minmax_fix=true writes true to d3d12_blend_minmax_fix after the plugin "
+          "loaded, false writes nothing");
+    const auto &sleep = Info(Key::kShortSleepNative);
+    Check(FindKey("short_sleep_native") == Key::kShortSleepNative &&
+              sleep.phase == Phase::kStartup && CvarName(sleep) == "ke_delay_short_sleep_mode" &&
+              CvarText(sleep, true) == "native" && CvarText(sleep, false).empty() &&
+              sleep.true_source == TextSource::kLiteral && !sleep.overrides_user,
+          "short_sleep_native=true writes native to ke_delay_short_sleep_mode at startup, "
+          "false writes nothing");
+    const auto &apu = Info(Key::kApuPriorityNormal);
+    Check(FindKey("apu_priority_normal") == Key::kApuPriorityNormal &&
+              apu.phase == Phase::kStartup && CvarName(apu) == "apu_worker_priority" &&
+              CvarText(apu, true) == "normal" && CvarText(apu, false).empty() &&
+              apu.true_source == TextSource::kLiteral && !apu.overrides_user,
+          "apu_priority_normal=true writes normal to apu_worker_priority at startup, false "
+          "writes nothing");
+    const auto &heaps_off = Info(Key::kTexturePlacedHeapsOff);
+    Check(FindKey("texture_placed_heaps_off") == Key::kTexturePlacedHeapsOff &&
+              heaps_off.phase == Phase::kGraphicsPlugin &&
+              CvarName(heaps_off) == "d3d12_texture_placed_heaps" &&
+              CvarText(heaps_off, true) == "false" && CvarText(heaps_off, false).empty() &&
+              heaps_off.true_source == TextSource::kLiteral && !heaps_off.overrides_user,
+          "texture_placed_heaps_off=true writes false to d3d12_texture_placed_heaps after the "
+          "plugin loaded, false writes nothing");
+    const auto &timer_off = Info(Key::kTimerBlockingOff);
+    Check(FindKey("timer_blocking_off") == Key::kTimerBlockingOff &&
+              timer_off.phase == Phase::kStartup &&
+              CvarName(timer_off) == "timer_queue_blocking_wait" &&
+              CvarText(timer_off, true) == "false" && CvarText(timer_off, false).empty() &&
+              timer_off.true_source == TextSource::kLiteral && !timer_off.overrides_user,
+          "timer_blocking_off=true writes false to timer_queue_blocking_wait at startup, false "
+          "writes nothing");
+    Check(Info(Key::kTexturePlacedHeaps).phase == heaps_off.phase &&
+              CvarName(Info(Key::kTexturePlacedHeaps)) == CvarName(heaps_off) &&
+              Info(Key::kTimerQueueBlockingWait).phase == timer_off.phase &&
+              CvarName(Info(Key::kTimerQueueBlockingWait)) == CvarName(timer_off),
+          "each l80 control and its l79 on key write one cvar in one phase");
+    size_t heap_pairs = 0;
+    size_t timer_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key :
+           {Key::kBlendMinmaxFix, Key::kShortSleepNative, Key::kApuPriorityNormal}) {
+        Check(pair.first != key && pair.second != key,
+              "the blend fix and the KI-060 controls are in no conflict pair");
+      }
+      if (pair.first == Key::kTexturePlacedHeapsOff || pair.second == Key::kTexturePlacedHeapsOff ||
+          pair.first == Key::kTexturePlacedHeaps || pair.second == Key::kTexturePlacedHeaps) {
+        Check(pair.first == Key::kTexturePlacedHeaps && pair.second == Key::kTexturePlacedHeapsOff,
+              "the heaps control pairs only with the heaps key");
+        ++heap_pairs;
+      }
+      if (pair.first == Key::kTimerBlockingOff || pair.second == Key::kTimerBlockingOff ||
+          pair.first == Key::kTimerQueueBlockingWait ||
+          pair.second == Key::kTimerQueueBlockingWait) {
+        Check(pair.first == Key::kTimerQueueBlockingWait && pair.second == Key::kTimerBlockingOff,
+              "the timer control pairs only with the timer key");
+        ++timer_pairs;
+      }
+    }
+    Check(heap_pairs == 1 && timer_pairs == 1, "one conflict pair for each l80 control");
+    Check(!FindKey("d3d12_blend_minmax_fix") && !FindKey("blend_minmax_fix_on") &&
+              !FindKey("BLEND_MINMAX_FIX") && !FindKey("blend_min_max_fix") &&
+              !FindKey("blend_minmax") && !FindKey("blend_fix") &&
+              !FindKey("ke_delay_short_sleep_mode") && !FindKey("short_sleep_hires_timer") &&
+              !FindKey("short_sleep_yield") && !FindKey("short_sleep") &&
+              !FindKey("SHORT_SLEEP_NATIVE") && !FindKey("short_sleep_native_on") &&
+              !FindKey("apu_worker_priority") && !FindKey("apu_priority_above_normal") &&
+              !FindKey("apu_priority_highest") && !FindKey("apu_priority") &&
+              !FindKey("APU_PRIORITY_NORMAL") && !FindKey("texture_placed_heaps_of") &&
+              !FindKey("texture_placed_heaps_off_on") && !FindKey("TEXTURE_PLACED_HEAPS_OFF") &&
+              !FindKey("placed_heaps_off") && !FindKey("timer_blocking") &&
+              !FindKey("timer_blocking_of") && !FindKey("timer_queue_blocking_wait_off") &&
+              !FindKey("TIMER_BLOCKING_OFF") && !FindKey("timer_blocking_off_on") &&
+              !FindKey("d3d12_texture_heap_precreate") && !FindKey("texture_heap_precreate"),
+          "no prefix, suffix, cvar-name, case or other value variants of the l80 keys");
+    // Both members of a control pair true: neither applies, the later line is
+    // logged; with the on key false the control applies.
+    const Parsed both = Parse("timer_queue_blocking_wait=true\n"
+                              "texture_placed_heaps_off=true\n"
+                              "timer_blocking_off=true\n"
+                              "texture_placed_heaps=true\n");
+    Check(both.ValueCount() == 0 && both.issue_count == 2 && both.issues[0].line == 3 &&
+              both.issues[0].issue == LineIssue::kConflict && both.issues[1].line == 4 &&
+              both.issues[1].issue == LineIssue::kConflict,
+          "l80 controls with their l79 on keys: neither applied, conflicts on the later lines");
+    const Parsed controls = Parse("texture_placed_heaps=false\n"
+                                  "texture_placed_heaps_off=true\n"
+                                  "timer_queue_blocking_wait=false\n"
+                                  "timer_blocking_off=true\n"
+                                  "short_sleep_native=true\n"
+                                  "apu_priority_normal=true\n"
+                                  "blend_minmax_fix=true\n");
+    Check(controls.ValueCount() == 7 && controls.issue_count == 0 &&
+              controls.Value(Key::kTexturePlacedHeapsOff) == true &&
+              controls.Value(Key::kTimerBlockingOff) == true &&
+              controls.Value(Key::kShortSleepNative) == true &&
+              controls.Value(Key::kApuPriorityNormal) == true &&
+              controls.Value(Key::kBlendMinmaxFix) == true &&
+              controls.Value(Key::kTexturePlacedHeaps) == false &&
+              controls.Value(Key::kTimerQueueBlockingWait) == false,
+          "l80 controls with the on keys false, and all five l80 keys true: no conflict");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -693,7 +812,10 @@ void TestWhitelist() {
                           key == Key::kVblankHz88 || key == Key::kReadbackSteadyExemptOff ||
                           key == Key::kFenceWriteDeferredOff || key == Key::kFenceDeferGap2000 ||
                           key == Key::kXmaCanaryFixes || key == Key::kTimerQueueBlockingWait ||
-                          key == Key::kTexturePlacedHeaps || key == Key::kTextureHeap64Mb;
+                          key == Key::kTexturePlacedHeaps || key == Key::kTextureHeap64Mb ||
+                          key == Key::kBlendMinmaxFix || key == Key::kShortSleepNative ||
+                          key == Key::kApuPriorityNormal || key == Key::kTexturePlacedHeapsOff ||
+                          key == Key::kTimerBlockingOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -783,11 +905,12 @@ void TestWhitelist() {
         Check(paired, "keys writing one cvar form a conflict pair");
       }
     }
-    // Six pairs (l77: the walk fix and its control; l78: the steady key and
-    // the fence key with their controls) plus the kick and the vblank groups
-    // of three (each listed as its three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 12,
-          "twelve shared-cvar pairs");
+    // Eight pairs (l77: the walk fix and its control; l78: the steady key and
+    // the fence key with their controls; l80: the timer and heaps keys with
+    // their controls) plus the kick and the vblank groups of three (each
+    // listed as its three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 14,
+          "fourteen shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -1435,11 +1558,18 @@ void TestWhitelist() {
              "\n" + "vblank_hz_80=" + arm[5] + "\n" + "vblank_hz_88=" + arm[6] + "\n";
     };
     // l78: the l77 arms with the three l78 keys explicit false (62 keys);
-    // l79: plus the four l79 keys explicit false (66 keys).
+    // l79: plus the four l79 keys explicit false (66 keys); l80: plus the
+    // five l80 keys explicit false (71 keys).
+    const std::string l80_false = "blend_minmax_fix=false\n"
+                                  "short_sleep_native=false\n"
+                                  "apu_priority_normal=false\n"
+                                  "texture_placed_heaps_off=false\n"
+                                  "timer_blocking_off=false\n";
     const std::string l79_false = "xma_canary_fixes=false\n"
                                   "timer_queue_blocking_wait=false\n"
                                   "texture_placed_heaps=false\n"
-                                  "texture_heap_64mb=false\n";
+                                  "texture_heap_64mb=false\n" +
+                                  l80_false;
     const std::string l78_false = "readback_steady_exempt_off=false\n"
                                   "fence_write_deferred_off=false\n"
                                   "fence_defer_gap_2000=false\n" +
@@ -1452,7 +1582,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l77 arm: every key (66), nothing ignored, fits in kMaxBytes");
+            "l77 arm: every key (71), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kRawTimerOff) == (arm[3][0] == 't') &&
                 a.Value(Key::kVblankHz72) == (arm[4][0] == 't') &&
                 a.Value(Key::kVblankHz80) == (arm[5][0] == 't') &&
@@ -1520,7 +1650,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l78 arm: every key (66), nothing ignored, fits in kMaxBytes");
+            "l78 arm: every key (71), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kReadbackSteadyExempt) == false &&
                 a.Value(Key::kFenceWriteDeferred) == false &&
                 a.Value(Key::kXmaFrameWalkFix) == false &&
@@ -1596,12 +1726,12 @@ void TestWhitelist() {
                                "xma_canary_fixes=" +
                                arm[0] + "\n" + "timer_queue_blocking_wait=" + arm[1] + "\n" +
                                "texture_placed_heaps=" + arm[2] + "\n" +
-                               "texture_heap_64mb=" + arm[3] + "\n";
+                               "texture_heap_64mb=" + arm[3] + "\n" + l80_false;
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l79 arm: every key (66), nothing ignored, fits in kMaxBytes");
+            "l79 arm: every key (71), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kXmaCanaryFixes) == (arm[0][0] == 't') &&
                 a.Value(Key::kTimerQueueBlockingWait) == (arm[1][0] == 't') &&
                 a.Value(Key::kTexturePlacedHeaps) == (arm[2][0] == 't') &&
@@ -1638,6 +1768,75 @@ void TestWhitelist() {
               l79_bad.issues[3].issue == LineIssue::kMalformed &&
               l79_bad.issues[4].issue == LineIssue::kDuplicate,
           "l79 near misses: integer values, the cvar name, other sizes and repeats are ignored");
+    // l80 arms (private/l80-arms): default = the l79 default arm (l79 switches
+    // false: the l80 platform defaults apply) plus the five l80 keys false;
+    // pc blend adds blend_minmax_fix, pc heaps-off texture_placed_heaps_off;
+    // deck census adds memory_watch_census, deck audio-off the two KI-060
+    // controls.
+    const char *const l80_arms[5][6] = {
+        // census, blend, short_sleep, apu, heaps_off, timer_off
+        {"false", "false", "false", "false", "false", "false"},  // default
+        {"false", "true", "false", "false", "false", "false"},   // pc blend
+        {"false", "false", "false", "false", "true", "false"},   // pc heaps-off
+        {"true", "false", "false", "false", "false", "false"},   // deck census
+        {"false", "false", "true", "true", "false", "false"}};   // deck audio-off
+    for (const auto &arm : l80_arms) {
+      const char *const l77_row[7] = {"false", "false", "false", "false",
+                                      "false", "false", "false"};
+      std::string l77 = l77_text(l77_row);
+      const std::string_view census_false = "memory_watch_census=false\n";
+      const size_t at = l77.find(census_false);
+      Check(!l77.empty() && at != std::string::npos,
+            "the l76 base text holds the steady and census keys");
+      if (at == std::string::npos) {
+        continue;
+      }
+      l77.replace(at, census_false.size(), std::string("memory_watch_census=") + arm[0] + "\n");
+      const std::string text = l77 +
+                               "readback_steady_exempt_off=false\n"
+                               "fence_write_deferred_off=false\n"
+                               "fence_defer_gap_2000=false\n"
+                               "xma_canary_fixes=false\n"
+                               "timer_queue_blocking_wait=false\n"
+                               "texture_placed_heaps=false\n"
+                               "texture_heap_64mb=false\n"
+                               "blend_minmax_fix=" +
+                               arm[1] + "\n" + "short_sleep_native=" + arm[2] + "\n" +
+                               "apu_priority_normal=" + arm[3] + "\n" +
+                               "texture_placed_heaps_off=" + arm[4] + "\n" +
+                               "timer_blocking_off=" + arm[5] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l80 arm: every key (71), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kWatchCensus) == (arm[0][0] == 't') &&
+                a.Value(Key::kBlendMinmaxFix) == (arm[1][0] == 't') &&
+                a.Value(Key::kShortSleepNative) == (arm[2][0] == 't') &&
+                a.Value(Key::kApuPriorityNormal) == (arm[3][0] == 't') &&
+                a.Value(Key::kTexturePlacedHeapsOff) == (arm[4][0] == 't') &&
+                a.Value(Key::kTimerBlockingOff) == (arm[5][0] == 't') &&
+                a.Value(Key::kXmaCanaryFixes) == false &&
+                a.Value(Key::kTimerQueueBlockingWait) == false &&
+                a.Value(Key::kTexturePlacedHeaps) == false,
+            "l80 arm values (l79 switches false: the l80 platform defaults apply)");
+    }
+    const Parsed l80_bad = Parse("short_sleep_native=native\n"
+                                 "ke_delay_short_sleep_mode=true\n"
+                                 "apu_priority_above_normal=true\n"
+                                 "blend_minmax_fix=1\n"
+                                 "timer_blocking_off=true\n"
+                                 "timer_blocking_off=false\n"
+                                 "apu_priority_normal=true\n");
+    Check(l80_bad.ValueCount() == 2 && l80_bad.Value(Key::kTimerBlockingOff) == true &&
+              l80_bad.Value(Key::kApuPriorityNormal) == true &&
+              !l80_bad.Value(Key::kShortSleepNative) && !l80_bad.Value(Key::kBlendMinmaxFix) &&
+              l80_bad.ignored_lines == 5 && l80_bad.issues[0].issue == LineIssue::kMalformed &&
+              l80_bad.issues[1].issue == LineIssue::kUnknownName &&
+              l80_bad.issues[2].issue == LineIssue::kUnknownName &&
+              l80_bad.issues[3].issue == LineIssue::kMalformed &&
+              l80_bad.issues[4].issue == LineIssue::kDuplicate,
+          "l80 near misses: string values, the cvar name, other values and repeats are ignored");
     // The vblank caps: one true applies; two or three true is a conflict for
     // the whole group (none applied), logged on every later true line.
     const Parsed cap = Parse("vblank_hz_72=false\nvblank_hz_80=true\nvblank_hz_88=false\n"

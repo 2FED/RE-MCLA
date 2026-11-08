@@ -107,7 +107,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 53> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 57> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -196,14 +196,24 @@ inline constexpr std::array<std::string_view, 53> kNeverWrittenCvars = {
     // l78 fence deferral minimum gap (SDK int, default 0); owner key
     // fence_defer_gap_2000 only until an owner A/B accepts another value.
     "d3d12_fence_defer_min_gap_us",
-    // l79 SDK experiments (all default off: Canary XMA fixes, timer queue
-    // blocking wait, placed texture heaps and their block size); owner keys
+    // l79 SDK experiments (default off in l79; since the l80 SDK its platform
+    // defaults turn the XMA fixes and the timer wait on, and placed heaps on
+    // on Windows: Canary XMA fixes, timer queue blocking wait, placed texture
+    // heaps and their block size); owner keys
     // xma_canary_fixes / timer_queue_blocking_wait / texture_placed_heaps /
     // texture_heap_64mb only until an owner A/B accepts them.
     "xma_canary_fixes",
     "timer_queue_blocking_wait",
     "d3d12_texture_placed_heaps",
     "d3d12_texture_heap_block_mb",
+    // l80 SDK: the KI-013 blend fix (default off), the KI-060 Wine short
+    // sleep mode and audio worker priority (platform defaults) and the placed
+    // heap pre-creation count (default 2) stay SDK-owned; owner keys
+    // blend_minmax_fix / short_sleep_native / apu_priority_normal only.
+    "d3d12_blend_minmax_fix",
+    "ke_delay_short_sleep_mode",
+    "apu_worker_priority",
+    "d3d12_texture_heap_precreate",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {

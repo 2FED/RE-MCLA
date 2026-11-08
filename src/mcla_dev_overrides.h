@@ -174,7 +174,27 @@
 //   OnPostLoadGraphicsPlugin (ReXApp::SetupPresentation precedes
 //   ConstructRuntime), so the graphics-plugin phase is in time.
 //   texture_heap_64mb alone (without texture_placed_heaps) has no effect.
-//   They write four different cvars, so no combination is a conflict.
+//   Since the l80 SDK the platform defaults turn xma_canary_fixes and
+//   timer_queue_blocking_wait on everywhere and d3d12_texture_placed_heaps on
+//   on Windows (off under Wine/Proton), so these keys' true then writes the
+//   default there; the controls are the l80 keys below.
+// - l80 (docs/evidence/M11-l80-sdk-20261108.md): blend_minmax_fix=true writes
+//   true to the SDK bool d3d12_blend_minmax_fix (KI-013 MIN/MAX blend source
+//   factor, default false; graphics plugin, read for every pipeline's pixel
+//   shader modification, so a new modification key compiles new pipelines).
+//   short_sleep_native=true writes native to the SDK string
+//   ke_delay_short_sleep_mode (KI-060, latched at the first guest delay;
+//   platform default native on Windows, hires_timer under Wine/Proton) and
+//   apu_priority_normal=true writes normal to the SDK string
+//   apu_worker_priority (read when the audio worker and XMA decoder threads
+//   are created; platform default normal on Windows, above_normal under
+//   Wine/Proton), both at startup: the Deck control arm for the l80 KI-060
+//   defaults. texture_placed_heaps_off=true writes false to
+//   d3d12_texture_placed_heaps (graphics plugin, restart-only like
+//   texture_placed_heaps) and timer_blocking_off=true writes false to
+//   timer_queue_blocking_wait (startup): the controls for the l80 platform
+//   defaults; each forms a conflict pair with its l79 on key (both true:
+//   neither applied). =false changes nothing for all five.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -212,7 +232,8 @@ inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
 // 2 KiB since l73: a full 35-key arm file (every key explicit) is about
 // 1.07 KB, beyond the former 1 KiB (a full 59-key arm is about 1.7 KB, a full
-// 66-key l79 arm about 1.9 KB).
+// 66-key l79 arm about 1.9 KB, a full 71-key l80 arm about 2.02 KB: close to
+// the limit; later arms drop redundant =false lines rather than raise it).
 inline constexpr size_t kMaxBytes = 2048;
 
 enum class Key : uint8_t {
@@ -282,8 +303,13 @@ enum class Key : uint8_t {
   kTimerQueueBlockingWait,   // l79 C: timer_queue_blocking_wait=true
   kTexturePlacedHeaps,       // l79 B: d3d12_texture_placed_heaps=true (restart-only)
   kTextureHeap64Mb,          // l79 B: d3d12_texture_heap_block_mb=64 (restart-only)
+  kBlendMinmaxFix,           // l80 KI-013: d3d12_blend_minmax_fix=true
+  kShortSleepNative,         // l80 KI-060 control: ke_delay_short_sleep_mode=native
+  kApuPriorityNormal,        // l80 KI-060 control: apu_worker_priority=normal
+  kTexturePlacedHeapsOff,    // l80 control: d3d12_texture_placed_heaps=false
+  kTimerBlockingOff,         // l80 control: timer_queue_blocking_wait=false
 };
-inline constexpr size_t kKeyCount = 66;
+inline constexpr size_t kKeyCount = 71;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -449,11 +475,26 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // setup, after the plugin-load phase); =false writes nothing.
     {"texture_placed_heaps", Phase::kGraphicsPlugin, "d3d12_texture_placed_heaps", "true", ""},
     {"texture_heap_64mb", Phase::kGraphicsPlugin, "d3d12_texture_heap_block_mb", "64", ""},
+    // l80 KI-013: SDK bool registered by the graphics plugin (pipeline cache),
+    // read per pixel shader modification; =false writes nothing.
+    {"blend_minmax_fix", Phase::kGraphicsPlugin, "d3d12_blend_minmax_fix", "true", ""},
+    // l80 KI-060 controls: SDK rexruntime strings, latched at the first guest
+    // delay / when the audio threads are created, so before the guest;
+    // =false writes nothing.
+    {"short_sleep_native", Phase::kStartup, "ke_delay_short_sleep_mode", "native", ""},
+    {"apu_priority_normal", Phase::kStartup, "apu_worker_priority", "normal", ""},
+    // l80 controls for the platform defaults: placed heaps (graphics plugin,
+    // restart-only) and the timer queue blocking wait (rexruntime, startup);
+    // =false writes nothing.
+    {"texture_placed_heaps_off", Phase::kGraphicsPlugin, "d3d12_texture_placed_heaps", "false",
+     ""},
+    {"timer_blocking_off", Phase::kStartup, "timer_queue_blocking_wait", "false", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
 // audio_speaker_config string, or the xma_frame_walk_fix,
-// d3d12_readback_sync_steady_exempt and d3d12_fence_write_deferred bools):
+// d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
+// d3d12_texture_placed_heaps and timer_queue_blocking_wait bools):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -461,7 +502,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 12> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 14> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -474,6 +515,8 @@ inline constexpr std::array<ConflictPair, 12> kConflictPairs = {{
     {Key::kVblankHz80, Key::kVblankHz88},
     {Key::kReadbackSteadyExempt, Key::kReadbackSteadyExemptOff},
     {Key::kFenceWriteDeferred, Key::kFenceWriteDeferredOff},
+    {Key::kTimerQueueBlockingWait, Key::kTimerBlockingOff},
+    {Key::kTexturePlacedHeaps, Key::kTexturePlacedHeapsOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
