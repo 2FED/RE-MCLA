@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 62, "sixty-two whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 66, "sixty-six whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -195,6 +195,63 @@ void TestWhitelist() {
               !FindKey("d3d12_fence_defer_min_gap_us") && !FindKey("fence_defer_min_gap_us") &&
               !FindKey("FENCE_DEFER_GAP_2000") && !FindKey("fence_gap_2000"),
           "no prefix, suffix, cvar-name, case or other numeric variants of the l78 keys");
+  }
+  {
+    // l79 keys: two SDK rexruntime bools at startup (Canary XMA fixes, timer
+    // queue blocking wait) and the two restart-only placed-heap cvars of the
+    // graphics plugin; =false writes nothing; four cvars, no conflict pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &canary = Info(Key::kXmaCanaryFixes);
+    Check(FindKey("xma_canary_fixes") == Key::kXmaCanaryFixes &&
+              canary.phase == Phase::kStartup && CvarName(canary) == "xma_canary_fixes" &&
+              CvarText(canary, true) == "true" && CvarText(canary, false).empty() &&
+              canary.true_source == TextSource::kLiteral && !canary.overrides_user,
+          "xma_canary_fixes=true writes true to its own SDK cvar at startup, false writes "
+          "nothing");
+    const auto &timer = Info(Key::kTimerQueueBlockingWait);
+    Check(FindKey("timer_queue_blocking_wait") == Key::kTimerQueueBlockingWait &&
+              timer.phase == Phase::kStartup && CvarName(timer) == "timer_queue_blocking_wait" &&
+              CvarText(timer, true) == "true" && CvarText(timer, false).empty() &&
+              timer.true_source == TextSource::kLiteral && !timer.overrides_user,
+          "timer_queue_blocking_wait=true writes true to its own SDK cvar at startup, false "
+          "writes nothing");
+    const auto &heaps = Info(Key::kTexturePlacedHeaps);
+    Check(FindKey("texture_placed_heaps") == Key::kTexturePlacedHeaps &&
+              heaps.phase == Phase::kGraphicsPlugin &&
+              CvarName(heaps) == "d3d12_texture_placed_heaps" && CvarText(heaps, true) == "true" &&
+              CvarText(heaps, false).empty() && heaps.true_source == TextSource::kLiteral &&
+              !heaps.overrides_user,
+          "texture_placed_heaps=true writes true to d3d12_texture_placed_heaps after the "
+          "plugin loaded, false writes nothing");
+    const auto &block = Info(Key::kTextureHeap64Mb);
+    Check(FindKey("texture_heap_64mb") == Key::kTextureHeap64Mb &&
+              block.phase == Phase::kGraphicsPlugin &&
+              CvarName(block) == "d3d12_texture_heap_block_mb" && CvarText(block, true) == "64" &&
+              CvarText(block, false).empty() && block.true_source == TextSource::kLiteral &&
+              !block.overrides_user,
+          "texture_heap_64mb=true writes 64 to d3d12_texture_heap_block_mb after the plugin "
+          "loaded, false writes nothing");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key key : {Key::kXmaCanaryFixes, Key::kTimerQueueBlockingWait,
+                            Key::kTexturePlacedHeaps, Key::kTextureHeap64Mb}) {
+        Check(pair.first != key && pair.second != key, "the l79 keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("xma_canary_fix") && !FindKey("xma_canary_fixes_on") &&
+              !FindKey("XMA_CANARY_FIXES") && !FindKey("canary_fixes") &&
+              !FindKey("xma_canary") && !FindKey("timer_queue_blocking") &&
+              !FindKey("timer_queue_blocking_wait_on") && !FindKey("TIMER_QUEUE_BLOCKING_WAIT") &&
+              !FindKey("timer_queue_spin_tail_us") && !FindKey("timer_blocking_wait") &&
+              !FindKey("d3d12_texture_placed_heaps") && !FindKey("texture_placed_heap") &&
+              !FindKey("texture_placed_heaps_on") && !FindKey("TEXTURE_PLACED_HEAPS") &&
+              !FindKey("placed_heaps") && !FindKey("d3d12_texture_heap_block_mb") &&
+              !FindKey("texture_heap_block_mb") && !FindKey("texture_heap_64") &&
+              !FindKey("texture_heap_128mb") && !FindKey("texture_heap_256mb") &&
+              !FindKey("texture_heap_64mb_on") && !FindKey("TEXTURE_HEAP_64MB"),
+          "no prefix, suffix, cvar-name, case or other numeric variants of the l79 keys");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -634,7 +691,9 @@ void TestWhitelist() {
                           key == Key::kXmaFrameWalkFixOff || key == Key::kRawTimerOff ||
                           key == Key::kVblankHz72 || key == Key::kVblankHz80 ||
                           key == Key::kVblankHz88 || key == Key::kReadbackSteadyExemptOff ||
-                          key == Key::kFenceWriteDeferredOff || key == Key::kFenceDeferGap2000;
+                          key == Key::kFenceWriteDeferredOff || key == Key::kFenceDeferGap2000 ||
+                          key == Key::kXmaCanaryFixes || key == Key::kTimerQueueBlockingWait ||
+                          key == Key::kTexturePlacedHeaps || key == Key::kTextureHeap64Mb;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1375,10 +1434,16 @@ void TestWhitelist() {
              arm[2] + "\n" + "raw_timer_off=" + arm[3] + "\n" + "vblank_hz_72=" + arm[4] +
              "\n" + "vblank_hz_80=" + arm[5] + "\n" + "vblank_hz_88=" + arm[6] + "\n";
     };
-    // l78: the l77 arms with the three l78 keys explicit false (62 keys).
+    // l78: the l77 arms with the three l78 keys explicit false (62 keys);
+    // l79: plus the four l79 keys explicit false (66 keys).
+    const std::string l79_false = "xma_canary_fixes=false\n"
+                                  "timer_queue_blocking_wait=false\n"
+                                  "texture_placed_heaps=false\n"
+                                  "texture_heap_64mb=false\n";
     const std::string l78_false = "readback_steady_exempt_off=false\n"
                                   "fence_write_deferred_off=false\n"
-                                  "fence_defer_gap_2000=false\n";
+                                  "fence_defer_gap_2000=false\n" +
+                                  l79_false;
     for (const auto &arm : l77_arms) {
       const std::string l77 = l77_text(arm);
       Check(!l77.empty(), "the l76 base text holds the steady key");
@@ -1387,7 +1452,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l77 arm: every key (62), nothing ignored, fits in kMaxBytes");
+            "l77 arm: every key (66), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kRawTimerOff) == (arm[3][0] == 't') &&
                 a.Value(Key::kVblankHz72) == (arm[4][0] == 't') &&
                 a.Value(Key::kVblankHz80) == (arm[5][0] == 't') &&
@@ -1450,12 +1515,12 @@ void TestWhitelist() {
       Check(!l77.empty(), "the l76 base text holds the steady key");
       const std::string text = l77 + "readback_steady_exempt_off=" + arm[1] + "\n" +
                                "fence_write_deferred_off=" + arm[2] + "\n" +
-                               "fence_defer_gap_2000=" + arm[3] + "\n";
+                               "fence_defer_gap_2000=" + arm[3] + "\n" + l79_false;
       const Parsed a = Parse(text);
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l78 arm: every key (62), nothing ignored, fits in kMaxBytes");
+            "l78 arm: every key (66), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kReadbackSteadyExempt) == false &&
                 a.Value(Key::kFenceWriteDeferred) == false &&
                 a.Value(Key::kXmaFrameWalkFix) == false &&
@@ -1507,6 +1572,72 @@ void TestWhitelist() {
               l78_bad.issues[3].issue == LineIssue::kMalformed &&
               l78_bad.issues[4].issue == LineIssue::kDuplicate,
           "l78 near misses: integer values, the cvar name, other gaps and repeats are ignored");
+    // l79 arms (private/l79-arms): default = the l78 default arm plus the four
+    // l79 keys false; pc xma / timer / heaps add one key each, all3 the three
+    // switches; deck heaps64 and deck all3 also set texture_heap_64mb.
+    const char *const l79_arms[7][4] = {
+        // canary, timer, heaps, heap_64mb
+        {"false", "false", "false", "false"},  // default
+        {"true", "false", "false", "false"},   // xma
+        {"false", "true", "false", "false"},   // timer
+        {"false", "false", "true", "false"},   // heaps
+        {"true", "true", "true", "false"},     // all3
+        {"false", "false", "true", "true"},    // deck heaps64
+        {"true", "true", "true", "true"}};     // deck all3
+    for (const auto &arm : l79_arms) {
+      const char *const l77_row[7] = {"false", "false", "false", "false",
+                                      "false", "false", "false"};
+      const std::string l77 = l77_text(l77_row);
+      Check(!l77.empty(), "the l76 base text holds the steady key");
+      const std::string text = l77 +
+                               "readback_steady_exempt_off=false\n"
+                               "fence_write_deferred_off=false\n"
+                               "fence_defer_gap_2000=false\n"
+                               "xma_canary_fixes=" +
+                               arm[0] + "\n" + "timer_queue_blocking_wait=" + arm[1] + "\n" +
+                               "texture_placed_heaps=" + arm[2] + "\n" +
+                               "texture_heap_64mb=" + arm[3] + "\n";
+      const Parsed a = Parse(text);
+      Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
+                a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
+                a.issue_count == 0,
+            "l79 arm: every key (66), nothing ignored, fits in kMaxBytes");
+      Check(a.Value(Key::kXmaCanaryFixes) == (arm[0][0] == 't') &&
+                a.Value(Key::kTimerQueueBlockingWait) == (arm[1][0] == 't') &&
+                a.Value(Key::kTexturePlacedHeaps) == (arm[2][0] == 't') &&
+                a.Value(Key::kTextureHeap64Mb) == (arm[3][0] == 't') &&
+                a.Value(Key::kReadbackSteadyExemptOff) == false &&
+                a.Value(Key::kFenceWriteDeferredOff) == false &&
+                a.Value(Key::kFenceDeferGap2000) == false,
+            "l79 arm values (l78 controls false: the l78 SDK defaults apply)");
+    }
+    const Parsed l79_all = Parse("xma_canary_fixes=true\n"
+                                 "timer_queue_blocking_wait=true\n"
+                                 "texture_placed_heaps=true\n"
+                                 "texture_heap_64mb=true\n");
+    Check(l79_all.ValueCount() == 4 && l79_all.issue_count == 0 &&
+              l79_all.Value(Key::kXmaCanaryFixes) == true &&
+              l79_all.Value(Key::kTimerQueueBlockingWait) == true &&
+              l79_all.Value(Key::kTexturePlacedHeaps) == true &&
+              l79_all.Value(Key::kTextureHeap64Mb) == true,
+          "all four l79 keys true together: no conflict");
+    const Parsed l79_bad = Parse("texture_heap_64mb=64\n"
+                                 "d3d12_texture_placed_heaps=true\n"
+                                 "texture_heap_128mb=true\n"
+                                 "timer_queue_blocking_wait=on\n"
+                                 "xma_canary_fixes=true\n"
+                                 "xma_canary_fixes=false\n"
+                                 "texture_heap_64mb=true\n");
+    Check(l79_bad.ValueCount() == 2 && l79_bad.Value(Key::kXmaCanaryFixes) == true &&
+              l79_bad.Value(Key::kTextureHeap64Mb) == true &&
+              !l79_bad.Value(Key::kTimerQueueBlockingWait) &&
+              !l79_bad.Value(Key::kTexturePlacedHeaps) && l79_bad.ignored_lines == 5 &&
+              l79_bad.issues[0].issue == LineIssue::kMalformed &&
+              l79_bad.issues[1].issue == LineIssue::kUnknownName &&
+              l79_bad.issues[2].issue == LineIssue::kUnknownName &&
+              l79_bad.issues[3].issue == LineIssue::kMalformed &&
+              l79_bad.issues[4].issue == LineIssue::kDuplicate,
+          "l79 near misses: integer values, the cvar name, other sizes and repeats are ignored");
     // The vblank caps: one true applies; two or three true is a conflict for
     // the whole group (none applied), logged on every later true line.
     const Parsed cap = Parse("vblank_hz_72=false\nvblank_hz_80=true\nvblank_hz_88=false\n"

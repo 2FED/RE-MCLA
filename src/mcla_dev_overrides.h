@@ -160,6 +160,21 @@
 //   pair with its l73 / l77 on key (both true: neither applied).
 //   fence_defer_gap_2000=true writes 2000 to d3d12_fence_defer_min_gap_us
 //   (graphics plugin); =false changes nothing for all three.
+// - l79 (docs/evidence/M11-l79-sdk-20261108.md; all four SDK cvars default
+//   off, so =false changes nothing): xma_canary_fixes=true writes true to the
+//   SDK rexruntime bool xma_canary_fixes (Xenia Canary XMA decoder fixes, read
+//   on every XMA Work pass) and timer_queue_blocking_wait=true writes true to
+//   the SDK rexruntime bool timer_queue_blocking_wait (the timer queue thread
+//   blocks on a high-resolution waitable timer instead of spinning; read on
+//   every dispatch pass), both at startup. texture_placed_heaps=true writes
+//   true to d3d12_texture_placed_heaps and texture_heap_64mb=true writes 64 to
+//   the int d3d12_texture_heap_block_mb (256 by default); both are registered
+//   by the graphics plugin and are restart-only: D3D12TextureCache::Initialize
+//   latches them when the runtime sets up the guest GPU, which follows
+//   OnPostLoadGraphicsPlugin (ReXApp::SetupPresentation precedes
+//   ConstructRuntime), so the graphics-plugin phase is in time.
+//   texture_heap_64mb alone (without texture_placed_heaps) has no effect.
+//   They write four different cvars, so no combination is a conflict.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -196,7 +211,8 @@ namespace mcla::dev_overrides {
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
 // 2 KiB since l73: a full 35-key arm file (every key explicit) is about
-// 1.07 KB, beyond the former 1 KiB (a full 59-key arm is about 1.7 KB).
+// 1.07 KB, beyond the former 1 KiB (a full 59-key arm is about 1.7 KB, a full
+// 66-key l79 arm about 1.9 KB).
 inline constexpr size_t kMaxBytes = 2048;
 
 enum class Key : uint8_t {
@@ -262,8 +278,12 @@ enum class Key : uint8_t {
   kReadbackSteadyExemptOff,  // l78 control: d3d12_readback_sync_steady_exempt=false
   kFenceWriteDeferredOff,    // l78 control: d3d12_fence_write_deferred=false
   kFenceDeferGap2000,        // l78 A/B: d3d12_fence_defer_min_gap_us=2000
+  kXmaCanaryFixes,           // l79 A: xma_canary_fixes=true (Xenia Canary XMA fixes)
+  kTimerQueueBlockingWait,   // l79 C: timer_queue_blocking_wait=true
+  kTexturePlacedHeaps,       // l79 B: d3d12_texture_placed_heaps=true (restart-only)
+  kTextureHeap64Mb,          // l79 B: d3d12_texture_heap_block_mb=64 (restart-only)
 };
-inline constexpr size_t kKeyCount = 62;
+inline constexpr size_t kKeyCount = 66;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -420,6 +440,15 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"fence_write_deferred_off", Phase::kGraphicsPlugin, "d3d12_fence_write_deferred", "false",
      ""},
     {"fence_defer_gap_2000", Phase::kGraphicsPlugin, "d3d12_fence_defer_min_gap_us", "2000", ""},
+    // l79: SDK rexruntime bools (default false), read on every pass, before
+    // the guest; =false writes nothing.
+    {"xma_canary_fixes", Phase::kStartup, "", "true", ""},
+    {"timer_queue_blocking_wait", Phase::kStartup, "", "true", ""},
+    // l79: placed texture heaps, restart-only SDK cvars registered by the
+    // graphics plugin and latched by D3D12TextureCache::Initialize (guest GPU
+    // setup, after the plugin-load phase); =false writes nothing.
+    {"texture_placed_heaps", Phase::kGraphicsPlugin, "d3d12_texture_placed_heaps", "true", ""},
+    {"texture_heap_64mb", Phase::kGraphicsPlugin, "d3d12_texture_heap_block_mb", "64", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the

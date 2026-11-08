@@ -218,7 +218,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("xma_honor_frame_trim") && IsNeverWritten("xma_frame_trim_block_granular") &&
             IsNeverWritten("xma_dump_contexts") && IsNeverWritten("xma_dump_all_rates") &&
-            kNeverWrittenCvars.size() == 49,
+            kNeverWrittenCvars.size() == 53,
         "KI-071 step 3 cvar names in the never-written set");
   for (const auto key : {dev::Key::kXmaFrameWalkTrace, dev::Key::kXmaFrameWalkFix,
                          dev::Key::kXmaDumpInput}) {
@@ -235,7 +235,7 @@ void TestTable() {
           "the M11-007d lock switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_lock_probe") && IsNeverWritten("mcla_lock_readback_ensure") &&
-            kNeverWrittenCvars.size() == 49,
+            kNeverWrittenCvars.size() == 53,
         "M11-007d cvar names in the never-written set");
   for (const auto key : {dev::Key::kFenceWriteDeferred, dev::Key::kXmaFrameWalkFixOff}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -243,7 +243,7 @@ void TestTable() {
           "the l77 switches keep their SDK defaults (owner keys only)");
   }
   Check(IsNeverWritten("d3d12_fence_write_deferred") && IsNeverWritten("xma_frame_walk_fix") &&
-            kNeverWrittenCvars.size() == 49,
+            kNeverWrittenCvars.size() == 53,
         "l77 cvar names in the never-written set");
   for (const auto key : {dev::Key::kRawTimerOff, dev::Key::kVblankHz72, dev::Key::kVblankHz80,
                          dev::Key::kVblankHz88}) {
@@ -253,8 +253,8 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_raw_timer") && IsNeverWritten("mcla_guest_vblank_hz") &&
             Find("mcla_raw_timer") == nullptr && Find("mcla_guest_vblank_hz") == nullptr &&
-            kNeverWrittenCvars.size() == 49,
-        "KI-074 cvar names in the never-written set (49)");
+            kNeverWrittenCvars.size() == 53,
+        "KI-074 cvar names in the never-written set (53)");
   for (const auto key : {dev::Key::kReadbackSteadyExemptOff, dev::Key::kFenceWriteDeferredOff,
                          dev::Key::kFenceDeferGap2000}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -264,8 +264,20 @@ void TestTable() {
   Check(IsNeverWritten("d3d12_fence_defer_min_gap_us") &&
             Find("d3d12_fence_defer_min_gap_us") == nullptr &&
             IsNeverWritten("d3d12_readback_sync_steady_exempt") &&
-            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 49,
-        "l78 cvar names in the never-written set (49)");
+            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 53,
+        "l78 cvar names in the never-written set (53)");
+  for (const auto key : {dev::Key::kXmaCanaryFixes, dev::Key::kTimerQueueBlockingWait,
+                         dev::Key::kTexturePlacedHeaps, dev::Key::kTextureHeap64Mb}) {
+    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) == nullptr,
+          "the l79 SDK experiments keep their SDK defaults (owner keys only)");
+  }
+  Check(IsNeverWritten("xma_canary_fixes") && IsNeverWritten("timer_queue_blocking_wait") &&
+            IsNeverWritten("d3d12_texture_placed_heaps") &&
+            IsNeverWritten("d3d12_texture_heap_block_mb") &&
+            Find("d3d12_texture_placed_heaps") == nullptr &&
+            Find("d3d12_texture_heap_block_mb") == nullptr && kNeverWrittenCvars.size() == 53,
+        "l79 cvar names in the never-written set (53)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
             Find("mcla_album_preview_restore") == nullptr,
