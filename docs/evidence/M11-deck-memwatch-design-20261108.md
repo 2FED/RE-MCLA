@@ -1,5 +1,7 @@
 # Deck memory-watch cost: hot pages with per-submission batched copies (design, read-only, 2026-11-08)
 
+
+**Primary-agent note (2026-11-08):** the l79 Deck default session (cc29bd06) logs `MCLA watch protect/min: arm calls 670511 (9181692 us) ... 836532 (10979959 us), disarm calls 297257-341400 (3.8-4.2 s)` per minute at ~14 fps: about 800-1000 arm calls per frame at ~13 us each, versus 479 calls/frame at 16.7 us on l66. So the l79 arm time rose because of MORE calls (the steady exemption and fence changes let the guest/CP interleave more uploads per frame), not dearer calls; the hot-pages census should confirm which sources added them.
 Read-only design by an Opus subagent on 2026-11-08 (SDK l79 sources, l66 Deck census logs, M10 hot-blocks evidence; external project used for the idea only); accepted by the primary agent.
 
 Read-only design by an Opus subagent. Nothing was built, launched or committed. Spark was not used:
