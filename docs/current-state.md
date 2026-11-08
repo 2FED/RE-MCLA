@@ -1,6 +1,6 @@
 # Current state and handoff
 
-**Update 2026-11-08:** l78 PC regression PASS (default runs, Locked, cut-scene, cold cache; Deck part not yet reported). l79 staged for the owner A/B of three new SDK switches (placed texture heaps, timer blocking wait, Canary XMA fixes), all off by default: see docs/M11-priorities.md "l79 staged". External repos surveyed (docs/evidence/M11-external-repos-survey-20261108.md): code only from permissive upstreams; the in-game menu needs the LARecomp author's permission.
+**Update 2026-11-08 (end of day):** l78 PC regression PASS; l79 A/B: placed texture heaps removed the PC traversal stutter (p99 53 -> 37 ms); KI-013 traffic-light reflections FIXED (owner PASS on l80); KI-071 voice confirmed on the default; SDK v0.20.0.10 = ca63f94 published to the fork. Deck still ~15 fps with crackling audio: root causes found (the game's sound-manager thread spins on Sleep(0) ~180k/s; our Deck arms since l71 disabled the M10 Wine memory-watch defaults). Staged for the owner: **l81** (host a9de776 + SDK 2aff82e: blend fix + Fix A on, Deck zero-delay backoff + game audio-thread priority, sparse Deck arms) with `private/l81-CHECKLIST.txt`; **l81v** volunteer candidate (unsigned, allowance list l81v only) with `private/l81v-CHECKLIST.txt`; tester guide refreshed. Before "publish l81v": publish SDK 2aff82e as v0.20.0.11. Next engineering: Deck hot pages v2 after a census on the corrected baseline; CP fast paths. See docs/M11-priorities.md tail.
 
 Updated November 7, 2026 Kyiv (M11 active; l78 defaults build in preparation).
 

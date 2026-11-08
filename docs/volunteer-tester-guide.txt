@@ -29,14 +29,17 @@ contains no game files.
    - 2160p is not offered on volunteer builds: it needs more video memory
      than an 8 GB graphics card has.
    - Unlocked, known limits: menus over the city (pause, map, Arcade, meet
-     spot) stay at 30; busy junctions drop to 30-40 FPS; lights flicker at
-     night; the race victory screen can be lit wrongly; one graphics reset
-     was seen in testing.
+     spot) stay at 30; the race victory screen can be lit wrongly.
+     Better than the last build: on PC busy junctions stutter less, though
+     they can still drop to 30-40 FPS; the flicker of buildings and signs is
+     fixed.
 
 3. WHEN SOMETHING GOES WRONG
    - Bug: at the moment it happens press F10 on the keyboard, or R2 on the
      wheel, or hold Start+Back on the gamepad for about 1 second (the pause
      menu may open as well; that is fine).
+   - F10 no longer pauses the game: you can keep playing while the report
+     is made.
    - Wheel or force-feedback bug (for example the wheel stops centering):
      press L2 on the wheel. This also records the wheel state.
    - One press = one report. The top right corner shows RECORDING..., then
@@ -57,16 +60,25 @@ contains no game files.
      and a screenshot, so send them only to the owner.
 
 4. KNOWN PROBLEMS
-   - Entering a garage can freeze: press F10, wait 15 seconds, press F10
-     again, wait 15 seconds more, then close the game. Do not close it at once.
+   - Entering a garage used to freeze; this should be rare now. If it
+     happens: press F10, wait 15 seconds, press F10 again, wait 15 seconds
+     more, then close the game. Do not close it at once. Please report it.
    - After losing a Red Light Driver race and choosing Race Back, the camera
      can stay in the air: press F10, wait for READY, then restart the game
      and continue from the last autosave.
    - The wheel can lose its centering force: press wheel L2 when it happens.
    - Some signs show plain coloured blocks or stripes; F10 is welcome.
-   - Traffic lights make car paint glow at night; no need to report it.
+   - Steam Deck: the sound can crackle when the game is busy (for example
+     driving fast in the city). This is being worked on; report it only if
+     it is worse than before.
+   - Cars can disappear on the results screen after a race. This is normal
+     game behaviour; no need to report it.
    - Should be fixed, please report if you see it: a broken first photo in
-     Photo Mode; a gamepad that stops working after it disconnects.
+     Photo Mode; a gamepad that stops working after it disconnects; on the
+     Steam Deck, a "storage device removed" message when you save (saving
+     twice in a row now works); a cut-scene voice that sounds doubled or
+     hollow; an album slot preview that does not show the photo you just
+     took.
 
 5. IF THE LAUNCHER SAYS
    - "This test build was withdrawn": get the current build from the owner.
@@ -107,14 +119,18 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
    - 2160p у збірках для волонтерів недоступна: вона потребує більше
      відеопам'яті, ніж є на відеокарті з 8 ГБ.
    - Unlocked, відомі обмеження: меню поверх міста (пауза, мапа, Arcade,
-     місце зустрічі) лишаються на 30; на завантажених перехрестях 30-40 FPS;
-     уночі мерехтить світло; екран перемоги після гонки може бути неправильно
-     освітлений; у тестах був один збій (скидання) відеокарти.
+     місце зустрічі) лишаються на 30; екран перемоги після гонки може бути
+     неправильно освітлений.
+     Краще, ніж у попередній збірці: на ПК завантажені перехрестя менше
+     смикаються, хоча FPS там ще може падати до 30-40; мерехтіння будинків і
+     вивісок виправлено.
 
 3. ЯКЩО ЩОСЬ НЕ ТАК
    - Баг: саме в цей момент натисніть F10 на клавіатурі, або R2 на кермі,
      або утримуйте Start+Back на геймпаді приблизно 1 секунду (може також
      відкритися меню паузи; це нормально).
+   - F10 більше не ставить гру на паузу: можна грати далі, поки записується
+     звіт.
    - Баг керма чи віддачі (force feedback), наприклад кермо перестало
      центруватися: натисніть L2 на кермі. Так записується ще й стан керма.
    - Одне натискання = один звіт. У правому верхньому куті з'явиться
@@ -137,17 +153,24 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      екрана, тож надсилайте їх лише власнику.
 
 4. ВІДОМІ ПРОБЛЕМИ
-   - Вхід у гараж може зависнути: натисніть F10, зачекайте 15 секунд,
-     натисніть F10 ще раз, зачекайте ще 15 секунд і лише тоді закрийте гру.
-     Не закривайте її одразу.
+   - Вхід у гараж раніше міг зависнути; тепер це має траплятися рідко. Якщо
+     сталося: натисніть F10, зачекайте 15 секунд, натисніть F10 ще раз,
+     зачекайте ще 15 секунд і лише тоді закрийте гру. Не закривайте її
+     одразу. Обов'язково повідомте.
    - Після програшу в Red Light Driver і вибору Race Back камера може
      зависнути в повітрі: натисніть F10, дочекайтеся READY, перезапустіть
      гру і продовжте з останнього автосейву.
    - Кермо може втратити силу центрування: натисніть L2 на кермі саме тоді.
    - Деякі вивіски показують однотонні прямокутники або смуги; F10 вітається.
-   - Світлофори вночі підсвічують фарбу авто; повідомляти не треба.
+   - Steam Deck: звук може тріщати, коли гра навантажена (наприклад, швидка
+     їзда містом). Над цим працюємо; повідомляйте, лише якщо стало гірше.
+   - Після гонки на екрані результатів авто можуть зникати. Це звичайна
+     поведінка гри; повідомляти не треба.
    - Мало б бути виправлено, повідомте, якщо побачите: зіпсоване перше фото
-     у Photo Mode; геймпад, що перестав працювати після відключення.
+     у Photo Mode; геймпад, що перестав працювати після відключення; на
+     Steam Deck повідомлення "storage device removed" під час збереження
+     (збереження двічі поспіль тепер працює); голос у катсцені, що звучить
+     подвоєно або глухо; прев'ю слота альбому без щойно зробленого фото.
 
 5. ЯКЩО ЛАУНЧЕР ПИШЕ
    - "This test build was withdrawn": візьміть актуальну збірку у власника.
