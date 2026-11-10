@@ -215,6 +215,12 @@
 //   startup): the control, a conflict pair with mcla_album_preview_restore.
 //   =false changes nothing for all four; an SDK without the l81 cvars logs
 //   the two KI-060 keys as unavailable.
+// - l82 (docs/evidence/M11-l82-sdk-bulk-registers-20261108.md): cp_bulk_regs=true
+//   writes true to the SDK bool cp_bulk_register_writes (CP bulk register
+//   range writes, default false; registered by the graphics plugin, hot
+//   reload, latched at setup and every frame start): the A/B arm for the
+//   packets_other cost. =false changes nothing; an SDK without the l82 cvar
+//   logs the key as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -333,8 +339,9 @@ enum class Key : uint8_t {
   kGuestAudioPrioNormal,     // l81 KI-060 control: guest_audio_thread_priority=normal
   kBlendMinmaxFixOff,        // l81 KI-013 control: d3d12_blend_minmax_fix=false
   kAlbumPreviewRestoreOff,   // l81 KI-056 control: mcla_album_preview_restore=false
+  kCpBulkRegs,               // l82 A/B: cp_bulk_register_writes=true
 };
-inline constexpr size_t kKeyCount = 75;
+inline constexpr size_t kKeyCount = 76;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -525,6 +532,10 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // nothing.
     {"blend_minmax_fix_off", Phase::kGraphicsPlugin, "d3d12_blend_minmax_fix", "false", ""},
     {"album_preview_restore_off", Phase::kStartup, "mcla_album_preview_restore", "false", ""},
+    // l82: CP bulk register writes, an SDK bool registered by the graphics
+    // plugin (hot reload), so after the plugin has loaded; =false writes
+    // nothing.
+    {"cp_bulk_regs", Phase::kGraphicsPlugin, "cp_bulk_register_writes", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
