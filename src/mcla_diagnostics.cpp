@@ -1112,6 +1112,9 @@ BuildStateJson(std::string_view reason, const SnapshotTrigger &trigger,
   if (!runtime.guest_pursuit_json.empty()) {
     out << "  \"pursuit\": " << runtime.guest_pursuit_json << ",\n";
   }
+  if (!runtime.ambient_dt_json.empty()) {
+    out << "  \"ambient_dt\": " << runtime.ambient_dt_json << ",\n";
+  }
   if (!runtime.perf_split_json.empty()) {
     out << "  \"perf_split\": " << runtime.perf_split_json << ",\n";
   }

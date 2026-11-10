@@ -92,6 +92,9 @@ struct RuntimeState {
   // empty if unavailable).
   std::string guest_album_json;
   std::string guest_pursuit_json;
+  // l83 KI-054: "ambient_dt" object (pre-rendered JSON; empty when the
+  // ambient delta probe and snapshot are both off).
+  std::string ambient_dt_json;
   // M10-001: "perf_split" object (pre-rendered JSON), empty when absent.
   std::string perf_split_json;
 };

@@ -13,6 +13,7 @@
 
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_step_smoother.h"
 
 #include <rex/cvar.h>
 
@@ -51,6 +52,14 @@ REXCVAR_DEFINE_BOOL(mcla_raw_timer_stats, false, "MCLA",
     "Log measured/applied timer step statistics every 300 updates")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+// KI-054 H2 (docs/evidence/M11-ki054-traffic-jitter-design-20261110.md, Arm
+// 2): a raw step above 0.1 s applies min(0.1 s, 1.1 x average) instead of
+// 0.1 s; the rest goes to the existing debt (mcla_step_smoother.h).
+REXCVAR_DEFINE_BOOL(mcla_raw_timer_hitch_hold, false, "MCLA",
+    "Hold a hitch step to 1.1x the average step, deferring the rest to the "
+    "timer debt (KI-054 camera dip after stutters)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 namespace {
 
 constexpr uint32_t kOne = 0x3F800000u;     // 1.0f
@@ -67,60 +76,16 @@ std::atomic<int> logged{0};
 // to seconds (sub_821BDA90: lfs f0,4368(r9) with r9 = 0x82010000).
 constexpr uint32_t kMainTimer = 0x827D7500u;
 constexpr uint32_t kTicksToSeconds = 0x82011110u;
-// Raw steps above the game's own 0.1 s clamp are hitches (loading, stutters).
-// The game drops the time above the clamp; up to kMaxHitchDebtSeconds of it is
-// kept as debt and repaid over the following updates, so short stutters during
-// races do not make the race clock fall behind real time (owner-measured 1.9 %
-// over a 3 minute race on 2026-10-28), while long loading pauses are not
-// replayed.
-constexpr double kHitchSeconds = 0.1;
-constexpr double kMaxHitchDebtSeconds = 1.0;
-
-// Updates alternate irregularly between 2 and 3 vblanks (33/50 ms). Applying
-// each measured interval directly makes per-frame motion and motion blur jump
-// by up to +-25 %. The applied step follows a slow exponential average of the
-// measured steps (time constant about 20 updates), so in steady scenes such as
-// the pause menu it is nearly constant, like the stock fixed step. The
-// difference to measured time is repaid gently (2 % per update, step held
-// within +-10 % of the average), so game time stays within a fraction of a
-// second of real time and does not drift. Timer ticks run on a single guest
-// thread.
-class StepSmoother {
- public:
-  double Apply(double raw) {
-    if (!(raw > 0.0)) {
-      Reset();
-      return raw;
-    }
-    if (raw > kHitchSeconds) {
-      // Apply what the game would clamp to anyway, and keep the rest (and the
-      // pending repayment) instead of losing it. The average is left as is.
-      debt_ = std::min(debt_ + (raw - kHitchSeconds), kMaxHitchDebtSeconds);
-      return kHitchSeconds;
-    }
-    average_ = has_average_ ? average_ + kAverageWeight * (raw - average_) : raw;
-    has_average_ = true;
-    const double applied = std::clamp(average_ + kRepayment * debt_,
-                                      (1.0 - kHold) * average_, (1.0 + kHold) * average_);
-    debt_ += raw - applied;
-    return applied;
-  }
-  double debt() const { return debt_; }
-
- private:
-  static constexpr double kAverageWeight = 0.05;
-  static constexpr double kRepayment = 0.02;
-  static constexpr double kHold = 0.10;
-  void Reset() {
-    has_average_ = false;
-    average_ = 0.0;
-    debt_ = 0.0;
-  }
-  bool has_average_ = false;
-  double average_ = 0.0;
-  double debt_ = 0.0;
-};
-StepSmoother smoother;
+// Step smoothing, the hitch debt and the KI-054 hitch hold are in
+// mcla_step_smoother.h (unit-tested).
+mcla::raw_timer::StepSmoother &Smoother() {
+  static mcla::raw_timer::StepSmoother smoother = [] {
+    mcla::raw_timer::StepSmoother s;
+    s.set_hitch_hold(REXCVAR_GET(mcla_raw_timer_hitch_hold));
+    return s;
+  }();
+  return smoother;
+}
 
 // Whole-millisecond steps with the remainder carried (see mcla_raw_timer_ms_steps).
 // The tiny bias keeps a float conversion of n / 1000 from truncating to n - 1.
@@ -166,10 +131,11 @@ struct StepStats {
     MCLA_APP_INFO(
         "MCLA timer stats: {} updates, measured mean {:.1f} ms sd {:.1f} ms "
         "step change {:.1f} ms; applied mean {:.1f} ms sd {:.1f} ms step change "
-        "{:.1f} ms; total measured {:.3f} s applied {:.3f} s",
+        "{:.1f} ms; total measured {:.3f} s applied {:.3f} s; hitches {} hold {}",
         count, 1000 * raw_sum / n, 1000 * sd(raw_sum, raw_sq),
         1000 * raw_change / (n - 1), 1000 * out_sum / n, 1000 * sd(out_sum, out_sq),
-        1000 * out_change / (n - 1), raw_sum, out_sum);
+        1000 * out_change / (n - 1), raw_sum, out_sum, Smoother().hitches(),
+        Smoother().hitch_hold() ? 1 : 0);
     *this = {};
   }
 };
@@ -209,7 +175,7 @@ REX_EXTERN(sub_821BDA90) {
     std::memcpy(&factor, &factor_bits, sizeof(factor));
     if (last != 0 && now > last && factor > 0.0f) {
       const double raw = double(now - last) * double(factor);
-      double applied = REXCVAR_GET(mcla_raw_timer_smoothing) ? smoother.Apply(raw) : raw;
+      double applied = REXCVAR_GET(mcla_raw_timer_smoothing) ? Smoother().Apply(raw) : raw;
       if (REXCVAR_GET(mcla_raw_timer_ms_steps)) applied = millisecond_steps.Apply(applied);
       if (REXCVAR_GET(mcla_raw_timer_stats)) stats.Add(raw, applied);
       ctx.f1.f64 = applied;

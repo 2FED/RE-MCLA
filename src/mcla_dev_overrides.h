@@ -221,6 +221,17 @@
 //   reload, latched at setup and every frame start): the A/B arm for the
 //   packets_other cost. =false changes nothing; an SDK without the l82 cvar
 //   logs the key as unavailable.
+// - l83 (docs/evidence/M11-ki054-l83-implementation-20261110.md; KI-054 design
+//   docs/evidence/M11-ki054-traffic-jitter-design-20261110.md):
+//   ambient_dt_probe=true writes true to the host init-only bool
+//   mcla_ambient_dt_probe (MCLA_AMBDT lines and the F10 "ambient_dt" block,
+//   read-only), ambient_dt_snapshot=true to mcla_ambient_dt_snapshot (the
+//   ambient-traffic thread gets the kick-time frame delta at its two
+//   register-visible reads) and raw_timer_hitch_hold=true to
+//   mcla_raw_timer_hitch_hold (a hitch step held to 1.1x the average, the
+//   rest to the timer debt), all at startup and default off. =false changes
+//   nothing; no conflict pairs. A build without mcla_raw_timer.cpp (the timer
+//   configuration probe build) logs raw_timer_hitch_hold as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -340,8 +351,11 @@ enum class Key : uint8_t {
   kBlendMinmaxFixOff,        // l81 KI-013 control: d3d12_blend_minmax_fix=false
   kAlbumPreviewRestoreOff,   // l81 KI-056 control: mcla_album_preview_restore=false
   kCpBulkRegs,               // l82 A/B: cp_bulk_register_writes=true
+  kAmbientDtProbe,           // l83 KI-054 Arm 0: mcla_ambient_dt_probe=true
+  kAmbientDtSnapshot,        // l83 KI-054 Arm 1: mcla_ambient_dt_snapshot=true
+  kRawTimerHitchHold,        // l83 KI-054 Arm 2: mcla_raw_timer_hitch_hold=true
 };
-inline constexpr size_t kKeyCount = 76;
+inline constexpr size_t kKeyCount = 79;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -536,6 +550,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // plugin (hot reload), so after the plugin has loaded; =false writes
     // nothing.
     {"cp_bulk_regs", Phase::kGraphicsPlugin, "cp_bulk_register_writes", "true", ""},
+    // l83 KI-054: host init-only bools (mcla_ambient_dt_probe.cpp,
+    // mcla_raw_timer.cpp), default off, before the guest; =false writes
+    // nothing.
+    {"ambient_dt_probe", Phase::kStartup, "mcla_ambient_dt_probe", "true", ""},
+    {"ambient_dt_snapshot", Phase::kStartup, "mcla_ambient_dt_snapshot", "true", ""},
+    {"raw_timer_hitch_hold", Phase::kStartup, "mcla_raw_timer_hitch_hold", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the

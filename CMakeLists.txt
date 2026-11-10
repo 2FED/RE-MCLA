@@ -67,7 +67,8 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # consume ledger. M11-007d: guest lock probe / read-back completion at the lock.
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
             readback_sync native_refcount dev_overrides m10_defaults save_copy_guard warp_probe
-            album_probe pursuit_probe xma_consume_probe lock_probe)
+            album_probe pursuit_probe xma_consume_probe lock_probe ambient_dt_probe
+            step_smoother)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -91,6 +92,11 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # layout against the generated code.
     target_compile_definitions(mcla_lock_probe_test PRIVATE
         MCLA_LOCK_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
+    # l83 KI-054: the ambient delta test checks its hook sites, return
+    # addresses and registers against the generated code. The step smoother
+    # test is pure (raw timer smoothing and the hitch hold).
+    target_compile_definitions(mcla_ambient_dt_probe_test PRIVATE
+        MCLA_AMBDT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -231,9 +237,13 @@ set(MCLA_SOURCES
 # KI-066 pursuit block and transition log (default off). KI-071: guest XMA
 # consume ledger (pass-through override of sub_823ED700; default off).
 # M11-007d: guest lock probe and read-back completion at the lock
-# (pass-through override of sub_82421CA0; default off).
+# (pass-through override of sub_82421CA0; default off). l83 KI-054:
+# ambient-traffic frame delta probe and kick-time delta (overrides
+# sub_826D9578, sub_826D95B0, sub_822A7E28, sub_826D75D8, sub_82387A18,
+# sub_826FBA60 and sub_826FA8A8; both default off).
 list(APPEND MCLA_SOURCES
     src/mcla_album_probe.cpp
+    src/mcla_ambient_dt_probe.cpp
     src/mcla_guest_sampler.cpp
     src/mcla_ki026_probe.cpp
     src/mcla_lock_probe.cpp
