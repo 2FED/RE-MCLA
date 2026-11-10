@@ -68,7 +68,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
             readback_sync native_refcount dev_overrides m10_defaults save_copy_guard warp_probe
             album_probe pursuit_probe xma_consume_probe lock_probe ambient_dt_probe
-            step_smoother)
+            step_smoother audio_filter)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -97,6 +97,11 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # test is pure (raw timer smoothing and the hitch hold).
     target_compile_definitions(mcla_ambient_dt_probe_test PRIVATE
         MCLA_AMBDT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
+    # l87 KI-060: the audio filter test runs the generated loop body of
+    # sub_82146BE0 as an interpreter against the native kernel and checks the
+    # offsets against the generated code.
+    target_compile_definitions(mcla_audio_filter_test PRIVATE
+        MCLA_AFILT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -240,10 +245,14 @@ set(MCLA_SOURCES
 # (pass-through override of sub_82421CA0; default off). l83 KI-054:
 # ambient-traffic frame delta probe and kick-time delta (overrides
 # sub_826D9578, sub_826D95B0, sub_822A7E28, sub_826D75D8, sub_82387A18,
-# sub_826FBA60 and sub_826FA8A8; both default off).
+# sub_826FBA60 and sub_826FA8A8; both default off). l87 KI-060: XAudio
+# engine-thread filter probe and native two-bank voice filter with its
+# self-check (overrides sub_82146BE0, sub_82147738 and sub_823EC248; all three
+# switches default off).
 list(APPEND MCLA_SOURCES
     src/mcla_album_probe.cpp
     src/mcla_ambient_dt_probe.cpp
+    src/mcla_audio_filter.cpp
     src/mcla_guest_sampler.cpp
     src/mcla_ki026_probe.cpp
     src/mcla_lock_probe.cpp

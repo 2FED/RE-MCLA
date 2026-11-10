@@ -95,6 +95,9 @@ struct RuntimeState {
   // l83 KI-054: "ambient_dt" object (pre-rendered JSON; empty when the
   // ambient delta probe and snapshot are both off).
   std::string ambient_dt_json;
+  // l87 KI-060: "audio_filter" object (pre-rendered JSON; empty when the
+  // three audio filter switches are off).
+  std::string audio_filter_json;
   // M10-001: "perf_split" object (pre-rendered JSON), empty when absent.
   std::string perf_split_json;
 };

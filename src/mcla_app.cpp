@@ -73,6 +73,7 @@
 #include "mcla_perf_split.h"
 #include "mcla_album_probe.h"
 #include "mcla_ambient_dt_probe.h"
+#include "mcla_audio_filter.h"
 #include "mcla_ki026_probe.h"
 #include "mcla_pursuit_probe.h"
 #include "mcla_menu_state.h"
@@ -3676,6 +3677,8 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
   }
   // l83 KI-054: ambient-traffic frame delta counters (host only; empty when off).
   state.ambient_dt_json = MclaAmbientDtStateJson();
+  // l87 KI-060: engine-thread filter counters (host only; empty when off).
+  state.audio_filter_json = MclaAudioFilterStateJson();
   // M10-001: cumulative cost-split totals (empty without the SDK split).
   state.perf_split_json = mcla::perf_split::StateJson();
   return state;

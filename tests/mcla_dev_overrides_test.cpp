@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 81, "eighty-one whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 84, "eighty-four whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -682,6 +682,54 @@ void TestWhitelist() {
           "l86 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
+    // l87 KI-060 keys: host init-only bools at startup (default off); =true
+    // writes true to the mcla_ cvar, =false writes nothing; no conflict pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const Key keys[] = {Key::kAudioFilterProbe, Key::kAudioFilterNative,
+                        Key::kAudioFilterNativeVerify};
+    const char *const names[] = {"audio_filter_probe", "audio_filter_native",
+                                 "audio_filter_native_verify"};
+    const char *const cvars[] = {"mcla_audio_filter_probe", "mcla_audio_filter_native",
+                                 "mcla_audio_filter_native_verify"};
+    for (size_t k = 0; k < 3; ++k) {
+      const auto &info = Info(keys[k]);
+      Check(FindKey(names[k]) == keys[k] && info.phase == Phase::kStartup &&
+                CvarName(info) == cvars[k] && CvarText(info, true) == "true" &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l87 key: =true writes true to its mcla_ cvar at startup, =false writes nothing");
+      Check(!FindKey(cvars[k]), "the l87 cvar name is not a key");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != keys[k] && pair.second != keys[k], "the l87 keys are in no pair");
+      }
+    }
+    Check(!FindKey("audio_filter") && !FindKey("audio_filter_probe_on") &&
+              !FindKey("audio_filter_native_off") && !FindKey("AUDIO_FILTER_PROBE") &&
+              !FindKey("audio_filter_verify") && !FindKey("audio_filter_native_verif"),
+          "no prefix, suffix or case variants of the l87 keys");
+    const Parsed on = Parse("audio_filter_probe=true\n"
+                            "audio_filter_native=true\n"
+                            "audio_filter_native_verify=true\n");
+    Check(on.ValueCount() == 3 && on.issue_count == 0 &&
+              on.Value(Key::kAudioFilterProbe) == true &&
+              on.Value(Key::kAudioFilterNative) == true &&
+              on.Value(Key::kAudioFilterNativeVerify) == true,
+          "the l87 afnative arm keys parse together");
+    const Parsed bad = Parse("audio_filter_native=1\n"
+                             "mcla_audio_filter_probe=true\n"
+                             "audio_filter_probe=true\n"
+                             "audio_filter_probe=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kAudioFilterProbe) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l87 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1131,7 +1179,9 @@ void TestWhitelist() {
                           key == Key::kBlendMinmaxFixOff || key == Key::kAlbumPreviewRestoreOff ||
                           key == Key::kCpBulkRegs || key == Key::kAmbientDtProbe ||
                           key == Key::kAmbientDtSnapshot || key == Key::kRawTimerHitchHold ||
-                          key == Key::kRawTimerStats || key == Key::kRawTimerHitchHoldOff;
+                          key == Key::kRawTimerStats || key == Key::kRawTimerHitchHoldOff ||
+                          key == Key::kAudioFilterProbe || key == Key::kAudioFilterNative ||
+                          key == Key::kAudioFilterNativeVerify;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1880,12 +1930,16 @@ void TestWhitelist() {
     // explicit false (75 keys; beyond the former 2 KiB limit); l82: plus the
     // l82 key explicit false (76 keys); l83: plus the three l83 keys explicit
     // false (79 keys); l84: plus the l84 key explicit false (80 keys); l86:
-    // plus the l86 key explicit false (81 keys).
+    // plus the l86 key explicit false (81 keys); l87: plus the three l87 keys
+    // explicit false (84 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
                                   "raw_timer_stats=false\n"
-                                  "raw_timer_hitch_hold_off=false\n";
+                                  "raw_timer_hitch_hold_off=false\n"
+                                  "audio_filter_probe=false\n"
+                                  "audio_filter_native=false\n"
+                                  "audio_filter_native_verify=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"

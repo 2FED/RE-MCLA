@@ -246,6 +246,15 @@
 //   to the host init-only bool mcla_raw_timer_hitch_hold at startup: the
 //   control, a conflict pair with raw_timer_hitch_hold (which still writes
 //   true, the default now). =false changes nothing.
+// - l87 (docs/evidence/M11-l87-owner-build-20261110.md; KI-060 Deck audio):
+//   audio_filter_probe=true writes true to the host init-only bool
+//   mcla_audio_filter_probe (one MCLA_AFILT line per second of XAudio engine
+//   frames and the F10 "audio_filter" block, read-only),
+//   audio_filter_native=true to mcla_audio_filter_native (the two-bank voice
+//   filter sub_82146BE0 run natively with the recompiled arithmetic) and
+//   audio_filter_native_verify=true to mcla_audio_filter_native_verify (one
+//   call in 64 runs the original and is compared bit for bit), all at startup
+//   and default off. =false changes nothing; no conflict pairs.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -370,8 +379,11 @@ enum class Key : uint8_t {
   kRawTimerHitchHold,        // l83 KI-054 Arm 2: mcla_raw_timer_hitch_hold=true
   kRawTimerStats,            // l84 KI-054: mcla_raw_timer_stats=true
   kRawTimerHitchHoldOff,     // l86 KI-054 control: mcla_raw_timer_hitch_hold=false
+  kAudioFilterProbe,         // l87 KI-060: mcla_audio_filter_probe=true
+  kAudioFilterNative,        // l87 KI-060: mcla_audio_filter_native=true
+  kAudioFilterNativeVerify,  // l87 KI-060: mcla_audio_filter_native_verify=true
 };
-inline constexpr size_t kKeyCount = 81;
+inline constexpr size_t kKeyCount = 84;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -579,6 +591,11 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // l86 control for the new KI-054 default: the hitch hold (host init-only,
     // startup); =false writes nothing.
     {"raw_timer_hitch_hold_off", Phase::kStartup, "mcla_raw_timer_hitch_hold", "false", ""},
+    // l87 KI-060: host init-only bools (mcla_audio_filter.cpp), default off,
+    // before the guest; =false writes nothing.
+    {"audio_filter_probe", Phase::kStartup, "mcla_audio_filter_probe", "true", ""},
+    {"audio_filter_native", Phase::kStartup, "mcla_audio_filter_native", "true", ""},
+    {"audio_filter_native_verify", Phase::kStartup, "mcla_audio_filter_native_verify", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
