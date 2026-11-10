@@ -255,6 +255,13 @@
 //   audio_filter_native_verify=true to mcla_audio_filter_native_verify (one
 //   call in 64 runs the original and is compared bit for bit), all at startup
 //   and default off. =false changes nothing; no conflict pairs.
+// - l88 (docs/evidence/M11-l88-sdk-20261110.md; KI-074 flicker):
+//   readback_fenced_delivery=true writes true to the SDK bool
+//   d3d12_readback_fenced_delivery (default false; registered by the graphics
+//   plugin, hot reload): an every-4th read-back copy whose slot has not
+//   completed is not made, completed copies reach guest memory before their
+//   fences. =false changes nothing; an SDK without the l88 cvar logs the key
+//   as unavailable; no conflict pair.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -382,8 +389,9 @@ enum class Key : uint8_t {
   kAudioFilterProbe,         // l87 KI-060: mcla_audio_filter_probe=true
   kAudioFilterNative,        // l87 KI-060: mcla_audio_filter_native=true
   kAudioFilterNativeVerify,  // l87 KI-060: mcla_audio_filter_native_verify=true
+  kReadbackFencedDelivery,   // l88 KI-074: d3d12_readback_fenced_delivery=true
 };
-inline constexpr size_t kKeyCount = 84;
+inline constexpr size_t kKeyCount = 85;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -596,6 +604,11 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"audio_filter_probe", Phase::kStartup, "mcla_audio_filter_probe", "true", ""},
     {"audio_filter_native", Phase::kStartup, "mcla_audio_filter_native", "true", ""},
     {"audio_filter_native_verify", Phase::kStartup, "mcla_audio_filter_native_verify", "true", ""},
+    // l88 KI-074: fenced read-back delivery, an SDK bool registered by the
+    // graphics plugin (hot reload), so after the plugin has loaded; =false
+    // writes nothing.
+    {"readback_fenced_delivery", Phase::kGraphicsPlugin, "d3d12_readback_fenced_delivery", "true",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
