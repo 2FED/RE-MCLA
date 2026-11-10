@@ -157,3 +157,5 @@ Confirmation pending: KI-022 and KI-047 (testers), KI-057 (Deck), KI-064 (owner)
 - Commit after each closed task; review and push after each milestone.
 - SDK publication and signed-list publication need the owner's explicit yes. Volunteer builds come from a
   clean clone at a published SDK pin.
+
+**2026-11-10.** l81 owner PC run PASS; SDK v0.20.0.11 (2aff82e) published; l81v signed by the owner and published (DebugBundle 138b0ef, l81v only). Owner is running the l81 Deck loops (default / zero-native / census), results pending. Staged, unsigned: l82 owner build (host 9168872 + SDK c40db4b, CP bulk register writes A/B, `private/l82-CHECKLIST.txt`). Designed, not implemented: KI-026 warp stall fix (l83 candidate). Next: l81 Deck results -> hot pages v2 decision; l82 Deck A/B; then KI-026 implementation.
