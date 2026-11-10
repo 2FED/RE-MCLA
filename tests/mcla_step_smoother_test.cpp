@@ -25,6 +25,7 @@ bool Near(double a, double b, double tolerance = 1e-12) {
   return std::fabs(a - b) <= tolerance;
 }
 
+using mcla::raw_timer::kHitchHoldDefault;
 using mcla::raw_timer::kHitchSeconds;
 using mcla::raw_timer::kMaxHitchDebtSeconds;
 using mcla::raw_timer::kPauseSeconds;
@@ -214,6 +215,11 @@ void TestDefaults() {
                 StepSmoother::kHold == 0.10);
   static_assert(StepSmoother::kWinsor == 2.0 && StepSmoother::kSlew == 0.10 &&
                 StepSmoother::kWideDebtSeconds == 0.25);
+  // l86: the host cvar mcla_raw_timer_hitch_hold is on by default (owner
+  // decision 2026-11-10); the owner control key raw_timer_hitch_hold_off turns
+  // it off for one arm. The object itself starts without the hold.
+  static_assert(kHitchHoldDefault, "hitch hold default on since l86");
+  Check(kHitchHoldDefault, "KI-054 hitch hold host default on (l86)");
   StepSmoother s;
   Check(!s.hitch_hold() && !s.has_average() && s.debt() == 0.0, "default: no hold, empty");
   Check(s.Apply(0.040) == 0.040 && s.has_average() && Near(s.average(), 0.040),

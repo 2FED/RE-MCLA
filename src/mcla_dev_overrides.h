@@ -229,15 +229,23 @@
 //   ambient-traffic thread gets the kick-time frame delta at its two
 //   register-visible reads) and raw_timer_hitch_hold=true to
 //   mcla_raw_timer_hitch_hold (l85 v2: the step moves at most 10 % per update,
-//   rest to the timer debt), all at startup and default off. =false changes
-//   nothing; no conflict pairs. A build without mcla_raw_timer.cpp (the timer
-//   configuration probe build) logs raw_timer_hitch_hold as unavailable.
+//   rest to the timer debt), all at startup; the two probes default off, the
+//   hitch hold off until l85 and on since l86 (see l86 below). =false changes
+//   nothing (so an old arm line raw_timer_hitch_hold=false no longer turns the
+//   hold off). A build without mcla_raw_timer.cpp (the timer configuration
+//   probe build) logs raw_timer_hitch_hold as unavailable.
 // - l84 (docs/evidence/M11-l84-owner-build-20261110.md): raw_timer_stats=true
 //   writes true to the host init-only bool mcla_raw_timer_stats (one
 //   "MCLA timer stats" line per 300 raw timer updates, with the hitch count
 //   and the hitch hold state), at startup and default off. =false changes
 //   nothing; no conflict pair. ambient_dt_snapshot stays a valid key but is
 //   inert in retail (the ambient worker it serves is never started).
+// - l86 (docs/evidence/M11-l86-owner-build-20261110.md; owner decision
+//   2026-11-10): the KI-054 hitch hold is default on
+//   (raw_timer::kHitchHoldDefault). raw_timer_hitch_hold_off=true writes false
+//   to the host init-only bool mcla_raw_timer_hitch_hold at startup: the
+//   control, a conflict pair with raw_timer_hitch_hold (which still writes
+//   true, the default now). =false changes nothing.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -361,8 +369,9 @@ enum class Key : uint8_t {
   kAmbientDtSnapshot,        // l83 KI-054 Arm 1: mcla_ambient_dt_snapshot=true
   kRawTimerHitchHold,        // l83 KI-054 Arm 2: mcla_raw_timer_hitch_hold=true
   kRawTimerStats,            // l84 KI-054: mcla_raw_timer_stats=true
+  kRawTimerHitchHoldOff,     // l86 KI-054 control: mcla_raw_timer_hitch_hold=false
 };
-inline constexpr size_t kKeyCount = 80;
+inline constexpr size_t kKeyCount = 81;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -558,21 +567,26 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // nothing.
     {"cp_bulk_regs", Phase::kGraphicsPlugin, "cp_bulk_register_writes", "true", ""},
     // l83 KI-054: host init-only bools (mcla_ambient_dt_probe.cpp,
-    // mcla_raw_timer.cpp), default off, before the guest; =false writes
-    // nothing.
+    // mcla_raw_timer.cpp), before the guest; the probes default off, the hitch
+    // hold on since l86 (the control is raw_timer_hitch_hold_off); =false
+    // writes nothing.
     {"ambient_dt_probe", Phase::kStartup, "mcla_ambient_dt_probe", "true", ""},
     {"ambient_dt_snapshot", Phase::kStartup, "mcla_ambient_dt_snapshot", "true", ""},
     {"raw_timer_hitch_hold", Phase::kStartup, "mcla_raw_timer_hitch_hold", "true", ""},
     // l84 KI-054: host init-only bool (mcla_raw_timer.cpp), default off,
     // before the guest; =false writes nothing.
     {"raw_timer_stats", Phase::kStartup, "mcla_raw_timer_stats", "true", ""},
+    // l86 control for the new KI-054 default: the hitch hold (host init-only,
+    // startup); =false writes nothing.
+    {"raw_timer_hitch_hold_off", Phase::kStartup, "mcla_raw_timer_hitch_hold", "false", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
 // audio_speaker_config string, or the xma_frame_walk_fix,
 // d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
 // d3d12_texture_placed_heaps, timer_queue_blocking_wait,
-// d3d12_blend_minmax_fix and mcla_album_preview_restore bools):
+// d3d12_blend_minmax_fix, mcla_album_preview_restore and
+// mcla_raw_timer_hitch_hold bools):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -580,7 +594,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 16> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 17> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -597,6 +611,7 @@ inline constexpr std::array<ConflictPair, 16> kConflictPairs = {{
     {Key::kTexturePlacedHeaps, Key::kTexturePlacedHeapsOff},
     {Key::kAlbumPreviewRestore, Key::kAlbumPreviewRestoreOff},
     {Key::kBlendMinmaxFix, Key::kBlendMinmaxFixOff},
+    {Key::kRawTimerHitchHold, Key::kRawTimerHitchHoldOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -896,7 +911,7 @@ std::optional<bool> AppliedValue(Key key);
 // written. Used for keys whose value writes nothing (upload-ahead, hot blocks,
 // read-back kick, the l73 fetch-identity / steady-exempt and the KI-071 XMA
 // SDK keys =false, also xma_dump_contexts_on=false and, since l81,
-// mcla_album_preview_restore=false).
+// mcla_album_preview_restore=false; since l86 raw_timer_hitch_hold=false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

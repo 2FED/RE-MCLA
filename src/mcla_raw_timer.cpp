@@ -58,9 +58,12 @@ REXCVAR_DEFINE_BOOL(mcla_raw_timer_stats, false, "MCLA",
 // the applied step follows an average that includes hitches, moves at most
 // 10 % per update and repays the debt within a bounded band; a single step
 // above 0.5 s is a loading pause and is not replayed (mcla_step_smoother.h).
-REXCVAR_DEFINE_BOOL(mcla_raw_timer_hitch_hold, false, "MCLA",
+// Default on since l86 (owner decision 2026-11-10,
+// raw_timer::kHitchHoldDefault); dev key raw_timer_hitch_hold_off writes false.
+REXCVAR_DEFINE_BOOL(mcla_raw_timer_hitch_hold, mcla::raw_timer::kHitchHoldDefault, "MCLA",
     "Slew-limit the timer step across hitches (at most 10 % per update), "
-    "repaying the deferred time gently (KI-054 traffic jumps after stutters)")
+    "repaying the deferred time gently (KI-054 traffic jumps after stutters; "
+    "default on since l86)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace {

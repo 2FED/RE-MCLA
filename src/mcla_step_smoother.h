@@ -2,8 +2,9 @@
 
 // Raw-timer step smoothing (mcla_raw_timer.cpp), moved here unchanged so it
 // can be unit-tested (tests/mcla_step_smoother_test.cpp), plus the KI-054
-// hitch hold (mcla_raw_timer_hitch_hold, default off; v2 since l85,
-// docs/evidence/M11-l85-owner-build-20261110.md).
+// hitch hold (mcla_raw_timer_hitch_hold; v2 since l85,
+// docs/evidence/M11-l85-owner-build-20261110.md; default off until l85, on
+// since l86, kHitchHoldDefault).
 //
 // Updates alternate irregularly between 2 and 3 vblanks (33/50 ms). Applying
 // each measured interval directly makes per-frame motion and motion blur jump
@@ -57,6 +58,13 @@ inline constexpr double kHitchSeconds = 0.1;
 inline constexpr double kMaxHitchDebtSeconds = 1.0;
 // Hitch hold v2 only: a single measured step above this is a loading pause.
 inline constexpr double kPauseSeconds = 0.5;
+// The default of the host init-only cvar mcla_raw_timer_hitch_hold: off until
+// l85, on since l86 (owner decision 2026-11-10 after the l85 Deck and PC
+// runs; docs/evidence/M11-l86-owner-build-20261110.md). The owner control key
+// raw_timer_hitch_hold_off (mcla_dev_overrides.h) turns it off for one arm. A
+// StepSmoother object itself starts without the hold; the host sets it from
+// the cvar.
+inline constexpr bool kHitchHoldDefault = true;
 
 class StepSmoother {
  public:

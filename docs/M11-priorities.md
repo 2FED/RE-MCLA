@@ -332,3 +332,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l85 staged (2026-11-10), not signed:** hitch hold v2 (simulation on Deck-like dense hitches: max step ratio 1.06-1.10, lost time 0, vs v1 8-9 % lost and off 1.7-2.0 ratio). Deck first: arm hitchhold. [Evidence](evidence/M11-l85-owner-build-20261110.md).
 
 **l85 Deck PASS (2026-11-10):** KI-054 hitch hold v2: no traffic jumps (owner), lost time 0. Pending: owner PC 1080p Unlocked run; then default-on in l86.
+
+**l86 staged (2026-11-10), not signed:** KI-054 hitch hold v2 default on (owner PASS Deck + PC on l85). Arms: default, hold-off (control). `private/l86-CHECKLIST.txt`. [Evidence](evidence/M11-l86-owner-build-20261110.md).

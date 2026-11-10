@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 80, "eighty whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 81, "eighty-one whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -531,8 +531,9 @@ void TestWhitelist() {
           "l82 near misses: an integer value and the cvar name are ignored");
   }
   {
-    // l83 KI-054 keys: host init-only bools at startup (default off); =true
-    // writes true to the mcla_ cvar, =false writes nothing; no conflict pair.
+    // l83 KI-054 keys: host init-only bools at startup; =true writes true to
+    // the mcla_ cvar, =false writes nothing; no conflict pair except the hitch
+    // hold, default on since l86 and paired with its control (l86 block).
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
     using mcla::dev_overrides::Info;
@@ -550,15 +551,18 @@ void TestWhitelist() {
                 !info.overrides_user,
             "l83 key: =true writes true to its mcla_ cvar at startup, =false writes nothing");
       Check(!FindKey(cvars[k]), "the l83 cvar name is not a key");
+      if (keys[k] == Key::kRawTimerHitchHold) {
+        continue;
+      }
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != keys[k] && pair.second != keys[k], "the l83 keys are in no pair");
+        Check(pair.first != keys[k] && pair.second != keys[k], "the l83 probes are in no pair");
       }
     }
     Check(!FindKey("ambient_dt") && !FindKey("ambient_dt_probe_on") &&
               !FindKey("ambient_dt_probe_off") && !FindKey("AMBIENT_DT_PROBE") &&
               !FindKey("ambient_dt_snapshot_off") && !FindKey("ambient_snapshot") &&
               !FindKey("raw_timer_hitch") && !FindKey("hitch_hold") &&
-              !FindKey("raw_timer_hitch_hold_off") && !FindKey("camera_ct_filters"),
+              !FindKey("camera_ct_filters"),
           "no prefix, suffix or case variants of the l83 keys; no camera key");
     const Parsed on = Parse("ambient_dt_probe=true\n"
                             "ambient_dt_snapshot=true\n"
@@ -615,6 +619,67 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kUnknownName,
           "l84 near misses: an integer and the cvar name are ignored");
+  }
+  {
+    // l86 KI-054 control: the hitch hold is default on (owner decision
+    // 2026-11-10); raw_timer_hitch_hold_off=true writes false to
+    // mcla_raw_timer_hitch_hold at startup, =false writes nothing; a conflict
+    // pair with raw_timer_hitch_hold, which writes the default (true).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &off = Info(Key::kRawTimerHitchHoldOff);
+    const auto &hold = Info(Key::kRawTimerHitchHold);
+    Check(FindKey("raw_timer_hitch_hold_off") == Key::kRawTimerHitchHoldOff &&
+              off.phase == Phase::kStartup && CvarName(off) == "mcla_raw_timer_hitch_hold" &&
+              CvarText(off, true) == "false" && CvarText(off, false).empty() &&
+              off.true_source == TextSource::kLiteral && !off.overrides_user,
+          "raw_timer_hitch_hold_off=true writes false to mcla_raw_timer_hitch_hold at startup, "
+          "false writes nothing");
+    Check(CvarName(hold) == CvarName(off) && hold.phase == off.phase &&
+              CvarText(hold, true) == "true" && CvarText(hold, false).empty(),
+          "raw_timer_hitch_hold=true writes the l86 default, false writes nothing");
+    size_t hold_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      if (pair.first == Key::kRawTimerHitchHoldOff || pair.second == Key::kRawTimerHitchHoldOff ||
+          pair.first == Key::kRawTimerHitchHold || pair.second == Key::kRawTimerHitchHold) {
+        Check(pair.first == Key::kRawTimerHitchHold &&
+                  pair.second == Key::kRawTimerHitchHoldOff,
+              "the hitch hold control pairs only with the hitch hold key");
+        ++hold_pairs;
+      }
+    }
+    Check(hold_pairs == 1, "one conflict pair for the l86 control");
+    Check(!FindKey("raw_timer_hitch_hold_of") && !FindKey("raw_timer_hitch_hold_off_on") &&
+              !FindKey("RAW_TIMER_HITCH_HOLD_OFF") && !FindKey("mcla_raw_timer_hitch_hold_off") &&
+              !FindKey("hitch_hold_off"),
+          "no prefix, suffix, cvar-name or case variants of the l86 key");
+    const Parsed both = Parse("raw_timer_stats=true\n"
+                              "raw_timer_hitch_hold=true\n"
+                              "raw_timer_hitch_hold_off=true\n");
+    Check(both.ValueCount() == 1 && both.Value(Key::kRawTimerStats) == true &&
+              both.issue_count == 1 && both.issues[0].line == 3 &&
+              both.issues[0].issue == LineIssue::kConflict,
+          "the l86 control with its on key: neither applied, conflict on the later line");
+    const Parsed control = Parse("raw_timer_hitch_hold_off=true\n"
+                                 "raw_timer_stats=true\n"
+                                 "raw_timer_hitch_hold=false\n");
+    Check(control.ValueCount() == 3 && control.issue_count == 0 &&
+              control.Value(Key::kRawTimerHitchHoldOff) == true &&
+              control.Value(Key::kRawTimerHitchHold) == false &&
+              control.Value(Key::kRawTimerStats) == true,
+          "the l86 hold-off arm keys parse together; with the on key false no conflict");
+    const Parsed bad = Parse("raw_timer_hitch_hold_off=1\n"
+                             "mcla_raw_timer_hitch_hold=false\n"
+                             "raw_timer_hitch_hold_off=true\n"
+                             "raw_timer_hitch_hold_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kRawTimerHitchHoldOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l86 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -1066,7 +1131,7 @@ void TestWhitelist() {
                           key == Key::kBlendMinmaxFixOff || key == Key::kAlbumPreviewRestoreOff ||
                           key == Key::kCpBulkRegs || key == Key::kAmbientDtProbe ||
                           key == Key::kAmbientDtSnapshot || key == Key::kRawTimerHitchHold ||
-                          key == Key::kRawTimerStats;
+                          key == Key::kRawTimerStats || key == Key::kRawTimerHitchHoldOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1159,10 +1224,10 @@ void TestWhitelist() {
     // Ten pairs (l77: the walk fix and its control; l78: the steady key and
     // the fence key with their controls; l80: the timer and heaps keys with
     // their controls; l81: the album restore and blend keys with their
-    // controls) plus the kick and the vblank groups of three (each listed as
-    // its three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 16,
-          "sixteen shared-cvar pairs");
+    // controls; l86: the hitch hold key with its control) plus the kick and
+    // the vblank groups of three (each listed as its three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 17,
+          "seventeen shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -1814,11 +1879,13 @@ void TestWhitelist() {
     // five l80 keys explicit false (71 keys); l81: plus the four l81 keys
     // explicit false (75 keys; beyond the former 2 KiB limit); l82: plus the
     // l82 key explicit false (76 keys); l83: plus the three l83 keys explicit
-    // false (79 keys); l84: plus the l84 key explicit false (80 keys).
+    // false (79 keys); l84: plus the l84 key explicit false (80 keys); l86:
+    // plus the l86 key explicit false (81 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
-                                  "raw_timer_stats=false\n";
+                                  "raw_timer_stats=false\n"
+                                  "raw_timer_hitch_hold_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"

@@ -228,8 +228,10 @@ inline constexpr std::array<std::string_view, 68> kNeverWrittenCvars = {
     // l82 SDK: CP bulk register writes (default off) stay SDK-owned; owner
     // key cp_bulk_regs only until an owner A/B accepts them.
     "cp_bulk_register_writes",
-    // l83 KI-054 host switches (default off) stay host-owned; owner keys
-    // ambient_dt_probe / ambient_dt_snapshot / raw_timer_hitch_hold only.
+    // l83 KI-054 host switches stay host-owned (the probes default off; the
+    // hitch hold default on in the host itself since l86, owner decision
+    // 2026-11-10); owner keys ambient_dt_probe / ambient_dt_snapshot /
+    // raw_timer_hitch_hold / raw_timer_hitch_hold_off only.
     "mcla_ambient_dt_probe",
     "mcla_ambient_dt_snapshot",
     "mcla_raw_timer_hitch_hold",

@@ -334,6 +334,11 @@ void TestTable() {
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kRawTimerStats))) &&
             Find("mcla_raw_timer_stats") == nullptr && kNeverWrittenCvars.size() == 68,
         "the l84 raw timer statistics switch is host-owned (owner key raw_timer_stats only)");
+  Check(IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kRawTimerHitchHoldOff))) &&
+            dev::CvarName(dev::Info(dev::Key::kRawTimerHitchHoldOff)) ==
+                "mcla_raw_timer_hitch_hold" &&
+            Find("mcla_raw_timer_hitch_hold") == nullptr && kNeverWrittenCvars.size() == 68,
+        "the KI-054 hitch hold is host-owned (default on since l86), never an M10 default");
   // l81 arm rule: an arm without upload-ahead and bridge lines leaves the Wine
   // defaults to this module (decision applied on Wine, not on Windows); an
   // explicit =false line of those keys is the owner's off arm (the l71-l80
