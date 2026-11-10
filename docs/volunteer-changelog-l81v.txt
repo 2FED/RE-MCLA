@@ -1,0 +1,58 @@
+MCLA-R test build l81v - what changed since l70
+
+New in this build
+- Steam Deck: saving several times in a row works again. The "storage
+  device was removed" message after the second save is gone.
+- Cut-scene voices are clean. The doubled, "from a barrel" sound that was
+  there since the start of the port is fixed (it also affected radio music).
+- Traffic lights no longer paint cars with bright red or green glow; car
+  reflections look like on the console.
+- Photo album: the slot preview now shows the photo you just took.
+- PC: the game no longer freezes for several seconds while a bug report is
+  being saved; F10 no longer pauses the game at all.
+- PC: much fewer stutters when driving into new parts of the city and at
+  busy junctions (worst frames roughly halved).
+- PC, Unlocked FPS: about 6 FPS more on busy streets, and the flicker of
+  buildings, billboards and road signs is fixed.
+- Steam Deck: first round of work on the crackling sound (the game's sound
+  thread no longer burns a whole CPU core); please tell us if it got better
+  or worse.
+
+Still known
+- Steam Deck stays around 15 FPS in the city; more work is coming.
+- Red Light Driver: after losing and choosing Race Back the camera can stay
+  in the air (restart and continue from the autosave).
+- Cars can disappear on the results screen after a race: that is normal.
+
+Older builds (l70 and before) stop starting once they check online; please
+switch to l81v. Your saves are not affected.
+
+-------------------------------------------------------------------------------
+
+MCLA-R тестова збірка l81v - що змінилося від l70
+
+Нове в цій збірці
+- Steam Deck: кілька збережень поспіль знову працюють. Повідомлення
+  "storage device was removed" після другого збереження більше немає.
+- Голоси в катсценах чисті. Подвоєний звук "як з бочки", що був з самого
+  початку порту, виправлено (він зачіпав і музику радіо).
+- Світлофори більше не заливають машини яскравим червоним чи зеленим;
+  відблиски на машинах як на консолі.
+- Фотоальбом: прев'ю слота тепер показує щойно зроблене фото.
+- ПК: гра більше не зависає на кілька секунд, поки зберігається звіт про
+  баг; F10 взагалі не зупиняє гру.
+- ПК: значно менше підгальмовувань при в'їзді в нові квартали і на
+  завантажених перехрестях (найгірші кадри приблизно вдвічі коротші).
+- ПК, Unlocked FPS: приблизно на 6 FPS більше на завантажених вулицях,
+  мерехтіння будинків, білбордів і дорожніх знаків виправлено.
+- Steam Deck: перший етап роботи над тріском звуку (звуковий потік гри
+  більше не з'їдає ціле ядро процесора); напишіть, чи стало краще чи гірше.
+
+Ще відомо
+- Steam Deck у місті тримає близько 15 FPS; робота триває.
+- Red Light Driver: після програшу і Race Back камера може лишитися в
+  повітрі (перезапустіть і продовжіть з автозбереження).
+- Машини можуть зникати на екрані результатів після гонки: це нормально.
+
+Старі збірки (l70 і раніші) перестануть запускатися після онлайн-перевірки;
+переходьте на l81v. Ваших збережень це не стосується.
