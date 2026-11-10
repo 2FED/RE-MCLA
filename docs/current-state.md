@@ -159,3 +159,5 @@ Confirmation pending: KI-022 and KI-047 (testers), KI-057 (Deck), KI-064 (owner)
   clean clone at a published SDK pin.
 
 **2026-11-10.** l81 owner PC run PASS; SDK v0.20.0.11 (2aff82e) published; l81v signed by the owner and published (DebugBundle 138b0ef, l81v only). Owner is running the l81 Deck loops (default / zero-native / census), results pending. Staged, unsigned: l82 owner build (host 9168872 + SDK c40db4b, CP bulk register writes A/B, `private/l82-CHECKLIST.txt`). Designed, not implemented: KI-026 warp stall fix (l83 candidate). Next: l81 Deck results -> hot pages v2 decision; l82 Deck A/B; then KI-026 implementation.
+
+**2026-11-10, later.** l81 Deck analysed (fps 14.3->16.4; audio unchanged, XAudio engine thread starved; hot pages v2 NO-GO). l82 Deck run done by the owner (D:\82), analysis in progress. KI-026 and KI-054 designs recorded; KI-054 code landed in d14621a (all off). Staged, unsigned: l83 (KI-054 A/B, `private/l83-CHECKLIST.txt`). Next: l82 Deck verdict on bulk register writes; owner signs and runs l83 on PC (ambprobe -> snapshot -> hitchhold), then Deck.
