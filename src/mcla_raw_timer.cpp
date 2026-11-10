@@ -54,12 +54,13 @@ REXCVAR_DEFINE_BOOL(mcla_raw_timer_stats, false, "MCLA",
     "Log measured/applied timer step statistics every 300 updates")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-// KI-054 H2 (docs/evidence/M11-ki054-traffic-jitter-design-20261110.md, Arm
-// 2): a raw step above 0.1 s applies min(0.1 s, 1.1 x average) instead of
-// 0.1 s; the rest goes to the existing debt (mcla_step_smoother.h).
+// KI-054 hitch hold v2 (l85, docs/evidence/M11-l85-owner-build-20261110.md):
+// the applied step follows an average that includes hitches, moves at most
+// 10 % per update and repays the debt within a bounded band; a single step
+// above 0.5 s is a loading pause and is not replayed (mcla_step_smoother.h).
 REXCVAR_DEFINE_BOOL(mcla_raw_timer_hitch_hold, false, "MCLA",
-    "Hold a hitch step to 1.1x the average step, deferring the rest to the "
-    "timer debt (KI-054 camera dip after stutters)")
+    "Slew-limit the timer step across hitches (at most 10 % per update), "
+    "repaying the deferred time gently (KI-054 traffic jumps after stutters)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace {
@@ -115,6 +116,7 @@ struct StepStats {
   double raw_sum = 0, raw_sq = 0, out_sum = 0, out_sq = 0;
   double raw_change = 0, out_change = 0, last_raw = 0, last_out = 0;
   mcla::raw_timer::StepRange range;  // l84: appended min/avg/max, far, debt
+  double lost_base = 0, paused_base = 0;  // l85: smoother totals at window start
   void Add(double raw, double out) {
     range.Add(raw, out);
     if (count) {
@@ -137,14 +139,18 @@ struct StepStats {
         "step change {:.1f} ms; applied mean {:.1f} ms sd {:.1f} ms step change "
         "{:.1f} ms; total measured {:.3f} s applied {:.3f} s; hitches {} hold {}; "
         "applied min/avg/max {:.1f}/{:.1f}/{:.1f} ms measured min/avg/max "
-        "{:.1f}/{:.1f}/{:.1f} ms; far {} debt {:.3f} s",
+        "{:.1f}/{:.1f}/{:.1f} ms; far {} debt {:.3f} s; max_ratio {:.3f} lost {:.3f} s "
+        "pause {:.3f} s",
         count, 1000 * raw_sum / n, 1000 * sd(raw_sum, raw_sq),
         1000 * raw_change / (n - 1), 1000 * out_sum / n, 1000 * sd(out_sum, out_sq),
         1000 * out_change / (n - 1), raw_sum, out_sum, Smoother().hitches(),
         Smoother().hitch_hold() ? 1 : 0, 1000 * range.out_min, 1000 * range.out_avg(),
         1000 * range.out_max, 1000 * range.raw_min, 1000 * range.raw_avg(),
-        1000 * range.raw_max, range.far, Smoother().debt());
+        1000 * range.raw_max, range.far, Smoother().debt(), range.max_ratio,
+        Smoother().lost_seconds() - lost_base, Smoother().paused_seconds() - paused_base);
     *this = {};
+    lost_base = Smoother().lost_seconds();
+    paused_base = Smoother().paused_seconds();
   }
 };
 

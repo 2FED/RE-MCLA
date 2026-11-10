@@ -328,3 +328,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l84 PC run (2026-11-10):** 1440p Locked is a steady 30 fps; no jumps; probe v2 clean (1 step per timer update, no split). KI-054 now needs the Deck run of l84 (ambprobe, hitchhold).
 
 **l84 Deck result (2026-11-10):** KI-054 cause confirmed (H2). Hitch hold v1 fixes the jumps (owner + instruments) but drops 2.2 % of game time at the debt cap. Next: hitch hold v2 (slew-rate limited step that still repays measured time), replay-tested against the Deck sequences, then l85. [Analysis](evidence/M11-l84-deck-analysis-20261110.md).
+
+**l85 staged (2026-11-10), not signed:** hitch hold v2 (simulation on Deck-like dense hitches: max step ratio 1.06-1.10, lost time 0, vs v1 8-9 % lost and off 1.7-2.0 ratio). Deck first: arm hitchhold. [Evidence](evidence/M11-l85-owner-build-20261110.md).

@@ -228,7 +228,7 @@
 //   read-only), ambient_dt_snapshot=true to mcla_ambient_dt_snapshot (the
 //   ambient-traffic thread gets the kick-time frame delta at its two
 //   register-visible reads) and raw_timer_hitch_hold=true to
-//   mcla_raw_timer_hitch_hold (a hitch step held to 1.1x the average, the
+//   mcla_raw_timer_hitch_hold (l85 v2: the step moves at most 10 % per update,
 //   rest to the timer debt), all at startup and default off. =false changes
 //   nothing; no conflict pairs. A build without mcla_raw_timer.cpp (the timer
 //   configuration probe build) logs raw_timer_hitch_hold as unavailable.
