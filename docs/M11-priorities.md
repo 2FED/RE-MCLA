@@ -308,3 +308,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l82 prep (2026-11-08):** SDK `c40db4b` CP bulk register writes behind `cp_bulk_register_writes` (default off; side-effect registers keep the per-register path; counters regs_bulk/regs_single/bulk_runs). Needs a host key + arms for the owner A/B; candidate for the build after the l81 owner runs, together with hot pages v2 if the corrected-baseline census passes. [Notes](evidence/M11-l82-sdk-bulk-registers-20261108.md).
 
 **l81 owner PC run PASS (2026-11-10)**; SDK v0.20.0.11 = 2aff82e published (source parity for l81v). Pending: l81 Deck loops (default / zero-native / census), l81v signing + offline pre-share check + "publish l81v".
+
+**l81v published (2026-11-10):** DebugBundle `138b0ef`, allowance list = l81v only. Testers can use it now; l70 is withdrawn.

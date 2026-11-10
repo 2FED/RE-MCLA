@@ -146,3 +146,8 @@ C:\BDU\MCLA-Recomp\private\tools\pwsh\pwsh.exe -NoProfile -File C:\BDU\MCLA-Reco
 All are in the patch's `build\` folder.
 - Scripts: `make_src.py`, `l81v_host_build.ps1`, `l81v_host_tests.ps1`, `l81v_scan.py`, `l81v-volunteer-prepare.ps1`.
 - Logs: `l81v-configure.log`, `l81v-build.log`, `l81v-tests.log`, `l81v-astgrep.log`, `l81v-scan.log`, `l81v-dryrun.log`, `l81v-dryrun-refuse.log`, `l81v-volunteer-input.sha256`.
+
+## Owner signature and publication (2026-11-10)
+
+- The owner signed l81v with `private/l81v-volunteer-prepare.ps1` (staging `private/l81v-volunteer`, mcla.exe 83C8955A..., receipt present) and said "sign, publish" ("підписав, викладай"); the offline pre-share check was not run separately (owner ran the l81 owner build on PC the same day; same sources).
+- The primary verified the signed list (`SIGNED_LEASES_VERIFIED entries=1 issued_utc=1794292652`, l81v host valid until 1796884652) and published it as `active-builds.txt` on `DebugBundle` of `2FED/RE-MCLA` (commit `138b0ef`, replacing `31c806d`); the API blob and the raw file at the commit match the local file byte-for-byte (the branch raw URL is CDN-cached for a few minutes). l70 and all older builds are refused at their next online check.
