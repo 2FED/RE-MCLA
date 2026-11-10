@@ -147,6 +147,34 @@ void TestTotalTimeKept() {
   Check(hold.hitches() == 1 && plain.hitches() == 1, "hitch counts");
 }
 
+// l84: the per-window ranges appended to the "MCLA timer stats" line.
+void TestStepRange() {
+  using mcla::raw_timer::FarFromRaw;
+  using mcla::raw_timer::StepRange;
+  Check(!FarFromRaw(0.040, 0.040) && !FarFromRaw(0.040, 0.047) && FarFromRaw(0.040, 0.0490) &&
+            FarFromRaw(0.400, 0.100) && !FarFromRaw(0.0, 0.040),
+        "far: more than 20 % away from a positive measured step");
+  StepRange r;
+  Check(r.raw_avg() == 0.0 && r.out_avg() == 0.0, "empty range averages are 0");
+  r.Add(0.040, 0.040);
+  r.Add(0.050, 0.044);
+  r.Add(0.400, 0.100);
+  r.Add(0.030, 0.040);
+  Check(r.count == 4 && r.far == 2 && Near(r.raw_min, 0.030) && Near(r.raw_max, 0.400) &&
+            Near(r.out_min, 0.040) && Near(r.out_max, 0.100) &&
+            Near(r.raw_avg(), 0.130, 1e-12) && Near(r.out_avg(), 0.056, 1e-12),
+        "min / avg / max of measured and applied steps, far count");
+  // Over a smoothed run the hitch is the only far update with the plain
+  // smoother; the hold keeps the applied step near the average.
+  StepSmoother plain;
+  StepRange range;
+  for (int i = 0; i < 300; ++i) {
+    const double raw = (i == 150) ? 0.400 : 0.040;
+    range.Add(raw, plain.Apply(raw));
+  }
+  Check(range.far == 1 && Near(range.out_max, kHitchSeconds), "a run with one hitch");
+}
+
 }  // namespace
 
 int main() {
@@ -154,6 +182,7 @@ int main() {
   TestHitchDefault();
   TestHitchHold();
   TestTotalTimeKept();
+  TestStepRange();
   std::printf("mcla_step_smoother_test: %d checks passed\n", checks);
   return 0;
 }

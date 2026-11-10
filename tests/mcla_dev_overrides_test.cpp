@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 79, "seventy-nine whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 80, "eighty whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -584,6 +584,39 @@ void TestWhitelist() {
           "l83 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
+    // l84 KI-054 key: the raw timer statistics line, a host init-only bool at
+    // startup (default off); =true writes true, =false writes nothing.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &info = Info(Key::kRawTimerStats);
+    Check(FindKey("raw_timer_stats") == Key::kRawTimerStats && info.phase == Phase::kStartup &&
+              CvarName(info) == "mcla_raw_timer_stats" && CvarText(info, true) == "true" &&
+              CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+              !info.overrides_user,
+          "l84 key: =true writes true to mcla_raw_timer_stats at startup, =false nothing");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kRawTimerStats && pair.second != Key::kRawTimerStats,
+            "the l84 key is in no pair");
+    }
+    Check(!FindKey("mcla_raw_timer_stats") && !FindKey("raw_timer_stat") &&
+              !FindKey("timer_stats") && !FindKey("raw_timer_stats_off") &&
+              !FindKey("RAW_TIMER_STATS"),
+          "no prefix, suffix or case variants of the l84 key");
+    const Parsed on = Parse("ambient_dt_probe=true\nraw_timer_stats=true\n");
+    Check(on.ValueCount() == 2 && on.issue_count == 0 && on.Value(Key::kRawTimerStats) == true &&
+              on.Value(Key::kAmbientDtProbe) == true,
+          "the l84 ambprobe arm keys parse together");
+    const Parsed bad = Parse("raw_timer_stats=1\nmcla_raw_timer_stats=true\n"
+                             "raw_timer_stats=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.Value(Key::kRawTimerStats) == false &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName,
+          "l84 near misses: an integer and the cvar name are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1032,7 +1065,8 @@ void TestWhitelist() {
                           key == Key::kZeroDelayNative || key == Key::kGuestAudioPrioNormal ||
                           key == Key::kBlendMinmaxFixOff || key == Key::kAlbumPreviewRestoreOff ||
                           key == Key::kCpBulkRegs || key == Key::kAmbientDtProbe ||
-                          key == Key::kAmbientDtSnapshot || key == Key::kRawTimerHitchHold;
+                          key == Key::kAmbientDtSnapshot || key == Key::kRawTimerHitchHold ||
+                          key == Key::kRawTimerStats;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1780,10 +1814,11 @@ void TestWhitelist() {
     // five l80 keys explicit false (71 keys); l81: plus the four l81 keys
     // explicit false (75 keys; beyond the former 2 KiB limit); l82: plus the
     // l82 key explicit false (76 keys); l83: plus the three l83 keys explicit
-    // false (79 keys).
+    // false (79 keys); l84: plus the l84 key explicit false (80 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
-                                  "raw_timer_hitch_hold=false\n";
+                                  "raw_timer_hitch_hold=false\n"
+                                  "raw_timer_stats=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -1813,7 +1848,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l77 arm: every key (79), nothing ignored, fits in kMaxBytes");
+            "l77 arm: every key (80), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kRawTimerOff) == (arm[3][0] == 't') &&
                 a.Value(Key::kVblankHz72) == (arm[4][0] == 't') &&
                 a.Value(Key::kVblankHz80) == (arm[5][0] == 't') &&
@@ -1881,7 +1916,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l78 arm: every key (79), nothing ignored, fits in kMaxBytes");
+            "l78 arm: every key (80), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kReadbackSteadyExempt) == false &&
                 a.Value(Key::kFenceWriteDeferred) == false &&
                 a.Value(Key::kXmaFrameWalkFix) == false &&
@@ -1962,7 +1997,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l79 arm: every key (79), nothing ignored, fits in kMaxBytes");
+            "l79 arm: every key (80), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kXmaCanaryFixes) == (arm[0][0] == 't') &&
                 a.Value(Key::kTimerQueueBlockingWait) == (arm[1][0] == 't') &&
                 a.Value(Key::kTexturePlacedHeaps) == (arm[2][0] == 't') &&
@@ -2040,7 +2075,7 @@ void TestWhitelist() {
       Check(text.size() <= mcla::dev_overrides::kMaxBytes && a.status == FileStatus::kParsed &&
                 a.ValueCount() == mcla::dev_overrides::kKeyCount && a.ignored_lines == 0 &&
                 a.issue_count == 0,
-            "l80 arm: every key (79), nothing ignored, fits in kMaxBytes");
+            "l80 arm: every key (80), nothing ignored, fits in kMaxBytes");
       Check(a.Value(Key::kWatchCensus) == (arm[0][0] == 't') &&
                 a.Value(Key::kBlendMinmaxFix) == (arm[1][0] == 't') &&
                 a.Value(Key::kShortSleepNative) == (arm[2][0] == 't') &&

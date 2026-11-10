@@ -31,6 +31,7 @@
 // stall sooner per hitch, because more of each hitch is deferred).
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 namespace mcla::raw_timer {
@@ -88,6 +89,36 @@ class StepSmoother {
   double average_ = 0.0;
   double debt_ = 0.0;
   uint64_t hitches_ = 0;
+};
+
+// KI-054 l84: per-window ranges for the "MCLA timer stats" line
+// (mcla_raw_timer_stats, dev key raw_timer_stats): applied and measured step
+// min / average / max and the updates whose applied step is more than 20 %
+// away from the measured one.
+inline constexpr double kFarFraction = 0.20;
+
+inline bool FarFromRaw(double raw, double applied) {
+  return raw > 0.0 && std::fabs(applied - raw) > kFarFraction * raw;
+}
+
+struct StepRange {
+  uint64_t count = 0;
+  uint64_t far = 0;
+  double raw_min = 0.0, raw_max = 0.0, raw_sum = 0.0;
+  double out_min = 0.0, out_max = 0.0, out_sum = 0.0;
+
+  void Add(double raw, double out) {
+    raw_min = count == 0 ? raw : std::min(raw_min, raw);
+    raw_max = count == 0 ? raw : std::max(raw_max, raw);
+    out_min = count == 0 ? out : std::min(out_min, out);
+    out_max = count == 0 ? out : std::max(out_max, out);
+    raw_sum += raw;
+    out_sum += out;
+    far += FarFromRaw(raw, out) ? 1 : 0;
+    ++count;
+  }
+  double raw_avg() const { return count ? raw_sum / double(count) : 0.0; }
+  double out_avg() const { return count ? out_sum / double(count) : 0.0; }
 };
 
 }  // namespace mcla::raw_timer

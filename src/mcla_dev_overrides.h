@@ -232,6 +232,12 @@
 //   rest to the timer debt), all at startup and default off. =false changes
 //   nothing; no conflict pairs. A build without mcla_raw_timer.cpp (the timer
 //   configuration probe build) logs raw_timer_hitch_hold as unavailable.
+// - l84 (docs/evidence/M11-l84-owner-build-20261110.md): raw_timer_stats=true
+//   writes true to the host init-only bool mcla_raw_timer_stats (one
+//   "MCLA timer stats" line per 300 raw timer updates, with the hitch count
+//   and the hitch hold state), at startup and default off. =false changes
+//   nothing; no conflict pair. ambient_dt_snapshot stays a valid key but is
+//   inert in retail (the ambient worker it serves is never started).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -354,8 +360,9 @@ enum class Key : uint8_t {
   kAmbientDtProbe,           // l83 KI-054 Arm 0: mcla_ambient_dt_probe=true
   kAmbientDtSnapshot,        // l83 KI-054 Arm 1: mcla_ambient_dt_snapshot=true
   kRawTimerHitchHold,        // l83 KI-054 Arm 2: mcla_raw_timer_hitch_hold=true
+  kRawTimerStats,            // l84 KI-054: mcla_raw_timer_stats=true
 };
-inline constexpr size_t kKeyCount = 79;
+inline constexpr size_t kKeyCount = 80;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -556,6 +563,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"ambient_dt_probe", Phase::kStartup, "mcla_ambient_dt_probe", "true", ""},
     {"ambient_dt_snapshot", Phase::kStartup, "mcla_ambient_dt_snapshot", "true", ""},
     {"raw_timer_hitch_hold", Phase::kStartup, "mcla_raw_timer_hitch_hold", "true", ""},
+    // l84 KI-054: host init-only bool (mcla_raw_timer.cpp), default off,
+    // before the guest; =false writes nothing.
+    {"raw_timer_stats", Phase::kStartup, "mcla_raw_timer_stats", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the

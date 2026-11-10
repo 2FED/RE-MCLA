@@ -1323,6 +1323,74 @@ void TestCreateParentSuggestion() {
   Check(recorder.calls.size() == before, "suggestion and cancellation perform no filesystem/backend action");
 }
 
+// KI-075: new profile forms start in the folder holding the selected profile.
+void TestDestinationParentDefault() {
+  const std::wstring main = L"D:/SyntheticSaves/MAIN";
+  for (const auto action : {UiAction::DuplicateProfile, UiAction::RestoreSnapshot,
+                            UiAction::ImportLegacy, UiAction::CreateProfile}) {
+    Check(DefaultDestinationParent(action, main, L"") == L"D:/SyntheticSaves",
+          "new-profile forms default to the selected profile's parent");
+    Check(DefaultDestinationParent(action, L"", L"").empty(),
+          "no selected managed profile: no default");
+  }
+  Check(DefaultDestinationParent(UiAction::DuplicateProfile, L"D:/SyntheticSaves/MAIN/", L"") ==
+            L"D:/SyntheticSaves",
+        "a trailing separator is not a folder level");
+  Check(DefaultDestinationParent(UiAction::DuplicateProfile, L"D:\\Saves\\MAIN", L"") ==
+            L"D:\\Saves",
+        "backslash roots keep their separators");
+  Check(DefaultDestinationParent(UiAction::DuplicateProfile, L"D:/MAIN", L"") == L"D:/",
+        "a profile at a drive root defaults to the drive root");
+  Check(DefaultDestinationParent(UiAction::DuplicateProfile, L"D:/", L"").empty() &&
+            DefaultDestinationParent(UiAction::DuplicateProfile, L"MAIN", L"").empty(),
+        "a drive root or a bare name has no parent default");
+  Check(DefaultDestinationParent(UiAction::CreateProfile, main, L"E:/Collection") ==
+            L"E:/Collection" &&
+            DefaultDestinationParent(UiAction::DuplicateProfile, main, L"E:/Collection") ==
+            L"D:/SyntheticSaves",
+        "Create keeps the collection hint; Copy uses the selected profile's parent");
+  for (const auto action : {UiAction::RegisterManaged, UiAction::RenameLabel,
+                            UiAction::SaveSettings, UiAction::Play}) {
+    Check(DefaultDestinationParent(action, main, L"E:/Collection").empty(),
+          "Register (an existing root) and other actions get no default");
+  }
+
+  Recorder recorder;
+  InvisibleWindow window(recorder);
+  if (!window) return;
+  const auto before = recorder.calls.size();
+  for (const auto &[id, expected] : std::vector<std::pair<int, std::wstring>>{
+           {UiDuplicateProfile, L"D:/SyntheticSaves"}, {UiRestoreSnapshot, L"D:/SyntheticSaves"},
+           {UiImport, L"D:/SyntheticSaves"}, {UiCreate, L"D:/SyntheticSaves"},
+           {UiRegister, L""}}) {
+    Click(window, id);
+    HWND dialog = Operation(window);
+    Check(dialog && Text(dialog, UiProfileRoot) == expected,
+          "the operation form prefills the destination parent (Register stays empty)");
+    if (dialog) Click(dialog, UiOperationCancel);
+  }
+  Click(window, UiDuplicateProfile);
+  HWND dialog = Operation(window);
+  Edit(dialog, UiProfileRoot, L"E:/Elsewhere");
+  Click(dialog, UiOperationCancel);
+  Click(window, UiDuplicateProfile);
+  dialog = Operation(window);
+  Check(Text(dialog, UiProfileRoot) == L"E:/Elsewhere", "a retained draft wins over the default");
+  Click(dialog, UiOperationCancel);
+  SendDlgItemMessageW(window, UiProfiles, CB_SETCURSEL, 2, 0);
+  SendMessageW(window, WM_COMMAND, MAKEWPARAM(UiProfiles, CBN_SELCHANGE),
+               reinterpret_cast<LPARAM>(GetDlgItem(window, UiProfiles)));
+  Click(window, UiImport);
+  dialog = Operation(window);
+  Check(!dialog || Text(dialog, UiProfileRoot).empty(),
+        "a selected legacy (read-only) profile gives no default");
+  if (dialog) Click(dialog, UiOperationCancel);
+  Check(std::all_of(recorder.calls.begin() + static_cast<std::ptrdiff_t>(before),
+                    recorder.calls.end(),
+                    [](const Call &call) { return call.action == UiAction::SelectProfile; }),
+        "prefilling and cancelling perform no profile operation");
+}
+
 void TestTimingChoice() {
   const TimingMode modes[] = {TimingMode::Stock, TimingMode::Unlocked};
   const wchar_t *labels[] = {L"30 FPS (recommended)", L"Unlocked FPS (experimental)"};
@@ -1651,6 +1719,7 @@ int main() {
   TestNavigationKeys();
   TestDraftCallbackMatrix();
   TestOperationDialogs();
+  TestDestinationParentDefault();
   TestRenderTargets();
   TestTimingChoice();
   TestLaunchReadiness();

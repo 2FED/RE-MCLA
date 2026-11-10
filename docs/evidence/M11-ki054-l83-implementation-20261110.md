@@ -150,3 +150,17 @@ rebuilt against the new header): 0 ignored lines, 0 mismatches.
 - Thread membership of sites B and C is assumed by the design; the `outside` counters answer it.
 - Arm 1 changes only the delta used by ambient traffic during a racer split; whether that removes
   the visible shake is an owner A/B (design test plan), not claimed here.
+
+## 9. Addendum 2026-11-10 (l84): Arm 1 is inert in retail
+
+The owner's l83 PC run had the F10 `ambient_dt` block with `windows=0`, `worker_steps=0` and
+`outside=[17887,26164,0]` (two packages). Static reason, pinned in
+`tests/mcla_ambient_dt_probe_test.cpp` since l84: the kick at 0x822C26B8 is skipped unless the
+ambient manager (0x8286D8E4) exists and its byte mgr+0x64259 is set; the manager constructor
+`sub_826D8E70` sets that byte to (word +4 of the command-line parameter object 0x8288E8F4 != 0),
+and the parameter's static registration (`sub_827AE6B0` -> `sub_821C06C8`) stores 0 at +4. On the
+retail command line the "[MC] Ambient Traffic" worker is never kicked and the ambient step runs
+inline on the main thread (`sub_822D3C20`, return 0x822D3D20). H1 as written (the worker reads a
+split delta) is refuted for retail, and `ambient_dt_snapshot` (served only inside a kick/join
+window) is a no-op there. The key is kept so that arm files stay valid; it is in no l84 arm.
+Probe v2 (l84) measures the inline path: `docs/evidence/M11-l84-owner-build-20261110.md`.

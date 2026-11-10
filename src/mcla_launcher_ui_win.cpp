@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <exception>
+#include <filesystem>
 #include <future>
 #include <chrono>
 #include <memory>
@@ -15,6 +16,21 @@
 #include <utility>
 
 namespace mcla::launcher {
+
+std::wstring DefaultDestinationParent(UiAction action, const std::wstring &selected_managed_root,
+                                      const std::wstring &collection_parent) {
+  const bool new_profile = action == UiAction::CreateProfile ||
+      action == UiAction::DuplicateProfile || action == UiAction::RestoreSnapshot ||
+      action == UiAction::ImportLegacy;
+  if (!new_profile) return {};
+  if (action == UiAction::CreateProfile && !collection_parent.empty()) return collection_parent;
+  if (selected_managed_root.empty()) return {};
+  std::filesystem::path root(selected_managed_root);
+  if (!root.has_filename()) root = root.parent_path();  // trailing separator
+  if (!root.has_relative_path()) return {};             // a drive or share root
+  return root.parent_path().wstring();
+}
+
 namespace {
 constexpr wchar_t kWindowClass[] = L"MclaInternalLauncherV1";
 constexpr UINT_PTR kRefreshTimer = 1;
@@ -1017,8 +1033,10 @@ void OpenOperation(HWND window, WindowState &owner, UiAction action) {
     operation->request.profile_root = previous->second.profile_root;
     operation->request.legacy_source_root = previous->second.legacy_source_root;
   }
-  if (action == UiAction::CreateProfile && !has_draft)
-    operation->request.profile_root = owner.model.collection_parent;
+  // KI-075: a new form starts in the folder that holds the selected profile.
+  if (!has_draft)
+    operation->request.profile_root = DefaultDestinationParent(
+        action, operation->source_profile_root, owner.model.collection_parent);
   if (action == UiAction::RenameLabel)
     for (const auto &entry : owner.model.library.entries)
       if (entry.id == owner.model.library.selected_id) operation->request.profile_label = Wide(entry.label);

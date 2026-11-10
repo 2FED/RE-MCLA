@@ -116,4 +116,14 @@ void SetLauncherClockForTest(HWND window, uint64_t monotonic_ms, uint64_t utc_se
 void EnableLauncherAutoChecksForTest(HWND window);
 bool PollLauncherCheckForTest(HWND window);
 
+// KI-075: the initial "Destination parent for the NEW profile" of a new
+// operation form (no retained draft). Copy selected profile, Restore snapshot
+// and Import old saves start in the parent folder of the selected managed
+// profile's root; Create keeps the controller's collection parent hint and
+// falls back to the same parent. Empty for every other action (Register asks
+// for an existing root) and when no managed profile is selected. A
+// presentation default only; the path is validated as before on submit.
+std::wstring DefaultDestinationParent(UiAction action, const std::wstring &selected_managed_root,
+                                      const std::wstring &collection_parent);
+
 } // namespace mcla::launcher

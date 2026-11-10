@@ -1,6 +1,8 @@
 // KI-054 ambient-traffic frame delta: pure parts of the probe and the
 // kick-time delta (src/mcla_ambient_dt_probe.h) and the generated code their
 // hook sites, return addresses and registers mirror (MCLA_AMBDT_GENERATED_DIR).
+// l84 (probe v2): the inline-path counters and the static reason the worker
+// path is not taken in retail (the kick guard mgr+0x64259; see TestGenerated).
 
 #include "mcla_ambient_dt_probe.h"
 
@@ -114,25 +116,150 @@ void TestLines() {
   s.worker_steps = 300;
   s.AddRead(amb::kSiteA, 41, 0.040f, 0.020f);
   s.AddRead(amb::kSiteB, 42, 0.040f, 0.040f);
-  const std::string line = amb::Line(s, 300, 0.040f, true, false);
-  Check(line.rfind("MCLA_AMBDT v=1 probe=1 snapshot=0 window=300 frames=300 windows=300 "
-                   "overlaps=4 racer_splits=9 ",
+  const std::string line = amb::Line(s, 300, 0.040f, true, false, 1);
+  Check(line.rfind("MCLA_AMBDT v=2 probe=1 snapshot=0 threaded=1 inline_steps=0 "
+                   "timer_updates=0 steps_per_update=0/0/0 ",
                    0) == 0,
         "line head");
-  Check(Has(line, " split_reads=1 reads=1/1/0 split=1/0/0 outside=0/0/0 served=0/0 ") &&
+  Check(Has(line, " window=300 windows=300 overlaps=4 racer_splits=9 ") &&
+            Has(line, " split_reads=1 reads=1/1/0 split=1/0/0 outside=0/0/0 served=0/0 ") &&
             Has(line, " max_abs_dt_delta=0.020000 min_ratio=0.5000 kick_dt=0.040000 ") &&
-            Has(line, " last=[41:a:0.040000:0.020000]"),
-        "line counters and the last mismatches");
+            Has(line, " last=[41:a:0.040000:0.020000]") && Has(line, " last_step=[] "),
+        "line keeps the v1 window counters and the last mismatches");
   Check(line.find('\n') == std::string::npos, "one line");
-  const std::string json = amb::StateJson(s, 300, 0.040f, true, true);
-  Check(json.front() == '{' && json.back() == '}' && Has(json, "\"probe\": true") &&
-            Has(json, "\"snapshot\": true") && Has(json, "\"split_reads\": [1, 0, 0]") &&
-            Has(json, "\"windows\": 300"),
+  const std::string json = amb::StateJson(s, 300, 0.040f, true, true, 0);
+  Check(json.front() == '{' && json.back() == '}' && Has(json, "\"version\": 2") &&
+            Has(json, "\"probe\": true") && Has(json, "\"snapshot\": true") &&
+            Has(json, "\"threaded\": 0") && Has(json, "\"split_reads\": [1, 0, 0]") &&
+            Has(json, "\"windows\": 300") && Has(json, "\"steps_per_update\": [0, 0, 0]"),
         "F10 JSON object");
   const amb::Stats empty;
-  Check(Has(amb::Line(empty, 0, 0.0f, true, true), " min_ratio=1.0000 ") &&
-            Has(amb::Line(empty, 0, 0.0f, true, true), " last=[]"),
+  Check(Has(amb::Line(empty, 0, 0.0f, true, true, -1), " min_ratio=1.0000 ") &&
+            Has(amb::Line(empty, 0, 0.0f, true, true, -1), " last=[]") &&
+            Has(amb::Line(empty, 0, 0.0f, true, true, -1), " threaded=-1 "),
         "empty interval");
+
+  // The retail (inline) case: 300 inline steps, one per timer update, one
+  // racer-split frame where the ambient step saw dt / 2.
+  amb::Stats r;
+  amb::InlineSample step;
+  step.dt = 0.040f;
+  step.full = 0.040f;
+  step.timer_dt = 0.040f;
+  step.applied = 0.040;
+  bool has_previous = false;
+  float previous = 0.0f;
+  for (int i = 0; i < 300; ++i) {
+    step.dt = i == 150 ? 0.020f : 0.040f;
+    step.split = i == 150 ? 1 : 0;
+    step.n = i == 150 ? 2 : 0;
+    r.inl.AddStep(step, has_previous, previous, true);
+    has_previous = true;
+    previous = step.dt;
+    r.inl.AddUpdate(1);
+    r.inl.inline_reads[0] += 1;
+    r.inl.inline_reads[1] += 4;
+    r.outside[0] += 1;
+    r.outside[1] += 4;
+    r.inl.AddSiteRead(amb::kSiteB, i == 150, 0.040f, step.dt);
+  }
+  const std::string retail = amb::Line(r, 0, 0.0f, true, false, 0);
+  std::printf("example: %s\n", retail.c_str());
+  Check(retail.rfind("MCLA_AMBDT v=2 probe=1 snapshot=0 threaded=0 inline_steps=300 "
+                     "timer_updates=300 steps_per_update=0/300/0 split_at_step=1 "
+                     "step_jumps=2 timer_mismatch=1 step_dt=0.020000/0.040000 "
+                     "max_step_ratio=2.0000 inline_reads=300/1200/0 split_any=0/1/0 "
+                     "split_short=0/1/0 max_split_ratio=2.0000 "
+                     "last_step=[0.040000:0.040000:0:0:0.040000:0.040000] window=0 windows=0 ",
+                     0) == 0,
+        "the inline-path line");
+  Check(Has(retail, " outside=300/1200/0 ") && Has(retail, " worker_steps=0 "),
+        "inline reads are also outside a worker window");
+}
+
+void TestInline() {
+  static_assert(amb::kAmbientManager == 0x82870000u - 10012u, "lis -32121 / -10012");
+  static_assert(amb::kThreadedFlagOffset == (6u << 16) + 16985u, "lis 6 / ori 16985");
+  static_assert(amb::kThreadedParam == 0x82890000u - 5900u, "lis -32119 / -5900");
+  Check(amb::IsInlineStep(amb::kInlineReturn) && !amb::IsInlineStep(amb::kWorkerReturn),
+        "the inline step is the call returning to 0x822D3D20");
+  Check(amb::StepsBucket(0) == 0 && amb::StepsBucket(1) == 1 && amb::StepsBucket(2) == 2 &&
+            amb::StepsBucket(7) == 2,
+        "steps per update buckets 0 / 1 / 2+");
+  Check(!amb::Jumped(0.040f, 0.040f) && !amb::Jumped(0.040f, 0.047f) &&
+            amb::Jumped(0.040f, 0.020f) && amb::Jumped(0.040f, 0.0490f) &&
+            !amb::Jumped(0.0f, 0.040f),
+        "a jump is more than 20 % against a positive previous delta");
+  Check(amb::StepRatio(0.040f, 0.020f) > 1.9999 && amb::StepRatio(0.040f, 0.020f) < 2.0001 &&
+            amb::StepRatio(0.020f, 0.040f) > 1.9999 && amb::StepRatio(0.0f, 0.040f) == 1.0 &&
+            amb::StepRatio(0.040f, 0.0f) == 1.0,
+        "step ratio is symmetric, 1 without a positive pair");
+
+  amb::InlineStats v;
+  v.AddSiteRead(amb::kSiteA, false, 0.0f, 0.040f);
+  Check(v.split_any[0] == 0 && v.split_short[0] == 0, "an unsplit read is not a split read");
+  v.AddSiteRead(amb::kSiteB, true, 0.040f, 0.040f);
+  Check(v.split_any[1] == 1 && v.split_short[1] == 0 && v.max_split_ratio == 1.0,
+        "a split read that sees the full delta is not short");
+  v.AddSiteRead(amb::kSiteB, true, 0.040f, 0.020f);
+  v.AddSiteRead(amb::kSiteC, true, 0.040f, 0.0133333f);
+  Check(v.split_any[1] == 2 && v.split_short[1] == 1 && v.split_short[2] == 1 &&
+            v.max_split_ratio > 2.99 && v.max_split_ratio < 3.01,
+        "short split reads and the largest full / seen ratio (N = 3)");
+  v.AddSiteRead(amb::kSiteCount, true, 0.040f, 0.010f);
+  Check(v.max_split_ratio < 3.01, "an invalid site is ignored");
+
+  amb::InlineSample s;
+  s.dt = 0.040f;
+  s.full = 0.040f;
+  s.timer_dt = 0.040f;
+  s.applied = 0.040;
+  v.AddStep(s, false, 0.0f, true);
+  Check(v.inline_steps == 1 && v.step_jumps == 0 && v.timer_mismatch == 0 &&
+            v.split_at_step == 0 && v.min_dt == 0.040f && v.max_dt == 0.040f && v.has_last,
+        "a first inline step: no previous, equals the timer");
+  s.dt = 0.020f;
+  s.split = 1;
+  s.n = 2;
+  v.AddStep(s, true, 0.040f, true);
+  Check(v.inline_steps == 2 && v.step_jumps == 1 && v.timer_mismatch == 1 &&
+            v.split_at_step == 1 && v.min_dt == 0.020f && v.max_dt == 0.040f &&
+            v.max_step_ratio > 1.9999,
+        "an inline step at dt / 2 while split: jump, mismatch, split at step");
+  s.dt = 0.041f;
+  s.split = 0;
+  s.n = 0;
+  s.timer_dt = 0.0f;
+  v.AddStep(s, true, 0.020f, false);
+  Check(v.timer_mismatch == 1 && v.step_jumps == 2, "no timer update seen: no mismatch counted");
+  v.AddUpdate(0);
+  v.AddUpdate(1);
+  v.AddUpdate(1);
+  v.AddUpdate(2);
+  v.AddUpdate(5);
+  Check(v.timer_updates == 5 && v.steps_per_update[0] == 1 && v.steps_per_update[1] == 2 &&
+            v.steps_per_update[2] == 2,
+        "steps per update histogram");
+
+  amb::Stats a;
+  a.inl = v;
+  amb::Stats b;
+  amb::InlineSample t;
+  t.dt = 0.010f;
+  t.timer_dt = 0.010f;
+  b.inl.AddStep(t, false, 0.0f, true);
+  b.inl.AddUpdate(1);
+  b.inl.inline_reads = {3, 4, 5};
+  a.Merge(b);
+  Check(a.inl.inline_steps == 4 && a.inl.timer_updates == 6 &&
+            a.inl.steps_per_update[1] == 3 && a.inl.min_dt == 0.010f &&
+            a.inl.max_dt == 0.041f && a.inl.inline_reads[2] == 5 && a.inl.last.dt == 0.010f &&
+            a.inl.max_split_ratio > 2.99 && a.inl.split_at_step == 1,
+        "merge adds the inline counters, keeps the ranges and the newest sample");
+  amb::Stats empty;
+  empty.Merge(amb::Stats{});
+  Check(empty.inl.inline_steps == 0 && empty.inl.min_dt == 0.0f && !empty.inl.has_last,
+        "merging empty intervals keeps the empty range");
 }
 
 // --- generated code --------------------------------------------------------------
@@ -176,6 +303,12 @@ std::string Between(const std::string &body, const std::string &from, const std:
   return b == std::string::npos ? std::string() : body.substr(a, b - a);
 }
 
+// The text strictly after `from` up to `to` (empty when either is missing).
+std::string After(const std::string &body, const std::string &from, const std::string &to) {
+  const std::string span = Between(body, from, to);
+  return span.size() >= from.size() ? span.substr(from.size()) : std::string();
+}
+
 // Instruction comment lines ("\t// ") in a span of generated code.
 size_t Instructions(const std::string &span) {
   size_t n = 0;
@@ -193,8 +326,9 @@ void TestGenerated() {
   const std::string g14 = ReadFile(dir + "/mcla_recomp.14.cpp");
   const std::string g54 = ReadFile(dir + "/mcla_recomp.54.cpp");
   const std::string g55 = ReadFile(dir + "/mcla_recomp.55.cpp");
+  const std::string g61 = ReadFile(dir + "/mcla_recomp.61.cpp");
   Check(!g5.empty() && !g12.empty() && !g13.empty() && !g14.empty() && !g54.empty() &&
-            !g55.empty(),
+            !g55.empty() && !g61.empty(),
         "generated files readable");
 
   // Game loop update: full delta restored, kick, join.
@@ -308,6 +442,61 @@ void TestGenerated() {
           "the timer split and restore");
   InOrder(update, {"// lis r11,-32131", "// addi r27,r11,29952", "// stfs f28,8(r27)"},
           "the update's r27 is the main timer 0x827D7500");
+
+  // v2 (l84): why retail never opens a kick/join window. The l83 PC run
+  // (2026-11-10) logged windows=0 with tens of thousands of site reads
+  // outside any window; the static reason pinned here: the kick is guarded
+  // by the ambient manager pointer 0x8286D8E4 and its byte mgr+0x64259, the
+  // constructor sets that byte to (word +4 of the command-line parameter
+  // object 0x8288E8F4 != 0), and the parameter's static registration zeroes
+  // +4. Only the command-line parser can set it (not checked here; the
+  // runtime "threaded=" field of the v2 lines reports the byte). Without it
+  // the ambient step runs inline from sub_822D3C20 (return 0x822D3D20), with
+  // r3 = the same manager.
+  InOrder(update,
+          {"// lis r22,-32121", "// ori r21,r11,16985", "// lwz r11,-10012(r22)",
+           "// cmplwi cr6,r11,0", "// beq cr6,0x822c26bc", "// lbzx r10,r11,r21",
+           "// cmplwi cr6,r10,0", "// beq cr6,0x822c26bc", "// bl 0x826d9578",
+           "ctx.lr = 0x822C26BC;"},
+          "the kick is skipped unless the manager exists and mgr+0x64259 is set");
+  {
+    const std::string guard = Between(update, "// lwz r11,-10012(r22)", "// bl 0x826d9578");
+    Check(!guard.empty() && !Has(guard, "ctx.lr = ") && !Has(guard, "bctrl") &&
+              !Has(guard, "\nloc_"),
+          "no call or label between the guard and the kick (the guard is the only path)");
+  }
+  const std::string ctor = Body(g54, "sub_826D8E70");
+  InOrder(ctor,
+          {"// lis r7,-32119", "// addi r4,r7,-5900", "// lis r7,6", "// lwz r9,4(r4)",
+           "// cntlzw r4,r9", "// ori r15,r7,16985", "// rlwinm r4,r4,27,31,31",
+           "// xori r8,r4,1", "// stbx r8,r31,r15"},
+          "the manager constructor stores (param +4 != 0) at mgr+0x64259");
+  {
+    const std::string clz = "ctx.r4.u64 = ctx.r9.u32 == 0 ? 32 : __builtin_clz(ctx.r9.u32);";
+    const std::string ori = "ctx.r15.u64 = ctx.r7.u64 | 16985;";
+    const std::string span = After(ctor, clz, "// rlwinm r4,r4,27,31,31");
+    Check(!span.empty() && !Has(span, "ctx.r4.u64 =") && !Has(span, "ctx.r4.s64 =") &&
+              !Has(span, "ctx.lr = "),
+          "r4 is not rewritten between cntlzw and rlwinm");
+    const std::string tail = After(ctor, ori, "// stbx r8,r31,r15");
+    Check(!tail.empty() && !Has(tail, "ctx.r15.u64 =") && !Has(tail, "ctx.r15.s64 =") &&
+              !Has(tail, "ctx.lr = "),
+          "r15 still holds 0x64259 at the store");
+  }
+  InOrder(Body(g14, "sub_822D3D38"),
+          {"// bl 0x826d8e70", "// lis r10,-32121", "// stw r31,-10012(r10)"},
+          "the constructed manager is stored at 0x8286D8E4");
+  InOrder(Body(g61, "sub_827AE6B0"),
+          {"// lis r10,-32119", "// addi r3,r10,-5900", "// li r6,0", "// li r4,0",
+           "// b 0x821c06c8"},
+          "the parameter object 0x8288E8F4 is registered by a static initialiser");
+  InOrder(Body(g5, "sub_821C06C8"),
+          {"// li r9,0", "// stw r5,0(r3)", "// stw r9,4(r3)", "// blr"},
+          "registration stores the name at +0 and zero at +4 (no value)");
+  InOrder(Body(g14, "sub_822D3C20"),
+          {"// lis r11,-32121", "// lwz r3,-10012(r11)", "// bl 0x826d75d8",
+           "ctx.lr = 0x822D3D20;"},
+          "the inline path steps the same manager on the calling (main) thread");
 }
 
 }  // namespace
@@ -316,6 +505,7 @@ int main() {
   TestDecisions();
   TestStats();
   TestLines();
+  TestInline();
   TestGenerated();
   std::printf("mcla_ambient_dt_probe_test: %d checks passed\n", checks);
   return 0;

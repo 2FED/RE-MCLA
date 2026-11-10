@@ -11,6 +11,7 @@
 // Default ON (MCLA_RAW_TIMER_DEFAULT=0 builds default OFF). --mcla_raw_timer=false
 // keeps the stock fixed timer for A/B comparison.
 
+#include "mcla_ambient_dt_probe.h"
 #include "mcla_init.h"
 #include "mcla_logging.h"
 #include "mcla_step_smoother.h"
@@ -48,6 +49,7 @@ REXCVAR_DEFINE_BOOL(mcla_raw_timer_scale_log, true, "MCLA",
     "Log changes of the main game timer scale (diagnostic)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+// Dev key raw_timer_stats (l84) writes true.
 REXCVAR_DEFINE_BOOL(mcla_raw_timer_stats, false, "MCLA",
     "Log measured/applied timer step statistics every 300 updates")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -112,7 +114,9 @@ struct StepStats {
   uint64_t count = 0;
   double raw_sum = 0, raw_sq = 0, out_sum = 0, out_sq = 0;
   double raw_change = 0, out_change = 0, last_raw = 0, last_out = 0;
+  mcla::raw_timer::StepRange range;  // l84: appended min/avg/max, far, debt
   void Add(double raw, double out) {
+    range.Add(raw, out);
     if (count) {
       raw_change += std::fabs(raw - last_raw);
       out_change += std::fabs(out - last_out);
@@ -131,11 +135,15 @@ struct StepStats {
     MCLA_APP_INFO(
         "MCLA timer stats: {} updates, measured mean {:.1f} ms sd {:.1f} ms "
         "step change {:.1f} ms; applied mean {:.1f} ms sd {:.1f} ms step change "
-        "{:.1f} ms; total measured {:.3f} s applied {:.3f} s; hitches {} hold {}",
+        "{:.1f} ms; total measured {:.3f} s applied {:.3f} s; hitches {} hold {}; "
+        "applied min/avg/max {:.1f}/{:.1f}/{:.1f} ms measured min/avg/max "
+        "{:.1f}/{:.1f}/{:.1f} ms; far {} debt {:.3f} s",
         count, 1000 * raw_sum / n, 1000 * sd(raw_sum, raw_sq),
         1000 * raw_change / (n - 1), 1000 * out_sum / n, 1000 * sd(out_sum, out_sq),
         1000 * out_change / (n - 1), raw_sum, out_sum, Smoother().hitches(),
-        Smoother().hitch_hold() ? 1 : 0);
+        Smoother().hitch_hold() ? 1 : 0, 1000 * range.out_min, 1000 * range.out_avg(),
+        1000 * range.out_max, 1000 * range.raw_min, 1000 * range.raw_avg(),
+        1000 * range.raw_max, range.far, Smoother().debt());
     *this = {};
   }
 };
@@ -165,6 +173,7 @@ REX_EXTERN(sub_821BDA90) {
       last_scale_bits = scale_bits;
     }
   }
+  double supplied = -1.0;
   if (RawTimerWanted() && timer == kMainTimer && ctx.f1.f64 < 0.0 &&
       REX_LOAD_U32(timer + 60) == 0 && REX_LOAD_U8(timer + 56) == 0 &&
       REX_LOAD_U8(timer + 58) == 0) {
@@ -179,9 +188,13 @@ REX_EXTERN(sub_821BDA90) {
       if (REXCVAR_GET(mcla_raw_timer_ms_steps)) applied = millisecond_steps.Apply(applied);
       if (REXCVAR_GET(mcla_raw_timer_stats)) stats.Add(raw, applied);
       ctx.f1.f64 = applied;
+      supplied = applied;
     }
   }
   __imp__sub_821BDA90(ctx, base);
+  // l84 KI-054 probe v2: timer updates against the inline ambient steps
+  // (a no-op unless mcla_ambient_dt_probe or _snapshot is on).
+  if (timer == kMainTimer) MclaAmbientDtOnTimerUpdate(base, supplied);
 }
 
 // Strong override of the generated weak sub_822D2478; the original body runs
