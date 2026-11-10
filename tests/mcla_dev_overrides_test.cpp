@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 85, "eighty-five whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 86, "eighty-six whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -769,6 +769,50 @@ void TestWhitelist() {
           "l88 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
+    // l89 KI-060 control key: the per-channel filter stays recompiled (host
+    // init-only bool at startup, default off); =false writes nothing; no
+    // conflict pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &ch_off = Info(Key::kAudioFilterNativeChOff);
+    Check(FindKey("audio_filter_native_ch_off") == Key::kAudioFilterNativeChOff &&
+              ch_off.phase == Phase::kStartup &&
+              CvarName(ch_off) == "mcla_audio_filter_native_ch_off" &&
+              CvarText(ch_off, true) == "true" && CvarText(ch_off, false).empty() &&
+              ch_off.true_source == TextSource::kLiteral && !ch_off.overrides_user,
+          "audio_filter_native_ch_off=true writes true to mcla_audio_filter_native_ch_off at "
+          "startup, false writes nothing");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kAudioFilterNativeChOff &&
+                pair.second != Key::kAudioFilterNativeChOff,
+            "the l89 key is in no conflict pair");
+    }
+    Check(!FindKey("mcla_audio_filter_native_ch_off") && !FindKey("audio_filter_ch_off") &&
+              !FindKey("audio_filter_native_ch") && !FindKey("AUDIO_FILTER_NATIVE_CH_OFF") &&
+              !FindKey("audio_filter_native_ch_off_on") && !FindKey("audio_filter_native_ch_of"),
+          "no prefix, suffix, cvar-name or case variants of the l89 key");
+    const Parsed on = Parse("audio_filter_probe=true\n"
+                            "audio_filter_native=true\n"
+                            "audio_filter_native_verify=true\n"
+                            "audio_filter_native_ch_off=true\n");
+    Check(on.ValueCount() == 4 && on.issue_count == 0 &&
+              on.Value(Key::kAudioFilterNativeChOff) == true &&
+              on.Value(Key::kAudioFilterNative) == true,
+          "the l89 control arm keys parse together");
+    const Parsed bad = Parse("audio_filter_native_ch_off=1\n"
+                             "mcla_audio_filter_native_ch_off=true\n"
+                             "audio_filter_native_ch_off=false\n"
+                             "audio_filter_native_ch_off=true\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kAudioFilterNativeChOff) == false &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l89 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1221,7 +1265,8 @@ void TestWhitelist() {
                           key == Key::kRawTimerStats || key == Key::kRawTimerHitchHoldOff ||
                           key == Key::kAudioFilterProbe || key == Key::kAudioFilterNative ||
                           key == Key::kAudioFilterNativeVerify ||
-                          key == Key::kReadbackFencedDelivery;
+                          key == Key::kReadbackFencedDelivery ||
+                          key == Key::kAudioFilterNativeChOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1971,7 +2016,8 @@ void TestWhitelist() {
     // l82 key explicit false (76 keys); l83: plus the three l83 keys explicit
     // false (79 keys); l84: plus the l84 key explicit false (80 keys); l86:
     // plus the l86 key explicit false (81 keys); l87: plus the three l87 keys
-    // explicit false (84 keys); l88: plus the l88 key explicit false (85 keys).
+    // explicit false (84 keys); l88: plus the l88 key explicit false (85 keys);
+    // l89: plus the l89 key explicit false (86 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -1980,7 +2026,8 @@ void TestWhitelist() {
                                   "audio_filter_probe=false\n"
                                   "audio_filter_native=false\n"
                                   "audio_filter_native_verify=false\n"
-                                  "readback_fenced_delivery=false\n";
+                                  "readback_fenced_delivery=false\n"
+                                  "audio_filter_native_ch_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"

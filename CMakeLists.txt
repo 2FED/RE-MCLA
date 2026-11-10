@@ -99,7 +99,8 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
         MCLA_AMBDT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     # l87 KI-060: the audio filter test runs the generated loop body of
     # sub_82146BE0 as an interpreter against the native kernel and checks the
-    # offsets against the generated code.
+    # offsets against the generated code (l89: also both loops of
+    # sub_82147738).
     target_compile_definitions(mcla_audio_filter_test PRIVATE
         MCLA_AFILT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
@@ -248,7 +249,8 @@ set(MCLA_SOURCES
 # sub_826FBA60 and sub_826FA8A8; both default off). l87 KI-060: XAudio
 # engine-thread filter probe and native two-bank voice filter with its
 # self-check (overrides sub_82146BE0, sub_82147738 and sub_823EC248; all three
-# switches default off).
+# switches default off). l89: native sub_82147738 too, and probe-only
+# pass-through overrides of sub_823F4450, sub_823EFD30 and sub_823EE050.
 list(APPEND MCLA_SOURCES
     src/mcla_album_probe.cpp
     src/mcla_ambient_dt_probe.cpp
@@ -260,6 +262,16 @@ list(APPEND MCLA_SOURCES
     src/mcla_photo_capture.cpp
     src/mcla_pursuit_probe.cpp
     src/mcla_xma_consume_probe.cpp)
+# l89 KI-060: the native voice-filter kernels are scalar recurrences. SLP
+# vectorization packs their independent operations into vectors with
+# shuffles and lengthens the dependency chain (host benchmark: 1.0x instead
+# of 1.3x for sub_82146BE0, 0.6x instead of 1.1x for the cascade channel), so
+# it is off for this file; contraction is off as in MulAdd. The result bits do
+# not depend on either option.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set_source_files_properties(src/mcla_audio_filter.cpp PROPERTIES
+        COMPILE_OPTIONS "-fno-slp-vectorize;-ffp-contract=off")
+endif()
 
 # M10-001 command-processor cost split (overrides sub_82411E98 and
 # sub_82412F98 when the SDK has rex/perf/perf_split.h). The option is OFF by

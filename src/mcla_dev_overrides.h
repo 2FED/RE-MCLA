@@ -262,6 +262,13 @@
 //   completed is not made, completed copies reach guest memory before their
 //   fences. =false changes nothing; an SDK without the l88 cvar logs the key
 //   as unavailable; no conflict pair.
+// - l89 (docs/evidence/M11-ki060-l89-implementation-20261110.md; KI-060):
+//   audio_filter_native now also runs the per-channel filter sub_82147738
+//   natively (both kernels without the library fma) and
+//   audio_filter_native_verify checks both; audio_filter_native_ch_off=true
+//   writes true to the host init-only bool mcla_audio_filter_native_ch_off
+//   at startup (the control: sub_82147738 stays recompiled). Default off;
+//   =false changes nothing; no conflict pair.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -390,8 +397,9 @@ enum class Key : uint8_t {
   kAudioFilterNative,        // l87 KI-060: mcla_audio_filter_native=true
   kAudioFilterNativeVerify,  // l87 KI-060: mcla_audio_filter_native_verify=true
   kReadbackFencedDelivery,   // l88 KI-074: d3d12_readback_fenced_delivery=true
+  kAudioFilterNativeChOff,   // l89 KI-060: mcla_audio_filter_native_ch_off=true
 };
-inline constexpr size_t kKeyCount = 85;
+inline constexpr size_t kKeyCount = 86;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -608,6 +616,10 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // graphics plugin (hot reload), so after the plugin has loaded; =false
     // writes nothing.
     {"readback_fenced_delivery", Phase::kGraphicsPlugin, "d3d12_readback_fenced_delivery", "true",
+     ""},
+    // l89 KI-060 control: sub_82147738 stays recompiled with the native
+    // switches on (host init-only, startup); =false writes nothing.
+    {"audio_filter_native_ch_off", Phase::kStartup, "mcla_audio_filter_native_ch_off", "true",
      ""},
 }};
 

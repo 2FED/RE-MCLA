@@ -12,6 +12,15 @@
 // docs/evidence/M11-ki060-audio-filter-analysis-20261110.md; implementation:
 // docs/evidence/M11-ki060-l87-implementation-20261110.md.
 //
+// l89 (docs/evidence/M11-ki060-l89-implementation-20261110.md): both native
+// kernels use MulAdd instead of the library fma (bit-identical, proof at
+// MulAdd); mcla_audio_filter_native also runs the per-channel biquad
+// sub_82147738 natively (layout below StepSection), unless
+// mcla_audio_filter_native_ch_off; the self-check covers both functions and
+// counts a difference explained by a concurrent input change as `raced`;
+// the probe also times the three remaining engine-thread leaves
+// sub_823F4450, sub_823EFD30 and sub_823EE050.
+//
 // Static layout of sub_82146BE0 (generated/default/mcla_recomp.0.cpp at the
 // M11 codegen; line numbers are of that file):
 // - r3 = effect object (`mr r31,r3`, :55202), r4 = buffer argument
@@ -55,6 +64,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 
 namespace mcla::audio_filter {
 
@@ -67,6 +77,10 @@ inline constexpr uint32_t kDescriptorFunction = 0x823EAF00u;
 inline constexpr uint32_t kEngineLoopReturn = 0x823EC96Cu;  // engine thread call
 inline constexpr uint32_t kCoefficientReturnA = 0x82146CE0u;
 inline constexpr uint32_t kCoefficientReturnB = 0x82146D28u;
+// l89 probe: the remaining engine-thread leaves (no calls of their own).
+inline constexpr uint32_t kMixFunction = 0x823F4450u;        // gain-ramp mixer
+inline constexpr uint32_t kAtomicAddFunction = 0x823EFD30u;  // lwarx/stwcx. add
+inline constexpr uint32_t kKickFunction = 0x823EE050u;       // XMA unlock and kick
 
 // Effect object layout (byte offsets from r3).
 inline constexpr uint32_t kBankA = 4;
@@ -96,11 +110,49 @@ inline constexpr uint32_t kExponentMask = 0x7F800000u;
 // History write-back order (indices into h0..h3).
 inline constexpr std::array<uint32_t, 4> kFlushOrder = {0, 2, 1, 3};
 
+// Static layout of sub_82147738 (mcla_recomp.0.cpp:57113-57851, l89):
+// - r3 = effect object (`mr r31,r3`, :57135), r4 = buffer argument
+//   (`mr r3,r4`, :57137). Byte +68 != 0: return r3 = 0 at once (:57139-57143,
+//   loc_82147BFC :57830).
+// - sub_823EAF00 with r4 = r1+96 (:57144-57148) copies [arg+12], [arg+16],
+//   [arg+20] to r1+96/100/104: the channel count is `lbz r10,97(r1)`
+//   (:57150), i.e. the byte at arg+13; the sample pointer is
+//   `lwz r11,104(r1)` (:57207) = [arg+20], as for sub_82146BE0.
+// - Coefficients c0..c4 = floats +12..+28 in f0, f13, f12, f11, f10, read
+//   once (:57151-57170); count 0: return (:57171). f5 = the float at
+//   0x82000ED4 (:57173-57183).
+// - Channel loop r4 = 0.. count-1 (`addi r4,r4,1`, `cmplw`, `blt`,
+//   :57822-57829), sample block data + 1024 * channel (`addi r5,r5,1024`,
+//   `add r11,r5,r11`); a channel runs when bit (1 << r4, slw) & byte +74
+//   (re-read per channel, :57187-57195). Its history words are
+//   [[+32] + r6] (h0), [[+36] + r6] (h1), [[+40] + r6] (h2), [[+44] + r6]
+//   (h3), r6 = 4 * the number of channels run before (`addi r6,r6,4` only on
+//   that path, :57817); loads :57196-57224.
+// - Byte +75 (per channel, :57204) != 0: two cascaded sections, loop
+//   loc_821477FC (:57235-57531), the arithmetic of StepBank; == 0: one
+//   section, loop loc_82147A20 (:57540-57734), StepSection. Both 32 x 8
+//   samples in place, each output `fmuls` by the gain float +60, re-read
+//   before every sample's output (`lfs fN,60(r31)`).
+// - Then (loc_82147B6C, :57735-57817) h0, h1, h2, h3 are stored in that
+//   order to the four arrays (pointers re-read), each replaced by f5 when its
+//   exponent bits are 0. Return r3 = 0 (:57832), f25-f31, r30, r31, lr
+//   restored. The object is only read.
+inline constexpr uint32_t kChannelBypassed = 68;      // byte
+inline constexpr uint32_t kChannelCoefficients = 12;  // c0..c4 at +12..+28
+inline constexpr std::array<uint32_t, 4> kChannelHistory = {32, 36, 40, 44};  // h0..h3
+inline constexpr uint32_t kChannelGain = 60;
+inline constexpr uint32_t kChannelMask = 74;     // byte
+inline constexpr uint32_t kChannelCascade = 75;  // byte
+inline constexpr uint32_t kChannelCountOffset = 13;  // byte [arg + 13]
+inline constexpr uint32_t kChannelStride = 1024;
+inline constexpr uint32_t kChannelFrameSize = 192;  // `stwu r1,-192(r1)`
+
 // 48 kHz / 256 samples per engine frame.
 inline constexpr double kFramesPerSecondNeeded = 48000.0 / kSamples;
 
 static_assert(kBankA + kBankBytes == kBankB && kBankB + kBankBytes == kParamB);
 static_assert(kIterations * kSamplesPerIteration == kSamples);
+static_assert(kSamples * 4 <= kChannelStride);
 
 constexpr bool BankAOn(uint32_t cutoff) { return cutoff < kBypassCutoff; }
 constexpr bool BankBOn(uint32_t param) { return param != 0; }
@@ -110,6 +162,13 @@ constexpr bool Denormal(uint32_t bits) {
 }
 constexpr uint32_t FlushHistoryWord(uint32_t bits, uint32_t zero_bits) {
   return ExponentZero(bits) ? zero_bits : bits;
+}
+// `slw r10,r3,r4` with r3 = 1 (shift amount r4 & 0x3F; 32..63 give 0), and
+// `and r9,r10,r11` with the mask byte (:57189-57195).
+constexpr bool ChannelOn(uint8_t mask, uint32_t channel) {
+  const uint32_t amount = channel & 0x3Fu;
+  const uint32_t bit = (amount & 0x20u) != 0 ? 0u : (1u << amount);
+  return (bit & mask) != 0;
 }
 
 inline float BitsToFloat(uint32_t bits) {
@@ -153,6 +212,44 @@ struct BankState {
 // `double(float(v))`, the recompiled rounding of every fmuls/fadds/fmadds.
 inline double Round(double v) { return static_cast<double>(static_cast<float>(v)); }
 
+// l89: the multiply-add of the native kernels, without the library fma.
+//
+// The recompiled fmadds/fmsubs are `double(float(std::fma(a, b, +-c)))`.
+// mcla.exe is built -O3 -msse4.1 (no -mfma), so std::fma is a call to the CRT
+// (the Wine builtin under Proton). In both kernels every operand a, b, c is
+// a double that holds a float exactly (each register is written only by
+// lfs/lfsx `double(temp.f32)`, by `double(float(...))` or by fmr of such a
+// register; the unit test checks this for every statement of both generated
+// loops). Then:
+// 1. a * b is exact in double: the significands have at most 24 bits each,
+//    so the product has at most 48 <= 53; its magnitude is 0 or within
+//    [2^-298, 2^256), inside the normal double range, so it neither rounds,
+//    overflows nor underflows.
+// 2. fma(a, b, c) = round64(a*b + c) (one rounding of the exact sum).
+//    a * b + c in double = round64(round64(a*b) + c) = round64(a*b + c) by 1.
+//    This holds in every rounding mode, and the sign of an exact zero sum is
+//    decided by the same operands (the exact product is the rounded one).
+// 3. The result then goes through the same round32 (`double(float(...))`),
+//    so the float bits are equal. NaN payload selection may differ (the
+//    known residual of the l87 kernel, unreachable for finite audio).
+// The product and the sum are separate statements and contraction is off
+// here, so no fused instruction is formed even if a build adds -mfma (a fused
+// result would be identical anyway, by 1). The M7-016 Proton fma
+// differences need |result| = 2^-1075, which float operands cannot reach.
+inline double MulAdd(double a, double b, double c) {
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#endif
+  const double product = a * b;
+  return product + c;
+}
+
+// The l87 kernels' library form (the recompiled code's call), kept for the
+// unit test and the benchmark; the hooks never use it.
+inline double LibraryFma(double a, double b, double c) { return std::fma(a, b, c); }
+
+using MulAddFn = double (*)(double, double, double);
+
 inline double Load(uint32_t bits) { return static_cast<double>(BitsToFloat(bits)); }
 
 inline BankState LoadBank(const Bank &bank) {
@@ -179,23 +276,71 @@ inline void StoreHistory(const BankState &s, Bank &bank) {
 // One sample through one bank: two cascaded transposed direct-form II
 // sections sharing c0..c4, in the recompiled operand order (bank A, sample 0
 // at :55509-55566; every other sample and bank B the same, checked by the
-// test's interpreter). Each line is one PPC instruction.
+// test's interpreter). Each line is one PPC instruction. `Fma` is MulAdd in
+// the hooks (l89) and LibraryFma in the l87 reference (test, benchmark).
+template <MulAddFn Fma = MulAdd>
 inline double StepBank(BankState &s, double x) {
-  const double y1 = Round(std::fma(x, s.c0, s.h0));    // fmadds f5,f0,f13,f7
-  const double y2 = Round(std::fma(y1, s.c0, s.h2));   // fmadds f13,f5,f13,f4
-  const double p1 = Round(y1 * s.c3);                  // fmuls f1,f5,f6
-  const double p2 = Round(y1 * s.c4);                  // fmuls f4,f5,f7
-  const double p3 = Round(y2 * s.c3);                  // fmuls f30,f13,f6
-  const double p4 = Round(y2 * s.c4);                  // fmuls f29,f13,f7
-  const double u1 = Round(std::fma(x, s.c1, -p1));     // fmsubs f1,f0,f6,f1
-  const double n1 = Round(std::fma(x, s.c2, -p2));     // fmsubs f0,f0,f7,f4
-  const double u3 = Round(std::fma(y1, s.c1, -p3));    // fmsubs f13,f5,f6,f30
-  const double n3 = Round(std::fma(y1, s.c2, -p4));    // fmsubs f7,f5,f7,f29
-  s.h0 = Round(u1 + s.h1);                             // fadds f6,f1,f3
-  s.h1 = n1;                                           // stfs f0,168(r1)
-  s.h2 = Round(u3 + s.h3);                             // fadds f5,f13,f2
-  s.h3 = n3;                                           // stfs f7,176(r1)
+  const double y1 = Round(Fma(x, s.c0, s.h0));    // fmadds f5,f0,f13,f7
+  const double y2 = Round(Fma(y1, s.c0, s.h2));   // fmadds f13,f5,f13,f4
+  const double p1 = Round(y1 * s.c3);             // fmuls f1,f5,f6
+  const double p2 = Round(y1 * s.c4);             // fmuls f4,f5,f7
+  const double p3 = Round(y2 * s.c3);             // fmuls f30,f13,f6
+  const double p4 = Round(y2 * s.c4);             // fmuls f29,f13,f7
+  const double u1 = Round(Fma(x, s.c1, -p1));     // fmsubs f1,f0,f6,f1
+  const double n1 = Round(Fma(x, s.c2, -p2));     // fmsubs f0,f0,f7,f4
+  const double u3 = Round(Fma(y1, s.c1, -p3));    // fmsubs f13,f5,f6,f30
+  const double n3 = Round(Fma(y1, s.c2, -p4));    // fmsubs f7,f5,f7,f29
+  s.h0 = Round(u1 + s.h1);                        // fadds f6,f1,f3
+  s.h1 = n1;                                      // stfs f0,168(r1)
+  s.h2 = Round(u3 + s.h3);                        // fadds f5,f13,f2
+  s.h3 = n3;                                      // stfs f7,176(r1)
   return y2;
+}
+
+// One sample through the single section of sub_82147738 (byte +75 == 0, loop
+// loc_82147A20, sample 0 at :57550-57593): the first half of StepBank; h2
+// and h3 are not touched.
+template <MulAddFn Fma = MulAdd>
+inline double StepSection(BankState &s, double x) {
+  const double y = Round(Fma(x, s.c0, s.h0));   // fmadds f3,f4,f0,f9
+  const double p1 = Round(y * s.c3);            // fmuls f26,f3,f11
+  const double p2 = Round(y * s.c4);            // fmuls f25,f3,f10
+  const double u = Round(Fma(x, s.c1, -p1));    // fmsubs f28,f4,f13,f26
+  const double n = Round(Fma(x, s.c2, -p2));    // fmsubs f4,f4,f12,f25
+  s.h0 = Round(u + s.h1);                       // fadds f8,f28,f8
+  s.h1 = n;
+  return y;
+}
+
+// The 256 samples of one sub_82147738 channel in place (raw float bits, host
+// order): the section(s), then `fmuls` by the gain that `gain()` returns
+// (the original re-reads +60 for every output, so the hook passes a guest
+// load). The history is in `s` (c0..c4 the object's +12..+28).
+template <MulAddFn Fma = MulAdd, typename Gain>
+inline void ProcessChannel(BankState &s, bool cascade, uint32_t *samples, Gain &&gain) {
+  if (cascade) {
+    for (uint32_t i = 0; i < kSamples; ++i) {
+      const double y = StepBank<Fma>(s, Load(samples[i]));
+      samples[i] = FloatToBits(static_cast<float>(y * Load(gain())));
+    }
+  } else {
+    for (uint32_t i = 0; i < kSamples; ++i) {
+      const double y = StepSection<Fma>(s, Load(samples[i]));
+      samples[i] = FloatToBits(static_cast<float>(y * Load(gain())));
+    }
+  }
+}
+
+// The channel's four history words after the block (h0..h3 order), each
+// replaced by f5 when its exponent bits are 0 (loc_82147B6C).
+inline std::array<uint32_t, kHistoryWords> ChannelHistoryOut(const BankState &s,
+                                                             uint32_t zero_bits) {
+  Bank bank;
+  StoreHistory(s, bank);
+  for (uint32_t k = 0; k < kHistoryWords; ++k) {
+    bank.h[k] = FlushHistoryWord(bank.h[k], zero_bits);
+  }
+  return bank.h;
 }
 
 // Entry: a bank that is on and was bypassed last block starts from f31.
@@ -211,6 +356,7 @@ inline void ResetBypassedHistory(Object &o, bool a_on, bool b_on, uint32_t zero_
 // Everything after the coefficient refresh: the flags and caches (with the
 // values re-read at :55447/:55451), the 256 samples in place (raw float
 // bits, host order) and the end-of-block history flush.
+template <MulAddFn Fma = MulAdd>
 inline void Process(Object &o, bool a_on, bool b_on, uint32_t cutoff_now, uint32_t param_now,
                     uint32_t *samples, uint32_t zero_bits) {
   o.bypassed_b = b_on ? 0 : 1;
@@ -221,16 +367,16 @@ inline void Process(Object &o, bool a_on, bool b_on, uint32_t cutoff_now, uint32
   BankState b = LoadBank(o.b);
   if (a_on && b_on) {
     for (uint32_t i = 0; i < kSamples; ++i) {
-      const double x = StepBank(b, StepBank(a, Load(samples[i])));
+      const double x = StepBank<Fma>(b, StepBank<Fma>(a, Load(samples[i])));
       samples[i] = FloatToBits(static_cast<float>(x));
     }
   } else if (a_on) {
     for (uint32_t i = 0; i < kSamples; ++i) {
-      samples[i] = FloatToBits(static_cast<float>(StepBank(a, Load(samples[i]))));
+      samples[i] = FloatToBits(static_cast<float>(StepBank<Fma>(a, Load(samples[i]))));
     }
   } else if (b_on) {
     for (uint32_t i = 0; i < kSamples; ++i) {
-      samples[i] = FloatToBits(static_cast<float>(StepBank(b, Load(samples[i]))));
+      samples[i] = FloatToBits(static_cast<float>(StepBank<Fma>(b, Load(samples[i]))));
     }
   }
   if (a_on) {
@@ -250,6 +396,29 @@ inline void Process(Object &o, bool a_on, bool b_on, uint32_t cutoff_now, uint32
 constexpr bool NeedsRefresh(const Object &o) {
   return o.cache_a != o.cutoff_a || o.cache_b != o.param_b;
 }
+
+// l89 self-check race: `before` is the host copy the prediction was made
+// from, `after` the object once the original has run. The original stores
+// +88 = +80 and +84 = +76 as it read them last; a cache that differs from the
+// copied parameter, or a parameter that differs now, means another thread
+// changed +80/+76 between the copy and the original (l87: a coefficient
+// refresh the copy did not predict).
+constexpr bool FilterRaced(const Object &before, const Object &after) {
+  return after.cache_a != before.cutoff_a || after.cache_b != before.param_b ||
+         after.cutoff_a != before.cutoff_a || after.param_b != before.param_b;
+}
+
+// The sub_82147738 object fields (only read by the original). A self-check
+// difference with these changed across the original's run is `raced`.
+struct ChannelInputs {
+  uint8_t bypassed = 0;  // +68
+  uint8_t mask = 0;      // +74
+  uint8_t cascade = 0;   // +75
+  std::array<uint32_t, kCoefficients> c{};             // +12..+28
+  uint32_t gain = 0;                                   // +60
+  std::array<uint32_t, kHistoryWords> history{};       // +32..+44 (pointers)
+  bool operator==(const ChannelInputs &) const = default;
+};
 
 // The input block as the probe classifies it.
 struct BlockClass {
@@ -277,33 +446,33 @@ struct Mismatch {
   std::string field;  // first differing field
   uint32_t want = 0;
   uint32_t got = 0;
+  // The field name is built only for the first difference (index < 0: none).
+  void Check(const char *name, int index, uint32_t a, uint32_t b) {
+    if (a != b && count++ == 0) {
+      field = index >= 0 ? name + std::to_string(index) : std::string(name);
+      want = a;
+      got = b;
+    }
+  }
 };
 
 inline Mismatch Compare(const Object &want, const uint32_t *want_samples, const Object &got,
                         const uint32_t *got_samples) {
   Mismatch m;
-  // The field name is built only for the first difference (index < 0: none).
-  auto check = [&m](const char *field, int index, uint32_t a, uint32_t b) {
-    if (a != b && m.count++ == 0) {
-      m.field = index >= 0 ? field + std::to_string(index) : std::string(field);
-      m.want = a;
-      m.got = b;
-    }
-  };
   for (uint32_t k = 0; k < kCoefficients; ++k) {
-    check("a.c", int(k), want.a.c[k], got.a.c[k]);
-    check("b.c", int(k), want.b.c[k], got.b.c[k]);
+    m.Check("a.c", int(k), want.a.c[k], got.a.c[k]);
+    m.Check("b.c", int(k), want.b.c[k], got.b.c[k]);
   }
   for (uint32_t k = 0; k < kHistoryWords; ++k) {
-    check("a.h", int(k), want.a.h[k], got.a.h[k]);
-    check("b.h", int(k), want.b.h[k], got.b.h[k]);
+    m.Check("a.h", int(k), want.a.h[k], got.a.h[k]);
+    m.Check("b.h", int(k), want.b.h[k], got.b.h[k]);
   }
-  check("cache_a", -1, want.cache_a, got.cache_a);
-  check("cache_b", -1, want.cache_b, got.cache_b);
-  check("bypassed_a", -1, want.bypassed_a, got.bypassed_a);
-  check("bypassed_b", -1, want.bypassed_b, got.bypassed_b);
+  m.Check("cache_a", -1, want.cache_a, got.cache_a);
+  m.Check("cache_b", -1, want.cache_b, got.cache_b);
+  m.Check("bypassed_a", -1, want.bypassed_a, got.bypassed_a);
+  m.Check("bypassed_b", -1, want.bypassed_b, got.bypassed_b);
   for (uint32_t i = 0; i < kSamples; ++i) {
-    check("sample", int(i), want_samples[i], got_samples[i]);
+    m.Check("sample", int(i), want_samples[i], got_samples[i]);
   }
   return m;
 }
@@ -342,6 +511,30 @@ struct FunctionStats {
   }
 };
 
+// l89 probe of a pass-through leaf: calls inside a frame (timed while its
+// rate stays at or below kPassTimedMaxPerSecond), calls outside any frame
+// (counted only).
+struct PassStats {
+  uint64_t calls = 0;
+  uint64_t timed = 0;
+  uint64_t ns = 0;  // over the timed calls
+  uint64_t outside = 0;
+  void Merge(const PassStats &o) {
+    calls += o.calls;
+    timed += o.timed;
+    ns += o.ns;
+    outside += o.outside;
+  }
+  // ns per frame, scaled to all in-frame calls when only some were timed.
+  uint64_t NsPerFrame(uint64_t frames) const {
+    if (frames == 0 || timed == 0) {
+      return 0;
+    }
+    return static_cast<uint64_t>(double(ns) * double(calls) / double(timed) / double(frames));
+  }
+};
+inline constexpr uint64_t kPassTimedMaxPerSecond = 50000;
+
 struct Stats {
   uint64_t frames = 0;
   uint64_t other_frames = 0;  // frame calls not from the engine thread loop
@@ -358,13 +551,25 @@ struct Stats {
   uint64_t none = 0;
   uint64_t zero = 0;
   uint64_t denormal = 0;
-  // Native path and self-check.
+  // Native path and self-check of sub_82146BE0.
   uint64_t native = 0;
   uint64_t refresh = 0;   // native calls that refreshed coefficients
   uint64_t fallback = 0;  // native on, original called (no buffer pointer)
   uint64_t verified = 0;
   uint64_t mismatches = 0;
   uint64_t verify_skipped = 0;  // sampled but refreshing: not compared
+  uint64_t raced = 0;  // l89: differences explained by FilterRaced (not mismatches)
+  // l89: native path and self-check of sub_82147738.
+  uint64_t ch_native = 0;
+  uint64_t ch_fallback = 0;  // no buffer argument or sample pointer
+  uint64_t ch_verified = 0;
+  uint64_t ch_mismatches = 0;
+  uint64_t ch_raced = 0;  // ChannelInputs changed across the original
+  uint64_t ch_verify_skipped = 0;  // sampled but bypassed / no channel / no buffer
+  // l89 probe: the remaining engine-thread leaves.
+  PassStats mix;   // sub_823F4450
+  PassStats add;   // sub_823EFD30
+  PassStats kick;  // sub_823EE050
 
   void AddMix(bool a_on, bool b_on) {
     a_only += a_on && !b_on ? 1 : 0;
@@ -402,10 +607,61 @@ struct Stats {
     verified += o.verified;
     mismatches += o.mismatches;
     verify_skipped += o.verify_skipped;
+    raced += o.raced;
+    ch_native += o.ch_native;
+    ch_fallback += o.ch_fallback;
+    ch_verified += o.ch_verified;
+    ch_mismatches += o.ch_mismatches;
+    ch_raced += o.ch_raced;
+    ch_verify_skipped += o.ch_verify_skipped;
+    mix.Merge(o.mix);
+    add.Merge(o.add);
+    kick.Merge(o.kick);
   }
 };
 
 inline double Ratio(uint64_t a, uint64_t b) { return b ? double(a) / double(b) : 0.0; }
+
+// The l89 fields appended to the MCLA_AFILT line and the F10 object.
+inline std::string L89Fields(const Stats &s, bool json) {
+  using ull = unsigned long long;
+  char text[1024];
+  if (!json) {
+    std::snprintf(text, sizeof(text),
+                  " raced=%llu ch_nat=%llu ch_fallback=%llu ch_verified=%llu ch_mismatch=%llu "
+                  "ch_raced=%llu ch_vskip=%llu",
+                  ull(s.raced), ull(s.ch_native), ull(s.ch_fallback), ull(s.ch_verified),
+                  ull(s.ch_mismatches), ull(s.ch_raced), ull(s.ch_verify_skipped));
+  } else {
+    std::snprintf(text, sizeof(text),
+                  ", \"raced\": %llu, \"ch_native_calls\": %llu, \"ch_fallback\": %llu, "
+                  "\"ch_verified\": %llu, \"ch_mismatches\": %llu, \"ch_raced\": %llu, "
+                  "\"ch_verify_skipped\": %llu",
+                  ull(s.raced), ull(s.ch_native), ull(s.ch_fallback), ull(s.ch_verified),
+                  ull(s.ch_mismatches), ull(s.ch_raced), ull(s.ch_verify_skipped));
+  }
+  std::string out = text;
+  const std::pair<const char *, const PassStats *> leaves[] = {
+      {"mix", &s.mix}, {"add", &s.add}, {"kick", &s.kick}};
+  for (const auto &[name, p] : leaves) {
+    if (!json) {
+      std::snprintf(text, sizeof(text),
+                    " %s_calls=%llu %s_out=%llu %s_timed=%llu %s_ns=%llu %s_per_frame=%.2f "
+                    "%s_ns_per_frame=%llu",
+                    name, ull(p->calls), name, ull(p->outside), name, ull(p->timed), name,
+                    ull(p->ns), name, Ratio(p->calls, s.frames), name,
+                    ull(p->NsPerFrame(s.frames)));
+    } else {
+      std::snprintf(text, sizeof(text),
+                    ", \"%s\": {\"calls\": %llu, \"outside\": %llu, \"timed\": %llu, "
+                    "\"ns\": %llu, \"ns_per_frame\": %llu}",
+                    name, ull(p->calls), ull(p->outside), ull(p->timed), ull(p->ns),
+                    ull(p->NsPerFrame(s.frames)));
+    }
+    out += text;
+  }
+  return out;
+}
 
 // One MCLA_AFILT line for an interval of `interval_ns`.
 inline std::string Line(const Stats &s, uint64_t interval_ns, bool native, bool verify) {
@@ -446,7 +702,7 @@ inline std::string Line(const Stats &s, uint64_t interval_ns, bool native, bool 
       static_cast<unsigned long long>(s.refresh), static_cast<unsigned long long>(s.fallback),
       static_cast<unsigned long long>(s.verified), static_cast<unsigned long long>(s.mismatches),
       static_cast<unsigned long long>(s.verify_skipped));
-  return text;
+  return text + L89Fields(s, false);
 }
 
 // One MCLA_AFILT_VERIFY line (the first few mismatches of a session).
@@ -459,6 +715,20 @@ inline std::string VerifyLine(uint64_t index, uint64_t verified, const Mismatch 
                 static_cast<unsigned long long>(index),
                 static_cast<unsigned long long>(verified), a_on ? 1 : 0, b_on ? 1 : 0, m.count,
                 m.field.c_str(), m.want, m.got);
+  return text;
+}
+
+// One MCLA_AFILT_CH_VERIFY line (l89; the first few sub_82147738 mismatches).
+// Fields: "ch<k>.sample<i>" or "ch<k>.h<j>" (k = channel number).
+inline std::string ChannelVerifyLine(uint64_t index, uint64_t verified, const Mismatch &m,
+                                     uint32_t channels, uint8_t mask, bool cascade) {
+  char text[256];
+  std::snprintf(text, sizeof(text),
+                "MCLA_AFILT_CH_VERIFY v=1 n=%llu call=%llu channels=%u mask=0x%02X cascade=%d "
+                "diffs=%u field=%s want=0x%08X got=0x%08X",
+                static_cast<unsigned long long>(index),
+                static_cast<unsigned long long>(verified), channels, unsigned(mask),
+                cascade ? 1 : 0, m.count, m.field.c_str(), m.want, m.got);
   return text;
 }
 
@@ -479,7 +749,7 @@ inline std::string StateJson(const Stats &s, uint64_t session_ns, bool probe, bo
       "\"channel\": {\"calls\": %llu, \"ns\": %llu, \"ns_max\": %llu, \"per_frame_max\": %llu, "
       "\"mxcsr_de\": %llu, \"mxcsr_ue\": %llu}, "
       "\"native_calls\": %llu, \"refresh\": %llu, \"fallback\": %llu, \"verified\": %llu, "
-      "\"mismatches\": %llu, \"verify_skipped\": %llu}",
+      "\"mismatches\": %llu, \"verify_skipped\": %llu",
       probe ? "true" : "false", native ? "true" : "false", verify ? "true" : "false", seconds,
       static_cast<unsigned long long>(s.frames), static_cast<unsigned long long>(s.other_frames),
       fps, kFramesPerSecondNeeded,
@@ -503,7 +773,7 @@ inline std::string StateJson(const Stats &s, uint64_t session_ns, bool probe, bo
       static_cast<unsigned long long>(s.refresh), static_cast<unsigned long long>(s.fallback),
       static_cast<unsigned long long>(s.verified), static_cast<unsigned long long>(s.mismatches),
       static_cast<unsigned long long>(s.verify_skipped));
-  return text;
+  return text + L89Fields(s, true) + "}";
 }
 
 // Self-check sampling: one call in kVerifyEvery; at most kVerifyLines lines.
@@ -513,5 +783,5 @@ inline constexpr uint64_t kLineIntervalNs = 1000000000ull;
 
 }  // namespace mcla::audio_filter
 
-// The F10 state block "audio_filter"; empty when all three switches are off.
+// The F10 state block "audio_filter"; empty when all switches are off.
 std::string MclaAudioFilterStateJson();

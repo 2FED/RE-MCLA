@@ -5,6 +5,12 @@
 // block), on random, silent, denormal, impulse and large inputs for the three
 // bank combinations; the offsets are checked against the generated code text
 // (MCLA_AFILT_GENERATED_DIR).
+// l89: the kernels use MulAdd instead of std::fma (the interpreter keeps
+// std::fma, the recompiled form); random and adversarial float operands
+// check that the product is exact and MulAdd equals fma; every FP register
+// write in both generated functions is float-exact; sub_82147738's two loops
+// run by the same kind of interpreter against ProcessChannel; its offsets,
+// the race classification and the l89 line fields.
 
 #include "mcla_audio_filter.h"
 
@@ -352,7 +358,13 @@ bool CompareCase(const std::vector<Op> &ops, const af::Bank &bank_a, const af::B
   o.b = bank_b;
   std::array<uint32_t, af::kSamples> native = samples;
   af::Process(o, a_on, b_on, 1000, 1, native.data(), zero_bits);
-  bool same = generated == native;
+  // The l87 library-fma kernel gives the same bits (MulAdd == fma here).
+  af::Object l87;
+  l87.a = bank_a;
+  l87.b = bank_b;
+  std::array<uint32_t, af::kSamples> library = samples;
+  af::Process<af::LibraryFma>(l87, a_on, b_on, 1000, 1, library.data(), zero_bits);
+  bool same = generated == native && library == native && l87.a.h == o.a.h && l87.b.h == o.b.h;
   for (uint32_t k = 0; k < af::kHistoryWords; ++k) {
     const uint32_t ga = af::FlushHistoryWord(
         stack.at((af::kStackCoefficientsA + af::kHistoryOffset + 4 * k) / 4), zero_bits);
@@ -736,14 +748,510 @@ void TestGenerated() {
   Check(!Body(g0, "sub_82147738").empty(), "sub_82147738 found");
 }
 
+// --- l89: MulAdd exactness ---
+
+uint32_t RandomFloatBits() {
+  // Any finite float: random sign, exponent 0..254 (0 = zero/denormal),
+  // random mantissa.
+  const uint32_t r = Next();
+  const uint32_t exponent = (r >> 8) % 255u;
+  return (r & 0x80000000u) | (exponent << 23) | (Next() & 0x007FFFFFu);
+}
+
+bool SameDouble(double a, double b) {
+  uint64_t x, y;
+  std::memcpy(&x, &a, sizeof(x));
+  std::memcpy(&y, &b, sizeof(y));
+  return x == y;
+}
+
+// One triple: the double product is exact (its fma residual is +-0) and
+// MulAdd equals std::fma bit for bit, before and after the round to float.
+bool ExactTriple(uint32_t a_bits, uint32_t b_bits, uint32_t c_bits, bool negate) {
+  const double a = af::Load(a_bits);
+  const double b = af::Load(b_bits);
+  const double c = negate ? -af::Load(c_bits) : af::Load(c_bits);
+  const double product = a * b;
+  const double residual = std::fma(a, b, -product);
+  const double fused = std::fma(a, b, c);
+  const double split = af::MulAdd(a, b, c);
+  return residual == 0.0 && SameDouble(fused, split) &&
+         af::FloatToBits(float(fused)) == af::FloatToBits(float(split));
+}
+
+void TestMulAddExact() {
+  // Adversarial operands: full 24-bit significands, the extremes of the
+  // float range (2^-149 * 2^-149 = 2^-298, max * max ~ 2^256), denormals
+  // with long mantissas, signed zeros, one ulp around 1, and addends that
+  // cancel the product exactly or nearly.
+  const uint32_t edges[] = {0x00000000u, 0x80000000u, 0x00000001u, 0x80000001u, 0x007FFFFFu,
+                            0x00400001u, 0x00800000u, 0x00FFFFFFu, 0x3F7FFFFFu, 0x3F800000u,
+                            0x3F800001u, 0xBFFFFFFFu, 0x3FFFFFFFu, 0x4B7FFFFFu, 0x7F7FFFFFu,
+                            0xFF7FFFFFu, 0x5F7FFFFFu, 0x1F800001u, 0x33800000u, 0x0CAAAAABu};
+  size_t cases = 0;
+  for (const uint32_t a : edges) {
+    for (const uint32_t b : edges) {
+      for (const uint32_t c : edges) {
+        Check(ExactTriple(a, b, c, false) && ExactTriple(a, b, c, true),
+              "edge operands: exact product, MulAdd == fma");
+        cases += 2;
+      }
+      // Addends that cancel the product: the float nearest to it, +- one ulp.
+      const float p = float(af::Load(a) * af::Load(b));
+      if (std::isfinite(p)) {
+        const uint32_t pb = af::FloatToBits(p);
+        for (const uint32_t c : {pb, pb + 1u, pb - 1u}) {
+          if ((c & 0x7F800000u) == 0x7F800000u) {
+            continue;
+          }
+          Check(ExactTriple(a, b, c, true), "cancelling addend: MulAdd == fma");
+          ++cases;
+        }
+      }
+    }
+  }
+  // Random finite float triples, and pairs in the audio range.
+  for (int n = 0; n < 1000000; ++n) {
+    const uint32_t a = RandomFloatBits();
+    const uint32_t b = RandomFloatBits();
+    const uint32_t c = RandomFloatBits();
+    Check(ExactTriple(a, b, c, (n & 1) != 0), "random floats: exact product, MulAdd == fma");
+    const uint32_t x = af::FloatToBits(Uniform(-1.0f, 1.0f));
+    const uint32_t k = af::FloatToBits(Uniform(-2.0f, 2.0f));
+    const uint32_t h = af::FloatToBits(Uniform(-1.0f, 1.0f));
+    Check(ExactTriple(x, k, h, (n & 2) != 0), "audio-range floats: MulAdd == fma");
+    cases += 2;
+  }
+  Check(cases > 2000000, "MulAdd case count");
+}
+
+// Every FP register write in a generated function keeps a float-exact double:
+// `double(temp.f32)` (lfs/lfsx), `double(float(...))` (single-precision
+// arithmetic) or a copy of another register (fmr); and each register is
+// written before its first read in the text.
+void CheckFloatExact(const std::string &body, const char *what) {
+  static const std::regex write(R"(ctx\.f(\d+)\.f64 = (.*);)");
+  static const std::regex exact(
+      R"(^(double\(temp\.f32\)|double\(float\(.*\)\)|ctx\.f\d+\.f64)$)");
+  size_t writes = 0;
+  for (std::sregex_iterator it(body.begin(), body.end(), write), end; it != end; ++it) {
+    const std::string rhs = (*it)[2].str();
+    if (!std::regex_match(rhs, exact)) {
+      std::fprintf(stderr, "%s: not float-exact: %s\n", what, it->str().c_str());
+      Check(false, what);
+    }
+    ++writes;
+  }
+  for (int r = 0; r < 32; ++r) {
+    const std::string name = "ctx.f" + std::to_string(r) + ".f64";
+    const size_t first = body.find(name);
+    if (first == std::string::npos) {
+      continue;
+    }
+    if (body.compare(first, name.size() + 3, name + " = ") != 0) {
+      std::fprintf(stderr, "%s: f%d read before written\n", what, r);
+      Check(false, what);
+    }
+  }
+  Check(writes > 0, what);
+}
+
+// --- l89: interpreter of sub_82147738's two loops ---
+
+enum class ChKind { kLoad, kTempToF, kFma, kMul, kAdd, kFToTemp, kStore, kAddi };
+
+struct ChOp {
+  ChKind kind;
+  int d = 0, a = 0, b = 0, c = 0;
+  bool negate = false;
+  int reg = 0;  // address register (kLoad/kStore/kAddi destination)
+  int offset = 0;
+};
+
+std::vector<ChOp> ParseChannelLoop(const std::string &loop, size_t &unknown) {
+  static const std::regex load(R"(^temp\.u32 = REX_LOAD_U32\(ctx\.r(\d+)\.u32 \+ (-?\d+)\);$)");
+  static const std::regex temp_to_f(R"(^ctx\.f(\d+)\.f64 = double\(temp\.f32\);$)");
+  static const std::regex fma(
+      R"(^ctx\.f(\d+)\.f64 = double\(float\(std::fma\(ctx\.f(\d+)\.f64, ctx\.f(\d+)\.f64, )"
+      R"((-?)ctx\.f(\d+)\.f64\)\)\);$)");
+  static const std::regex bin(
+      R"(^ctx\.f(\d+)\.f64 = double\(float\(ctx\.f(\d+)\.f64 ([*+]) ctx\.f(\d+)\.f64\)\);$)");
+  static const std::regex f_to_temp(R"(^temp\.f32 = float\(ctx\.f(\d+)\.f64\);$)");
+  static const std::regex store(
+      R"(^REX_STORE_U32\(ctx\.r(\d+)\.u32 \+ (-?\d+), temp\.u32\);$)");
+  static const std::regex addi(R"(^ctx\.r(\d+)\.s64 = ctx\.r11\.s64 \+ (-?\d+);$)");
+  // The loop counter (addic. r10,r10,-1): not part of the arithmetic.
+  static const std::regex counter(
+      R"(^(ctx\.xer\.ca = ctx\.r10\.u32 > 0;|ctx\.r10\.s64 = ctx\.r10\.s64 \+ -1;|)"
+      R"(ctx\.cr0\.compare<int32_t>\(ctx\.r10\.s32, 0, ctx\.xer\);)$)");
+  std::vector<ChOp> ops;
+  std::istringstream in(loop);
+  std::string raw;
+  unknown = 0;
+  while (std::getline(in, raw)) {
+    std::string l = raw;
+    while (!l.empty() && (l.back() == '\r' || l.back() == ' ' || l.back() == '\t')) {
+      l.pop_back();
+    }
+    const size_t first = l.find_first_not_of(" \t");
+    l = first == std::string::npos ? std::string() : l.substr(first);
+    if (l.empty() || l.rfind("//", 0) == 0 || l.rfind("rex::ppc::SetGuestProgramCounter", 0) == 0 ||
+        l == "ctx.fpscr.disableFlushMode();" || std::regex_match(l, counter) ||
+        std::regex_match(l, std::regex(R"(^loc_[0-9A-F]+:$)"))) {
+      continue;
+    }
+    std::smatch m;
+    ChOp op{};
+    if (std::regex_match(l, m, load)) {
+      op.kind = ChKind::kLoad;
+      op.reg = std::stoi(m[1].str());
+      op.offset = std::stoi(m[2].str());
+    } else if (std::regex_match(l, m, temp_to_f)) {
+      op.kind = ChKind::kTempToF;
+      op.d = std::stoi(m[1].str());
+    } else if (std::regex_match(l, m, fma)) {
+      op.kind = ChKind::kFma;
+      op.d = std::stoi(m[1].str());
+      op.a = std::stoi(m[2].str());
+      op.b = std::stoi(m[3].str());
+      op.negate = m[4].str() == "-";
+      op.c = std::stoi(m[5].str());
+    } else if (std::regex_match(l, m, bin)) {
+      op.kind = m[3].str() == "*" ? ChKind::kMul : ChKind::kAdd;
+      op.d = std::stoi(m[1].str());
+      op.a = std::stoi(m[2].str());
+      op.b = std::stoi(m[4].str());
+    } else if (std::regex_match(l, m, f_to_temp)) {
+      op.kind = ChKind::kFToTemp;
+      op.a = std::stoi(m[1].str());
+    } else if (std::regex_match(l, m, store)) {
+      op.kind = ChKind::kStore;
+      op.reg = std::stoi(m[1].str());
+      op.offset = std::stoi(m[2].str());
+    } else if (std::regex_match(l, m, addi)) {
+      op.kind = ChKind::kAddi;
+      op.reg = std::stoi(m[1].str());
+      op.offset = std::stoi(m[2].str());
+    } else {
+      std::fprintf(stderr, "unknown channel loop statement: %s\n", l.c_str());
+      ++unknown;
+      continue;
+    }
+    ops.push_back(op);
+  }
+  return ops;
+}
+
+// The 32 iterations of one parsed loop on one channel block: f0, f13, f12,
+// f11, f10 = c0..c4 (+12..+28), f9, f8, f7, f6 = h0..h3 on entry and exit,
+// r11 = the block, r31+60 = the gain.
+void RunChannelLoop(const std::vector<ChOp> &ops, const af::Bank &bank, uint32_t gain,
+                    std::array<uint32_t, af::kSamples> &samples,
+                    std::array<uint32_t, af::kHistoryWords> &history) {
+  double f[32] = {};
+  f[0] = af::Load(bank.c[0]);
+  f[13] = af::Load(bank.c[1]);
+  f[12] = af::Load(bank.c[2]);
+  f[11] = af::Load(bank.c[3]);
+  f[10] = af::Load(bank.c[4]);
+  f[9] = af::Load(bank.h[0]);
+  f[8] = af::Load(bank.h[1]);
+  f[7] = af::Load(bank.h[2]);
+  f[6] = af::Load(bank.h[3]);
+  int64_t r[32] = {};
+  uint32_t temp = 0;
+  for (uint32_t iteration = 0; iteration < af::kIterations; ++iteration) {
+    for (const ChOp &op : ops) {
+      switch (op.kind) {
+        case ChKind::kLoad:
+          if (op.reg == 31) {
+            Check(op.offset == int(af::kChannelGain), "the loop reads only the gain field");
+            temp = gain;
+          } else {
+            temp = samples.at(size_t((r[op.reg] + op.offset) / 4));
+          }
+          break;
+        case ChKind::kTempToF:
+          f[op.d] = double(af::BitsToFloat(temp));
+          break;
+        case ChKind::kFma:
+          f[op.d] = double(float(std::fma(f[op.a], f[op.b], op.negate ? -f[op.c] : f[op.c])));
+          break;
+        case ChKind::kMul:
+          f[op.d] = double(float(f[op.a] * f[op.b]));
+          break;
+        case ChKind::kAdd:
+          f[op.d] = double(float(f[op.a] + f[op.b]));
+          break;
+        case ChKind::kFToTemp:
+          temp = af::FloatToBits(float(f[op.a]));
+          break;
+        case ChKind::kStore:
+          Check(op.reg != 31, "the loop writes no object field");
+          samples.at(size_t((r[op.reg] + op.offset) / 4)) = temp;
+          break;
+        case ChKind::kAddi:
+          r[op.reg] = r[11] + op.offset;
+          break;
+      }
+    }
+  }
+  Check(r[11] == int64_t(af::kSamples * 4), "the loop walks the 256 samples");
+  history = {af::FloatToBits(float(f[9])), af::FloatToBits(float(f[8])),
+             af::FloatToBits(float(f[7])), af::FloatToBits(float(f[6]))};
+}
+
+bool CompareChannelCase(const std::vector<ChOp> &ops, const af::Bank &bank, bool cascade,
+                        uint32_t gain, Input input, uint32_t zero_bits) {
+  std::array<uint32_t, af::kSamples> samples{};
+  Fill(input, samples);
+  std::array<uint32_t, af::kSamples> generated = samples;
+  std::array<uint32_t, af::kHistoryWords> history{};
+  RunChannelLoop(ops, bank, gain, generated, history);
+  for (uint32_t &word : history) {
+    word = af::FlushHistoryWord(word, zero_bits);
+  }
+  af::BankState s = af::LoadBank(bank);
+  std::array<uint32_t, af::kSamples> native = samples;
+  int gain_reads = 0;
+  af::ProcessChannel(s, cascade, native.data(), [&] {
+    ++gain_reads;
+    return gain;
+  });
+  const auto out = af::ChannelHistoryOut(s, zero_bits);
+  af::BankState l = af::LoadBank(bank);
+  std::array<uint32_t, af::kSamples> library = samples;
+  af::ProcessChannel<af::LibraryFma>(l, cascade, library.data(), [&] { return gain; });
+  return generated == native && library == native && history == out &&
+         af::ChannelHistoryOut(l, zero_bits) == out && gain_reads == int(af::kSamples);
+}
+
+void TestChannelAgainstGenerated() {
+  const std::string dir = MCLA_AFILT_GENERATED_DIR;
+  const std::string g0 = ReadFile(dir + "/mcla_recomp.0.cpp");
+  const std::string body = Body(g0, "sub_82147738");
+  Check(!body.empty(), "sub_82147738 found");
+  CheckFloatExact(body, "sub_82147738: every FP register write is float-exact");
+  CheckFloatExact(Body(g0, "sub_82146BE0"), "sub_82146BE0: every FP register write is float-exact");
+  const std::string cascade_loop = Between(body, "loc_821477FC:", "// bne 0x821477fc");
+  const std::string single_loop = Between(body, "loc_82147A20:", "// bne 0x82147a20");
+  Check(!cascade_loop.empty() && !single_loop.empty(), "both channel loops found");
+  size_t unknown = 0;
+  const std::vector<ChOp> cascade_ops = ParseChannelLoop(cascade_loop, unknown);
+  Check(unknown == 0, "every cascade loop statement understood");
+  const std::vector<ChOp> single_ops = ParseChannelLoop(single_loop, unknown);
+  Check(unknown == 0, "every single loop statement understood");
+  auto shape = [](const std::vector<ChOp> &ops, ChKind kind, bool gain_load) {
+    size_t n = 0;
+    for (const ChOp &op : ops) {
+      if (op.kind == kind && (kind != ChKind::kLoad || (op.reg == 31) == gain_load)) {
+        ++n;
+      }
+    }
+    return n;
+  };
+  // Cascade: 8 x (6 fma, 4 + 1 mul, 2 add); single: 8 x (3 fma, 2 + 1 mul, 1 add);
+  // 8 samples in, 8 gain loads, 8 samples out each.
+  Check(shape(cascade_ops, ChKind::kFma, false) == 48 &&
+            shape(cascade_ops, ChKind::kMul, false) == 40 &&
+            shape(cascade_ops, ChKind::kAdd, false) == 16 &&
+            shape(cascade_ops, ChKind::kLoad, false) == 8 &&
+            shape(cascade_ops, ChKind::kLoad, true) == 8 &&
+            shape(cascade_ops, ChKind::kStore, false) == 8,
+        "cascade loop shape");
+  Check(shape(single_ops, ChKind::kFma, false) == 24 &&
+            shape(single_ops, ChKind::kMul, false) == 24 &&
+            shape(single_ops, ChKind::kAdd, false) == 8 &&
+            shape(single_ops, ChKind::kLoad, false) == 8 &&
+            shape(single_ops, ChKind::kLoad, true) == 8 &&
+            shape(single_ops, ChKind::kStore, false) == 8,
+        "single loop shape");
+  Check(Has(body, "// fmadds") && std::string::npos == body.find("std::fma", body.find(
+                                                                     "loc_82147B6C:")),
+        "no fma after the loops");
+
+  const uint32_t zeros[] = {0x00000000u, 0x3F800000u};
+  const uint32_t gains[] = {0x3F800000u, 0x3F000000u, 0x00000000u, 0x80000000u, 0x00000123u,
+                            af::FloatToBits(0.7071f)};
+  const Input inputs[] = {Input::kRandom, Input::kSilent, Input::kDenormal,
+                          Input::kImpulse, Input::kLarge, Input::kTiny};
+  const double cutoffs[] = {80.0, 400.0, 2500.0, 9000.0, 20000.0};
+  size_t cases = 0;
+  for (const double cutoff : cutoffs) {
+    for (const Input input : inputs) {
+      for (const bool cascade : {true, false}) {
+        for (const uint32_t zero : zeros) {
+          const uint32_t fills[] = {0u, af::FloatToBits(Uniform(-0.5f, 0.5f)), 0x00012345u};
+          for (const uint32_t fill : fills) {
+            const af::Bank bank = Design(cutoff, (cases & 1) != 0, fill);
+            const uint32_t gain = gains[cases % 6];
+            Check(CompareChannelCase(cascade ? cascade_ops : single_ops, bank, cascade, gain,
+                                     input, zero),
+                  "native channel kernel bit-identical to the generated loop");
+            ++cases;
+          }
+        }
+      }
+    }
+  }
+  for (int n = 0; n < 40; ++n) {
+    af::Bank bank;
+    for (uint32_t k = 0; k < af::kCoefficients; ++k) {
+      bank.c[k] = af::FloatToBits(Uniform(-0.45f, 0.45f));
+    }
+    for (uint32_t k = 0; k < af::kHistoryWords; ++k) {
+      bank.h[k] = af::FloatToBits(Uniform(-1.0f, 1.0f));
+    }
+    const uint32_t gain = af::FloatToBits(Uniform(-2.0f, 2.0f));
+    for (const bool cascade : {true, false}) {
+      Check(CompareChannelCase(cascade ? cascade_ops : single_ops, bank, cascade, gain,
+                               Input::kRandom, 0),
+            "random channel coefficients: bit-identical");
+      ++cases;
+    }
+  }
+  Check(cases == 5 * 6 * 2 * 2 * 3 + 40 * 2, "channel case count");
+}
+
+void TestChannelGenerated() {
+  const std::string dir = MCLA_AFILT_GENERATED_DIR;
+  const std::string g0 = ReadFile(dir + "/mcla_recomp.0.cpp");
+  const std::string g25 = ReadFile(dir + "/mcla_recomp.25.cpp");
+  const std::string f = Body(g0, "sub_82147738");
+  Check(Has(f, "// stwu r1,-" + std::to_string(af::kChannelFrameSize) + "(r1)"), "frame 192");
+  InOrder(f,
+          {"// mr r31,r3", "// mr r3,r4", Off("lbz r11,", af::kChannelBypassed, "r31"),
+           "if (!ctx.cr6.eq) goto loc_82147BFC;", "// addi r4,r1,96", "// bl 0x823eaf00",
+           "sub_823EAF00(ctx, base);", "// lbz r10,97(r1)",
+           Off("lfs f0,", af::kChannelCoefficients, "r31"),
+           Off("lfs f13,", af::kChannelCoefficients + 4, "r31"),
+           Off("lfs f12,", af::kChannelCoefficients + 8, "r31"),
+           Off("lfs f11,", af::kChannelCoefficients + 12, "r31"),
+           Off("lfs f10,", af::kChannelCoefficients + 16, "r31"),
+           "if (ctx.cr6.eq) goto loc_82147BFC;", "// lis r11,-32256", "// li r6,0", "// li r5,0",
+           "// li r3,1", "// lfs f5,3796(r11)"},
+          "channel entry: bypass byte, descriptor, count, coefficients, f5");
+  InOrder(f,
+          {"loc_821477A8:", Off("lbz r11,", af::kChannelMask, "r31"), "// slw r10,r3,r4",
+           "ctx.r10.u64 = ctx.r4.u8 & 0x20 ? 0 : (ctx.r3.u32 << (ctx.r4.u8 & 0x3F));",
+           "// and r9,r10,r11", "if (ctx.cr6.eq) goto loc_82147BE8;",
+           Off("lwz r10,", af::kChannelHistory[2], "r31"),
+           Off("lwz r9,", af::kChannelHistory[3], "r31"),
+           Off("lwz r8,", af::kChannelHistory[0], "r31"),
+           Off("lwz r7,", af::kChannelHistory[1], "r31"),
+           Off("lbz r30,", af::kChannelCascade, "r31"), "// lwz r11,104(r1)",
+           "// lfsx f7,r6,r10", "// lfsx f6,r9,r6", "// lfsx f9,r8,r6", "// add r11,r5,r11",
+           "// lfsx f8,r7,r6", "// li r10," + std::to_string(af::kIterations),
+           "// stfs f7,88(r1)", "// stfs f6,92(r1)", "if (ctx.cr6.eq) goto loc_82147A20;",
+           "loc_821477FC:"},
+          "channel mask, history pointers, cascade byte and loop setup");
+  InOrder(f,
+          {"// bne 0x821477fc", "// stfs f7,88(r1)", "// stfs f6,92(r1)", "// b 0x82147b6c",
+           "loc_82147A20:", "// bne 0x82147a20", "loc_82147B6C:", "// stfs f9,80(r1)",
+           "// rlwinm r10,r11,0,1,8", "// stfs f8,84(r1)", "// fmr f9,f5",
+           Off("lwz r11,", af::kChannelHistory[0], "r31"), "// stfsx f9,r11,r6",
+           "// fmr f8,f5", Off("lwz r11,", af::kChannelHistory[1], "r31"),
+           "// stfsx f8,r11,r6", "// fmr f7,f5", Off("lwz r11,", af::kChannelHistory[2], "r31"),
+           "// stfsx f7,r6,r11", "// fmr f6,f5", Off("lwz r11,", af::kChannelHistory[3], "r31"),
+           "// stfsx f6,r11,r6", "// addi r6,r6,4", "loc_82147BE8:", "// lbz r10,97(r1)",
+           "// addi r4,r4,1", "// addi r5,r5," + std::to_string(af::kChannelStride),
+           "// cmplw cr6,r4,r10", "if (ctx.cr6.lt) goto loc_821477A8;", "loc_82147BFC:",
+           "// li r3,0", "// addi r1,r1,192", "__restfpr_25(ctx, base);", "// blr"},
+          "history flush h0, h1, h2, h3 with f5; channel stride 1024; return 0");
+  Check(!Has(f, "REX_STORE_U32(ctx.r31.u32") && !Has(f, "REX_STORE_U8(ctx.r31.u32"),
+        "sub_82147738 writes no object field");
+  // Descriptor: r1+96 = [arg - 8 + 20], so byte 97 is the byte at arg + 13.
+  InOrder(Body(g25, "sub_823EAF00"), {"// lwz r10,20(r11)", "// stw r10,0(r4)"},
+          "sub_823EAF00: +96 of the frame is [arg + 12]");
+  static_assert(af::kChannelCountOffset == 20 - 8 + 1);
+  // The probed leaves: no calls of their own, reached from the engine code.
+  for (const char *leaf : {"sub_823F4450", "sub_823EFD30", "sub_823EE050"}) {
+    const std::string b = Body(g25, leaf);
+    Check(!b.empty() && !Has(b, "(ctx, base);"), "probed leaf found, makes no call");
+  }
+  Check(Has(Body(g25, "sub_823F4570"), "sub_823F4450(ctx, base);") &&
+            Has(Body(g25, "sub_823EBEC0"), "sub_823EFD30(ctx, base);") &&
+            Has(Body(g25, "sub_823EC248"), "sub_823EBEC0(ctx, base);"),
+        "callers of the probed leaves");
+}
+
+void TestL89Pure() {
+  Check(af::ChannelOn(0x01, 0) && !af::ChannelOn(0x01, 1) && af::ChannelOn(0x80, 7) &&
+            !af::ChannelOn(0xFF, 8) && !af::ChannelOn(0xFF, 32) && !af::ChannelOn(0xFF, 63) &&
+            af::ChannelOn(0x01, 64) && af::ChannelOn(0x02, 65) && !af::ChannelOn(0xFF, 96),
+        "channel bit: slw semantics (shift amount & 0x3F, 32..63 give 0)");
+  af::Object before;
+  before.cutoff_a = 1000;
+  before.param_b = 3;
+  af::Object after = before;
+  after.cache_a = 1000;
+  after.cache_b = 3;
+  Check(!af::FilterRaced(before, after), "no race when the caches match the copied parameters");
+  after.cache_a = 1001;
+  Check(af::FilterRaced(before, after), "race: the original saw another cutoff");
+  after.cache_a = 1000;
+  after.param_b = 4;
+  Check(af::FilterRaced(before, after), "race: the parameter changed meanwhile");
+  af::ChannelInputs x, y;
+  Check(x == y, "equal channel inputs");
+  y.gain = 1;
+  Check(!(x == y), "a changed gain is a changed input");
+  y = x;
+  y.history[3] = 4;
+  Check(!(x == y), "a changed history pointer is a changed input");
+  af::PassStats p;
+  p.calls = 100;
+  p.timed = 50;
+  p.ns = 5000;
+  Check(p.NsPerFrame(10) == 1000 && af::PassStats{}.NsPerFrame(10) == 0 && p.NsPerFrame(0) == 0,
+        "leaf ns per frame scaled to all calls");
+  af::Stats s;
+  s.frames = 10;
+  s.raced = 2;
+  s.ch_native = 7;
+  s.mix = p;
+  af::Stats t;
+  t.Merge(s);
+  t.Merge(s);
+  Check(t.raced == 4 && t.ch_native == 14 && t.mix.calls == 200 && t.mix.ns == 10000,
+        "l89 counters merge");
+  const std::string line = af::Line(s, 1000000000ull, true, true);
+  Check(line.find(" vskip=0 raced=2 ch_nat=7 ch_fallback=0 ch_verified=0 ch_mismatch=0 "
+                  "ch_raced=0 ch_vskip=0 mix_calls=100 mix_out=0 mix_timed=50 mix_ns=5000 "
+                  "mix_per_frame=10.00 mix_ns_per_frame=1000 add_calls=0") != std::string::npos,
+        "line: l89 fields after vskip");
+  Check(line.size() < 2048 && line.find("kick_ns_per_frame=0") != std::string::npos,
+        "line: kick fields last");
+  const std::string json = af::StateJson(s, 1000000000ull, true, true, true);
+  Check(json.find("\"verify_skipped\": 0, \"raced\": 2, \"ch_native_calls\": 7, ") !=
+                std::string::npos &&
+            json.find("\"mix\": {\"calls\": 100, \"outside\": 0, \"timed\": 50, \"ns\": 5000, "
+                      "\"ns_per_frame\": 1000}") != std::string::npos &&
+            json.rfind("}}") == json.size() - 2,
+        "F10 object: l89 fields");
+  af::Mismatch m;
+  m.Check("ch2.sample", 17, 1, 2);
+  m.Check("ch2.h", 0, 3, 4);
+  Check(m.count == 2 && m.field == "ch2.sample17" && m.want == 1 && m.got == 2,
+        "mismatch keeps the first field");
+  Check(af::ChannelVerifyLine(1, 64, m, 2, 0x03, true) ==
+            "MCLA_AFILT_CH_VERIFY v=1 n=1 call=64 channels=2 mask=0x03 cascade=1 diffs=2 "
+            "field=ch2.sample17 want=0x00000001 got=0x00000002",
+        "channel verify line");
+}
+
 }  // namespace
 
 int main() {
   TestPure();
   TestStats();
+  TestL89Pure();
   TestHandTransliteration();
   TestKernelAgainstGenerated();
   TestGenerated();
+  TestMulAddExact();
+  TestChannelAgainstGenerated();
+  TestChannelGenerated();
   std::printf("mcla_audio_filter_test: %d checks passed\n", checks);
   return 0;
 }
