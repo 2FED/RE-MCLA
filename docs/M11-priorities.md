@@ -334,3 +334,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l85 Deck PASS (2026-11-10):** KI-054 hitch hold v2: no traffic jumps (owner), lost time 0. Pending: owner PC 1080p Unlocked run; then default-on in l86.
 
 **l86 staged (2026-11-10), not signed:** KI-054 hitch hold v2 default on (owner PASS Deck + PC on l85). Arms: default, hold-off (control). `private/l86-CHECKLIST.txt`. [Evidence](evidence/M11-l86-owner-build-20261110.md).
+
+**KI-060 plan (2026-11-10):** engine thread is compute-bound in two biquad filter effects. l87: `audio_filter_probe` + default-off native replacement of sub_82146BE0 (`audio_filter_native`), Deck A/B on underruns/s and F8000534 CPU %. [Analysis](evidence/M11-ki060-audio-filter-analysis-20261110.md).
