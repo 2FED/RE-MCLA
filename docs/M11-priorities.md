@@ -326,3 +326,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l83 PC result and l84 (2026-11-10):** KI-054 H1 refuted (ambient worker never started in retail; inline main-thread path). l84 staged, unsigned: probe v2 for the inline path, `raw_timer_stats` key (80 keys), KI-075 launcher prefill. Test at 1440p Locked (jitter scales with frame time). [Evidence](evidence/M11-l84-owner-build-20261110.md).
 
 **l84 PC run (2026-11-10):** 1440p Locked is a steady 30 fps; no jumps; probe v2 clean (1 step per timer update, no split). KI-054 now needs the Deck run of l84 (ambprobe, hitchhold).
+
+**l84 Deck result (2026-11-10):** KI-054 cause confirmed (H2). Hitch hold v1 fixes the jumps (owner + instruments) but drops 2.2 % of game time at the debt cap. Next: hitch hold v2 (slew-rate limited step that still repays measured time), replay-tested against the Deck sequences, then l85. [Analysis](evidence/M11-l84-deck-analysis-20261110.md).
