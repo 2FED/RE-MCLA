@@ -324,3 +324,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l82 Deck A/B result (2026-11-10, D:\82): lever 2 (CP bulk register writes) = no measurable effect** (packets_other 10.97 vs 10.98 ms/f; runs average 2 dwords). Rejected as a Deck gain; key stays for reference. Deck CP budget (51 ms/f) now needs a different lever: where packets_other actually goes (type-0 single-register packets, constant blocks ~75 k dwords/f, direct writes) must be profiled before the next SDK attempt. [Analysis](evidence/M11-l82-deck-analysis-20261110.md).
 
 **l83 PC result and l84 (2026-11-10):** KI-054 H1 refuted (ambient worker never started in retail; inline main-thread path). l84 staged, unsigned: probe v2 for the inline path, `raw_timer_stats` key (80 keys), KI-075 launcher prefill. Test at 1440p Locked (jitter scales with frame time). [Evidence](evidence/M11-l84-owner-build-20261110.md).
+
+**l84 PC run (2026-11-10):** 1440p Locked is a steady 30 fps; no jumps; probe v2 clean (1 step per timer update, no split). KI-054 now needs the Deck run of l84 (ambprobe, hitchhold).
