@@ -310,3 +310,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l81 owner PC run PASS (2026-11-10)**; SDK v0.20.0.11 = 2aff82e published (source parity for l81v). Pending: l81 Deck loops (default / zero-native / census), l81v signing + offline pre-share check + "publish l81v".
 
 **l81v published (2026-11-10):** DebugBundle `138b0ef`, allowance list = l81v only. Testers can use it now; l70 is withdrawn.
+
+**KI-026 design ready (2026-11-10):** warp stall fix (state 19 exit + finished/never-started detector, `mcla_warp_stall_fix` default off, log MCLA_KI026_CAMFIX). Implementation candidate for l83 after the l82 Deck A/B. Open: which warper state KI-026 actually sits in (no sighting captured state; the l33 sighting predates the l69 state-20 fix). [Design](evidence/M11-ki026-warp-stall-fix-design-20261110.md).
