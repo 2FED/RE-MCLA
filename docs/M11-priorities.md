@@ -368,3 +368,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **KI-074 root cause (2026-11-11):** unproven; top hypothesis = a raw-pointer guest reader of non-exempt read-back keys seeing older data when F-1 is unfinished. l92 probes: `readback_read_watch` (names the reader), `readback_age_inject` (stale data under strict), `guest_swap_hold`; plus occlusion-query drain counters. Owner first: l91 lead-strict through dawn. [Research](evidence/M11-ki074-rootcause-research-20261111.md).
 
 **KI-026 implemented (2026-11-11):** warp stall fix in the host (92 keys), default off; goes into l92. Owner test: Red Light Driver, lose, Race Back x10-15 per arm on Unlocked. [Implementation](evidence/M11-ki026-implementation-20261111.md).
+
+**Hardware FMA lever (2026-11-11):** bounded at about 2 % of Deck process CPU after the l89 native audio filters; low priority; cheapest route is link-time interposition of `fma` with a start-up benchmark first. Not a Deck fps fix. [Design](evidence/M11-fma-dispatch-design-20261111.md).
