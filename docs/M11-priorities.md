@@ -360,3 +360,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **l91 staged (2026-11-11), not signed:** host (90 keys) + SDK ef72fd1 (strict / adaptive frame lead). Owner A/B: pc/lead-strict first, then lead-adaptive. Valid l90 lead1 run: no-op, still flickers. `private/l91-CHECKLIST.txt`. [SDK](evidence/M11-l91-sdk-20261111.md), [build](evidence/M11-l91-owner-build-20261111.md).
 
 **l91 owner result (2026-11-11):** KI-074 surface flicker gone on lead-strict (40.6 fps avg) and lead-adaptive (44.8 fps avg; default 46-52). Next: 30+ min soak on the MAIN save with pc/lead-adaptive, then adaptive default-on in l92; then find what breaks at lead 2 to recover the last 2-3 fps.
+
+**l91 lead-adaptive long run (2026-11-11):** dawn sidewalk flicker with lead2/f2p = 0; better separator = mid-frame "F-1 not finished" (fast waits); adaptive dropped as a candidate default. Owner next: l91 pc/lead-strict on the same route through dawn (no build needed). KI-077: bloom on characters at the hangout catalogued. [Analysis](evidence/M11-l91-adaptive-long-run-analysis-20261111.md).
