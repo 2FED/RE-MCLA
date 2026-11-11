@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 88, "eighty-eight whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 90, "ninety whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -869,6 +869,80 @@ void TestWhitelist() {
           "l90 near misses: an integer, the cvar name, a repeat and a non-bool are ignored");
   }
   {
+    // l91 KI-074 keys: the strict (1) and adaptive (2) frame lead bound, one
+    // graphics plugin int (SDK default 0); =false writes nothing; the two keys
+    // form one conflict pair, none with frame_lead_limit_1 (another cvar).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &strict = Info(Key::kFrameLeadStrict);
+    Check(FindKey("frame_lead_strict") == Key::kFrameLeadStrict &&
+              strict.phase == Phase::kGraphicsPlugin &&
+              CvarName(strict) == "d3d12_frame_lead_strict" && CvarText(strict, true) == "1" &&
+              CvarText(strict, false).empty() && strict.true_source == TextSource::kLiteral &&
+              !strict.overrides_user,
+          "frame_lead_strict=true writes 1 to d3d12_frame_lead_strict after the plugin "
+          "loaded, false writes nothing");
+    const auto &adaptive = Info(Key::kFrameLeadAdaptive);
+    Check(FindKey("frame_lead_adaptive") == Key::kFrameLeadAdaptive &&
+              adaptive.phase == Phase::kGraphicsPlugin &&
+              CvarName(adaptive) == "d3d12_frame_lead_strict" &&
+              CvarText(adaptive, true) == "2" && CvarText(adaptive, false).empty() &&
+              adaptive.true_source == TextSource::kLiteral && !adaptive.overrides_user,
+          "frame_lead_adaptive=true writes 2 to d3d12_frame_lead_strict after the plugin "
+          "loaded, false writes nothing");
+    size_t lead_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      lead_pairs += (pair.first == Key::kFrameLeadStrict &&
+                     pair.second == Key::kFrameLeadAdaptive)
+                        ? 1
+                        : 0;
+      Check(pair.first != Key::kFrameLeadLimit1 && pair.second != Key::kFrameLeadLimit1,
+            "frame_lead_limit_1 is in no conflict pair");
+    }
+    Check(lead_pairs == 1, "one conflict pair for the l91 strict and adaptive keys");
+    Check(!FindKey("d3d12_frame_lead_strict") && !FindKey("frame_lead_strict_1") &&
+              !FindKey("frame_lead_strict_2") && !FindKey("FRAME_LEAD_STRICT") &&
+              !FindKey("lead_strict") && !FindKey("frame_lead_strict_on") &&
+              !FindKey("frame_lead_adaptive_on") && !FindKey("FRAME_LEAD_ADAPTIVE") &&
+              !FindKey("lead_adaptive") && !FindKey("frame_lead"),
+          "no prefix, suffix, cvar-name, case or numeric variants of the l91 keys");
+    const Parsed on = Parse("frame_lead_strict=true\n"
+                            "frame_lead_adaptive=false\n"
+                            "frame_lead_limit_1=true\n");
+    Check(on.ValueCount() == 3 && on.issue_count == 0 &&
+              on.Value(Key::kFrameLeadStrict) == true &&
+              on.Value(Key::kFrameLeadAdaptive) == false &&
+              on.Value(Key::kFrameLeadLimit1) == true,
+          "strict with adaptive false and the l90 limit key: no conflict");
+    const Parsed ad = Parse("frame_lead_adaptive=true\nframe_lead_strict=false\n");
+    Check(ad.ValueCount() == 2 && ad.issue_count == 0 &&
+              ad.Value(Key::kFrameLeadAdaptive) == true &&
+              ad.Value(Key::kFrameLeadStrict) == false,
+          "the adaptive arm parses");
+    const Parsed both = Parse("frame_lead_strict=true\n"
+                              "memory_watch_census=false\n"
+                              "frame_lead_adaptive=true\n");
+    Check(both.ValueCount() == 1 && !both.Value(Key::kFrameLeadStrict) &&
+              !both.Value(Key::kFrameLeadAdaptive) &&
+              both.Value(Key::kWatchCensus) == false && both.issue_count == 1 &&
+              both.issues[0].line == 3 && both.issues[0].issue == LineIssue::kConflict,
+          "strict and adaptive both true: neither applies, conflict on the later line");
+    const Parsed bad = Parse("frame_lead_strict=1\n"
+                             "d3d12_frame_lead_strict=true\n"
+                             "frame_lead_strict=false\n"
+                             "frame_lead_strict=true\n"
+                             "frame_lead_adaptive=2\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 4 &&
+              bad.Value(Key::kFrameLeadStrict) == false &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate &&
+              bad.issues[3].issue == LineIssue::kMalformed,
+          "l91 near misses: an integer, the cvar name, a repeat and a non-bool are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1323,7 +1397,8 @@ void TestWhitelist() {
                           key == Key::kAudioFilterNativeVerify ||
                           key == Key::kReadbackFencedDelivery ||
                           key == Key::kAudioFilterNativeChOff ||
-                          key == Key::kFrameLeadLimit1 || key == Key::kReadbackDeferredRelease;
+                          key == Key::kFrameLeadLimit1 || key == Key::kReadbackDeferredRelease ||
+                          key == Key::kFrameLeadStrict || key == Key::kFrameLeadAdaptive;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1417,9 +1492,10 @@ void TestWhitelist() {
     // the fence key with their controls; l80: the timer and heaps keys with
     // their controls; l81: the album restore and blend keys with their
     // controls; l86: the hitch hold key with its control) plus the kick and
-    // the vblank groups of three (each listed as its three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 17,
-          "seventeen shared-cvar pairs");
+    // the vblank groups of three (each listed as its three pairs); l91: the
+    // strict and adaptive lead keys.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 18,
+          "eighteen shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -2075,7 +2151,8 @@ void TestWhitelist() {
     // plus the l86 key explicit false (81 keys); l87: plus the three l87 keys
     // explicit false (84 keys); l88: plus the l88 key explicit false (85 keys);
     // l89: plus the l89 key explicit false (86 keys); l90: plus the two l90
-    // keys explicit false (88 keys).
+    // keys explicit false (88 keys); l91: plus the two l91 keys explicit false
+    // (90 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2087,7 +2164,9 @@ void TestWhitelist() {
                                   "readback_fenced_delivery=false\n"
                                   "audio_filter_native_ch_off=false\n"
                                   "frame_lead_limit_1=false\n"
-                                  "readback_deferred_release=false\n";
+                                  "readback_deferred_release=false\n"
+                                  "frame_lead_strict=false\n"
+                                  "frame_lead_adaptive=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"

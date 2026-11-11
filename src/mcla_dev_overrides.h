@@ -278,6 +278,16 @@
 //   plugin, hot reload): read-back slot buffers released by slot growth or
 //   eviction go through the deferred deletion. =false changes nothing; an SDK
 //   without the l90 cvars logs the key as unavailable; no conflict pairs.
+// - l91 (docs/evidence/M11-l91-sdk-20261111.md; KI-074 flicker):
+//   frame_lead_strict=true writes 1 and frame_lead_adaptive=true writes 2 to
+//   the SDK int d3d12_frame_lead_strict (default 0; registered by the graphics
+//   plugin, hot reload). 1: a guest frame opens only when the previous frame
+//   has completed on the GPU (frame F waits, bounded, for frame F-1), so the
+//   frame-end lead gauge stays at 1 and no guest fence is 2+ frames late. 2:
+//   the same wait only while armed by an imminent lead of 2. =false changes
+//   nothing; an SDK without the l91 cvar logs the key as unavailable. The two
+//   keys write one cvar, so they form a conflict pair; neither conflicts with
+//   frame_lead_limit_1 (another cvar; strict implies limit 1).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -409,8 +419,10 @@ enum class Key : uint8_t {
   kAudioFilterNativeChOff,   // l89 KI-060: mcla_audio_filter_native_ch_off=true
   kFrameLeadLimit1,          // l90 KI-074: d3d12_frame_lead_limit=1
   kReadbackDeferredRelease,  // l90 KI-074: d3d12_readback_deferred_release=true
+  kFrameLeadStrict,          // l91 KI-074: d3d12_frame_lead_strict=1
+  kFrameLeadAdaptive,        // l91 KI-074: d3d12_frame_lead_strict=2
 };
-inline constexpr size_t kKeyCount = 88;
+inline constexpr size_t kKeyCount = 90;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -638,10 +650,15 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"frame_lead_limit_1", Phase::kGraphicsPlugin, "d3d12_frame_lead_limit", "1", ""},
     {"readback_deferred_release", Phase::kGraphicsPlugin, "d3d12_readback_deferred_release",
      "true", ""},
+    // l91 KI-074: the strict (1) and adaptive (2) frame lead bound, one SDK
+    // int registered by the graphics plugin (hot reload), so after the plugin
+    // has loaded; =false writes nothing.
+    {"frame_lead_strict", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict", "1", ""},
+    {"frame_lead_adaptive", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict", "2", ""},
 }};
 
-// Key pairs that write different values to one cvar (integer, the
-// audio_speaker_config string, or the xma_frame_walk_fix,
+// Key pairs that write different values to one cvar (integer, among them
+// l91 d3d12_frame_lead_strict, the audio_speaker_config string, or the xma_frame_walk_fix,
 // d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
 // d3d12_texture_placed_heaps, timer_queue_blocking_wait,
 // d3d12_blend_minmax_fix, mcla_album_preview_restore and
@@ -653,7 +670,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 17> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 18> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -671,6 +688,7 @@ inline constexpr std::array<ConflictPair, 17> kConflictPairs = {{
     {Key::kAlbumPreviewRestore, Key::kAlbumPreviewRestoreOff},
     {Key::kBlendMinmaxFix, Key::kBlendMinmaxFixOff},
     {Key::kRawTimerHitchHold, Key::kRawTimerHitchHoldOff},
+    {Key::kFrameLeadStrict, Key::kFrameLeadAdaptive},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
