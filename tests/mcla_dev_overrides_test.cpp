@@ -30,7 +30,56 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 90, "ninety whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 92, "ninety-two whitelisted names");
+  {
+    // KI-026 keys: the stall fix (host init-only bool, default off; =false
+    // writes nothing) and the KI-026 probe (plain host bool), both at startup;
+    // the KI-026 watchdog stays command-line only.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    const auto &stall = Info(Key::kWarpStallFix);
+    Check(FindKey("mcla_warp_stall_fix") == Key::kWarpStallFix &&
+              stall.phase == Phase::kStartup && CvarName(stall) == "mcla_warp_stall_fix" &&
+              CvarText(stall, true) == "true" && CvarText(stall, false).empty() &&
+              !stall.overrides_user,
+          "mcla_warp_stall_fix=true writes true at startup, false writes nothing");
+    const auto &probe = Info(Key::kKi026Probe);
+    Check(FindKey("mcla_ki026_probe") == Key::kKi026Probe && probe.phase == Phase::kStartup &&
+              CvarName(probe) == "mcla_ki026_probe" && CvarText(probe, true) == "true" &&
+              CvarText(probe, false) == "false",
+          "mcla_ki026_probe is a plain host bool at startup");
+    Check(!FindKey("mcla_ki026_watchdog") && !FindKey("mcla_warp_stall_fix_off") &&
+              !FindKey("mcla_warp_stall") && !FindKey("warp_stall_fix") &&
+              !FindKey("MCLA_WARP_STALL_FIX") && !FindKey("mcla_ki026") &&
+              !FindKey("ki026_probe"),
+          "no watchdog, off, prefix, case or short variants of the KI-026 keys");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kWarpStallFix && pair.second != Key::kWarpStallFix &&
+                pair.first != Key::kKi026Probe && pair.second != Key::kKi026Probe,
+            "the KI-026 keys are in no conflict pair");
+    }
+    const Parsed arm = Parse("mcla_warp_stall_fix=true\r\nmcla_ki026_probe=true\r\n"
+                             "mcla_warp_probe=true\r\nmcla_warp_watchdog=false\r\n");
+    Check(arm.ValueCount() == 4 && arm.issue_count == 0 &&
+              arm.Value(Key::kWarpStallFix) == true && arm.Value(Key::kKi026Probe) == true &&
+              arm.Value(Key::kWarpProbe) == true && arm.Value(Key::kWarpWatchdog) == false,
+          "the KI-026 fix arm parses");
+    const Parsed control = Parse("mcla_warp_stall_fix=false\nmcla_ki026_probe=true\n");
+    Check(control.ValueCount() == 2 && control.issue_count == 0 &&
+              control.Value(Key::kWarpStallFix) == false,
+          "the KI-026 control arm parses");
+    const Parsed bad = Parse("mcla_warp_stall_fix=1\n"
+                             "mcla_ki026_watchdog=true\n"
+                             "mcla_ki026_probe=true\n"
+                             "mcla_ki026_probe=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kKi026Probe) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "KI-026 near misses: an integer, the watchdog and a repeat are ignored");
+  }
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -1268,8 +1317,8 @@ void TestWhitelist() {
   Check(!FindKey("mcla_warp_watchdog_seconds"), "integer watchdog cvar not whitelisted");
   Check(!FindKey("mcla_warp_watchdog_15") && !FindKey("mcla_warp"),
         "no numeric or prefix warp keys");
-  Check(!FindKey("mcla_ki026_probe") && !FindKey("mcla_ki026_watchdog"),
-        "KI-026 switches stay command-line only");
+  Check(FindKey("mcla_ki026_probe") == Key::kKi026Probe && !FindKey("mcla_ki026_watchdog"),
+        "KI-026 probe key; the KI-026 watchdog stays command-line only");
   Check(FindKey("mcla_readback_sync_composite") == Key::kReadbackSyncComposite, "readback key");
   Check(FindKey("mcla_native_d3d_refcount") == Key::kNativeD3dRefcount, "refcount key");
   Check(FindKey("mcla_native_xapi_interlocked") == Key::kNativeXapiInterlocked, "xapi key");
@@ -1398,7 +1447,8 @@ void TestWhitelist() {
                           key == Key::kReadbackFencedDelivery ||
                           key == Key::kAudioFilterNativeChOff ||
                           key == Key::kFrameLeadLimit1 || key == Key::kReadbackDeferredRelease ||
-                          key == Key::kFrameLeadStrict || key == Key::kFrameLeadAdaptive;
+                          key == Key::kFrameLeadStrict || key == Key::kFrameLeadAdaptive ||
+                          key == Key::kWarpStallFix;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2152,7 +2202,7 @@ void TestWhitelist() {
     // explicit false (84 keys); l88: plus the l88 key explicit false (85 keys);
     // l89: plus the l89 key explicit false (86 keys); l90: plus the two l90
     // keys explicit false (88 keys); l91: plus the two l91 keys explicit false
-    // (90 keys).
+    // (90 keys); KI-026: plus the two KI-026 keys explicit false (92 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2166,7 +2216,9 @@ void TestWhitelist() {
                                   "frame_lead_limit_1=false\n"
                                   "readback_deferred_release=false\n"
                                   "frame_lead_strict=false\n"
-                                  "frame_lead_adaptive=false\n";
+                                  "frame_lead_adaptive=false\n"
+                                  "mcla_warp_stall_fix=false\n"
+                                  "mcla_ki026_probe=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"

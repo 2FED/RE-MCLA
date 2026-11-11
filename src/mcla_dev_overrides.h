@@ -278,6 +278,14 @@
 //   plugin, hot reload): read-back slot buffers released by slot growth or
 //   eviction go through the deferred deletion. =false changes nothing; an SDK
 //   without the l90 cvars logs the key as unavailable; no conflict pairs.
+// - KI-026 (docs/evidence/M11-ki026-implementation-20261111.md; Race Back
+//   camera softlock): mcla_warp_stall_fix=true writes true to the host
+//   init-only bool of the same name (default false: the state-19 callback
+//   exit and the state-19/20 stall poll); =false writes nothing, so an arm
+//   line =false stays a no-op if the default is flipped later (the control
+//   would then be a separate _off key). mcla_ki026_probe is a plain host
+//   init-only bool (the KI-026 edge / printf / warper-state log, formerly
+//   command-line only); mcla_ki026_watchdog stays command-line only.
 // - l91 (docs/evidence/M11-l91-sdk-20261111.md; KI-074 flicker):
 //   frame_lead_strict=true writes 1 and frame_lead_adaptive=true writes 2 to
 //   the SDK int d3d12_frame_lead_strict (default 0; registered by the graphics
@@ -421,8 +429,10 @@ enum class Key : uint8_t {
   kReadbackDeferredRelease,  // l90 KI-074: d3d12_readback_deferred_release=true
   kFrameLeadStrict,          // l91 KI-074: d3d12_frame_lead_strict=1
   kFrameLeadAdaptive,        // l91 KI-074: d3d12_frame_lead_strict=2
+  kWarpStallFix,             // KI-026: mcla_warp_stall_fix=true
+  kKi026Probe,               // KI-026: mcla_ki026_probe (plain bool)
 };
-inline constexpr size_t kKeyCount = 90;
+inline constexpr size_t kKeyCount = 92;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -655,6 +665,11 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // has loaded; =false writes nothing.
     {"frame_lead_strict", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict", "1", ""},
     {"frame_lead_adaptive", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict", "2", ""},
+    // KI-026 host init-only bools (mcla_ki026_probe.cpp), before the guest:
+    // the stall fix (default off; =false writes nothing) and the KI-026 probe
+    // (plain bool, as mcla_warp_probe).
+    {"mcla_warp_stall_fix", Phase::kStartup, "", "true", ""},
+    {"mcla_ki026_probe", Phase::kStartup},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them

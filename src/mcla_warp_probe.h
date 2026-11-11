@@ -16,6 +16,9 @@
 // the host reads the fields instead of calling guest code. Each getter is
 // recognised by the guest address the camera's vtable slot holds; an unknown
 // getter leaves the value unknown (and the watchdog idle).
+//
+// KI-026 (docs/evidence/M11-ki026-implementation-20261111.md) adds the
+// state-19 callback decision (DecideFinish) and the stall detector below.
 
 #include <cstdint>
 
@@ -186,6 +189,7 @@ constexpr Value Time(Getter getter, const CameraFields &fields) {
 }
 
 // --- warp object ------------------------------------------------------------
+inline constexpr uint32_t kStateZoomIn = 19;         // loc_8221C044 (KI-026)
 inline constexpr uint32_t kStateCinematicZoom = 20;  // loc_8221C120
 inline constexpr uint32_t kStateIdle = 29;
 
@@ -234,7 +238,8 @@ static_assert(kExitGlobalPointer == 0x8286D8F0u);
 
 // What the callback hook reads before the original runs.
 struct FinishSample {
-  bool enabled = true;        // mcla_warp_finish_fix
+  bool enabled = true;        // mcla_warp_finish_fix (state 20)
+  bool stall_enabled = false; // mcla_warp_stall_fix (state 19, KI-026)
   bool complete = false;      // every guest read succeeded
   bool global_warper = false; // r3 == *(0x8286D8D4) + 0x51240
   uint32_t state = 0;         // warper+288
@@ -243,16 +248,17 @@ struct FinishSample {
   bool source_match = false;          // warper+256 == r4
   bool request_camera_match = false;  // r5 == request+108
   bool camera_copy_match = false;     // r5 == warper+300
-  uint8_t req0 = 0;   // request+0 (the state-20 wait needs it)
-  uint8_t req3 = 0;   // request+3 (the state-20 wait needs it)
+  uint8_t req0 = 0;   // request+0 (the state-19 and state-20 waits need it)
+  uint8_t req3 = 0;   // request+3 (state 20 needs it set, state 19 clear)
   bool writable = false;  // the three exit addresses are writable
 };
 
 enum class FinishAction : uint8_t {
   kPassThrough,        // run the original unchanged, nothing logged as a race
   kFinish,             // perform the state-20 exit, then run the original
-  kSkipRequestPending, // matched in state 20 but req+0/req+3 not set: pass through
+  kSkipRequestPending, // matched but the state's own req+0/req+3 wait is not met: pass
   kRefusedUnwritable,  // matched but an exit address is not writable: pass through
+  kFinishState19,      // KI-026: perform the state-19 exit, then run the original
 };
 
 constexpr const char *FinishActionName(FinishAction action) {
@@ -261,6 +267,8 @@ constexpr const char *FinishActionName(FinishAction action) {
       return "pass";
     case FinishAction::kFinish:
       return "finish-state20";
+    case FinishAction::kFinishState19:
+      return "finish-cb19";
     case FinishAction::kSkipRequestPending:
       return "skip-request-pending";
     case FinishAction::kRefusedUnwritable:
@@ -276,20 +284,38 @@ constexpr bool FinishMatched(const FinishSample &s) {
          s.camera_copy_match;
 }
 
+// KI-026 (docs/evidence/M11-ki026-warp-stall-fix-design-20261110.md 3.1):
+// state 19 (loc_8221C044) waits for req+3 == 0 (bne at 0x8221C08C), req+0 != 0
+// (beq at 0x8221C098) and a ready camera (vfunc +92 at 0x8221C068) before
+// it accumulates +260 and exits through the same three stores as state 20
+// (0x8221C0F8..0x8221C10C). The camera's finish notification clears ready,
+// so a matching callback while the warper is still in 19 means state 19 can
+// never exit; the fix performs that exit first, as for state 20.
 constexpr FinishAction DecideFinish(const FinishSample &s) {
-  if (!s.enabled || !s.complete || !s.global_warper || s.state != kStateCinematicZoom ||
-      !FinishMatched(s)) {
+  if (!s.complete || !s.global_warper || !FinishMatched(s)) {
     return FinishAction::kPassThrough;
   }
-  // The state-20 handler waits for req+3 and req+0 before it looks at the
-  // camera (0x8221C15C..0x8221C180); never skip that wait.
-  if (!s.req0 || !s.req3) {
-    return FinishAction::kSkipRequestPending;
+  if (s.state == kStateCinematicZoom) {
+    if (!s.enabled) {
+      return FinishAction::kPassThrough;
+    }
+    // The state-20 handler waits for req+3 and req+0 before it looks at the
+    // camera (0x8221C15C..0x8221C180); never skip that wait.
+    if (!s.req0 || !s.req3) {
+      return FinishAction::kSkipRequestPending;
+    }
+    return s.writable ? FinishAction::kFinish : FinishAction::kRefusedUnwritable;
   }
-  if (!s.writable) {
-    return FinishAction::kRefusedUnwritable;
+  if (s.state == kStateZoomIn) {
+    if (!s.stall_enabled) {
+      return FinishAction::kPassThrough;
+    }
+    if (!s.req0 || s.req3) {
+      return FinishAction::kSkipRequestPending;
+    }
+    return s.writable ? FinishAction::kFinishState19 : FinishAction::kRefusedUnwritable;
   }
-  return FinishAction::kFinish;
+  return FinishAction::kPassThrough;
 }
 
 // The state-20 compare (0x8221C1B0..0x8221C1C0) with float rounding as the
@@ -401,6 +427,377 @@ constexpr uint64_t WatchdogLimitMs(int32_t seconds) {
   }
   return static_cast<uint64_t>(seconds > 600 ? 600 : seconds) * 1000u;
 }
+
+// --- KI-026 stall detector (mcla_warp_stall_fix) -------------------------------
+// docs/evidence/M11-ki026-warp-stall-fix-design-20261110.md 3.2 and
+// docs/evidence/M11-ki026-implementation-20261111.md. One sample per
+// mcWarper::Update call, taken after the stock update, while the warper is in
+// state 19 or 20.
+//
+// Mode A (completed unseen): the camera was seen ready and in the active
+// transition list in this episode, and is now not ready and not listed (the
+// post-finish signature: SetFinished clears ready, sub_82221DB0 drops the
+// entry) for kStallStuckSamples consecutive samples and kStallStuckSeconds
+// of their dt and wall time. Neither state can exit any more (both need
+// ready).
+//
+// Mode B (never started / stalled): the episode outlived the camera duration
+// by kStallTimeoutMarginSeconds (kStallTimeoutFallbackSeconds when the camera
+// is null or its duration unknown), in dt and in wall time, and the camera
+// time has not increased for kStallNoAdvanceSeconds of dt. A camera still in
+// the active list is logged only (the abort path sub_8221E310 is not used).
+//
+// A paused simulation restarts the dt and wall counters. Requests whose flags
+// do not match the state's own wait (19: req0 && !req3; 20: req0 && req3)
+// are logged once and never acted on.
+inline constexpr uint32_t kStallStuckSamples = 3;
+inline constexpr float kStallStuckSeconds = 0.1f;
+inline constexpr uint64_t kStallStuckMs = 100;
+inline constexpr float kStallTimeoutMarginSeconds = 3.0f;
+inline constexpr float kStallTimeoutFallbackSeconds = 10.0f;
+inline constexpr float kStallNoAdvanceSeconds = 1.0f;
+// MCLA_KI026_CAMFIX lines per process (actions, observations and skips).
+inline constexpr uint32_t kMaxCamfixLines = 200;
+
+// The state-19 look-ahead: exit when +260 + 0.0001 >= duration - lead with
+// lead = *(0x827D7558) * *(0x82006BF0) (0x8221C0C0..0x8221C0F4: lis r9,-32131;
+// addi r7,r9,29952; lfs f0,88(r7); lis r8,-32256; lfs f13,27632(r8)).
+inline constexpr uint32_t kLeadScaleAddress =
+    static_cast<uint32_t>(-32131 * 65536) + 29952u + 88u;
+inline constexpr uint32_t kLeadFactorAddress = static_cast<uint32_t>(-32256 * 65536) + 27632u;
+static_assert(kLeadScaleAddress == 0x827D7558u);
+static_assert(kLeadFactorAddress == 0x82006BF0u);
+
+// The two-slot view override released by the callback (sub_82224A28 on
+// UILogic + 0x10D50: lis r11,-32121; lwz r11,-10028(r11); addis r3,r11,1;
+// addi r3,r3,3408). sub_82224A28 sets +64, +65, +144, +145 to 1; a slot is
+// active while +64 == 0 or +65 == 0 (sub_82224930).
+inline constexpr uint32_t kViewOverrideOffset = 65536u + 3408u;
+inline constexpr uint32_t kUiLogicPointer =
+    static_cast<uint32_t>(-32121 * 65536) + static_cast<uint32_t>(-10028);
+static_assert(kViewOverrideOffset == 0x10D50u);
+static_assert(kUiLogicPointer == 0x8286D8D4u);
+
+struct StallSample {
+  uint64_t now_ms = 0;
+  float dt = 0.0f;              // f1 of this mcWarper::Update call
+  bool complete = false;        // every guest read succeeded, active list included
+  bool global_warper = false;   // warper == *(0x8286D8D4) + 0x51240
+  uint32_t state = 0;           // warper+288 after the update
+  uint32_t request = 0;         // warper+68
+  uint32_t camera = 0;          // warper+296
+  uint32_t request_camera = 0;  // request+108
+  uint8_t req0 = 0;
+  uint8_t req3 = 0;
+  bool ready_known = false;
+  bool ready = false;
+  bool listed = false;          // camera found in the active transition list
+  bool time_known = false;
+  float time = 0.0f;
+  bool duration_known = false;
+  float duration = 0.0f;
+  bool paused = false;          // simulation pause manager paused
+};
+
+enum class StallVerdict : uint8_t {
+  kIdle,                    // not a 19/20 episode, or an incomplete sample
+  kWatching,                // episode tracked, nothing to report
+  kSkipFlagsPending,        // the request flags do not match the state's wait (once)
+  kObservedStalledListed,   // mode B bounds met but the camera is still listed (once)
+  kModeA,                   // completed unseen: act (once per episode)
+  kModeB,                   // never started / stalled, camera unlisted or null: act
+  kFired,                   // already acted in this episode
+};
+
+constexpr const char *StallVerdictName(StallVerdict verdict) {
+  switch (verdict) {
+    case StallVerdict::kIdle:
+      return "idle";
+    case StallVerdict::kWatching:
+      return "watching";
+    case StallVerdict::kSkipFlagsPending:
+      return "skip-flags-pending";
+    case StallVerdict::kObservedStalledListed:
+      return "observed-stalled-listed";
+    case StallVerdict::kModeA:
+      return "A";
+    case StallVerdict::kModeB:
+      return "B";
+    case StallVerdict::kFired:
+      return "fired";
+  }
+  return "unknown";
+}
+
+constexpr bool StallFlagsMatch(uint32_t state, uint8_t req0, uint8_t req3) {
+  return state == kStateZoomIn ? (req0 != 0 && req3 == 0)
+                               : (state == kStateCinematicZoom && req0 != 0 && req3 != 0);
+}
+
+// The mode B bound in seconds.
+constexpr float StallTimeoutSeconds(uint32_t camera, bool duration_known, float duration) {
+  if (!camera || !duration_known || !(duration >= 0.0f) || !(duration < 1.0e6f)) {
+    return kStallTimeoutFallbackSeconds;
+  }
+  return duration + kStallTimeoutMarginSeconds;
+}
+
+class StallDetector {
+ public:
+  StallVerdict Observe(const StallSample &s) {
+    const bool in_state = s.state == kStateZoomIn || s.state == kStateCinematicZoom;
+    if (!s.complete || !s.global_warper || !in_state || !s.request ||
+        (s.camera && s.camera != s.request_camera)) {
+      active_ = false;
+      return StallVerdict::kIdle;
+    }
+    if (!active_ || s.state != state_ || s.request != request_ || s.camera != camera_) {
+      Start(s);
+    }
+    if (fired_) {
+      return StallVerdict::kFired;
+    }
+    if (!StallFlagsMatch(s.state, s.req0, s.req3)) {
+      if (!flags_logged_) {
+        flags_logged_ = true;
+        return StallVerdict::kSkipFlagsPending;
+      }
+      return StallVerdict::kWatching;
+    }
+    if (s.paused) {
+      Restart(s.now_ms);
+      return StallVerdict::kWatching;
+    }
+    const float dt = s.dt > 0.0f && s.dt < 1.0e6f ? s.dt : 0.0f;  // NaN and negatives: 0
+    episode_dt_ += dt;
+    if (s.camera && s.ready_known && s.ready && s.listed) {
+      seen_running_ = true;
+    }
+    if (s.time_known && s.time > max_time_) {  // NaN never compares greater
+      max_time_ = s.time;
+      last_advance_dt_ = episode_dt_;
+    }
+
+    // Mode A.
+    const bool finished = seen_running_ && s.camera && s.ready_known && !s.ready && !s.listed;
+    if (finished) {
+      if (stuck_samples_ == 0) {
+        stuck_since_ms_ = s.now_ms;
+        stuck_dt_ = 0.0f;
+      }
+      ++stuck_samples_;
+      stuck_dt_ += dt;
+    } else {
+      stuck_samples_ = 0;
+      stuck_dt_ = 0.0f;
+    }
+    if (finished && stuck_samples_ >= kStallStuckSamples && stuck_dt_ >= kStallStuckSeconds &&
+        s.now_ms >= stuck_since_ms_ && s.now_ms - stuck_since_ms_ >= kStallStuckMs) {
+      fired_ = true;
+      return StallVerdict::kModeA;
+    }
+
+    // Mode B. A non-null camera needs a known time to prove it is not
+    // advancing; a null camera has no time (state 19/20 treat it as not ready).
+    const float bound = StallTimeoutSeconds(s.camera, s.duration_known, s.duration);
+    const uint64_t bound_ms = static_cast<uint64_t>(bound * 1000.0f);
+    const bool time_ok = !s.camera || s.time_known;
+    if (time_ok && episode_dt_ > bound && s.now_ms >= wall_start_ms_ &&
+        s.now_ms - wall_start_ms_ > bound_ms &&
+        episode_dt_ - last_advance_dt_ >= kStallNoAdvanceSeconds) {
+      if (s.camera && s.listed) {
+        if (!listed_logged_) {
+          listed_logged_ = true;
+          return StallVerdict::kObservedStalledListed;
+        }
+        return StallVerdict::kWatching;
+      }
+      fired_ = true;
+      return StallVerdict::kModeB;
+    }
+    return StallVerdict::kWatching;
+  }
+
+  bool active() const { return active_; }
+  bool seen_running() const { return seen_running_; }
+  uint32_t stuck_samples() const { return stuck_samples_; }
+  float episode_dt() const { return episode_dt_; }
+  uint64_t wall_ms(uint64_t now_ms) const {
+    return now_ms >= wall_start_ms_ ? now_ms - wall_start_ms_ : 0;
+  }
+
+ private:
+  void Start(const StallSample &s) {
+    active_ = true;
+    fired_ = false;
+    flags_logged_ = false;
+    listed_logged_ = false;
+    seen_running_ = false;
+    state_ = s.state;
+    request_ = s.request;
+    camera_ = s.camera;
+    max_time_ = s.time_known && s.time == s.time ? s.time : -1.0f;
+    Restart(s.now_ms);
+  }
+
+  void Restart(uint64_t now_ms) {
+    wall_start_ms_ = now_ms;
+    episode_dt_ = 0.0f;
+    last_advance_dt_ = 0.0f;
+    stuck_samples_ = 0;
+    stuck_dt_ = 0.0f;
+    stuck_since_ms_ = now_ms;
+  }
+
+  bool active_ = false;
+  bool fired_ = false;
+  bool flags_logged_ = false;
+  bool listed_logged_ = false;
+  bool seen_running_ = false;
+  uint32_t state_ = 0;
+  uint32_t request_ = 0;
+  uint32_t camera_ = 0;
+  uint64_t wall_start_ms_ = 0;
+  float episode_dt_ = 0.0f;
+  float last_advance_dt_ = 0.0f;
+  float max_time_ = -1.0f;
+  uint32_t stuck_samples_ = 0;
+  float stuck_dt_ = 0.0f;
+  uint64_t stuck_since_ms_ = 0;
+};
+
+// What the hook does with a mode A/B verdict.
+enum class StallAction : uint8_t {
+  kNone,
+  kPollHandler,           // A: exit stores, then the callback (warper+300 still set)
+  kPollFinalise,          // A: exit stores, then sub_8221B790 (the callback already ran)
+  kTimeoutHandler,        // B: as kPollHandler
+  kTimeoutFinalise,       // B: as kPollFinalise
+  kObservedFixOff,        // A/B signature with mcla_warp_stall_fix off: log only
+  kObservedStalledListed, // B bounds with the camera still listed: log only
+  kSkipFlagsPending,      // request flags do not match the state's wait: log only
+  kRefusedUnwritable,     // an exit address is not writable: log only
+  kSkipCameraMismatch,    // warper+300 is neither the camera nor 0: log only
+};
+
+constexpr const char *StallActionName(StallAction action) {
+  switch (action) {
+    case StallAction::kNone:
+      return "none";
+    case StallAction::kPollHandler:
+      return "poll-handler";
+    case StallAction::kPollFinalise:
+      return "poll-finalise";
+    case StallAction::kTimeoutHandler:
+      return "timeout-handler";
+    case StallAction::kTimeoutFinalise:
+      return "timeout-finalise";
+    case StallAction::kObservedFixOff:
+      return "observed-fix-off";
+    case StallAction::kObservedStalledListed:
+      return "observed-stalled-listed";
+    case StallAction::kSkipFlagsPending:
+      return "skip-flags-pending";
+    case StallAction::kRefusedUnwritable:
+      return "refused-unwritable";
+    case StallAction::kSkipCameraMismatch:
+      return "skip-camera-mismatch";
+  }
+  return "unknown";
+}
+
+constexpr bool StallActs(StallAction action) {
+  return action == StallAction::kPollHandler || action == StallAction::kPollFinalise ||
+         action == StallAction::kTimeoutHandler || action == StallAction::kTimeoutFinalise;
+}
+
+constexpr bool StallCallsHandler(StallAction action) {
+  return action == StallAction::kPollHandler || action == StallAction::kTimeoutHandler;
+}
+
+// camera = warper+296, camera_copy = warper+300 (cleared by the callback when
+// it ran for that camera, 0x8221B900..0x8221B924).
+constexpr StallAction ResolveStall(StallVerdict verdict, bool fix_on, bool writable,
+                                   uint32_t camera, uint32_t camera_copy) {
+  switch (verdict) {
+    case StallVerdict::kSkipFlagsPending:
+      return StallAction::kSkipFlagsPending;
+    case StallVerdict::kObservedStalledListed:
+      return StallAction::kObservedStalledListed;
+    case StallVerdict::kModeA:
+    case StallVerdict::kModeB:
+      break;
+    default:
+      return StallAction::kNone;
+  }
+  if (!fix_on) {
+    return StallAction::kObservedFixOff;
+  }
+  const bool handler = camera != 0 && camera_copy == camera;
+  if (!handler && camera_copy != 0) {
+    return StallAction::kSkipCameraMismatch;
+  }
+  if (!writable) {
+    return StallAction::kRefusedUnwritable;
+  }
+  if (verdict == StallVerdict::kModeA) {
+    return handler ? StallAction::kPollHandler : StallAction::kPollFinalise;
+  }
+  return handler ? StallAction::kTimeoutHandler : StallAction::kTimeoutFinalise;
+}
+
+// Signature 3 (log only): warper idle (29) with an empty queue, racer active,
+// simulation running and a view override slot active, for
+// kViewOverrideLimitMs. Reported once per continuous signature.
+inline constexpr uint64_t kViewOverrideLimitMs = 20000;
+
+struct ViewOverrideSample {
+  uint64_t now_ms = 0;
+  bool complete = false;
+  uint32_t state = 0;
+  uint32_t queue = 0;      // warper+64
+  bool racer_active = false;
+  bool paused = false;
+  uint8_t b64 = 1;
+  uint8_t b65 = 1;
+};
+
+constexpr bool ViewOverrideActive(uint8_t b64, uint8_t b65) {
+  return b64 == 0 || b65 == 0;
+}
+
+class ViewOverrideWatch {
+ public:
+  // True once when the signature has held for kViewOverrideLimitMs.
+  bool Observe(const ViewOverrideSample &s) {
+    const bool signature = s.complete && s.state == kStateIdle && s.queue == 0 &&
+                           s.racer_active && !s.paused && ViewOverrideActive(s.b64, s.b65);
+    if (!signature) {
+      active_ = false;
+      return false;
+    }
+    if (!active_ || s.now_ms < since_ms_) {
+      active_ = true;
+      reported_ = false;
+      since_ms_ = s.now_ms;
+      return false;
+    }
+    if (reported_ || s.now_ms - since_ms_ < kViewOverrideLimitMs) {
+      return false;
+    }
+    reported_ = true;
+    return true;
+  }
+
+  uint64_t held_ms(uint64_t now_ms) const {
+    return active_ && now_ms >= since_ms_ ? now_ms - since_ms_ : 0;
+  }
+
+ private:
+  bool active_ = false;
+  bool reported_ = false;
+  uint64_t since_ms_ = 0;
+};
 
 // --- probe log pacing ---------------------------------------------------------
 // State changes are logged as they happen, at most kMaxStateLines per

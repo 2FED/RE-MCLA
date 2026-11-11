@@ -32,6 +32,14 @@
 // warp then never finishes. --mcla_warp_finish_fix (default on, init-only)
 // performs the state-20 handler's own exit at the entry of that callback in
 // exactly that case, then runs the original callback.
+//
+// KI-026 stall fix (docs/evidence/M11-ki026-implementation-20261111.md,
+// --mcla_warp_stall_fix, default off, init-only): the same exit for a
+// callback that arrives in state 19, and a poll after mcWarper::Update for
+// a state-19/20 warp whose camera finished without the callback (mode A) or
+// never ran / stalled (mode B, unlisted cameras only). With the fix off and a
+// probe key on (mcla_warp_probe or mcla_ki026_probe) the same signatures are
+// logged as observed-fix-off and nothing is changed.
 
 #include "mcla_ki026_probe.h"
 
@@ -73,6 +81,11 @@ REXCVAR_DEFINE_INT32(mcla_warp_watchdog_seconds, 0, "MCLA",
 REXCVAR_DEFINE_BOOL(mcla_warp_finish_fix, true, "MCLA",
     "Finish a cinematic warp whose camera completed while the warper was still "
     "in state 20 (KI-035 frame-time race)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_BOOL(mcla_warp_stall_fix, false, "MCLA",
+    "Finish a warp stuck in state 19 or 20 whose camera finished, never ran or "
+    "stalled (KI-026 Race Back camera softlock)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace {
@@ -148,6 +161,23 @@ bool WarpFinishFixOn() {
 
 std::atomic<uint32_t> warp_finish_fixes{0};    // state-20 exits done by the fix
 std::atomic<uint32_t> warp_finish_races{0};    // race notifications seen (any action)
+
+// KI-026 stall fix (mcla_warp_stall_fix, default off). The callback part and
+// the poll run when the fix is on, or, logging only, when a probe key
+// (mcla_warp_probe or mcla_ki026_probe) is on.
+bool StallFixOn() {
+  static const bool on = REXCVAR_GET(mcla_warp_stall_fix);
+  return on;
+}
+
+bool StallObserveOn() {
+  static const bool on = StallFixOn() || WarpProbeOn() || ProbeOn();
+  return on;
+}
+
+std::atomic<uint32_t> warp_stall_fires{0};     // state-19/20 exits done by the stall fix
+std::atomic<uint32_t> warp_stall_observed{0};  // observed-*, skip-* and refused lines
+std::atomic<uint32_t> camfix_lines{0};
 
 // The dt of the last mcWarper::Update call (f1 at entry, every call) and the
 // last state-20 sample after the stock update (warp probe or watchdog on).
@@ -521,13 +551,281 @@ void WarpObserve(uint8_t *base, uint32_t warper, bool before_ok, uint32_t state_
 
 }  // namespace
 
+// --- KI-026 stall fix: shared reads, log lines and the poll --------------------
+// docs/evidence/M11-ki026-implementation-20261111.md. Guest writes are only
+// the three exit stores the state-19 and state-20 handlers perform
+// themselves (0x8221C0F8..0x8221C10C and 0x8221C1C8..0x8221C1DC); everything
+// else is guest code the game runs on a healthy trip (the callback
+// sub_8221B8C8 or the finalise sub_8221B790).
+namespace {
+
+struct CamfixEnv {
+  bool ok = true;
+  uint32_t request = 0;
+  uint32_t type = 0;
+  uint32_t req0 = 0;
+  uint32_t req3 = 0;
+  uint32_t req7 = 0;
+  uint32_t event_source = 0;  // warper+256
+  uint32_t camera300 = 0;
+  uint32_t notified273 = 0;
+  uint32_t exit276 = 0;
+  uint32_t queue = 0;
+  uint32_t view[6] = {};      // UILogic+0x10D50 +64, +65, +66, +144, +145, +146
+  uint32_t camera_paused = 0;
+  bool racer_active = false;
+  bool sim_paused = false;
+  float lead = -1.0f;         // *(0x827D7558) * *(0x82006BF0)
+};
+
+CamfixEnv ReadCamfixEnv(const GuestReader &read, uint32_t warper) {
+  namespace warp = mcla::warp;
+  CamfixEnv env;
+  bool &ok = env.ok;
+  env.request = read.U32(warper + warp::kWarperRequestField, ok);
+  if (env.request) {
+    env.type = read.U32(env.request + 12, ok);
+    env.req0 = read.U8(env.request + 0, ok);
+    env.req3 = read.U8(env.request + 3, ok);
+    env.req7 = read.U8(env.request + 7, ok);
+  }
+  env.event_source = read.U32(warper + warp::kWarperEventSource, ok);
+  env.camera300 = read.U32(warper + warp::kWarperCameraCopyField, ok);
+  env.notified273 = read.U8(warper + warp::kWarperNotifiedField, ok);
+  env.exit276 = read.U8(warper + warp::kWarperFinishFlagField, ok);
+  env.queue = read.U32(warper + kWarperQueueCount, ok);
+  const uint32_t ui_logic = warper - kWarperOffset;
+  const uint32_t view = ui_logic + warp::kViewOverrideOffset;
+  const uint32_t view_offsets[6] = {64, 65, 66, 144, 145, 146};
+  for (uint32_t i = 0; i < 6; ++i) {
+    env.view[i] = read.U8(view + view_offsets[i], ok);
+  }
+  env.camera_paused = read.U8(ui_logic + kCameraPaused, ok);
+  if (const uint32_t pm = read.U32(kPauseManagerPtr, ok)) {
+    env.sim_paused = read.U8(pm + 4, ok) != 0 && read.U8(pm + 10, ok) == 0;
+  }
+  if (const uint32_t players = read.U32(kPlayerManagerPtr, ok)) {
+    if (const uint32_t racer = read.U32(players + 8, ok)) {
+      env.racer_active = read.U32(racer + kRacerState, ok) == 3 &&
+                         read.U8(racer + kRacerCameraInputOff, ok) == 0;
+    }
+  }
+  bool lead_ok = true;
+  const float scale = read.F32(warp::kLeadScaleAddress, lead_ok);
+  const float factor = read.F32(warp::kLeadFactorAddress, lead_ok);
+  if (lead_ok) {
+    env.lead = static_cast<float>(scale * factor);  // fmuls f11,f0,f13
+  }
+  return env;
+}
+
+// The three exit addresses (shared by states 19 and 20); 0 when not writable.
+uint32_t WritableExitGlobal(const GuestReader &read, uint32_t warper) {
+  namespace warp = mcla::warp;
+  bool ok = true;
+  const uint32_t global = read.U32(warp::kExitGlobalPointer, ok);
+  if (!ok || !global || !read.Writable(global + warp::kExitGlobalByteField, 1) ||
+      !read.Writable(warper + warp::kWarperFinishFlagField, 1) ||
+      !read.Writable(warper + warp::kWarperStateField, 4)) {
+    return 0;
+  }
+  return global;
+}
+
+// The state-19 exit (0x8221C0F8..0x8221C10C: lis r11,-32121; li r10,29;
+// lwz r11,-10000(r11); stb r26(=0),293(r11); stb r28(=1),276(r31);
+// stw r10,288(r31)), identical to the state-20 exit (0x8221C1C8..0x8221C1DC).
+void StoreWarpExit(uint8_t *base, uint32_t global, uint32_t warper) {
+  namespace warp = mcla::warp;
+  REX_STORE_U8(global + warp::kExitGlobalByteField, warp::kExitGlobalByteValue);
+  REX_STORE_U8(warper + warp::kWarperFinishFlagField, warp::kExitFinishFlagValue);
+  REX_STORE_U32(warper + warp::kWarperStateField, warp::kExitStateValue);
+}
+
+struct CamfixEpisode {
+  int seen_running = -1;  // -1: not tracked (callback lines)
+  uint32_t stuck_samples = 0;
+  float episode_dt = -1.0f;
+  int64_t wall_ms = -1;
+};
+
+void LogCamfix(const char *action, const char *mode, uint32_t state, uint32_t camera,
+               const WarpCamera &cam, const CamfixEnv &env, const CamfixEpisode &ep) {
+  if (camfix_lines.fetch_add(1) >= mcla::warp::kMaxCamfixLines) {
+    return;
+  }
+  const float time = cam.time.known ? cam.time.value : -1.0f;
+  const float duration = cam.duration.known ? cam.duration.value : -1.0f;
+  const int ready = cam.ready_known ? (cam.ready ? 1 : 0) : -1;
+  const int listed = cam.list_read ? (cam.active_index >= 0 ? 1 : 0) : -1;
+  REXLOG_CAT_WARN(::mcla::logging::App(),
+                  "MCLA_KI026_CAMFIX v=1 action={} mode={} fix={} state={} request={:08X} "
+                  "type={} req0={} req3={} req7={} camera={:08X} class={} ready={} listed={} "
+                  "active_index={} active_count={} time={} duration={} lead={} "
+                  "seen_running={} stuck_frames={} episode_dt_s={} wall_ms={} "
+                  "camera300={:08X} notified273={} exit276={} view_override={},{},{},{} "
+                  "camera_paused={} racer_active={} sim_paused={} complete={}",
+                  action, mode, StallFixOn() ? 1 : 0, state, env.request, env.type, env.req0,
+                  env.req3, env.req7, camera, mcla::warp::TransitionClassName(cam.vtable), ready,
+                  listed, cam.active_index, cam.active_count, time, duration, env.lead,
+                  ep.seen_running, ep.stuck_samples, ep.episode_dt, ep.wall_ms, env.camera300,
+                  env.notified273, env.exit276, env.view[0], env.view[1], env.view[3],
+                  env.view[4], env.camera_paused, env.racer_active ? 1 : 0,
+                  env.sim_paused ? 1 : 0, env.ok ? 1 : 0);
+}
+
+// After an action: expected state 29, request 0, +300 0, +273 1 and the view
+// override released (1,1,1,1).
+void LogCamfixDone(uint8_t *base, const char *action, uint32_t warper) {
+  namespace warp = mcla::warp;
+  const GuestReader read = HookReader(base);
+  bool ok = true;
+  const uint32_t state = read.U32(warper + warp::kWarperStateField, ok);
+  const CamfixEnv env = ReadCamfixEnv(read, warper);
+  MCLA_APP_INFO("MCLA_KI026_CAMFIX_DONE v=1 action={} state={} request={:08X} "
+                "camera300={:08X} notified273={} exit276={} view_override={},{},{},{} "
+                "camera_paused={} complete={}",
+                action, state, env.request, env.camera300, env.notified273, env.exit276,
+                env.view[0], env.view[1], env.view[3], env.view[4], env.camera_paused,
+                ok && env.ok ? 1 : 0);
+}
+
+struct StallTracker {
+  mcla::warp::StallDetector detector;
+  mcla::warp::ViewOverrideWatch view;
+};
+StallTracker stall_tracker;  // the warper update runs on one guest thread
+
+// Runs after the stock mcWarper::Update (r3 = warper, f1 = dt at entry).
+void StallObserve(PPCContext &ctx, uint8_t *base, uint32_t warper, uint32_t state, float dt) {
+  namespace warp = mcla::warp;
+  const GuestReader read = HookReader(base);
+  const uint64_t now_ms = SteadyMs();
+  bool ok = true;
+  const uint32_t ui = read.U32(kUiLogicPtr, ok);
+  const bool global_warper = ok && ui != 0 && warper == ui + kWarperOffset;
+
+  if (state == warp::kStateIdle) {
+    // Signature 3 (log only): a view override slot left active while the
+    // racer drives with the warper idle.
+    stall_tracker.detector.Observe({});  // ends any 19/20 episode
+    if (!global_warper) {
+      return;
+    }
+    // Two byte reads per idle frame; the rest only while a slot is active.
+    bool view_ok = true;
+    const uint32_t view = ui + warp::kViewOverrideOffset;
+    const uint32_t b64 = read.U8(view + 64, view_ok);
+    const uint32_t b65 = read.U8(view + 65, view_ok);
+    if (!view_ok || !warp::ViewOverrideActive(static_cast<uint8_t>(b64),
+                                              static_cast<uint8_t>(b65))) {
+      stall_tracker.view.Observe({});
+      return;
+    }
+    const CamfixEnv env = ReadCamfixEnv(read, warper);
+    warp::ViewOverrideSample v;
+    v.now_ms = now_ms;
+    v.complete = env.ok;
+    v.state = state;
+    v.queue = env.queue;
+    v.racer_active = env.racer_active;
+    v.paused = env.sim_paused;
+    v.b64 = static_cast<uint8_t>(env.view[0]);
+    v.b65 = static_cast<uint8_t>(env.view[1]);
+    const uint64_t held = stall_tracker.view.held_ms(now_ms);
+    if (stall_tracker.view.Observe(v)) {
+      warp_stall_observed.fetch_add(1);
+      CamfixEpisode ep;
+      ep.wall_ms = static_cast<int64_t>(held);
+      LogCamfix("observed-view-override", "S3", state, 0, WarpCamera{}, env, ep);
+    }
+    return;
+  }
+  stall_tracker.view.Observe({});
+  if (state != warp::kStateZoomIn && state != warp::kStateCinematicZoom) {
+    stall_tracker.detector.Observe({});
+    return;
+  }
+
+  const CamfixEnv env = ReadCamfixEnv(read, warper);
+  const uint32_t camera = read.U32(warper + kWarperCamera, ok);
+  const uint32_t request_camera =
+      env.request ? read.U32(env.request + kRequestCamera, ok) : 0;
+  const WarpCamera cam = ReadWarpCamera(read, camera);
+  warp::StallSample s;
+  s.now_ms = now_ms;
+  s.dt = dt;
+  s.complete = ok && env.ok && (!camera || (cam.read && cam.list_read));
+  s.global_warper = global_warper;
+  s.state = state;
+  s.request = env.request;
+  s.camera = camera;
+  s.request_camera = request_camera;
+  s.req0 = static_cast<uint8_t>(env.req0);
+  s.req3 = static_cast<uint8_t>(env.req3);
+  s.ready_known = cam.ready_known;
+  s.ready = cam.ready;
+  s.listed = cam.active_index >= 0;
+  s.time_known = cam.time.known;
+  s.time = cam.time.value;
+  s.duration_known = cam.duration.known;
+  s.duration = cam.duration.value;
+  s.paused = env.sim_paused;
+  const warp::StallVerdict verdict = stall_tracker.detector.Observe(s);
+  if (verdict == warp::StallVerdict::kIdle || verdict == warp::StallVerdict::kWatching ||
+      verdict == warp::StallVerdict::kFired) {
+    return;
+  }
+  const bool modes = verdict == warp::StallVerdict::kModeA ||
+                     verdict == warp::StallVerdict::kModeB;
+  const uint32_t global = modes ? WritableExitGlobal(read, warper) : 0;
+  const warp::StallAction action =
+      warp::ResolveStall(verdict, StallFixOn(), global != 0, camera, env.camera300);
+  CamfixEpisode ep;
+  ep.seen_running = stall_tracker.detector.seen_running() ? 1 : 0;
+  ep.stuck_samples = stall_tracker.detector.stuck_samples();
+  ep.episode_dt = stall_tracker.detector.episode_dt();
+  ep.wall_ms = static_cast<int64_t>(stall_tracker.detector.wall_ms(now_ms));
+  const char *mode = verdict == warp::StallVerdict::kModeA ? "A"
+                     : verdict == warp::StallVerdict::kSkipFlagsPending ? "poll"
+                                                                        : "B";
+  LogCamfix(warp::StallActionName(action), mode, state, camera, cam, env, ep);
+  if (!warp::StallActs(action)) {
+    warp_stall_observed.fetch_add(1);
+    return;
+  }
+  StoreWarpExit(base, global, warper);
+  warp_stall_fires.fetch_add(1);
+  if (warp::StallCallsHandler(action)) {
+    // The callback with the arguments the transition would have passed
+    // (r4 = warper+256, its own compare at 0x8221B8DC; r5 = the camera,
+    // == request+108 and == warper+300). It releases the view override
+    // (sub_82224A28), pauses the camera when req+7 is set, finalises
+    // (+276 = 1 now) and sets +273 = 1, as on a healthy trip.
+    ctx.r3.u64 = warper;
+    ctx.r4.u64 = env.event_source;
+    ctx.r5.u64 = camera;
+    __imp__sub_8221B8C8(ctx, base);
+  } else {
+    // The callback ran earlier (+300 already 0): finalise only, as the
+    // callback does when +276 is set (0x8221B984..0x8221B994). Precedent:
+    // Ki026Watchdog signature 2 calls sub_8221B790 from this same site.
+    ctx.r3.u64 = warper;
+    sub_8221B790(ctx, base);
+  }
+  LogCamfixDone(base, warp::StallActionName(action), warper);
+}
+
+}  // namespace
+
 REX_EXTERN(sub_8221BE98) {
   const uint32_t warper = ctx.r3.u32;
   // f1 = dt (fmr f31,f1 in the prologue); kept for the KI-035 race lines.
   const float dt = static_cast<float>(ctx.f1.f64);
   last_update_dt.store(dt, std::memory_order_relaxed);
   const bool warp_on = WarpProbeOn() || WarpWatchdogLimitMs() != 0;
-  if (!ProbeOn() && !WatchdogOn() && !warp_on) {
+  const bool stall_on = StallObserveOn();
+  if (!ProbeOn() && !WatchdogOn() && !warp_on && !stall_on) {
     __imp__sub_8221BE98(ctx, base);
     return;
   }
@@ -563,6 +861,15 @@ REX_EXTERN(sub_8221BE98) {
   if (warp_on) {
     WarpObserve(base, warper, before_ok, state_before, state, dt);
   }
+  if (stall_on) {
+    // KI-026 stall detector (after the KI-035 watchdog, which arms keep off).
+    // A watchdog or KI-026 watchdog action leaves 29, so the poll sees idle.
+    bool now_ok = true;
+    const uint32_t state_now = HookReader(base).U32(warper + kWarperState, now_ok);
+    if (now_ok) {
+      StallObserve(ctx, base, warper, state_now, dt);
+    }
+  }
 }
 
 // --- KI-035 fix: camera-finished callback during state 20 --------------------
@@ -587,7 +894,8 @@ REX_EXTERN(sub_8221B8C8) {
   }
   const bool fix_on = WarpFinishFixOn();
   const bool probe_on = WarpProbeOn();
-  if (!fix_on && !probe_on) {
+  const bool stall_observe = StallObserveOn();
+  if (!fix_on && !probe_on && !stall_observe) {
     __imp__sub_8221B8C8(ctx, base);
     return;
   }
@@ -599,6 +907,7 @@ REX_EXTERN(sub_8221B8C8) {
   bool ok = true;
   warp::FinishSample s;
   s.enabled = fix_on;
+  s.stall_enabled = StallFixOn();
   const uint32_t ui = read.U32(kUiLogicPtr, ok);
   s.global_warper = ui != 0 && warper == ui + kWarperOffset;
   s.state = read.U32(warper + warp::kWarperStateField, ok);
@@ -623,19 +932,33 @@ REX_EXTERN(sub_8221B8C8) {
   s.camera_copy_match = camera == camera_copy;
   s.complete = ok;
   uint32_t global = 0;
-  if (s.complete && s.state == warp::kStateCinematicZoom && warp::FinishMatched(s)) {
-    bool global_ok = true;
-    global = read.U32(warp::kExitGlobalPointer, global_ok);
-    s.writable = global_ok && global != 0 &&
-                 read.Writable(global + warp::kExitGlobalByteField, 1) &&
-                 read.Writable(warper + warp::kWarperFinishFlagField, 1) &&
-                 read.Writable(warper + warp::kWarperStateField, 4);
+  if (s.complete &&
+      (s.state == warp::kStateCinematicZoom || s.state == warp::kStateZoomIn) &&
+      warp::FinishMatched(s)) {
+    global = WritableExitGlobal(read, warper);
+    s.writable = global != 0;
   }
   const warp::FinishAction action = warp::DecideFinish(s);
   warp::FinishSample as_if_on = s;
   as_if_on.enabled = true;
+  as_if_on.stall_enabled = true;
   const warp::FinishAction would = warp::DecideFinish(as_if_on);
-  const bool race = would != warp::FinishAction::kPassThrough;
+  // race: the KI-035 state-20 case; cb19: the KI-026 state-19 case.
+  const bool race =
+      would != warp::FinishAction::kPassThrough && s.state == warp::kStateCinematicZoom;
+  const bool cb19 = would != warp::FinishAction::kPassThrough && s.state == warp::kStateZoomIn;
+
+  if (cb19 && stall_observe) {
+    const char *name =
+        !s.stall_enabled ? "observed-fix-off" : warp::FinishActionName(action);
+    if (action == warp::FinishAction::kFinishState19) {
+      warp_stall_fires.fetch_add(1);
+    } else {
+      warp_stall_observed.fetch_add(1);
+    }
+    LogCamfix(name, "cb19", s.state, camera, ReadWarpCamera(read, camera),
+              ReadCamfixEnv(read, warper), CamfixEpisode{});
+  }
 
   if (race || probe_on) {
     const float dt_update = last_update_dt.load(std::memory_order_relaxed);
@@ -656,8 +979,9 @@ REX_EXTERN(sub_8221B8C8) {
     const float time = cam.time.known ? cam.time.value : -1.0f;
     const float duration = cam.duration.known ? cam.duration.value : -1.0f;
     const int ready = cam.ready_known ? (cam.ready ? 1 : 0) : -1;
-    const char *action_name =
-        !fix_on && race ? "observed-fix-off" : warp::FinishActionName(action);
+    const char *action_name = (!fix_on && race) || (!s.stall_enabled && cb19)
+                                  ? "observed-fix-off"
+                                  : warp::FinishActionName(action);
     if (probe_on && finish_notify_lines.fetch_add(1) < warp::kMaxFinishNotifyLines) {
       MCLA_APP_INFO("MCLA_KI035_FINISH_NOTIFY v=1 action={} warper={:08X} global_warper={} "
                     "state={} request={:08X} type={} req0={} req3={} req7={} source={:08X} "
@@ -689,6 +1013,16 @@ REX_EXTERN(sub_8221B8C8) {
     }
   }
 
+  if (action == warp::FinishAction::kFinishState19) {
+    // KI-026: the state-19 handler's own exit (0x8221C0F8..0x8221C10C, the
+    // same three stores as state 20), every address checked writable above;
+    // then the original, which releases +300 and the view override,
+    // pauses the camera when req+7 is set, finalises and sets +273 = 1.
+    StoreWarpExit(base, global, warper);
+    __imp__sub_8221B8C8(ctx, base);
+    LogCamfixDone(base, warp::FinishActionName(action), warper);
+    return;
+  }
   if (action != warp::FinishAction::kFinish) {
     __imp__sub_8221B8C8(ctx, base);
     return;
@@ -811,6 +1145,26 @@ std::string MclaKi026StateJson(rex::memory::Memory *memory, uint8_t *base) {
         << ", \"warp_finish_fix\": " << (WarpFinishFixOn() ? "true" : "false")
         << ", \"warp_finish_races\": " << warp_finish_races.load()
         << ", \"warp_finish_fixes\": " << warp_finish_fixes.load();
+    // KI-026 stall fix and the UILogic+0x10D50 view override slots
+    // (sub_82224A28 releases them by setting +64/+65/+144/+145 to 1).
+    const uint32_t view = ui + mcla::warp::kViewOverrideOffset;
+    out << ", \"warp_stall_fix\": " << (StallFixOn() ? "true" : "false")
+        << ", \"warp_stall_observe\": " << (StallObserveOn() ? "true" : "false")
+        << ", \"warp_stall_fires\": " << warp_stall_fires.load()
+        << ", \"warp_stall_observed\": " << warp_stall_observed.load()
+        << ", \"ki026_probe\": " << (ProbeOn() ? "true" : "false")
+        << ", \"view_override\": {\"b64\": " << read.U8(view + 64, ok)
+        << ", \"b65\": " << read.U8(view + 65, ok) << ", \"b66\": " << read.U8(view + 66, ok)
+        << ", \"b144\": " << read.U8(view + 144, ok)
+        << ", \"b145\": " << read.U8(view + 145, ok)
+        << ", \"b146\": " << read.U8(view + 146, ok) << "}";
+    bool lead_ok = true;
+    const float lead_scale = read.F32(mcla::warp::kLeadScaleAddress, lead_ok);
+    const float lead_factor = read.F32(mcla::warp::kLeadFactorAddress, lead_ok);
+    out << ", \"state19_lead\": "
+        << (lead_ok ? Float(static_cast<float>(lead_scale * lead_factor)) : std::string("null"))
+        << ", \"state19_lead_scale\": " << (lead_ok ? Float(lead_scale) : std::string("null"))
+        << ", \"state19_lead_factor\": " << (lead_ok ? Float(lead_factor) : std::string("null"));
   }
   if (const uint32_t pm = read.U32(kPauseManagerPtr, ok)) {
     out << ", \"pause_manager\": {\"paused\": " << read.U8(pm + 4, ok)
