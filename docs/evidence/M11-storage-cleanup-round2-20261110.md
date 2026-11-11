@@ -217,3 +217,7 @@ Why the two folders were skipped:
   - **Third-party copies** (`clang++.exe`, CRT DLLs). Redistributable and can be downloaded again.
 - **Group D.** Nothing unreproducible was lost: every tracked byte is in git, and the extras are regenerable
   codegen output.
+
+## Addendum 2026-11-11: l34-src
+
+A file-by-file review (Opus subagent, read-only) found that `private/l34-src` was a standalone clone at 370632d (an ancestor of main HEAD, 387 commits back) and that every uncommitted or untracked hand-written file in it is already in HEAD in the same or a later form (diagnostic-export sources byte-identical; session-report, lease policy, launcher and M9 docs superseded). The only file not in git in any form, `mcla_manifest.l34-local.toml` (550 bytes, sha256 0AB8DA90...), was copied to `private/storage-maintenance-20261110/l34-src-kept/`. The folder (1,808,421,466 bytes, 21,913 files, no reparse points) was then deleted by the primary under the owner approval of 2026-11-10 for verified source copies. Lost: nothing unique.
