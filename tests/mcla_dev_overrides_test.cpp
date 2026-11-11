@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 86, "eighty-six whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 88, "eighty-eight whitelisted names");
   {
     // l77 KI-074 keys: the raw timer switch (startup) and the three vblank
     // caps (graphics plugin, a conflict group, replacing the launcher value).
@@ -813,6 +813,62 @@ void TestWhitelist() {
           "l89 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
+    // l90 KI-074 keys: the frame lead limit (graphics plugin int, SDK default
+    // 0) and the deferred read-back slot release (graphics plugin bool, SDK
+    // default false); =false writes nothing; no conflict pairs.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &lead = Info(Key::kFrameLeadLimit1);
+    Check(FindKey("frame_lead_limit_1") == Key::kFrameLeadLimit1 &&
+              lead.phase == Phase::kGraphicsPlugin &&
+              CvarName(lead) == "d3d12_frame_lead_limit" && CvarText(lead, true) == "1" &&
+              CvarText(lead, false).empty() && lead.true_source == TextSource::kLiteral &&
+              !lead.overrides_user,
+          "frame_lead_limit_1=true writes 1 to d3d12_frame_lead_limit after the plugin "
+          "loaded, false writes nothing");
+    const auto &rel = Info(Key::kReadbackDeferredRelease);
+    Check(FindKey("readback_deferred_release") == Key::kReadbackDeferredRelease &&
+              rel.phase == Phase::kGraphicsPlugin &&
+              CvarName(rel) == "d3d12_readback_deferred_release" &&
+              CvarText(rel, true) == "true" && CvarText(rel, false).empty() &&
+              rel.true_source == TextSource::kLiteral && !rel.overrides_user,
+          "readback_deferred_release=true writes true to d3d12_readback_deferred_release "
+          "after the plugin loaded, false writes nothing");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kFrameLeadLimit1 && pair.second != Key::kFrameLeadLimit1 &&
+                pair.first != Key::kReadbackDeferredRelease &&
+                pair.second != Key::kReadbackDeferredRelease,
+            "the l90 keys are in no conflict pair");
+    }
+    Check(!FindKey("d3d12_frame_lead_limit") && !FindKey("frame_lead_limit") &&
+              !FindKey("frame_lead_limit_2") && !FindKey("frame_lead_limit_0") &&
+              !FindKey("FRAME_LEAD_LIMIT_1") && !FindKey("frame_lead_limit_1_on") &&
+              !FindKey("lead_limit_1") && !FindKey("d3d12_readback_deferred_release") &&
+              !FindKey("readback_deferred") && !FindKey("READBACK_DEFERRED_RELEASE") &&
+              !FindKey("readback_deferred_release_on") && !FindKey("deferred_release"),
+          "no prefix, suffix, cvar-name, case or other numeric variants of the l90 keys");
+    const Parsed on = Parse("frame_lead_limit_1=true\n"
+                            "readback_deferred_release=true\n");
+    Check(on.ValueCount() == 2 && on.issue_count == 0 &&
+              on.Value(Key::kFrameLeadLimit1) == true &&
+              on.Value(Key::kReadbackDeferredRelease) == true,
+          "the l90 arm keys parse together");
+    const Parsed bad = Parse("frame_lead_limit_1=1\n"
+                             "d3d12_frame_lead_limit=true\n"
+                             "frame_lead_limit_1=false\n"
+                             "frame_lead_limit_1=true\n"
+                             "readback_deferred_release=yes\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 4 &&
+              bad.Value(Key::kFrameLeadLimit1) == false &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate &&
+              bad.issues[3].issue == LineIssue::kMalformed,
+          "l90 near misses: an integer, the cvar name, a repeat and a non-bool are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1266,7 +1322,8 @@ void TestWhitelist() {
                           key == Key::kAudioFilterProbe || key == Key::kAudioFilterNative ||
                           key == Key::kAudioFilterNativeVerify ||
                           key == Key::kReadbackFencedDelivery ||
-                          key == Key::kAudioFilterNativeChOff;
+                          key == Key::kAudioFilterNativeChOff ||
+                          key == Key::kFrameLeadLimit1 || key == Key::kReadbackDeferredRelease;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2017,7 +2074,8 @@ void TestWhitelist() {
     // false (79 keys); l84: plus the l84 key explicit false (80 keys); l86:
     // plus the l86 key explicit false (81 keys); l87: plus the three l87 keys
     // explicit false (84 keys); l88: plus the l88 key explicit false (85 keys);
-    // l89: plus the l89 key explicit false (86 keys).
+    // l89: plus the l89 key explicit false (86 keys); l90: plus the two l90
+    // keys explicit false (88 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2027,7 +2085,9 @@ void TestWhitelist() {
                                   "audio_filter_native=false\n"
                                   "audio_filter_native_verify=false\n"
                                   "readback_fenced_delivery=false\n"
-                                  "audio_filter_native_ch_off=false\n";
+                                  "audio_filter_native_ch_off=false\n"
+                                  "frame_lead_limit_1=false\n"
+                                  "readback_deferred_release=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"

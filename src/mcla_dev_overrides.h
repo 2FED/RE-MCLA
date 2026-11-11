@@ -269,6 +269,15 @@
 //   writes true to the host init-only bool mcla_audio_filter_native_ch_off
 //   at startup (the control: sub_82147738 stays recompiled). Default off;
 //   =false changes nothing; no conflict pair.
+// - l90 (docs/evidence/M11-l90-sdk-20261111.md; KI-074 flicker):
+//   frame_lead_limit_1=true writes 1 to the SDK int d3d12_frame_lead_limit
+//   (default 0; registered by the graphics plugin, hot reload): a guest frame
+//   opens only when at most one earlier frame is still on the GPU (frame F
+//   waits, bounded, for frame F-2). readback_deferred_release=true writes true
+//   to the SDK bool d3d12_readback_deferred_release (default false, graphics
+//   plugin, hot reload): read-back slot buffers released by slot growth or
+//   eviction go through the deferred deletion. =false changes nothing; an SDK
+//   without the l90 cvars logs the key as unavailable; no conflict pairs.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -398,8 +407,10 @@ enum class Key : uint8_t {
   kAudioFilterNativeVerify,  // l87 KI-060: mcla_audio_filter_native_verify=true
   kReadbackFencedDelivery,   // l88 KI-074: d3d12_readback_fenced_delivery=true
   kAudioFilterNativeChOff,   // l89 KI-060: mcla_audio_filter_native_ch_off=true
+  kFrameLeadLimit1,          // l90 KI-074: d3d12_frame_lead_limit=1
+  kReadbackDeferredRelease,  // l90 KI-074: d3d12_readback_deferred_release=true
 };
-inline constexpr size_t kKeyCount = 86;
+inline constexpr size_t kKeyCount = 88;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -621,6 +632,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // switches on (host init-only, startup); =false writes nothing.
     {"audio_filter_native_ch_off", Phase::kStartup, "mcla_audio_filter_native_ch_off", "true",
      ""},
+    // l90 KI-074: the frame lead limit (SDK int) and the deferred read-back
+    // slot release (SDK bool), registered by the graphics plugin (hot
+    // reload), so after the plugin has loaded; =false writes nothing.
+    {"frame_lead_limit_1", Phase::kGraphicsPlugin, "d3d12_frame_lead_limit", "1", ""},
+    {"readback_deferred_release", Phase::kGraphicsPlugin, "d3d12_readback_deferred_release",
+     "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, the
