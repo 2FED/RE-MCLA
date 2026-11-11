@@ -354,3 +354,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **KI-074 (2026-11-11, after cap44):** flicker <=> CP lead 2 under GPU saturation. l90: SDK `d3d12_frame_lead_limit` (default 0), counters lead_cap_waits / wait ms, deferred release of read-back buffers with a counter; owner A/B default vs limit=1. KI-077 not reproduced per lap. [Analysis](evidence/M11-l88-cap44-analysis-20261111.md).
 
 **l90 staged (2026-11-11), not signed:** host (88 keys) + SDK 4ec7abd (local, unpublished). KI-074 A/B: pc/default vs pc/lead1 (then lead1-rel); includes l89 audio arms for the Deck. `private/l90-CHECKLIST.txt`. [SDK](evidence/M11-l90-sdk-20261111.md), [build](evidence/M11-l90-owner-build-20261111.md).
+
+**l90 A/B invalid (2026-11-11):** the launcher still pointed at l88; lead limit untested. Separator across all runs: frame-end lead 2 / fences 2+ frames late (f2p), 0 in clean runs. Next: owner re-run l90 pc/lead1 (check receipt build D6AF6995 and the "MCLA dev override: frame_lead_limit_1=true" line); strict lead variant for l91. [Analysis](evidence/M11-l90-ab-invalid-and-all-runs-20261111.md).
