@@ -370,3 +370,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **KI-026 implemented (2026-11-11):** warp stall fix in the host (92 keys), default off; goes into l92. Owner test: Red Light Driver, lose, Race Back x10-15 per arm on Unlocked. [Implementation](evidence/M11-ki026-implementation-20261111.md).
 
 **Hardware FMA lever (2026-11-11):** bounded at about 2 % of Deck process CPU after the l89 native audio filters; low priority; cheapest route is link-time interposition of `fma` with a start-up benchmark first. Not a Deck fps fix. [Design](evidence/M11-fma-dispatch-design-20261111.md).
+
+**l92 staged (2026-11-11), not signed:** host 98 keys + SDK e6d6bd3. Owner order: (1) lead-strict through dawn on the Sunset -> Santa Monica route; (2) read-watch; (3) strict-inject2; (4) stall-fix (KI-026, Race Back x10-15); (5) present-stats at 60 Hz; Deck audio arms. `private/l92-CHECKLIST.txt`. [SDK](evidence/M11-l92-sdk-20261111.md), [build](evidence/M11-l92-owner-build-20261111.md).

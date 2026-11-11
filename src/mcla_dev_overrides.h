@@ -296,6 +296,20 @@
 //   nothing; an SDK without the l91 cvar logs the key as unavailable. The two
 //   keys write one cvar, so they form a conflict pair; neither conflicts with
 //   frame_lead_limit_1 (another cvar; strict implies limit 1).
+// - l92 (docs/evidence/M11-l92-sdk-20261111.md; KI-074 / KI-076 probes),
+//   all SDK cvars of the graphics plugin phase, default off, =false writes
+//   nothing, no conflict pairs (each key writes its own cvar):
+//   readback_read_watch=true writes true to d3d12_readback_read_watch (names
+//   the guest reader of read-back bytes, MCLA_RB_READ lines);
+//   readback_age_inject_2=true writes 2 to d3d12_readback_age_inject (due
+//   cadence copies of non-exempt keys held 2 frames);
+//   occlusion_query_bounded_4=true writes 4 to
+//   d3d12_occlusion_query_bounded_ms (the occlusion query drain bounded to
+//   4 ms); present_stats=true writes true to d3d12_present_stats
+//   (MCLA_PRESENT_STATS lines); present_interval_1=true writes 1 to
+//   d3d12_present_sync_interval; locked_tearing_off=true writes true to
+//   mcla_locked_tearing_off (no ALLOW_TEARING in Locked either). An SDK
+//   without the l92 cvars logs the keys as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -431,8 +445,14 @@ enum class Key : uint8_t {
   kFrameLeadAdaptive,        // l91 KI-074: d3d12_frame_lead_strict=2
   kWarpStallFix,             // KI-026: mcla_warp_stall_fix=true
   kKi026Probe,               // KI-026: mcla_ki026_probe (plain bool)
+  kReadbackReadWatch,        // l92 KI-074: d3d12_readback_read_watch=true
+  kReadbackAgeInject2,       // l92 KI-074: d3d12_readback_age_inject=2
+  kOcclusionQueryBounded4,   // l92: d3d12_occlusion_query_bounded_ms=4
+  kPresentStats,             // l92 KI-076: d3d12_present_stats=true
+  kPresentInterval1,         // l92 KI-076: d3d12_present_sync_interval=1
+  kLockedTearingOff,         // l92 KI-076: mcla_locked_tearing_off=true
 };
-inline constexpr size_t kKeyCount = 92;
+inline constexpr size_t kKeyCount = 98;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -670,6 +690,15 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // (plain bool, as mcla_warp_probe).
     {"mcla_warp_stall_fix", Phase::kStartup, "", "true", ""},
     {"mcla_ki026_probe", Phase::kStartup},
+    // l92 probes (SDK, registered by the graphics plugin, default off); =false
+    // writes nothing.
+    {"readback_read_watch", Phase::kGraphicsPlugin, "d3d12_readback_read_watch", "true", ""},
+    {"readback_age_inject_2", Phase::kGraphicsPlugin, "d3d12_readback_age_inject", "2", ""},
+    {"occlusion_query_bounded_4", Phase::kGraphicsPlugin, "d3d12_occlusion_query_bounded_ms", "4",
+     ""},
+    {"present_stats", Phase::kGraphicsPlugin, "d3d12_present_stats", "true", ""},
+    {"present_interval_1", Phase::kGraphicsPlugin, "d3d12_present_sync_interval", "1", ""},
+    {"locked_tearing_off", Phase::kGraphicsPlugin, "mcla_locked_tearing_off", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them

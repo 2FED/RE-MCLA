@@ -30,7 +30,66 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 92, "ninety-two whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 98, "ninety-eight whitelisted names");
+  {
+    // l92 probe keys: six SDK cvars of the graphics plugin phase, each its own
+    // cvar (no conflict pair); =false writes nothing.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    struct L92Key {
+      Key key;
+      const char *name;
+      const char *cvar;
+      const char *text;
+    };
+    const L92Key l92_keys[] = {
+        {Key::kReadbackReadWatch, "readback_read_watch", "d3d12_readback_read_watch", "true"},
+        {Key::kReadbackAgeInject2, "readback_age_inject_2", "d3d12_readback_age_inject", "2"},
+        {Key::kOcclusionQueryBounded4, "occlusion_query_bounded_4",
+         "d3d12_occlusion_query_bounded_ms", "4"},
+        {Key::kPresentStats, "present_stats", "d3d12_present_stats", "true"},
+        {Key::kPresentInterval1, "present_interval_1", "d3d12_present_sync_interval", "1"},
+        {Key::kLockedTearingOff, "locked_tearing_off", "mcla_locked_tearing_off", "true"},
+    };
+    for (const L92Key &k : l92_keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == k.cvar && CvarText(info, true) == k.text &&
+                CvarText(info, false).empty() && !info.overrides_user,
+            "l92 key writes its SDK cvar in the graphics plugin phase, false writes nothing");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "the l92 keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("d3d12_readback_read_watch") && !FindKey("readback_age_inject") &&
+              !FindKey("readback_age_inject_1") && !FindKey("occlusion_query_bounded") &&
+              !FindKey("present_interval") && !FindKey("PRESENT_STATS") &&
+              !FindKey("locked_tearing") && !FindKey("readback_read_watch_off"),
+          "no cvar, numeric, prefix, case or off variants of the l92 keys");
+    const Parsed arm = Parse("readback_read_watch=true\r\nreadback_age_inject_2=true\r\n"
+                             "frame_lead_strict=true\r\npresent_stats=true\r\n"
+                             "present_interval_1=false\r\nlocked_tearing_off=false\r\n"
+                             "occlusion_query_bounded_4=false\r\n");
+    Check(arm.ValueCount() == 7 && arm.issue_count == 0 &&
+              arm.Value(Key::kReadbackReadWatch) == true &&
+              arm.Value(Key::kReadbackAgeInject2) == true &&
+              arm.Value(Key::kFrameLeadStrict) == true && arm.Value(Key::kPresentStats) == true &&
+              arm.Value(Key::kPresentInterval1) == false &&
+              arm.Value(Key::kLockedTearingOff) == false &&
+              arm.Value(Key::kOcclusionQueryBounded4) == false,
+          "an l92 arm parses (strict lead with age inject, read watch, present stats)");
+    const Parsed bad = Parse("readback_age_inject_2=2\n"
+                             "d3d12_present_stats=true\n"
+                             "present_stats=true\n"
+                             "present_stats=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kPresentStats) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l92 near misses: an integer, the cvar name and a repeat are ignored");
+  }
   {
     // KI-026 keys: the stall fix (host init-only bool, default off; =false
     // writes nothing) and the KI-026 probe (plain host bool), both at startup;
@@ -1448,7 +1507,10 @@ void TestWhitelist() {
                           key == Key::kAudioFilterNativeChOff ||
                           key == Key::kFrameLeadLimit1 || key == Key::kReadbackDeferredRelease ||
                           key == Key::kFrameLeadStrict || key == Key::kFrameLeadAdaptive ||
-                          key == Key::kWarpStallFix;
+                          key == Key::kWarpStallFix || key == Key::kReadbackReadWatch ||
+                          key == Key::kReadbackAgeInject2 ||
+                          key == Key::kOcclusionQueryBounded4 || key == Key::kPresentStats ||
+                          key == Key::kPresentInterval1 || key == Key::kLockedTearingOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2202,7 +2264,8 @@ void TestWhitelist() {
     // explicit false (84 keys); l88: plus the l88 key explicit false (85 keys);
     // l89: plus the l89 key explicit false (86 keys); l90: plus the two l90
     // keys explicit false (88 keys); l91: plus the two l91 keys explicit false
-    // (90 keys); KI-026: plus the two KI-026 keys explicit false (92 keys).
+    // (90 keys); KI-026: plus the two KI-026 keys explicit false (92 keys);
+    // l92: plus the six l92 keys explicit false (98 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2218,7 +2281,13 @@ void TestWhitelist() {
                                   "frame_lead_strict=false\n"
                                   "frame_lead_adaptive=false\n"
                                   "mcla_warp_stall_fix=false\n"
-                                  "mcla_ki026_probe=false\n";
+                                  "mcla_ki026_probe=false\n"
+                                  "readback_read_watch=false\n"
+                                  "readback_age_inject_2=false\n"
+                                  "occlusion_query_bounded_4=false\n"
+                                  "present_stats=false\n"
+                                  "present_interval_1=false\n"
+                                  "locked_tearing_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
