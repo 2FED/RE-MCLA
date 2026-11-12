@@ -30,3 +30,7 @@ temp (scripts/xex.ps1, AES retail key + basic compression; 10,354,688 bytes, mat
 - Forcing flag byte 0x8288E5B8 -> hour = 0.0 in sub_822F3BD8 (TU15:43705); no static writer found.
 - Xbox Live session properties include "TimeOfDay" (table 0x82033E48) and "TODBase".
 - mcAmbientTod with TodArray / TodDensityArray: ambient density by hour (risk for traffic/peds).
+
+## Save behaviour (owner, 2026-11-12)
+
+Owner fact (2026-11-12): the save DOES remember the hour of day (the owner uses it to "teleport": start a race where needed and quit, and the game keeps that time and place). So an altered clock would be written into the save: the dawn arms must only be used on a COPY of the profile, never on MAIN.

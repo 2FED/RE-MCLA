@@ -136,3 +136,7 @@ tests/mcla_m10_defaults_test.cpp updated per convention.
 - Ambient density by hour (mcAmbientTod) follows the faster clock; traffic and pedestrians may
   change faster than in a normal session.
 - Not done: no in-game menu, no hot reload, no other warp callers, no garage-byte control.
+
+## Save behaviour (owner, 2026-11-12)
+
+Owner fact (2026-11-12): the save DOES remember the hour of day (the owner uses it to "teleport": start a race where needed and quit, and the game keeps that time and place). So an altered clock would be written into the save: the dawn arms must only be used on a COPY of the profile, never on MAIN.
