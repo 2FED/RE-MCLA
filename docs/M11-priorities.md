@@ -380,3 +380,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **KI-074 dawn A/B (2026-11-12):** flicker at the 06:00 night/day switch on default, none with strict. Strict is confirmed across night, day and dawn. Decision pending with the owner: strict default-on now (cost a few fps) vs keep off until the cheaper root fix (read-watch / inject probes, Reflex sleep).
 
 **l94 staged (2026-11-12), not signed:** KI-074 strict frame lead default on (host 104 keys; SDK e6d6bd3). Owner: (0) 20-30 min on MAIN with the default arm; then on a COPY profile the dawn hunt arms, 3 restarts each. Deck control arm deck/strict-off (strict is unmeasured on the Deck). `private/l94-CHECKLIST.txt`. [Evidence](evidence/M11-l94-owner-build-20261112.md).
+
+**l94 MAIN regression (2026-11-12):** strict default on: no surface flicker in ~30 min. KI-078: one white whole-frame flash, unexplained (texture trim ruled out). Next build: always-on per-frame ring + luminance-jump line + texture destroy counters. [Analysis](evidence/M11-l94-white-flash-analysis-20261112.md).
