@@ -2560,7 +2560,7 @@ At task/experiment boundaries also replace stale entries in `docs/current-state.
 ## 17c. Milestone M11 (plan approved by the owner 2026-11-06; ACTIVE) — Deck saves, owner diagnostics, Deck and video-memory performance round 3
 
 **Status: ACTIVE since 2026-11-06** (owner approval: "план влаштовує, можем робить"). The plan as approved
-is kept below unchanged; the ledger after it records what was done (to 2026-11-07). Plan file:
+is kept below unchanged; the ledger after it records what was done (to 2026-11-12). Plan file:
 `docs/M11-priorities.md` (dated entries carry the details).
 
 ### Plan (2026-11-06, as approved)
@@ -2621,7 +2621,7 @@ one 2160p session on the 3080 Ti or 6800 XT.
 - A clean-clone volunteer candidate carrying the closed groups, owner pre-share check passed;
   closure regression on PC (both modes) and Deck.
 
-### Ledger (status 2026-11-07)
+### Ledger (status 2026-11-12; rows from 2026-11-08 on are appended after M11-017)
 
 Task ids follow the task commits, not the plan list: `M11-003` and `M11-004` were used for KI-070 and the
 KI-056 Fix A; the plan items of those numbers (Deck core freeing with KI-060, hot blocks v2) are not
@@ -2651,10 +2651,26 @@ no owner confirmation of the shipped default; Mitigated = defect avoided, root c
 | KI-067 / KI-072 | Host CPU slowdown; high-speed stutter | KI-067 cause found, re-test pending; KI-072 Open (CP headroom) | l70, l71 | [HWiNFO](docs/evidence/M11-ki067-hwinfo-baseline-20261106.md), [l70 session](docs/evidence/M11-ki072-stutter-l70-session-20261106.md), [l71 South Central](docs/evidence/M11-ki072-l71-southcentral-20261106.md), [CP cost plan](docs/evidence/M11-cp-cost-plan-20261106.md) | Every lag episode matches the project's own parallel builds on the play PC (shared 35 W STAPM cap; unit costs x1.5-2). Rule: no builds or test runs during owner sessions (idle guard; since 2026-11-07 an explicit coordinator hold/resume). Project line: the CP thread is 95-96 % busy even at a healthy 36-40 fps (M11-015/016/007/017). |
 | KI-073 | Album: no delete, "Publish Album" needs Live | Backlog (design ready) | - | [design](docs/evidence/M11-ki073-album-publish-design-20261106.md) | `PHOTO_ALBUM` holds 16 full 1280x720 JPEGs; Publish calls a dead Rockstar service and never clears the album. Next: a no-hook extractor, then a save-time export behind a key. |
 | M11-017 | ThinLTO + PGO for the SDK runtime and host | Planned, not started | - | [CP cost plan](docs/evidence/M11-cp-cost-plan-20261106.md) | Expected -5 to -15 % CP user time. |
+| KI-072 (update) | High-speed / traversal stutter: placed texture heaps | Largely fixed, owner A/B; default on (Windows) since l80 | l79, l80 | [l79 perf A/B](docs/evidence/M11-l79-perf-ab-20261108.md), [l79 SDK](docs/evidence/M11-l79-sdk-20261108.md), [l80 SDK](docs/evidence/M11-l80-sdk-20261108.md) | The stutter was committed texture creation on the GPU-command thread (~0.4 ms each, ~7000 per minute). SDK `0755836` placed heaps (with `ca63f94` pre-creation): p99 53 -> 37 ms, frames > 50 ms 29 -> 0-3 per minute. Owner l80 default: the freeway-exit stutter is gone. Remaining drops are CP/GPU-bound. |
+| KI-013 | Traffic-light reflections on cars (MIN/MAX blend source factor) | Fixed, owner PASS; default on since l81 (SDK `v0.20.0.11`) | l80 (arm), l81 | [fix](docs/evidence/M11-ki013-blend-minmax-20261108.md) | Xenos applies the source blend factor in MIN/MAX blends, D3D12 ignores it; the pixel shader now pre-multiplies (`d3d12_blend_minmax_fix`). Owner PASS on the l80 arm (no HUD/glow regression) and on the l81 PC run. |
+| M11-004 (plan) | Hot blocks / hot pages v2 for the Deck memory watch | Closed (negative; census NO-GO) | l81 | [design](docs/evidence/M11-deck-memwatch-design-20261108.md), [l81 Deck](docs/evidence/M11-l81-deck-analysis-20261110.md) | Census on the corrected baseline projected CP -1.2..-2.2 ms/f, under the -4 ms/f gate. The corrected Deck arms (M10 Wine defaults back) alone gave 14.3 -> 16.4 fps. |
+| Deck lever 2 | CP bulk register writes | Closed (negative) | l82 | [SDK](docs/evidence/M11-l82-sdk-bulk-registers-20261108.md), [l82 Deck](docs/evidence/M11-l82-deck-analysis-20261110.md) | SDK `c40db4b` `cp_bulk_register_writes`: packets_other 10.97 vs 10.98 ms/f (runs average 2 dwords). Key kept for reference. The Deck CP budget (~51 ms/f) needs profiling first. |
+| M11-003 (plan) / KI-060 | Deck audio crackle (XAudio engine thread starved) | Open; l89 native filters untested on the Deck | l80-l89 | [l80 Deck](docs/evidence/M11-l80-deck-analysis-20261108.md), [filter analysis](docs/evidence/M11-ki060-audio-filter-analysis-20261110.md), [l87 Deck](docs/evidence/M11-l87-deck-analysis-20261110.md), [l89](docs/evidence/M11-ki060-l89-implementation-20261110.md) | l81: zero-delay backoff and audio-thread priority under Wine (default) cut CPU, not the crackle. The engine thread is compute-bound in two biquad filters; l87 native `sub_82146BE0`: -30 % underruns, only 1.45x faster because `std::fma` is a CRT call; l89 fma-free natives for both filters, Deck run pending. |
+| M11-009 / KI-054 | Traffic / camera jitter (traffic jumps) | Fixed for traffic jumps, owner PASS (Deck and PC, l85); default on since l86; camera filters not done | l83-l86 | [design](docs/evidence/M11-ki054-traffic-jitter-design-20261110.md), [l84 Deck](docs/evidence/M11-l84-deck-analysis-20261110.md), [l85](docs/evidence/M11-l85-owner-build-20261110.md) | H1 (ambient-traffic thread) refuted on l83; H2 confirmed on the l84 Deck: every > 100 ms frame applied a full 0.1 s step. Hitch hold v1 fixed the jumps but dropped 2.2 % of game time; v2 (slew-limited step that tracks measured time): lost 0.000 s over 562 s. Control key `raw_timer_hitch_hold_off`. |
+| KI-075 | Launcher copy/create dialog does not prefill the destination parent | Fixed in code; owner check pending | l84 | KI-075 row | Create, Copy, Restore and Import now default to the parent of the selected profile root (owner decision 2026-11-10). |
+| M11-018 (update) / KI-074 | Unlocked surface flicker at high fps | Fixed by the strict frame lead bound, default on since l94 (owner decision 2026-11-12); mechanism unproven | l86-l94 | [l86 recurrence](docs/evidence/M11-ki074-l86-recurrence-20261110.md), [l88 A/B](docs/evidence/M11-l88-pc-ab-analysis-20261111.md), [all runs](docs/evidence/M11-l90-ab-invalid-and-all-runs-20261111.md), [l91 long run](docs/evidence/M11-l91-adaptive-long-run-analysis-20261111.md), [research](docs/evidence/M11-ki074-rootcause-research-20261111.md), [read watch](docs/evidence/M11-l94-dawn-hunt-read-watch-20261112.md) | Recurred on l86 at ~50 fps. Rejected: fenced delivery (l88), lead limit 1 (l90, no-op), adaptive lead (l91, dawn sidewalk flicker). Separator: frame-end CP lead 2 under GPU saturation. Strict bound (SDK `ef72fd1`, written by the host m10 defaults on Windows and Wine since l94, control `frame_lead_strict_off`): clean on l91, l92, l93 (dawn) and the l94 MAIN regression (~30 min). l94 read watch: the only guest reader of read-back data is the livery bake, so the stale-CPU-reader hypothesis is dead. Costs a few fps when GPU-bound; unmeasured on the Deck. |
+| KI-079 | Tree blink at the 06:00 night/day switch | Open, low priority (treated as game behaviour) | l93, l94 | [tree impostors](docs/evidence/M11-l94-dawn-hunt-tree-impostors-20261112.md) | Blinks with strict on (control 4 of 5), with age inject (6/10) and at lead 1 (7/9); about 23 of 37 switches over all arms. Matches the game re-rendering all tree shadow impostors on the first day frame. Not KI-074. |
+| KI-076 / KI-077 / KI-078 | 60 Hz judder; session-dependent bloom; one white whole-frame flash | Open; open (research); probably external (watch) | l88-l94 | [pacing design](docs/evidence/M11-ki076-pacing-and-low-latency-design-20261111.md), [l91 bloom](docs/evidence/M11-l91-adaptive-long-run-analysis-20261111.md), [flash](docs/evidence/M11-l94-white-flash-analysis-20261112.md) | KI-076: not visible at 120 Hz; l92 present stats / sync interval / Locked tearing switch untested; Reflex / Anti-Lag 2 designed (l95 in progress). KI-077: not reproduced per lap; differs between sessions. KI-078: the same flash later appeared in the browser. |
+| KI-026 | Race Back camera never returns | Fixed in code (default off); owner test pending | l92-l94 (arm `pc/stall-fix`) | [design](docs/evidence/M11-ki026-warp-stall-fix-design-20261110.md), [implementation](docs/evidence/M11-ki026-implementation-20261111.md) | Host `4bf0f32`: state-19 exit plus a stall detector (`mcla_warp_stall_fix`, log `MCLA_KI026_CAMFIX`). |
+| M11-012 / KI-035 | State-20 forced finish (field data) | Fixed (since M10); refinement open | l69+ | KI-035 row | Fired 11 times in 11 sessions since 2026-11-05, all on type-17 transitions (garage and pre-race fly-by); once a visible LOD blink. |
+| Tools | Time of day: RE, always-on log, Arcade clock controls | Done | l93 | [RE](docs/evidence/M11-time-of-day-re-20261112.md), [control](docs/evidence/M11-l93-time-of-day-control-20261112.md) | Hour at lighting manager +0x38CC; night state flips at 06:00. The save stores the hour, so time-of-day arms run only on a profile copy. |
+| Design | Hardware FMA dispatch | Designed only (low priority) | - | [design](docs/evidence/M11-fma-dispatch-design-20261111.md) | Bounded at about 2 % of Deck process CPU after the native audio filters. |
 
 ### Owner builds
 
-All are owner-internal (V1 tickets). Testers stay on l70 (`DebugBundle` `31c806d`).
+All are owner-internal (V1 tickets) except l81v. Testers were on l70 (`DebugBundle` `31c806d`) until
+2026-11-10; since then on l81v (`DebugBundle` `138b0ef`, allowance list l81v only). "manifest" = the first 8
+hex digits of `build_manifest_sha256` in `private/lNN-internal/candidate-receipt.json` (present = signed).
 
 | Build | Host (main) | SDK | Carried | Owner result |
 |---|---|---|---|---|
@@ -2665,22 +2681,55 @@ All are owner-internal (V1 tickets). Testers stay on l70 (`DebugBundle` `31c806d
 | l75 | `60c6b93` | `4bb8c02` (install later `bd9314f`) | XMA trim and PCM dump; steady narrowing and fast delivery (48 keys) | Trim rejected; steady flicker persists |
 | l76 | `406ee7e` | `a4a5309` | XMA frame walk (arm); bounded wait; range API; lock probe and ensure (53 keys) | KI-071 PASS; flicker in all steady arms; 039CA000 never locked; Locked-mode control clean |
 | l77 | `afadfa6` | `590c484` | W1 default on; deferred fences (arm, default off); raw timer off, vblank 72/80/88 (59 keys) | KI-074 cap and timer arms; E3; steady-fence 3 of 3 clean at about 40 fps |
-| l78 | `f86da9d` | `d61c597` | Steady exemption and deferred fences on by default; fence and CP-lead counters; off-keys and fence gap 2000 (62 keys) | In preparation; owner regression pending (KI-047 livery, KI-035 garage, Locked run, Deck loop, cold shader cache, photo) |
+| l78 | `f86da9d` | `d61c597` | Steady exemption and deferred fences on by default; fence and CP-lead counters; off-keys and fence gap 2000 (62 keys) | PC regression PASS 2026-11-08 (default x2, Locked, cut-scene by ear, cold shader cache); Deck part not reported |
+| l79 | `7c349e6` | `0755836` | Canary XMA fixes, timer blocking wait, placed texture heaps (and the 64 MB variant) as A/B keys (66 keys) | PC A/B: placed heaps remove the traversal stutter (p99 53 -> 37 ms); XMA arm fine by ear; Deck flat ~15 fps, saves fine (manifest 6609C738) |
+| l80 | `6b99e5f` | `ca63f94` | Platform defaults (PC heaps with pre-creation, timer, Canary XMA; Deck heaps off); KI-060 short sleep and audio worker priority under Wine; KI-013 blend fix arm (71 keys) | KI-013 blend arm PASS; freeway-exit stutter gone on the default; Deck audio still crackles; Deck arms since l71 found to disable the M10 Wine defaults (manifest DE74EF1F) |
+| l81 | `a9de776` | `2aff82e` | KI-013 blend fix and KI-056 Fix A default on; Deck zero-delay backoff and game audio-thread priority; 4 KiB arm limit; sparse Deck arms (75 keys) | PC run PASS (2026-11-10); Deck 14.3 -> 16.4 fps, audio unchanged, hot pages v2 census NO-GO (manifest 4CB252D3) |
+| l81v | `a9de776` | `2aff82e` | Volunteer build (V2 ticket, dev-override reader compiled out) | Signed by the owner and published 2026-11-10: `DebugBundle` `138b0ef`, allowance list = l81v only; l70 withdrawn |
+| l82 | `9168872` | `c40db4b` | CP bulk register writes arm (76 keys) | Deck A/B: no measurable effect; rejected (manifest 6E4ECD30) |
+| l83 | `d14621a` | `c40db4b` | KI-054 ambient dt probe, kick-time snapshot, hitch hold v1 (79 keys) | PC: KI-054 H1 refuted (inline main-thread path) (manifest 600E5207) |
+| l84 | `04b8803` | `c40db4b` | Ambient probe v2, `raw_timer_stats`, KI-075 launcher prefill (80 keys) | PC 1440p Locked steady, no jumps; Deck: hitch hold v1 removes the jumps but drops 2.2 % of game time; KI-075 check pending (manifest EEAC0416) |
+| l85 | `b4f5243` | `c40db4b` | KI-054 hitch hold v2 arm (80 keys) | Deck PASS (no jumps, lost 0.000 s over 562 s); PC 1080p Unlocked PASS; owner: default on (manifest B3C90EE5) |
+| l86 | `21cea1e` | `c40db4b` | Hitch hold v2 default on, control `raw_timer_hitch_hold_off` (81 keys) | KI-074 flicker recurred at 1080p Unlocked ~50 fps (manifest 8423639B) |
+| l87 | `8aa6ae9` | `c40db4b` | KI-060 audio filter probe and native `sub_82146BE0` (84 keys) | Deck: -30 % underruns, still crackles; music slow on afnative (manifest AE5FFF5E) |
+| l88 | `79dc1e6` | `7cbfe3b` | KI-074 cadence counters (always on) and fenced read-back delivery arm (85 keys) | Fenced delivery rejected (fix active, still flickers); steady-off and cap44 clean; KI-076 seen at 60 Hz only; KI-077 catalogued (manifest D17C1E6B) |
+| l89 | `a8a488c` | `7cbfe3b` | KI-060 fma-free native filters (both), leaf probe (86 keys) | Deck afprobe/afnative not run yet (manifest 1694F36C) |
+| l90 | `c829269` | `4ec7abd` | KI-074 frame lead limit, deferred read-back release (88 keys) | First A/B invalid (launcher still on l88); valid lead1 re-run: no-op, still flickers (manifest D6AF6995) |
+| l91 | `062c318` | `ef72fd1` | KI-074 strict and adaptive frame lead arms (90 keys) | Strict (40.6 fps) and adaptive (44.8 fps) clean; adaptive long run: dawn sidewalk flicker, adaptive rejected; KI-077 hangout bloom (manifest 5485D487) |
+| l92 | `3693e01` (incl. KI-026 `4bf0f32`) | `e6d6bd3` | Read watch, age inject, occlusion-query counters, present stats and sync interval, Locked tearing switch; KI-026 stall-fix arm (98 keys) | lead-strict run clean by day and night; stall-fix and present-stats not run (manifest 103B9D6F) |
+| l93 | `5584799` | `e6d6bd3` | Always-on `MCLA_TOD` log and F10 block; Arcade-only clock controls (103 keys) | Dawn A/B on a copy profile: flicker at 06:00 on default, none with strict; owner decision: strict default on (manifest 0F3E2F19) |
+| l94 | `98cea8b` | `e6d6bd3` | KI-074 strict frame lead default on via host m10 defaults (Windows and Wine), control `frame_lead_strict_off`; dawn hunt arms (104 keys) | MAIN regression ~30 min clean (KI-078 one white flash, probably external); dawn hunt: tree blink = KI-079, independent of our settings; Deck, stall-fix, present-stats and dawn-off-fenced arms pending (manifest D82D1F3C) |
 
 ### SDK lineage (`2FED/rexglue-sdk`)
 
-One linear chain from `v0.20.0.8`; the host submodule pin is still `c63895c`.
+One linear chain from `v0.20.0.8`; the host submodule pin is still `c63895c` (checked 2026-11-12).
 
 - Published on `mcla/mcla-r-hotfixes`: `c63895c` (`v0.20.0.8`) -> `109116b` (KI-068) -> `5207195`
   (KI-069) -> `d08813b` (KI-071 speaker config; cherry-pick of `dbe6d54`) = **`v0.20.0.9`**, published
   2026-11-06 (ctest 2054/2054).
-- Local, unpublished: `ae35ae3` (M11-016) -> `e412c5c` (M11-007a) -> `4a3aea1` (KI-071 XMA fixes) ->
+- Local until 2026-11-08 (published with `v0.20.0.10`, see below): `ae35ae3` (M11-016) -> `e412c5c` (M11-007a) -> `4a3aea1` (KI-071 XMA fixes) ->
   `8f949f7` (sibling trace) -> `c526cb3` (frame trim, PCM dump) -> `4bb8c02` (M11-007b) -> `bd9314f`
   (burst-only dump) -> `ca2e332` / `1e65cc8` (M11-007c, range API) -> `a4a5309` (W1 frame walk; from
   `b6d361e` on `mcla/m11-xma-walk`) -> `f6fc975` / `590c484` (W1 default on; deferred fences) ->
   `636927c` / `d61c597` (l78 defaults and counters; ctest 2137/2137).
 - Publishing `v0.20.0.10` or later needs the owner's approval; open choices: the fetch identity
   default and the steady/fence defaults after the l78 regression.
+- Published 2026-11-08 and 2026-11-10 on `mcla/mcla-r-hotfixes` (the chain `ae35ae3` .. `d61c597`
+  above is an ancestor of `ca63f94`, so it was published with it; the side branch `b6d361e` was not):
+  `d61c597` -> `58b6ddf` / `4f3cbb7` / `8aabee4`
+  -> `0755836` (l79: Canary XMA fixes, timer blocking wait, placed texture heaps, all off; ctest
+  2159/2159) -> `8751534` / `5a842a1` / `0dab3a4` / `7d3712e` -> `ca63f94` (l80: platform defaults,
+  heap pre-creation, KI-060 short sleep, KI-013 blend fix off; ctest 2179/2179) = **`v0.20.0.10`**
+  (2026-11-08) -> `8c775ba` / `617579b` / `b4a5ba3` -> `2aff82e` (l81: KI-013 blend fix on, KI-060
+  zero-delay backoff and audio-thread priority under Wine; ctest 2189/2189) = **`v0.20.0.11`**
+  (2026-11-10, source parity for l81v).
+- Local, unpublished (branches `mcla/m11-l82` .. `mcla/m11-l92`, worktree `private/l92-sdk-wt`):
+  `c40db4b` (l82: CP bulk register writes, off; ctest 2195/2195) -> `7cbfe3b` (l88: read-back cadence
+  counters, fenced delivery off; ctest 2206+4) -> `4ec7abd` (l90: frame lead limit, deferred release,
+  off; 2211+4) -> `ef72fd1` (l91: strict frame lead, SDK default 0; 2217+4) -> `e6d6bd3` (l92: read
+  watch, age inject, occlusion-query counters, present stats, Locked tearing switch, all off; 2230+4).
+  The l94 strict default is written by the host m10 defaults; the SDK default stays 0.
+- The next publication after `v0.20.0.11` needs the owner's approval (2026-11-12 status).
 
 ### Checkpoint log
 
@@ -2697,3 +2746,16 @@ One linear chain from `v0.20.0.8`; the host submodule pin is still `c63895c`.
   both on by default; host `f86da9d` adds the control keys. origin/main at `70823b5` (l77 staging) when this
   ledger was written. Health: `GREEN`. Next: l78 candidate and the owner regression routine; then the SDK
   publication decision (owner approval), M11-017, KI-074b, and the Deck items (plan M11-003/004).
+- 2026-11-08 to 2026-11-11 — l78 PC regression PASS; l79 placed heaps fix the traversal stutter (KI-072);
+  KI-013 fixed (owner PASS l80, default on l81); SDK `v0.20.0.10` = `ca63f94` and `v0.20.0.11` = `2aff82e`
+  published; l81v published (`DebugBundle` `138b0ef`, l81v only). Deck: corrected arms 14.3 -> 16.4 fps;
+  hot pages v2 and CP bulk register writes closed negative; KI-060 traced to two filter effects (l87,
+  l89 native filters). KI-054 traffic jumps fixed by hitch hold v2 (owner PASS l85, default on l86).
+  KI-074 recurred on l86; fenced delivery, lead limit 1 and adaptive lead rejected; strict lead clean on
+  l91/l92. KI-026 stall fix implemented (arm). Storage cleanup rounds 1-4. Health: `GREEN`.
+- 2026-11-12 — Time-of-day RE and controls (l93); dawn A/B: strict clean at 06:00; owner decision:
+  strict default on (l94, host `98cea8b`, SDK `e6d6bd3` unchanged). l94 MAIN regression clean; KI-078
+  white flash probably external; the dawn tree blink is KI-079 (game behaviour, independent of our
+  settings) and the read-back freshness theory is withdrawn. origin/main `0d4ca1e`. In progress
+  overnight (results not known): l95 low-latency build, Deck CP analysis, KI-077 research. Pending owner:
+  Deck strict-off and audio arms, KI-026 stall-fix, KI-076 present-stats. Health: `GREEN`.
