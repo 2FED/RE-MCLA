@@ -372,3 +372,5 @@ RE (M11-ki047-lock-fence-re): the game's CPU readers wait on the EVENT_WRITE_SHD
 **Hardware FMA lever (2026-11-11):** bounded at about 2 % of Deck process CPU after the l89 native audio filters; low priority; cheapest route is link-time interposition of `fma` with a start-up benchmark first. Not a Deck fps fix. [Design](evidence/M11-fma-dispatch-design-20261111.md).
 
 **l92 staged (2026-11-11), not signed:** host 98 keys + SDK e6d6bd3. Owner order: (1) lead-strict through dawn on the Sunset -> Santa Monica route; (2) read-watch; (3) strict-inject2; (4) stall-fix (KI-026, Race Back x10-15); (5) present-stats at 60 Hz; Deck audio arms. `private/l92-CHECKLIST.txt`. [SDK](evidence/M11-l92-sdk-20261111.md), [build](evidence/M11-l92-owner-build-20261111.md).
+
+**Time-of-day control (2026-11-12, owner request):** RE done (hour at lighting manager + 0x38CC; night state flips at 06:00). l93: MCLA_TOD log + F10 field, keys tod_rate_x10 / x30 / tod_freeze, tod_start_0430 / 0530 (Arcade only). Use: reproduce night -> dawn in about a minute for KI-074 / KI-077 / KI-041. [RE](evidence/M11-time-of-day-re-20261112.md).
