@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 103, "one hundred and three whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 104, "one hundred and four whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1124,6 +1124,84 @@ void TestWhitelist() {
           "l91 near misses: an integer, the cvar name, a repeat and a non-bool are ignored");
   }
   {
+    // l94 KI-074 control: the strict frame lead bound is default on (m10
+    // defaults, owner decision 2026-11-12); frame_lead_strict_off=true writes
+    // 0 to d3d12_frame_lead_strict after the plugin loaded, =false writes
+    // nothing; with frame_lead_strict (1) and frame_lead_adaptive (2) it forms
+    // a group of three (three conflict pairs).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &off = Info(Key::kFrameLeadStrictOff);
+    Check(FindKey("frame_lead_strict_off") == Key::kFrameLeadStrictOff &&
+              off.phase == Phase::kGraphicsPlugin &&
+              CvarName(off) == "d3d12_frame_lead_strict" && CvarText(off, true) == "0" &&
+              CvarText(off, false).empty() && off.true_source == TextSource::kLiteral &&
+              !off.overrides_user,
+          "frame_lead_strict_off=true writes 0 to d3d12_frame_lead_strict after the plugin "
+          "loaded, false writes nothing");
+    Check(off.phase == Info(Key::kFrameLeadStrict).phase &&
+              off.phase == Info(Key::kFrameLeadAdaptive).phase,
+          "the three lead keys are applied in one phase");
+    size_t off_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      if (pair.first != Key::kFrameLeadStrictOff && pair.second != Key::kFrameLeadStrictOff) {
+        continue;
+      }
+      Check(pair.second == Key::kFrameLeadStrictOff &&
+                (pair.first == Key::kFrameLeadStrict || pair.first == Key::kFrameLeadAdaptive),
+            "the l94 control pairs only with the strict and adaptive keys");
+      ++off_pairs;
+    }
+    Check(off_pairs == 2, "two conflict pairs for the l94 control (a group of three)");
+    Check(!FindKey("frame_lead_strict_of") && !FindKey("frame_lead_strict_off_on") &&
+              !FindKey("FRAME_LEAD_STRICT_OFF") && !FindKey("d3d12_frame_lead_strict_off") &&
+              !FindKey("lead_strict_off") && !FindKey("frame_lead_strict_0") &&
+              !FindKey("frame_lead_adaptive_off"),
+          "no prefix, suffix, cvar-name, case or numeric variants of the l94 key");
+    const Parsed control = Parse("frame_lead_strict_off=true\n"
+                                 "frame_lead_strict=false\n"
+                                 "frame_lead_adaptive=false\n"
+                                 "tod_start_0530=true\n");
+    Check(control.ValueCount() == 4 && control.issue_count == 0 &&
+              control.Value(Key::kFrameLeadStrictOff) == true &&
+              control.Value(Key::kFrameLeadStrict) == false &&
+              control.Value(Key::kFrameLeadAdaptive) == false &&
+              control.Value(Key::kTodStart0530) == true,
+          "the l94 strict-off arm parses; with the other lead keys false no conflict");
+    const Parsed with_strict = Parse("frame_lead_strict=true\nframe_lead_strict_off=true\n");
+    Check(with_strict.ValueCount() == 0 && with_strict.issue_count == 1 &&
+              with_strict.issues[0].line == 2 &&
+              with_strict.issues[0].issue == LineIssue::kConflict,
+          "strict-off with strict: neither applies, conflict on the later line");
+    const Parsed with_adaptive = Parse("frame_lead_strict_off=true\n"
+                                       "present_stats=true\n"
+                                       "frame_lead_adaptive=true\n");
+    Check(with_adaptive.ValueCount() == 1 && with_adaptive.Value(Key::kPresentStats) == true &&
+              with_adaptive.issue_count == 1 && with_adaptive.issues[0].line == 3 &&
+              with_adaptive.issues[0].issue == LineIssue::kConflict,
+          "strict-off with adaptive: neither applies, conflict on the later line");
+    const Parsed three = Parse("frame_lead_adaptive=true\n"
+                               "frame_lead_strict_off=true\n"
+                               "frame_lead_strict=true\n");
+    Check(three.ValueCount() == 0 && three.issue_count == 2 &&
+              three.issues[0].line == 2 && three.issues[1].line == 3 &&
+              three.issues[0].issue == LineIssue::kConflict &&
+              three.issues[1].issue == LineIssue::kConflict,
+          "all three lead keys true: the whole group is dropped");
+    const Parsed bad = Parse("frame_lead_strict_off=0\n"
+                             "d3d12_frame_lead_strict=false\n"
+                             "frame_lead_strict_off=true\n"
+                             "frame_lead_strict_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kFrameLeadStrictOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l94 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1586,7 +1664,7 @@ void TestWhitelist() {
                           key == Key::kPresentInterval1 || key == Key::kLockedTearingOff ||
                           key == Key::kTodRateX10 || key == Key::kTodRateX30 ||
                           key == Key::kTodFreeze || key == Key::kTodStart0430 ||
-                          key == Key::kTodStart0530;
+                          key == Key::kTodStart0530 || key == Key::kFrameLeadStrictOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1681,10 +1759,11 @@ void TestWhitelist() {
     // their controls; l81: the album restore and blend keys with their
     // controls; l86: the hitch hold key with its control) plus the kick and
     // the vblank groups of three (each listed as its three pairs); l91: the
-    // strict and adaptive lead keys; l93: the time-of-day rate group of three
-    // and the two start keys.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 22,
-          "twenty-two shared-cvar pairs");
+    // strict and adaptive lead keys (since l94 with frame_lead_strict_off a
+    // group of three, listed as its three pairs); l93: the time-of-day rate
+    // group of three and the two start keys.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 24,
+          "twenty-four shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -2343,7 +2422,8 @@ void TestWhitelist() {
     // keys explicit false (88 keys); l91: plus the two l91 keys explicit false
     // (90 keys); KI-026: plus the two KI-026 keys explicit false (92 keys);
     // l92: plus the six l92 keys explicit false (98 keys); l93: plus the five
-    // l93 keys explicit false (103 keys).
+    // l93 keys explicit false (103 keys); l94: plus the l94 key explicit false
+    // (104 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2370,7 +2450,8 @@ void TestWhitelist() {
                                   "tod_rate_x30=false\n"
                                   "tod_freeze=false\n"
                                   "tod_start_0430=false\n"
-                                  "tod_start_0530=false\n";
+                                  "tod_start_0530=false\n"
+                                  "frame_lead_strict_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -2963,7 +3044,7 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l93: 103 keys, about 2.95 KB).
+    // former 2 KiB and accepted since l81 (l94: 104 keys, about 2.98 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
@@ -3052,6 +3133,11 @@ void TestConstexpr() {
   static_assert(album_conflict.ValueCount() == 0);
   static_assert(album_conflict.issues[0].line == 2);
   static_assert(album_conflict.issues[0].issue == LineIssue::kConflict);
+  constexpr Parsed lead_conflict =
+      Parse("frame_lead_strict_off=true\nframe_lead_adaptive=true\n");
+  static_assert(lead_conflict.ValueCount() == 0);
+  static_assert(lead_conflict.issues[0].line == 2);
+  static_assert(lead_conflict.issues[0].issue == LineIssue::kConflict);
   Check(std::string(mcla::dev_overrides::LineIssueName(LineIssue::kConflict)) ==
             "conflicting keys for one cvar (neither is applied)",
         "conflict issue name covers every pair");

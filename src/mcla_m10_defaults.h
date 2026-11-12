@@ -19,7 +19,8 @@
 //   d3d12_readback_sync_targeted=true, d3d12_readback_elide_unread=true,
 //   d3d12_wrm_event_wake=true, d3d12_replay_batched_wake=true,
 //   d3d12_readback_gpu_timing=false; under Wine/Proton only:
-//   shared_memory_upload_ahead_pages=16.
+//   shared_memory_upload_ahead_pages=16; since l94 on both platforms also
+//   d3d12_frame_lead_strict=1 (KI-074 fix, see below).
 //
 // Each phase is the phase of the owner override key for the same cvar.
 //
@@ -48,6 +49,21 @@
 // mcla_native_d3d_refcount and mcla_native_xapi_interlocked already default to
 // true (mcla_native_refcount.cpp) and are only reported.
 //
+// l94 KI-074 (owner decision 2026-11-12, "default A, build 94"; owner A/B at
+// night, by day and at the 06:00 dawn switch,
+// docs/evidence/M11-l93-owner-build-20261112.md): d3d12_frame_lead_strict=1, the
+// strict frame lead bound (a guest frame opens only when the previous one has
+// completed on the GPU), is written here because the SDK default stays 0 (the
+// l92 SDK is not rebuilt). On both platforms: it is a correctness fix for a
+// host-side pacing state (the CP two frames ahead of the GPU) that does not
+// depend on the OS; the Wine-only rule above is for switches measured net
+// negative on Windows, and this one is net positive there; it costs time
+// only while the GPU is saturated. Owner controls: frame_lead_strict_off
+// (writes 0, the old behaviour) and frame_lead_adaptive (writes 2) win as
+// applied override values; a =false line of the three lead keys writes
+// nothing and does not turn the default off (silent_false_is_arm false; only
+// the upload-ahead =false lines are the owner's off arm).
+//
 // Semantics kept from the SDK: targeted sync acts only while
 // d3d12_readback_sync_composite is on (MCLA_READBACK_SYNC_COMPOSITE_DEFAULT);
 // elision acts only in readback_resolve=some (the host default). Both are
@@ -61,6 +77,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace mcla::m10_defaults {
@@ -84,9 +101,13 @@ struct Default {
   // Diagnostics only: left at the SDK default in owner measurement builds.
   bool diagnostic;
   Platform platform = Platform::kAll;
+  // A valid file line of this cvar's key whose value writes nothing (=false
+  // of upload_ahead_16/_64) is the owner's off arm and wins over the default.
+  // false: such a line changes nothing (the l94 frame lead keys).
+  bool silent_false_is_arm = false;
 };
 
-inline constexpr std::array<Default, 8> kDefaults = {{
+inline constexpr std::array<Default, 9> kDefaults = {{
     {"memory_watch_census", "false", Phase::kStartup, true},
     {"memory_watch_disarm_bridge_safe_gaps", "true", Phase::kStartup, false, Platform::kWineOnly},
     {"d3d12_readback_sync_targeted", "true", Phase::kGraphicsPlugin, false},
@@ -95,7 +116,9 @@ inline constexpr std::array<Default, 8> kDefaults = {{
     {"d3d12_replay_batched_wake", "true", Phase::kGraphicsPlugin, false},
     {"d3d12_readback_gpu_timing", "false", Phase::kGraphicsPlugin, true},
     {"shared_memory_upload_ahead_pages", "16", Phase::kGraphicsPlugin, false,
-     Platform::kWineOnly},
+     Platform::kWineOnly, true},
+    // l94 KI-074 fix (both platforms; see above).
+    {"d3d12_frame_lead_strict", "1", Phase::kGraphicsPlugin, false},
 }};
 
 // Cvars this module writes only under Wine/Proton, never on Windows.
@@ -107,7 +130,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 86> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 85> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -255,9 +278,8 @@ inline constexpr std::array<std::string_view, 86> kNeverWrittenCvars = {
     // readback_deferred_release only.
     "d3d12_frame_lead_limit",
     "d3d12_readback_deferred_release",
-    // l91 KI-074: the strict / adaptive frame lead bound (default off) stays
-    // SDK-owned; owner keys frame_lead_strict / frame_lead_adaptive only.
-    "d3d12_frame_lead_strict",
+    // l91 KI-074: d3d12_frame_lead_strict left this list in l94 (now a
+    // default above).
     // KI-026 (host mcla_ki026_probe.cpp): the stall fix (default off until an
     // owner A/B accepts it) and the KI-026 probe; owner keys only.
     "mcla_warp_stall_fix",
@@ -305,6 +327,24 @@ constexpr bool HasOverrideKey(const Default &entry) {
     }
   }
   return false;
+}
+
+// True when one owner override key's record makes its line the entry's A/B
+// arm: the key writes the entry's cvar (not a launcher key) and its value was
+// applied, or its valid file line holds a value that writes nothing and the
+// entry treats such a line as the owner's off arm (silent_false_is_arm).
+// applied / file: dev_overrides::AppliedValue / FileValue of the key.
+constexpr bool KeyLineWins(const Default &entry, const dev_overrides::KeyInfo &info,
+                           std::optional<bool> applied, std::optional<bool> file) {
+  if (info.phase == dev_overrides::Phase::kLauncher ||
+      dev_overrides::CvarName(info) != entry.cvar) {
+    return false;
+  }
+  if (applied.has_value()) {
+    return true;
+  }
+  return file.has_value() && dev_overrides::CvarText(info, *file).empty() &&
+         entry.silent_false_is_arm;
 }
 
 constexpr std::string_view ValueText(bool value) {

@@ -319,6 +319,15 @@
 //   (default 0: the Arcade race preset warp target becomes 04:30 / 05:30).
 //   Keys of one cvar form conflict pairs (the three rate keys as a group of
 //   three, the two start keys); a rate key and a start key combine.
+// - l94 (docs/evidence/M11-l94-owner-build-20261112.md; owner decision
+//   2026-11-12, KI-074): the strict frame lead bound is default on through
+//   the m10 defaults (mcla_m10_defaults.h writes d3d12_frame_lead_strict=1 at
+//   graphics-plugin load; the SDK default stays 0). frame_lead_strict_off=true
+//   writes 0 to d3d12_frame_lead_strict after the plugin has loaded: the
+//   control (the pre-l94 behaviour). frame_lead_strict (1, now the default)
+//   and frame_lead_adaptive (2) stay; the three keys of the one cvar form a
+//   group of three conflict pairs. =false changes nothing for all three (no
+//   =false line turns the default off).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -465,8 +474,9 @@ enum class Key : uint8_t {
   kTodFreeze,                // l93: mcla_tod_rate=0
   kTodStart0430,             // l93: mcla_tod_start_minutes=270
   kTodStart0530,             // l93: mcla_tod_start_minutes=330
+  kFrameLeadStrictOff,       // l94 KI-074 control: d3d12_frame_lead_strict=0
 };
-inline constexpr size_t kKeyCount = 103;
+inline constexpr size_t kKeyCount = 104;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -720,10 +730,14 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"tod_freeze", Phase::kStartup, "mcla_tod_rate", "0", ""},
     {"tod_start_0430", Phase::kStartup, "mcla_tod_start_minutes", "270", ""},
     {"tod_start_0530", Phase::kStartup, "mcla_tod_start_minutes", "330", ""},
+    // l94 control for the new KI-074 default: the strict frame lead bound (SDK
+    // int, graphics plugin, hot reload), after the plugin has loaded; =false
+    // writes nothing.
+    {"frame_lead_strict_off", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict", "0", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
-// l91 d3d12_frame_lead_strict and the l93 mcla_tod_rate /
+// d3d12_frame_lead_strict (l91 / l94) and the l93 mcla_tod_rate /
 // mcla_tod_start_minutes, the audio_speaker_config string, or the xma_frame_walk_fix,
 // d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
 // d3d12_texture_placed_heaps, timer_queue_blocking_wait,
@@ -736,7 +750,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 22> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 24> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -755,6 +769,8 @@ inline constexpr std::array<ConflictPair, 22> kConflictPairs = {{
     {Key::kBlendMinmaxFix, Key::kBlendMinmaxFixOff},
     {Key::kRawTimerHitchHold, Key::kRawTimerHitchHoldOff},
     {Key::kFrameLeadStrict, Key::kFrameLeadAdaptive},
+    {Key::kFrameLeadStrict, Key::kFrameLeadStrictOff},
+    {Key::kFrameLeadAdaptive, Key::kFrameLeadStrictOff},
     {Key::kTodRateX10, Key::kTodRateX30},
     {Key::kTodRateX10, Key::kTodFreeze},
     {Key::kTodRateX30, Key::kTodFreeze},
@@ -1058,7 +1074,8 @@ std::optional<bool> AppliedValue(Key key);
 // written. Used for keys whose value writes nothing (upload-ahead, hot blocks,
 // read-back kick, the l73 fetch-identity / steady-exempt and the KI-071 XMA
 // SDK keys =false, also xma_dump_contexts_on=false and, since l81,
-// mcla_album_preview_restore=false; since l86 raw_timer_hitch_hold=false).
+// mcla_album_preview_restore=false; since l86 raw_timer_hitch_hold=false; since l94
+// the three d3d12_frame_lead_strict keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

@@ -25,9 +25,10 @@
 #if MCLA_M10_SPEEDUP_DEFAULTS
 REXCVAR_DEFINE_BOOL(mcla_m10_speedup_defaults, true, "MCLA",
     "M10 volunteer speed-up defaults (targeted read-back wait, read-back "
-    "elision, WAIT_REG_MEM event wake, batched replay wake; census and "
-    "read-back GPU timing off; under Wine/Proton also disarm bridging and "
-    "upload-ahead 16). false leaves every SDK switch at its default")
+    "elision, WAIT_REG_MEM event wake, batched replay wake, strict frame lead "
+    "bound; census and read-back GPU timing off; under Wine/Proton also disarm "
+    "bridging and upload-ahead 16). false leaves every SDK switch at its "
+    "default")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 #endif
 
@@ -53,20 +54,13 @@ std::string ReportValue(std::string_view name) {
 }
 
 // An owner override key of this cvar was applied, or its valid file line is an
-// explicit value that writes nothing (upload-ahead _16/_64=false, the owner's
-// "off" arm).
+// explicit value that writes nothing and the entry treats it as the owner's
+// "off" arm (upload-ahead _16/_64=false); see KeyLineWins.
 bool DevOverrideApplied(const Default &entry) {
   for (size_t i = 0; i < dev_overrides::kKeyCount; ++i) {
     const auto key = static_cast<dev_overrides::Key>(i);
-    const dev_overrides::KeyInfo &info = dev_overrides::Info(key);
-    if (info.phase == dev_overrides::Phase::kLauncher || dev_overrides::CvarName(info) != entry.cvar) {
-      continue;
-    }
-    if (dev_overrides::AppliedValue(key).has_value()) {
-      return true;
-    }
-    const std::optional<bool> file = dev_overrides::FileValue(key);
-    if (file && dev_overrides::CvarText(info, *file).empty()) {
+    if (KeyLineWins(entry, dev_overrides::Info(key), dev_overrides::AppliedValue(key),
+                    dev_overrides::FileValue(key))) {
       return true;
     }
   }
@@ -161,10 +155,10 @@ void OnGraphicsPluginLoaded() {
   MCLA_GPU_INFO(
       "MCLA m10 defaults (graphics plugin): {} d3d12_readback_sync_composite={} "
       "readback_resolve={} memory_watch_disarm_bridge_safe_gaps={} "
-      "shared_memory_upload_ahead_pages={}",
+      "shared_memory_upload_ahead_pages={} d3d12_frame_lead_strict={}",
       TallyText(tally, wine), ReportValue("d3d12_readback_sync_composite"),
       ReportValue("readback_resolve"), ReportValue(kWineOnlyCvars[0]),
-      ReportValue(kWineOnlyCvars[1]));
+      ReportValue(kWineOnlyCvars[1]), ReportValue("d3d12_frame_lead_strict"));
 #endif
 }
 
