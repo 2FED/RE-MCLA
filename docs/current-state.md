@@ -157,3 +157,5 @@ any volunteer build).
 - KI-013: `M11-ki013-blend-minmax-20261108.md`. KI-072: `M11-l79-perf-ab-20261108.md`.
 - Builds: `M11-lNN-owner-build-*.md` and `M11-lNN-sdk-*.md` (l79-l94); the volunteer build
   `M11-l81v-volunteer-candidate-20261108.md`; tester guide `docs/volunteer-tester-guide.txt`.
+
+> Update 2026-11-13 early: the overnight work landed. l95 is STAGED, unsigned (host 110 keys, SDK f9f5178 local: Reflex / Anti-Lag 2 default off; brightness fields always on); checklist `private/l95-CHECKLIST.txt`. KI-077 research: scale path ruled out between sessions, likely game state. Deck CP budget: incremental ceiling 18.5-20 fps; 30 fps needs a native renderer (owner decision topic). Evidence: M11-l95-*.md, M11-ki077-brightness-research-20261112.md, M11-deck-cp-budget-and-levers-20261112.md.

@@ -14,6 +14,7 @@
 #include "mcla_ambient_dt_probe.h"
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_low_latency.h"
 #include "mcla_step_smoother.h"
 
 #include <rex/cvar.h>
@@ -167,6 +168,11 @@ StepStats stats;
 // clamps and history updates.
 REX_EXTERN(sub_821BDA90) {
   const uint32_t timer = ctx.r3.u32;
+  // l95: the SDK low-latency sleep point (Reflex / Anti-Lag 2; default off, a
+  // no-op then): main timer only, guest main thread, before the game measures
+  // the frame time, no host lock held. The SDK sleeps at most once per guest
+  // swap, so loading phases without swaps never sleep.
+  if (timer == kMainTimer) MclaLowLatencySimulationStart();
   if (timer == kMainTimer && REXCVAR_GET(mcla_raw_timer_scale_log)) {
     // Diagnostic: log changes of the timer scale (+84), which the game may use
     // for pauses and slow motion, as a candidate menu/pause signal.

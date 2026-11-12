@@ -74,6 +74,7 @@
 #include "mcla_album_probe.h"
 #include "mcla_ambient_dt_probe.h"
 #include "mcla_audio_filter.h"
+#include "mcla_fma_bench.h"
 #include "mcla_ki026_probe.h"
 #include "mcla_pursuit_probe.h"
 #include "mcla_tod.h"
@@ -1210,6 +1211,9 @@ void MclaApp::OnPostInitLogging() {
   // M10 volunteer speed-up defaults (MCLA_M10_SPEEDUP_DEFAULTS builds only),
   // after the override file so owner A/B arms win.
   mcla::m10_defaults::OnStartup();
+  // l95 FMA stage 0: one MCLA_FMA_BENCH line when mcla_fma_bench is set (dev
+  // key fma_bench), before the guest runs.
+  MclaFmaBenchAtStartup();
   // M10-003: record counts of the shader store this session starts with
   // (after the launcher seeding, before the SDK reads it).
   mcla::shader_store::LogStartupStore(rex::to_path(REXCVAR_GET(cache_root)));

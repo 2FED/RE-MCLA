@@ -256,14 +256,19 @@ set(MCLA_SOURCES
 # switches default off). l89: native sub_82147738 too, and probe-only
 # pass-through overrides of sub_823F4450, sub_823EFD30 and sub_823EE050.
 # l93: time of day (overrides sub_822F1DB0 and sub_822F1518; the MCLA_TOD log
-# is always on and read-only, the controls default off).
+# is always on and read-only, the controls default off). l95: the FMA stage 0
+# start-up benchmark (mcla_fma_bench, default off) and the host side of the
+# SDK low-latency layer (resolved by name from rexruntime.dll; a no-op with an
+# SDK without it).
 list(APPEND MCLA_SOURCES
     src/mcla_album_probe.cpp
     src/mcla_ambient_dt_probe.cpp
     src/mcla_audio_filter.cpp
+    src/mcla_fma_bench.cpp
     src/mcla_guest_sampler.cpp
     src/mcla_ki026_probe.cpp
     src/mcla_lock_probe.cpp
+    src/mcla_low_latency_win.cpp
     src/mcla_menu_state.cpp
     src/mcla_photo_capture.cpp
     src/mcla_pursuit_probe.cpp

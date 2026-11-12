@@ -40,6 +40,25 @@
 // thresholds, and logs one MCLA_TOD line per real minute plus one at every
 // night flag change and every warp start and end.
 //
+// l95 (KI-077 / KI-020, docs/evidence/M11-ki077-brightness-research-20261112.md):
+// every MCLA_TOD line and the F10 block also carry the post-fx brightness
+// state, read only when a line or F10 is written (read-only):
+// - adapt_lum: the 1x1 k_32_FLOAT adapted-luminance resolve target at guest
+//   physical 0x03098000 (bytes 0-3, big-endian), read through the physical
+//   alias 0xA0000000 only when the host page is committed and readable; the
+//   address comes from the research's resolve log (one session), not from
+//   generated code, so a session that places it elsewhere logs another value
+//   (the raw bits are logged too);
+// - lum4_raw: the first 16 bytes of the 4x4 target at 0x03099000 as hex
+//   (the tiled layout of the 4x4 texels is not verified, so no min/max/mean);
+// - the post-fx object *0x829054A0 (sub_823076E8: `lis r11,-32112`,
+//   `lwz r11,21664(r11)`, `stb r4,340(r11)`; its two callers are script
+//   natives): the bright-pass preset byte +340 and the floats the bright-pass
+//   builder sub_8260DA68 (TU47) reads from its argument (+256..+280, +288,
+//   +304, +308, +348) plus the word +284; that the builder's argument is this
+//   object is the research's inference. A change of +340, checked at the
+//   1-in-16 clock tick, writes an immediate line (why=bp_preset).
+//
 // Controls (default off, init-only host cvars): mcla_tod_rate (1 = the game's
 // rate; 10 / 30 multiply the advance, 0 freezes the hour) and
 // mcla_tod_start_minutes (0 = off; 270 / 330 replace the Arcade preset warp
@@ -49,9 +68,11 @@
 // not paused. Guest writes: the hour, its render slot copy and (start keys)
 // the warp target register f1, all within 0..24.
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <optional>
 #include <string>
 
@@ -107,6 +128,24 @@ inline constexpr int kRateFreeze = 0;
 inline constexpr int kMaxRateFactor = 60;
 // One MCLA_TOD line per real minute (milliseconds).
 inline constexpr uint64_t kMinuteMs = 60000;
+
+// The l95 post-fx brightness state (see above).
+inline constexpr uint32_t kPostFxPtr = 0x829054A0u;
+inline constexpr uint32_t kBpPresetOffset = 340;
+inline constexpr std::array<uint32_t, 11> kBpFloatOffsets = {256, 260, 264, 268, 272, 276,
+                                                             280, 288, 304, 308, 348};
+inline constexpr uint32_t kBpWordOffset = 284;
+// Bytes of the post-fx object read (the last field ends at +352).
+inline constexpr uint32_t kPostFxSpan = 352;
+inline constexpr uint32_t kAdaptLumPhysical = 0x03098000u;
+inline constexpr uint32_t kLum4Physical = 0x03099000u;
+inline constexpr uint32_t kLum4Bytes = 16;
+// The guest virtual alias of physical memory (64 KiB pages, no offset).
+inline constexpr uint32_t kPhysicalAlias = 0xA0000000u;
+
+constexpr uint32_t PhysicalToVirtual(uint32_t physical) {
+  return kPhysicalAlias | (physical & 0x1FFFFFFFu);
+}
 
 // --- guest pointers and values ------------------------------------------------
 
@@ -282,6 +321,7 @@ enum Why : uint8_t {
   kWhyNight = 4,
   kWhyWarpStart = 8,
   kWhyWarpEnd = 16,
+  kWhyBpPreset = 32,  // l95: the post-fx bright-pass preset byte changed
 };
 
 inline std::string WhyText(uint8_t why) {
@@ -292,7 +332,8 @@ inline std::string WhyText(uint8_t why) {
                 {kWhyMinute, "minute"},
                 {kWhyNight, "night"},
                 {kWhyWarpStart, "warp_start"},
-                {kWhyWarpEnd, "warp_end"}};
+                {kWhyWarpEnd, "warp_end"},
+                {kWhyBpPreset, "bp_preset"}};
   std::string text;
   for (const auto &n : kNames) {
     if ((why & n.bit) != 0) {
@@ -340,6 +381,123 @@ struct Scheduler {
   }
 };
 
+// l95: the post-fx brightness state as read for one line (see above).
+struct Brightness {
+  bool lum_valid = false;
+  uint32_t lum_bits = 0;  // big-endian word as loaded
+  bool lum4_valid = false;
+  std::array<uint8_t, kLum4Bytes> lum4{};
+  bool bp_valid = false;
+  uint32_t bp_object = 0;
+  uint8_t preset = 0;
+  uint32_t word284 = 0;
+  std::array<float, kBpFloatOffsets.size()> bp{};
+};
+
+inline float FloatFromBits(uint32_t bits) {
+  float value = 0.0f;
+  static_assert(sizeof(value) == sizeof(bits));
+  std::memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+// Four guest bytes as a big-endian word.
+constexpr uint32_t BigEndianWord(const uint8_t *b) {
+  return (uint32_t(b[0]) << 24) | (uint32_t(b[1]) << 16) | (uint32_t(b[2]) << 8) | uint32_t(b[3]);
+}
+
+inline std::string HexBytes(const uint8_t *bytes, size_t count) {
+  static constexpr char kDigits[] = "0123456789abcdef";
+  std::string text;
+  text.reserve(count * 2);
+  for (size_t i = 0; i < count; ++i) {
+    text.push_back(kDigits[bytes[i] >> 4]);
+    text.push_back(kDigits[bytes[i] & 15]);
+  }
+  return text;
+}
+
+// The bright-pass float as text: %.4g, or "nan" / "inf" for non-finite.
+inline std::string FloatText(float value) {
+  if (std::isnan(value)) {
+    return "nan";
+  }
+  if (std::isinf(value)) {
+    return value > 0 ? "inf" : "-inf";
+  }
+  char text[32];
+  std::snprintf(text, sizeof(text), "%.4g", double(value));
+  return text;
+}
+
+// The fields appended to an MCLA_TOD line (leading space).
+inline std::string BrightnessFields(const Brightness &b) {
+  std::string text;
+  if (b.lum_valid) {
+    char lum[64];
+    std::snprintf(lum, sizeof(lum), " adapt_lum=%s adapt_lum_bits=0x%08X",
+                  FloatText(FloatFromBits(b.lum_bits)).c_str(), unsigned(b.lum_bits));
+    text += lum;
+  } else {
+    text += " adapt_lum=na";
+  }
+  text += " lum4_raw=";
+  text += b.lum4_valid ? HexBytes(b.lum4.data(), b.lum4.size()) : std::string("na");
+  if (!b.bp_valid) {
+    return text + " bp_preset=-1";
+  }
+  char head[64];
+  std::snprintf(head, sizeof(head), " bp_obj=0x%08X bp_preset=%u bp=", unsigned(b.bp_object),
+                unsigned(b.preset));
+  text += head;
+  for (size_t i = 0; i < b.bp.size(); ++i) {
+    text += i ? "," : "";
+    text += FloatText(b.bp[i]);
+  }
+  char word[32];
+  std::snprintf(word, sizeof(word), " bp284=0x%08X", unsigned(b.word284));
+  return text + word;
+}
+
+// The "brightness" member of the F10 object (no leading separator).
+inline std::string BrightnessJson(const Brightness &b) {
+  std::string text = "\"brightness\": {\"adapt_lum_valid\": ";
+  text += b.lum_valid ? "true" : "false";
+  char lum[96];
+  std::snprintf(lum, sizeof(lum), ", \"adapt_lum_bits\": \"0x%08X\", \"adapt_lum\": \"%s\"",
+                unsigned(b.lum_bits), FloatText(FloatFromBits(b.lum_bits)).c_str());
+  text += lum;
+  text += ", \"lum4_raw\": \"";
+  text += b.lum4_valid ? HexBytes(b.lum4.data(), b.lum4.size()) : std::string();
+  text += "\", \"bp_valid\": ";
+  text += b.bp_valid ? "true" : "false";
+  char head[96];
+  std::snprintf(head, sizeof(head),
+                ", \"bp_object\": \"0x%08X\", \"bp_preset\": %u, \"bp284\": \"0x%08X\", \"bp\": [",
+                unsigned(b.bp_object), unsigned(b.preset), unsigned(b.word284));
+  text += head;
+  for (size_t i = 0; i < b.bp.size(); ++i) {
+    char item[48];
+    std::snprintf(item, sizeof(item), "%s{\"off\": %u, \"v\": \"%s\"}", i ? ", " : "",
+                  unsigned(kBpFloatOffsets[i]), FloatText(b.bp[i]).c_str());
+    text += item;
+  }
+  return text + "]}";
+}
+
+// The +340 preset byte at the clock tick: true on a change between two valid
+// reads (an unknown read, -1, is not an edge and keeps the last value).
+struct PresetWatch {
+  int last = -1;
+  bool Observe(int preset) {
+    const bool changed = last >= 0 && preset >= 0 && preset != last;
+    if (preset >= 0) {
+      last = preset;
+    }
+    return changed;
+  }
+};
+
 // Session counters (F10).
 struct Counters {
   uint64_t updates = 0;         // updates observed with a valid manager
@@ -354,7 +512,8 @@ struct Counters {
 };
 
 inline std::string Line(uint8_t why, const Sample &s, const std::string &ctl,
-                        const std::string &start, bool gate, uint32_t warp_lr, uint64_t acts) {
+                        const std::string &start, bool gate, uint32_t warp_lr, uint64_t acts,
+                        const std::string &extra = {}) {
   char text[384];
   std::snprintf(text, sizeof(text),
                 "MCLA_TOD v=1 why=%s hour=%06.3f rate_hps=%.6f auto=%u warp=%u target=%06.3f "
@@ -363,13 +522,13 @@ inline std::string Line(uint8_t why, const Sample &s, const std::string &ctl,
                 unsigned(s.warp), double(s.target), unsigned(s.paused), s.night, ctl.c_str(),
                 start.c_str(), gate ? 1 : 0, unsigned(warp_lr),
                 static_cast<unsigned long long>(acts));
-  return text;
+  return text + extra;
 }
 
 // The F10 "time_of_day" object.
 inline std::string StateJson(bool valid, const Sample &s, const std::string &ctl,
                              const std::string &start, bool gate, uint32_t warp_lr,
-                             const Counters &c) {
+                             const Counters &c, const std::string &extra = {}) {
   char head[512];
   std::snprintf(head, sizeof(head),
                 "{\"version\": 1, \"valid\": %s, \"hour\": %.4f, \"rate_hps\": %.6f, "
@@ -394,7 +553,11 @@ inline std::string StateJson(bool valid, const Sample &s, const std::string &ctl
                 static_cast<unsigned long long>(c.start_replaced),
                 static_cast<unsigned long long>(c.acts),
                 static_cast<unsigned long long>(c.blocked));
-  return std::string(head) + tail;
+  std::string json = std::string(head) + tail;
+  if (!extra.empty()) {
+    json.insert(json.size() - 1, ", " + extra);
+  }
+  return json;
 }
 
 }  // namespace mcla::tod

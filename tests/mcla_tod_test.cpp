@@ -1,7 +1,8 @@
 // M11 time of day (l93): pure parts of the always-on MCLA_TOD log and the
 // default-off rate / freeze / start controls (src/mcla_tod.h), and the
 // generated code their offsets, addresses and return addresses mirror
-// (MCLA_TOD_GENERATED_DIR).
+// (MCLA_TOD_GENERATED_DIR). l95: the post-fx brightness fields and the
+// generated code of the post-fx object and the bright-pass builder.
 
 #include "mcla_tod.h"
 
@@ -231,6 +232,86 @@ void TestLines() {
         "before the first update");
 }
 
+void TestBrightness() {
+  static_assert(tod::kPostFxPtr == 0x82900000u + 21664u, "lis -32112 / 21664");
+  static_assert(tod::kBpPresetOffset == 340 && tod::kBpWordOffset == 284);
+  static_assert(tod::kBpFloatOffsets.size() == 11 && tod::kBpFloatOffsets[0] == 256 &&
+                tod::kBpFloatOffsets[10] == 348);
+  static_assert(tod::kPostFxSpan >= 348 + 4 && tod::kPostFxSpan >= tod::kBpPresetOffset + 1);
+  static_assert(tod::PhysicalToVirtual(0x03098000u) == 0xA3098000u);
+  static_assert(tod::PhysicalToVirtual(0x03099000u) == 0xA3099000u);
+  static_assert(tod::PhysicalToVirtual(0xE3098000u) == 0xA3098000u);
+  static_assert(tod::kWhyBpPreset == 32);
+  {
+    const uint8_t be[4] = {0x3F, 0x80, 0x00, 0x00};
+    static constexpr uint8_t word[4] = {0x12, 0x34, 0x56, 0x78};
+    static_assert(tod::BigEndianWord(word) == 0x12345678u);
+    Check(tod::FloatFromBits(tod::BigEndianWord(be)) == 1.0f, "big-endian 1.0f");
+  }
+  const uint8_t hex[3] = {0x00, 0xAB, 0x7F};
+  Check(tod::HexBytes(hex, 3) == "00ab7f", "hex bytes");
+  Check(tod::FloatText(0.125f) == "0.125" && tod::FloatText(1.0e-6f) == "1e-06" &&
+            tod::FloatText(tod::FloatFromBits(0x7FC00000u)) == "nan" &&
+            tod::FloatText(tod::FloatFromBits(0xFF800000u)) == "-inf",
+        "float text");
+  Check(tod::WhyText(tod::kWhyBpPreset) == "bp_preset" &&
+            tod::WhyText(tod::kWhyMinute | tod::kWhyBpPreset) == "minute+bp_preset",
+        "the bp_preset reason");
+  tod::PresetWatch watch;
+  Check(!watch.Observe(-1) && !watch.Observe(0) && !watch.Observe(0) && !watch.Observe(-1) &&
+            watch.Observe(1) && !watch.Observe(1) && watch.Observe(0),
+        "preset watch: edges between valid reads only");
+
+  tod::Brightness none;
+  Check(tod::BrightnessFields(none) == " adapt_lum=na lum4_raw=na bp_preset=-1",
+        "nothing readable");
+  tod::Brightness b;
+  b.lum_valid = true;
+  b.lum_bits = 0x3E000000u;  // 0.125
+  b.lum4_valid = true;
+  for (size_t i = 0; i < b.lum4.size(); ++i) {
+    b.lum4[i] = uint8_t(i);
+  }
+  b.bp_valid = true;
+  b.bp_object = 0x40123450u;
+  b.preset = 1;
+  b.word284 = 0x4012AB00u;
+  for (size_t i = 0; i < b.bp.size(); ++i) {
+    b.bp[i] = float(i) * 0.5f;
+  }
+  const std::string fields = tod::BrightnessFields(b);
+  std::printf("example brightness:%s\n", fields.c_str());
+  Check(fields == " adapt_lum=0.125 adapt_lum_bits=0x3E000000 "
+                  "lum4_raw=000102030405060708090a0b0c0d0e0f bp_obj=0x40123450 bp_preset=1 "
+                  "bp=0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5 bp284=0x4012AB00",
+        "the brightness fields");
+  tod::Sample s;
+  s.night = 1;
+  const std::string line = tod::Line(tod::kWhyBpPreset, s, "off", "off", false, 0, 0, fields);
+  Check(line.rfind("MCLA_TOD v=1 why=bp_preset hour=", 0) == 0 &&
+            line.size() > fields.size() &&
+            line.compare(line.size() - fields.size(), fields.size(), fields) == 0,
+        "the fields are appended to the line");
+  const std::string json =
+      tod::StateJson(true, s, "off", "off", false, 0, tod::Counters{}, tod::BrightnessJson(b));
+  Check(json.front() == '{' && json.back() == '}' &&
+            Has(json, "\"blocked\": 0, \"brightness\": {\"adapt_lum_valid\": true") &&
+            Has(json, "\"adapt_lum_bits\": \"0x3E000000\", \"adapt_lum\": \"0.125\"") &&
+            Has(json, "\"lum4_raw\": \"000102030405060708090a0b0c0d0e0f\"") &&
+            Has(json, "\"bp_preset\": 1") && Has(json, "{\"off\": 256, \"v\": \"0\"}") &&
+            Has(json, "{\"off\": 348, \"v\": \"5\"}]}}") &&
+            json.find('\n') == std::string::npos,
+        "the F10 brightness member");
+  const std::string json_none = tod::StateJson(false, tod::Sample{}, "off", "off", false, 0,
+                                               tod::Counters{}, tod::BrightnessJson(none));
+  Check(Has(json_none, "\"adapt_lum_valid\": false") && Has(json_none, "\"bp_valid\": false") &&
+            json_none.back() == '}',
+        "the F10 brightness member without data");
+  Check(tod::StateJson(false, tod::Sample{}, "off", "off", false, 0, tod::Counters{}).find(
+            "brightness") == std::string::npos,
+        "no member without the extra text");
+}
+
 // --- generated code --------------------------------------------------------------
 std::string ReadFile(const std::string &path) {
   std::ifstream in(path, std::ios::binary);
@@ -357,11 +438,32 @@ void TestGenerated() {
   InOrder(Body(g15, "sub_822F10D0"), {"// lbz r11,14546(r3)"},
           "the getter reads the garage byte +14546");
 
+  // l95: the post-fx object *0x829054A0 and its +340 preset setter.
+  InOrder(Body(g16, "sub_823076E8"),
+          {"// lis r11,-32112", "// lwz r11,21664(r11)", "// stb r4,340(r11)", "// blr"},
+          "the +340 setter stores r4 into *0x829054A0");
+  for (const char *native : {"sub_82304680", "sub_82305080"}) {
+    Check(Has(Body(g16, native), "sub_823076E8(ctx, base);"),
+          "the two script-native wrappers call the +340 setter");
+  }
+  // The bright-pass builder reads the preset and the fields from its argument.
+  const std::string g47 = ReadFile(dir + "/mcla_recomp.47.cpp");
+  const std::string builder = Body(g47, "sub_8260DA68");
+  InOrder(builder,
+          {"// mr r31,r3", "// lbz r11,340(r31)", "// lfs f0,308(r31)", "// lfs f13,256(r31)",
+           "// lfs f11,260(r31)", "// lfs f10,264(r31)", "// lfs f0,280(r31)",
+           "// lfs f13,268(r31)", "// lfs f11,272(r31)", "// lfs f10,276(r31)",
+           "// lfs f0,304(r31)", "// lfs f12,348(r31)"},
+          "the bright-pass builder: the preset byte and the two presets, +304, +348");
+  Check(Has(builder, "// lwz r5,284(r31)") && Has(builder, "// lfs f5,288(r31)"),
+        "the builder reads the word +284 and the float +288");
+
   // Callers across the whole generated tree: one update caller, seven warp
   // callers, one of them returning to 0x8265D61C.
   size_t update_calls = 0;
   size_t warp_calls = 0;
   size_t preset_calls = 0;
+  size_t preset_setter_calls = 0;
   size_t files = 0;
   for (const auto &entry : std::filesystem::directory_iterator(dir)) {
     const std::string name = entry.path().filename().string();
@@ -373,9 +475,11 @@ void TestGenerated() {
     update_calls += Count(g, "\tsub_822F1DB0(ctx, base);");
     warp_calls += Count(g, "\tsub_822F1518(ctx, base);");
     preset_calls += Count(g, "ctx.lr = 0x8265D61C;");
+    preset_setter_calls += Count(g, "\tsub_823076E8(ctx, base);");
   }
   Check(files >= 50, "the generated tree is present");
   Check(update_calls == 1, "sub_822F1DB0 has exactly one caller");
+  Check(preset_setter_calls == 2, "sub_823076E8 (the +340 setter) has exactly two callers");
   Check(warp_calls == 7 && preset_calls == 1,
         "sub_822F1518 has seven callers; one returns to 0x8265D61C");
 }
@@ -388,6 +492,7 @@ int main() {
   TestNightAndGate();
   TestSchedule();
   TestLines();
+  TestBrightness();
   TestGenerated();
   std::printf("mcla_tod_test: %d checks passed\n", checks);
   return 0;

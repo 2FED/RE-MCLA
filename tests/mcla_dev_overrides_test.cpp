@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 104, "one hundred and four whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 110, "one hundred and ten whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1202,6 +1202,92 @@ void TestWhitelist() {
           "l94 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
+    // l95: the low-latency keys (SDK rexruntime cvars at startup; the three
+    // mode keys write one string cvar and form a group of three) and the
+    // FMA stage 0 benchmark key (host init-only bool); =false writes nothing.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+      const char *text;
+    } l95[] = {
+        {Key::kLowLatencyReflex, "low_latency_reflex", "d3d12_low_latency_mode", "reflex"},
+        {Key::kLowLatencyAntiLag2, "low_latency_antilag2", "d3d12_low_latency_mode", "antilag2"},
+        {Key::kLowLatencyAuto, "low_latency_auto", "d3d12_low_latency_mode", "auto"},
+        {Key::kLowLatencyMarkers, "low_latency_markers", "d3d12_low_latency_markers_only",
+         "true"},
+        {Key::kLowLatencyBoost, "low_latency_boost", "d3d12_low_latency_boost", "true"},
+        {Key::kFmaBench, "fma_bench", "mcla_fma_bench", "true"},
+    };
+    for (const auto &k : l95) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kStartup &&
+                CvarName(info) == k.cvar && CvarText(info, true) == k.text &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l95 key: startup phase, its cvar and text, false writes nothing");
+    }
+    size_t mode_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      const bool first = pair.first == Key::kLowLatencyReflex ||
+                         pair.first == Key::kLowLatencyAntiLag2 ||
+                         pair.first == Key::kLowLatencyAuto;
+      const bool second = pair.second == Key::kLowLatencyReflex ||
+                          pair.second == Key::kLowLatencyAntiLag2 ||
+                          pair.second == Key::kLowLatencyAuto;
+      Check(first == second, "the l95 mode keys pair only among themselves");
+      mode_pairs += first ? 1 : 0;
+      for (const Key other : {Key::kLowLatencyMarkers, Key::kLowLatencyBoost, Key::kFmaBench}) {
+        Check(pair.first != other && pair.second != other,
+              "the l95 markers, boost and fma keys have no conflict pair");
+      }
+    }
+    Check(mode_pairs == 3, "the three l95 mode keys are a group of three");
+    Check(!FindKey("low_latency") && !FindKey("low_latency_off") &&
+              !FindKey("low_latency_mode") && !FindKey("LOW_LATENCY_REFLEX") &&
+              !FindKey("d3d12_low_latency_mode") && !FindKey("low_latency_antilag") &&
+              !FindKey("low_latency_markers_only") && !FindKey("fma_bench_on") &&
+              !FindKey("mcla_fma_bench") && !FindKey("reflex"),
+          "no prefix, suffix, cvar-name or case variants of the l95 keys");
+    const Parsed arm = Parse("low_latency_reflex=true\n"
+                             "low_latency_markers=true\n"
+                             "low_latency_boost=false\n"
+                             "frame_lead_strict_off=true\n"
+                             "fma_bench=true\n");
+    Check(arm.ValueCount() == 5 && arm.issue_count == 0 &&
+              arm.Value(Key::kLowLatencyReflex) == true &&
+              arm.Value(Key::kLowLatencyMarkers) == true &&
+              arm.Value(Key::kLowLatencyBoost) == false &&
+              arm.Value(Key::kFrameLeadStrictOff) == true && arm.Value(Key::kFmaBench) == true,
+          "an l95 arm parses; reflex combines with markers and the strict-off control");
+    const Parsed two = Parse("low_latency_antilag2=true\nlow_latency_reflex=true\n");
+    Check(two.ValueCount() == 0 && two.issue_count == 1 && two.issues[0].line == 2 &&
+              two.issues[0].issue == LineIssue::kConflict,
+          "reflex with antilag2: neither applies, conflict on the later line");
+    const Parsed three = Parse("low_latency_auto=true\n"
+                               "low_latency_reflex=true\n"
+                               "present_stats=true\n"
+                               "low_latency_antilag2=true\n");
+    Check(three.ValueCount() == 1 && three.Value(Key::kPresentStats) == true &&
+              three.issue_count == 2 && three.issues[0].line == 2 &&
+              three.issues[1].line == 4,
+          "all three mode keys true: the whole group is dropped");
+    const Parsed bad = Parse("low_latency_reflex=1\n"
+                             "d3d12_low_latency_mode=reflex\n"
+                             "fma_bench=true\n"
+                             "fma_bench=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kFmaBench) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kMalformed &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l95 near misses: an integer, a string value and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1664,7 +1750,10 @@ void TestWhitelist() {
                           key == Key::kPresentInterval1 || key == Key::kLockedTearingOff ||
                           key == Key::kTodRateX10 || key == Key::kTodRateX30 ||
                           key == Key::kTodFreeze || key == Key::kTodStart0430 ||
-                          key == Key::kTodStart0530 || key == Key::kFrameLeadStrictOff;
+                          key == Key::kTodStart0530 || key == Key::kFrameLeadStrictOff ||
+                          key == Key::kLowLatencyReflex || key == Key::kLowLatencyAntiLag2 ||
+                          key == Key::kLowLatencyAuto || key == Key::kLowLatencyMarkers ||
+                          key == Key::kLowLatencyBoost || key == Key::kFmaBench;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1761,9 +1850,10 @@ void TestWhitelist() {
     // the vblank groups of three (each listed as its three pairs); l91: the
     // strict and adaptive lead keys (since l94 with frame_lead_strict_off a
     // group of three, listed as its three pairs); l93: the time-of-day rate
-    // group of three and the two start keys.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 24,
-          "twenty-four shared-cvar pairs");
+    // group of three and the two start keys; l95: the low-latency mode group
+    // of three.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 27,
+          "twenty-seven shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -2423,7 +2513,7 @@ void TestWhitelist() {
     // (90 keys); KI-026: plus the two KI-026 keys explicit false (92 keys);
     // l92: plus the six l92 keys explicit false (98 keys); l93: plus the five
     // l93 keys explicit false (103 keys); l94: plus the l94 key explicit false
-    // (104 keys).
+    // (104 keys); l95: plus the six l95 keys explicit false (110 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2451,7 +2541,13 @@ void TestWhitelist() {
                                   "tod_freeze=false\n"
                                   "tod_start_0430=false\n"
                                   "tod_start_0530=false\n"
-                                  "frame_lead_strict_off=false\n";
+                                  "frame_lead_strict_off=false\n"
+                                  "low_latency_reflex=false\n"
+                                  "low_latency_antilag2=false\n"
+                                  "low_latency_auto=false\n"
+                                  "low_latency_markers=false\n"
+                                  "low_latency_boost=false\n"
+                                  "fma_bench=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3044,12 +3140,12 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l94: 104 keys, about 2.98 KB).
+    // former 2 KiB and accepted since l81 (l95: 110 keys, about 3.13 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3100, "full arm size");
+    Check(full.size() < 3300, "full arm size");
     full += "# " + std::string(3200 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&

@@ -18,6 +18,9 @@
 //     mcla_tod_start_minutes != 0 (default 0, off) it replaces f1 (the target
 //     hour) there before the original runs. Other callers are untouched.
 // With both cvars at their defaults no guest memory or register is written.
+// l95: every line and F10 also read the post-fx brightness state (mcla_tod.h;
+// read-only; the guest-physical reads only from committed, readable host
+// pages); the preset byte +340 is compared at the 1-in-16 clock tick.
 
 #include "mcla_tod.h"
 
@@ -31,6 +34,16 @@
 #include <cstring>
 #include <mutex>
 #include <string>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 REXCVAR_DEFINE_INT32(mcla_tod_rate, 1, "MCLA",
     "Time-of-day rate after an Arcade race preset warp: 1 = the game's own, "
@@ -96,11 +109,79 @@ struct Shared {
   uint64_t now_ms = 0;
   bool act_logged = false;
   bool block_logged = false;
+  // l95: the preset watch (update thread) and the guest memory base for F10.
+  tod::PresetWatch preset_watch;
+  std::atomic<uint8_t *> base{nullptr};
 };
 
 Shared &State() {
   static Shared state;
   return state;
+}
+
+// l95: true when [p, p + n) lies in committed host pages that can be read
+// (never touches the memory itself; a read-watch-armed or uncommitted page
+// is reported as unreadable).
+bool HostReadable(const void *p, size_t n) {
+#if defined(_WIN32)
+  const auto *at = static_cast<const uint8_t *>(p);
+  const auto *end = at + n;
+  while (at < end) {
+    MEMORY_BASIC_INFORMATION info;
+    if (VirtualQuery(at, &info, sizeof(info)) != sizeof(info) || info.State != MEM_COMMIT) {
+      return false;
+    }
+    const DWORD protect = info.Protect & 0xFFu;
+    if ((info.Protect & PAGE_GUARD) != 0 || protect == PAGE_NOACCESS ||
+        protect == PAGE_EXECUTE) {
+      return false;
+    }
+    at = static_cast<const uint8_t *>(info.BaseAddress) + info.RegionSize;
+  }
+  return true;
+#else
+  (void)p;
+  (void)n;
+  return false;
+#endif
+}
+
+// The +340 preset byte (-1 when the object pointer is not plausible).
+int ReadPreset(uint8_t *base) {
+  const uint32_t object = REX_LOAD_U32(tod::kPostFxPtr);
+  if (object == 0 || !tod::PointerPlausible(object)) {
+    return -1;
+  }
+  return REX_LOAD_U8(object + tod::kBpPresetOffset);
+}
+
+// The whole brightness state (when a line or F10 is written).
+tod::Brightness ReadBrightness(uint8_t *base) {
+  tod::Brightness b;
+  const uint32_t lum = tod::PhysicalToVirtual(tod::kAdaptLumPhysical);
+  if (HostReadable(REX_RAW_ADDR(lum), 4)) {
+    b.lum_valid = true;
+    b.lum_bits = REX_LOAD_U32(lum);
+  }
+  const uint32_t lum4 = tod::PhysicalToVirtual(tod::kLum4Physical);
+  if (HostReadable(REX_RAW_ADDR(lum4), tod::kLum4Bytes)) {
+    b.lum4_valid = true;
+    for (uint32_t i = 0; i < tod::kLum4Bytes; ++i) {
+      b.lum4[i] = REX_LOAD_U8(lum4 + i);
+    }
+  }
+  const uint32_t object = REX_LOAD_U32(tod::kPostFxPtr);
+  if (object != 0 && tod::PointerPlausible(object) &&
+      HostReadable(REX_RAW_ADDR(object), tod::kPostFxSpan)) {
+    b.bp_valid = true;
+    b.bp_object = object;
+    b.preset = REX_LOAD_U8(object + tod::kBpPresetOffset);
+    b.word284 = REX_LOAD_U32(object + tod::kBpWordOffset);
+    for (size_t i = 0; i < tod::kBpFloatOffsets.size(); ++i) {
+      b.bp[i] = AsFloat(REX_LOAD_U32(object + tod::kBpFloatOffsets[i]));
+    }
+  }
+  return b;
 }
 
 // The control part of the update hook: returns true when it wrote the hour.
@@ -182,6 +263,7 @@ REX_EXTERN(sub_822F1DB0) {
                         : 0;
   }
   auto &s = State();
+  s.base.store(base, std::memory_order_relaxed);
   if (pre && manager == manager_in) {
     Control(base, s, manager, before, warp_before, sample);
   }
@@ -192,7 +274,11 @@ REX_EXTERN(sub_822F1DB0) {
   if (tick) {
     s.now_ms = NowMs();
   }
-  const uint8_t why = s.scheduler.Observe(sample, s.now_ms);
+  uint8_t why = s.scheduler.Observe(sample, s.now_ms);
+  // l95: the bright-pass preset byte, one byte at the clock tick.
+  if (tick && s.preset_watch.Observe(ReadPreset(base))) {
+    why |= tod::kWhyBpPreset;
+  }
   ++s.local.updates;
   s.local.night_changes += (why & tod::kWhyNight) != 0 ? 1 : 0;
   s.local.warp_starts += (why & tod::kWhyWarpStart) != 0 ? 1 : 0;
@@ -201,7 +287,8 @@ REX_EXTERN(sub_822F1DB0) {
     ++s.local.lines;
     line = tod::Line(why, sample, tod::RateLabel(RateFactor()), tod::StartLabel(StartMinutes()),
                      s.arcade_seen.load(std::memory_order_relaxed),
-                     s.warp_lr.load(std::memory_order_relaxed), s.local.acts);
+                     s.warp_lr.load(std::memory_order_relaxed), s.local.acts,
+                     tod::BrightnessFields(ReadBrightness(base)));
   }
   if (tick || !line.empty()) {
     std::lock_guard guard(s.mutex);
@@ -251,8 +338,12 @@ std::string MclaTodStateJson() {
   counters.warp_calls = s.warp_calls.load(std::memory_order_relaxed);
   counters.preset_warps = s.preset_warps.load(std::memory_order_relaxed);
   counters.start_replaced = s.start_replaced.load(std::memory_order_relaxed);
+  // l95: a fresh read of the brightness state (after the first update only).
+  uint8_t *base = s.base.load(std::memory_order_relaxed);
+  const std::string brightness =
+      base ? tod::BrightnessJson(ReadBrightness(base)) : tod::BrightnessJson(tod::Brightness{});
   return tod::StateJson(valid, sample, tod::RateLabel(RateFactor()),
                         tod::StartLabel(StartMinutes()),
                         s.arcade_seen.load(std::memory_order_relaxed),
-                        s.warp_lr.load(std::memory_order_relaxed), counters);
+                        s.warp_lr.load(std::memory_order_relaxed), counters, brightness);
 }
