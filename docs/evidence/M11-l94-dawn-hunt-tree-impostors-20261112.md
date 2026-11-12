@@ -44,3 +44,7 @@ Host:
   age_due; record_gpu stays true (:255-258); no texture, validity, slot or submission side effect.
 - Write-watch re-protect does not drop the read watch (xmemory.cpp EnableAccessCallbacks protects
   only pages without notify bit; arm refresh :807-826).
+
+## Control run (2026-11-12, evening)
+
+CONTROL 2026-11-12 (l94 arm dawn = strict ON, no inject; session 22fbf76c, verified: d3d12_frame_lead_strict=1, 8474 strict waits, lead2 0, f2p 0, rb_age_injected 0): trees blinked in 4 of 5 restarts (1,2,3,5). So the tree blink does not depend on the strict bound, on read-back freshness or on the frame lead: all arms together about 23 of 37. Owner: it is not exactly at 06:00 but about a second after, and it feels like the game's own behaviour. Consistent with the RE: all tree shadow impostors are re-rendered on the first day frame and then one per frame round-robin with a period of 49 frames (about one second). Treated as game behaviour until shown otherwise; the earlier 0/3 on this arm was chance. Also in that session the owner saw the ground drop to a low LOD for about a second at the start of the first attempt; the log has no KI-035 forced-finish line in that session, so that was not our warp fix.
