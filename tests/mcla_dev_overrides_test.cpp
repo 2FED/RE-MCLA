@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 110, "one hundred and ten whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 114, "one hundred and fourteen whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1288,6 +1288,65 @@ void TestWhitelist() {
           "l95 near misses: an integer, a string value and a repeat are ignored");
   }
   {
+    // l96: the Deck CP lever-1 keys (SDK graphics-plugin cvars, hot reload);
+    // cp_fence_poll_64 writes 64 to the int cp_fence_poll_interval, the
+    // others true to the bools of their own names; =false writes nothing; no
+    // conflict pairs.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+      const char *text;
+    } l96[] = {
+        {Key::kCpFencePoll64, "cp_fence_poll_64", "cp_fence_poll_interval", "64"},
+        {Key::kCpDrawPacketTsc, "cp_draw_packet_tsc", "cp_draw_packet_tsc", "true"},
+        {Key::kShaderImLoadMemo, "shader_im_load_memo", "shader_im_load_memo", "true"},
+        {Key::kShaderImLoadMemoVerify, "shader_im_load_memo_verify",
+         "shader_im_load_memo_verify", "true"},
+    };
+    for (const auto &k : l96) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == k.cvar && CvarText(info, true) == k.text &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l96 key: graphics-plugin phase, its cvar and text, false writes nothing");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "the l96 keys have no conflict pair");
+      }
+    }
+    Check(!FindKey("cp_fence_poll_interval") && !FindKey("cp_fence_poll") &&
+              !FindKey("cp_fence_poll_32") && !FindKey("CP_DRAW_PACKET_TSC") &&
+              !FindKey("cp_draw_packet") && !FindKey("shader_im_load_memo_on") &&
+              !FindKey("im_load_memo") && !FindKey("shader_im_load_memo_verify_on"),
+          "no prefix, suffix, cvar-name or case variants of the l96 keys");
+    const Parsed arm = Parse("cp_fence_poll_64=true\n"
+                             "cp_draw_packet_tsc=true\n"
+                             "shader_im_load_memo=true\n"
+                             "shader_im_load_memo_verify=true\n"
+                             "cp_bulk_regs=true\n");
+    Check(arm.ValueCount() == 5 && arm.issue_count == 0 &&
+              arm.Value(Key::kCpFencePoll64) == true && arm.Value(Key::kCpDrawPacketTsc) == true &&
+              arm.Value(Key::kShaderImLoadMemo) == true &&
+              arm.Value(Key::kShaderImLoadMemoVerify) == true &&
+              arm.Value(Key::kCpBulkRegs) == true,
+          "an l96 cp-lever1 arm parses; the four keys combine with each other and cp_bulk_regs");
+    const Parsed bad = Parse("cp_fence_poll_64=64\n"
+                             "cp_fence_poll_interval=true\n"
+                             "shader_im_load_memo=true\n"
+                             "shader_im_load_memo=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kShaderImLoadMemo) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l96 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1753,7 +1812,9 @@ void TestWhitelist() {
                           key == Key::kTodStart0530 || key == Key::kFrameLeadStrictOff ||
                           key == Key::kLowLatencyReflex || key == Key::kLowLatencyAntiLag2 ||
                           key == Key::kLowLatencyAuto || key == Key::kLowLatencyMarkers ||
-                          key == Key::kLowLatencyBoost || key == Key::kFmaBench;
+                          key == Key::kLowLatencyBoost || key == Key::kFmaBench ||
+                          key == Key::kCpFencePoll64 || key == Key::kCpDrawPacketTsc ||
+                          key == Key::kShaderImLoadMemo || key == Key::kShaderImLoadMemoVerify;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2513,7 +2574,8 @@ void TestWhitelist() {
     // (90 keys); KI-026: plus the two KI-026 keys explicit false (92 keys);
     // l92: plus the six l92 keys explicit false (98 keys); l93: plus the five
     // l93 keys explicit false (103 keys); l94: plus the l94 key explicit false
-    // (104 keys); l95: plus the six l95 keys explicit false (110 keys).
+    // (104 keys); l95: plus the six l95 keys explicit false (110 keys); l96:
+    // plus the four l96 keys explicit false (114 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2547,7 +2609,11 @@ void TestWhitelist() {
                                   "low_latency_auto=false\n"
                                   "low_latency_markers=false\n"
                                   "low_latency_boost=false\n"
-                                  "fma_bench=false\n";
+                                  "fma_bench=false\n"
+                                  "cp_fence_poll_64=false\n"
+                                  "cp_draw_packet_tsc=false\n"
+                                  "shader_im_load_memo=false\n"
+                                  "shader_im_load_memo_verify=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3140,13 +3206,13 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l95: 110 keys, about 3.13 KB).
+    // former 2 KiB and accepted since l81 (l96: 114 keys, about 3.24 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3300, "full arm size");
-    full += "# " + std::string(3200 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 3400, "full arm size");
+    full += "# " + std::string(3360 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&

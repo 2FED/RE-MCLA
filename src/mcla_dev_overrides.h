@@ -339,6 +339,15 @@
 //   fma_bench=true writes true to the host init-only bool mcla_fma_bench (the
 //   FMA stage 0 start-up benchmark line). =false writes nothing for all six.
 //   An SDK without the l95 cvars logs the five SDK keys as unavailable.
+// - l96 (docs/evidence/M11-l96-sdk-measurement-20261113.md; Deck CP lever 1,
+//   default off): SDK graphics-plugin cvars (hot reload, latched at every
+//   frame start). cp_fence_poll_64=true writes 64 to the int
+//   cp_fence_poll_interval (the deferred fence service at packet boundaries
+//   and draws polls every 64 points or 20 us); cp_draw_packet_tsc=true,
+//   shader_im_load_memo=true and shader_im_load_memo_verify=true write true
+//   to the SDK bools of the same names. =false writes nothing for all four;
+//   no conflict pairs (the verify key only acts with the memo key). An SDK
+//   without the l96 cvars logs the four keys as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -492,8 +501,12 @@ enum class Key : uint8_t {
   kLowLatencyMarkers,        // l95: d3d12_low_latency_markers_only=true
   kLowLatencyBoost,          // l95: d3d12_low_latency_boost=true
   kFmaBench,                 // l95 FMA stage 0: mcla_fma_bench=true
+  kCpFencePoll64,            // l96 lever 1: cp_fence_poll_interval=64
+  kCpDrawPacketTsc,          // l96 lever 1: cp_draw_packet_tsc=true
+  kShaderImLoadMemo,         // l96 lever 1: shader_im_load_memo=true
+  kShaderImLoadMemoVerify,   // l96 lever 1: shader_im_load_memo_verify=true
 };
-inline constexpr size_t kKeyCount = 110;
+inline constexpr size_t kKeyCount = 114;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -761,6 +774,13 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // l95 FMA stage 0: host init-only bool (mcla_fma_bench.cpp), before the
     // guest; =false writes nothing.
     {"fma_bench", Phase::kStartup, "mcla_fma_bench", "true", ""},
+    // l96 Deck CP lever 1: SDK graphics-plugin cvars (hot reload, latched at
+    // every frame start), default off; =false writes nothing.
+    {"cp_fence_poll_64", Phase::kGraphicsPlugin, "cp_fence_poll_interval", "64", ""},
+    {"cp_draw_packet_tsc", Phase::kGraphicsPlugin, "cp_draw_packet_tsc", "true", ""},
+    {"shader_im_load_memo", Phase::kGraphicsPlugin, "shader_im_load_memo", "true", ""},
+    {"shader_im_load_memo_verify", Phase::kGraphicsPlugin, "shader_im_load_memo_verify", "true",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1107,7 +1127,7 @@ std::optional<bool> AppliedValue(Key key);
 // SDK keys =false, also xma_dump_contexts_on=false and, since l81,
 // mcla_album_preview_restore=false; since l86 raw_timer_hitch_hold=false; since l94
 // the three d3d12_frame_lead_strict keys =false; since l95 the six l95 keys
-// =false).
+// =false; since l96 the four l96 keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

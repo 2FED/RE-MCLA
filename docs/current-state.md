@@ -159,3 +159,4 @@ any volunteer build).
   `M11-l81v-volunteer-candidate-20261108.md`; tester guide `docs/volunteer-tester-guide.txt`.
 
 > Update 2026-11-13 early: the overnight work landed. l95 is STAGED, unsigned (host 110 keys, SDK f9f5178 local: Reflex / Anti-Lag 2 default off; brightness fields always on); checklist `private/l95-CHECKLIST.txt`. KI-077 research: scale path ruled out between sessions, likely game state. Deck CP budget: incremental ceiling 18.5-20 fps; 30 fps needs a native renderer (owner decision topic). Evidence: M11-l95-*.md, M11-ki077-brightness-research-20261112.md, M11-deck-cp-budget-and-levers-20261112.md.
+> l96 is STAGED, unsigned, and is a superset of l95 (host 114 keys, SDK ccac775 local): sign l96 instead of l95. Checklist `private/l96-CHECKLIST.txt`: Deck part first (measurement run, lever-1 arm, strict-off control, audio arms, fma bench), then the PC part (Reflex arms, KI-026 stall fix, present stats at 60 Hz).
