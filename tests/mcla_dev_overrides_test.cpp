@@ -30,7 +30,80 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 98, "ninety-eight whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 103, "one hundred and three whitelisted names");
+  {
+    // l93 time-of-day keys: host init-only ints at startup; the rate keys
+    // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
+    // mcla_tod_start_minutes (270 / 330); =false writes nothing.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    struct TodKey {
+      Key key;
+      const char *name;
+      const char *cvar;
+      const char *text;
+    };
+    const TodKey tod_keys[] = {
+        {Key::kTodRateX10, "tod_rate_x10", "mcla_tod_rate", "10"},
+        {Key::kTodRateX30, "tod_rate_x30", "mcla_tod_rate", "30"},
+        {Key::kTodFreeze, "tod_freeze", "mcla_tod_rate", "0"},
+        {Key::kTodStart0430, "tod_start_0430", "mcla_tod_start_minutes", "270"},
+        {Key::kTodStart0530, "tod_start_0530", "mcla_tod_start_minutes", "330"},
+    };
+    for (const TodKey &k : tod_keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kStartup &&
+                CvarName(info) == k.cvar && CvarText(info, true) == k.text &&
+                CvarText(info, false).empty() && !info.overrides_user,
+            "l93 key writes its host int at startup, false writes nothing");
+    }
+    const auto paired = [](Key a, Key b) {
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        if ((pair.first == a && pair.second == b) || (pair.first == b && pair.second == a)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    Check(paired(Key::kTodRateX10, Key::kTodRateX30) &&
+              paired(Key::kTodRateX10, Key::kTodFreeze) &&
+              paired(Key::kTodRateX30, Key::kTodFreeze) &&
+              paired(Key::kTodStart0430, Key::kTodStart0530),
+          "the rate keys and the freeze key are a group of three, the start keys a pair");
+    Check(!paired(Key::kTodRateX10, Key::kTodStart0530) &&
+              !paired(Key::kTodFreeze, Key::kTodStart0430) &&
+              !paired(Key::kTodRateX10, Key::kFrameLeadStrict),
+          "a rate key and a start key combine");
+    const Parsed dawn = Parse("tod_start_0530=true\r\ntod_rate_x10=true\r\n"
+                              "frame_lead_strict=true\r\n");
+    Check(dawn.ValueCount() == 3 && dawn.issue_count == 0 && dawn.ignored_lines == 0 &&
+              dawn.Value(Key::kTodStart0530) == true && dawn.Value(Key::kTodRateX10) == true &&
+              dawn.Value(Key::kFrameLeadStrict) == true,
+          "the l93 dawn-strict arm parses");
+    const Parsed rates = Parse("tod_rate_x10=true\ntod_rate_x30=true\ntod_freeze=false\n");
+    Check(rates.ValueCount() == 1 && !rates.Value(Key::kTodRateX10) &&
+              !rates.Value(Key::kTodRateX30) && rates.Value(Key::kTodFreeze) == false &&
+              rates.issue_count == 1 && rates.issues[0].line == 2 &&
+              rates.issues[0].issue == LineIssue::kConflict,
+          "x10 and x30 both true: neither applies, conflict on the later line");
+    const Parsed three = Parse("tod_freeze=true\ntod_rate_x10=true\ntod_rate_x30=true\n");
+    Check(three.ValueCount() == 0 && three.issue_count == 2 &&
+              three.issues[0].issue == LineIssue::kConflict &&
+              three.issues[1].issue == LineIssue::kConflict,
+          "freeze with both rates: the whole group is dropped");
+    const Parsed starts = Parse("tod_start_0430=true\ntod_start_0530=true\n");
+    Check(starts.ValueCount() == 0 && starts.issue_count == 1 && starts.issues[0].line == 2,
+          "both start keys true: neither applies");
+    const Parsed bad = Parse("tod_rate_x10=10\nmcla_tod_rate=true\ntod_rate=true\n"
+                             "TOD_FREEZE=true\n");
+    Check(bad.ValueCount() == 0 && bad.ignored_lines == 4 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kUnknownName &&
+              bad.issues[3].issue == LineIssue::kUnknownName,
+          "l93 near misses: an integer, the cvar name, a prefix and the upper case are ignored");
+  }
   {
     // l92 probe keys: six SDK cvars of the graphics plugin phase, each its own
     // cvar (no conflict pair); =false writes nothing.
@@ -1510,7 +1583,10 @@ void TestWhitelist() {
                           key == Key::kWarpStallFix || key == Key::kReadbackReadWatch ||
                           key == Key::kReadbackAgeInject2 ||
                           key == Key::kOcclusionQueryBounded4 || key == Key::kPresentStats ||
-                          key == Key::kPresentInterval1 || key == Key::kLockedTearingOff;
+                          key == Key::kPresentInterval1 || key == Key::kLockedTearingOff ||
+                          key == Key::kTodRateX10 || key == Key::kTodRateX30 ||
+                          key == Key::kTodFreeze || key == Key::kTodStart0430 ||
+                          key == Key::kTodStart0530;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1605,9 +1681,10 @@ void TestWhitelist() {
     // their controls; l81: the album restore and blend keys with their
     // controls; l86: the hitch hold key with its control) plus the kick and
     // the vblank groups of three (each listed as its three pairs); l91: the
-    // strict and adaptive lead keys.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 18,
-          "eighteen shared-cvar pairs");
+    // strict and adaptive lead keys; l93: the time-of-day rate group of three
+    // and the two start keys.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 22,
+          "twenty-two shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -2265,7 +2342,8 @@ void TestWhitelist() {
     // l89: plus the l89 key explicit false (86 keys); l90: plus the two l90
     // keys explicit false (88 keys); l91: plus the two l91 keys explicit false
     // (90 keys); KI-026: plus the two KI-026 keys explicit false (92 keys);
-    // l92: plus the six l92 keys explicit false (98 keys).
+    // l92: plus the six l92 keys explicit false (98 keys); l93: plus the five
+    // l93 keys explicit false (103 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2287,7 +2365,12 @@ void TestWhitelist() {
                                   "occlusion_query_bounded_4=false\n"
                                   "present_stats=false\n"
                                   "present_interval_1=false\n"
-                                  "locked_tearing_off=false\n";
+                                  "locked_tearing_off=false\n"
+                                  "tod_rate_x10=false\n"
+                                  "tod_rate_x30=false\n"
+                                  "tod_freeze=false\n"
+                                  "tod_start_0430=false\n"
+                                  "tod_start_0530=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -2880,13 +2963,13 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81.
+    // former 2 KiB and accepted since l81 (l93: 103 keys, about 2.95 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 2900, "full arm size");
-    full += "# " + std::string(3000 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 3100, "full arm size");
+    full += "# " + std::string(3200 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&

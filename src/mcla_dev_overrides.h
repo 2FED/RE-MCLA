@@ -310,6 +310,15 @@
 //   d3d12_present_sync_interval; locked_tearing_off=true writes true to
 //   mcla_locked_tearing_off (no ALLOW_TEARING in Locked either). An SDK
 //   without the l92 cvars logs the keys as unavailable.
+// - l93 (docs/evidence/M11-l93-time-of-day-control-20261112.md; time of day),
+//   host init-only ints at startup, default off, =false writes nothing:
+//   tod_rate_x10=true writes 10, tod_rate_x30=true 30 and tod_freeze=true 0
+//   to mcla_tod_rate (default 1: the game's own rate; the control acts only
+//   after an Arcade race preset warp in this session); tod_start_0430=true
+//   writes 270 and tod_start_0530=true 330 to mcla_tod_start_minutes
+//   (default 0: the Arcade race preset warp target becomes 04:30 / 05:30).
+//   Keys of one cvar form conflict pairs (the three rate keys as a group of
+//   three, the two start keys); a rate key and a start key combine.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -451,8 +460,13 @@ enum class Key : uint8_t {
   kPresentStats,             // l92 KI-076: d3d12_present_stats=true
   kPresentInterval1,         // l92 KI-076: d3d12_present_sync_interval=1
   kLockedTearingOff,         // l92 KI-076: mcla_locked_tearing_off=true
+  kTodRateX10,               // l93: mcla_tod_rate=10
+  kTodRateX30,               // l93: mcla_tod_rate=30
+  kTodFreeze,                // l93: mcla_tod_rate=0
+  kTodStart0430,             // l93: mcla_tod_start_minutes=270
+  kTodStart0530,             // l93: mcla_tod_start_minutes=330
 };
-inline constexpr size_t kKeyCount = 98;
+inline constexpr size_t kKeyCount = 103;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -699,10 +713,18 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"present_stats", Phase::kGraphicsPlugin, "d3d12_present_stats", "true", ""},
     {"present_interval_1", Phase::kGraphicsPlugin, "d3d12_present_sync_interval", "1", ""},
     {"locked_tearing_off", Phase::kGraphicsPlugin, "mcla_locked_tearing_off", "true", ""},
+    // l93 time of day: host init-only ints (mcla_tod.cpp), default off,
+    // before the guest; =false writes nothing.
+    {"tod_rate_x10", Phase::kStartup, "mcla_tod_rate", "10", ""},
+    {"tod_rate_x30", Phase::kStartup, "mcla_tod_rate", "30", ""},
+    {"tod_freeze", Phase::kStartup, "mcla_tod_rate", "0", ""},
+    {"tod_start_0430", Phase::kStartup, "mcla_tod_start_minutes", "270", ""},
+    {"tod_start_0530", Phase::kStartup, "mcla_tod_start_minutes", "330", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
-// l91 d3d12_frame_lead_strict, the audio_speaker_config string, or the xma_frame_walk_fix,
+// l91 d3d12_frame_lead_strict and the l93 mcla_tod_rate /
+// mcla_tod_start_minutes, the audio_speaker_config string, or the xma_frame_walk_fix,
 // d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
 // d3d12_texture_placed_heaps, timer_queue_blocking_wait,
 // d3d12_blend_minmax_fix, mcla_album_preview_restore and
@@ -714,7 +736,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 18> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 22> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -733,6 +755,10 @@ inline constexpr std::array<ConflictPair, 18> kConflictPairs = {{
     {Key::kBlendMinmaxFix, Key::kBlendMinmaxFixOff},
     {Key::kRawTimerHitchHold, Key::kRawTimerHitchHoldOff},
     {Key::kFrameLeadStrict, Key::kFrameLeadAdaptive},
+    {Key::kTodRateX10, Key::kTodRateX30},
+    {Key::kTodRateX10, Key::kTodFreeze},
+    {Key::kTodRateX30, Key::kTodFreeze},
+    {Key::kTodStart0430, Key::kTodStart0530},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

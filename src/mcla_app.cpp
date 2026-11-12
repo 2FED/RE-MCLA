@@ -76,6 +76,7 @@
 #include "mcla_audio_filter.h"
 #include "mcla_ki026_probe.h"
 #include "mcla_pursuit_probe.h"
+#include "mcla_tod.h"
 #include "mcla_menu_state.h"
 #include "mcla_photo_capture.h"
 // End M9 host hooks.
@@ -3679,6 +3680,8 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
   state.ambient_dt_json = MclaAmbientDtStateJson();
   // l87 KI-060: engine-thread filter counters (host only; empty when off).
   state.audio_filter_json = MclaAudioFilterStateJson();
+  // l93: time of day (always-on read-only stage 0 and the control counters).
+  state.time_of_day_json = MclaTodStateJson();
   // M10-001: cumulative cost-split totals (empty without the SDK split).
   state.perf_split_json = mcla::perf_split::StateJson();
   return state;

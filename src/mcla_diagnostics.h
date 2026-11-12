@@ -98,6 +98,8 @@ struct RuntimeState {
   // l87 KI-060: "audio_filter" object (pre-rendered JSON; empty when the
   // three audio filter switches are off).
   std::string audio_filter_json;
+  // l93: "time_of_day" object (pre-rendered JSON; always present).
+  std::string time_of_day_json;
   // M10-001: "perf_split" object (pre-rendered JSON), empty when absent.
   std::string perf_split_json;
 };

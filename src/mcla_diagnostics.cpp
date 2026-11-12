@@ -1118,6 +1118,9 @@ BuildStateJson(std::string_view reason, const SnapshotTrigger &trigger,
   if (!runtime.audio_filter_json.empty()) {
     out << "  \"audio_filter\": " << runtime.audio_filter_json << ",\n";
   }
+  if (!runtime.time_of_day_json.empty()) {
+    out << "  \"time_of_day\": " << runtime.time_of_day_json << ",\n";
+  }
   if (!runtime.perf_split_json.empty()) {
     out << "  \"perf_split\": " << runtime.perf_split_json << ",\n";
   }
