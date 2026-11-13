@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 124, "one hundred and twenty-four whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 128, "one hundred and twenty-eight whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1637,6 +1637,77 @@ void TestWhitelist() {
           "l99 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
+    // l100: command-processor levers and the guest spin backoff (default
+    // off). cp_reg_skip / cp_reg_skip_verify / cp_draw_fast_verify write true
+    // to the SDK bools cp_reg_write_skip_unchanged / cp_reg_write_skip_verify
+    // / cp_draw_const_only_verify (graphics plugin); guest_spin_backoff_64
+    // writes 64 to the host int mcla_guest_spin_backoff at startup; =false
+    // writes nothing; no conflict pairs (different cvars).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      const char *text;
+    } l100[] = {
+        {Key::kCpRegSkip, "cp_reg_skip", Phase::kGraphicsPlugin, "cp_reg_write_skip_unchanged",
+         "true"},
+        {Key::kCpRegSkipVerify, "cp_reg_skip_verify", Phase::kGraphicsPlugin,
+         "cp_reg_write_skip_verify", "true"},
+        {Key::kCpDrawFastVerify, "cp_draw_fast_verify", Phase::kGraphicsPlugin,
+         "cp_draw_const_only_verify", "true"},
+        {Key::kGuestSpinBackoff64, "guest_spin_backoff_64", Phase::kStartup,
+         "mcla_guest_spin_backoff", "64"},
+    };
+    for (const auto &k : l100) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l100 key: its phase, cvar and text, false writes nothing");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "l100 keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("cp_reg_write_skip_unchanged") && !FindKey("cp_reg_write_skip_verify") &&
+              !FindKey("cp_draw_const_only_verify") && !FindKey("mcla_guest_spin_backoff") &&
+              !FindKey("cp_draw_fast") && !FindKey("cp_reg_skip_on") &&
+              !FindKey("CP_REG_SKIP") && !FindKey("guest_spin_backoff") &&
+              !FindKey("guest_spin_backoff_32"),
+          "no prefix, suffix, cvar-name or case variants of the l100 keys (no cp_draw_fast)");
+    const Parsed verify = Parse("cp_reg_skip_verify=true\n"
+                                "cp_draw_fast_verify=true\n");
+    Check(verify.ValueCount() == 2 && verify.issue_count == 0 &&
+              verify.Value(Key::kCpRegSkipVerify) == true &&
+              verify.Value(Key::kCpDrawFastVerify) == true,
+          "the l100 cp-verify arm parses");
+    const Parsed reg = Parse("cp_reg_skip=true\n");
+    Check(reg.ValueCount() == 1 && reg.issue_count == 0 && reg.Value(Key::kCpRegSkip) == true,
+          "the l100 cp-reg arm parses");
+    const Parsed spin = Parse("guest_spin_backoff_64=true\n");
+    Check(spin.ValueCount() == 1 && spin.issue_count == 0 &&
+              spin.Value(Key::kGuestSpinBackoff64) == true,
+          "the l100 spin-backoff arm parses");
+    const Parsed both = Parse("cp_reg_skip=true\n"
+                              "cp_reg_skip_verify=true\n");
+    Check(both.ValueCount() == 2 && both.issue_count == 0,
+          "cp_reg_skip with its verify: both apply (the SDK verify wins), no conflict");
+    const Parsed bad = Parse("guest_spin_backoff_64=64\n"
+                             "cp_draw_fast=true\n"
+                             "cp_reg_skip=true\n"
+                             "cp_reg_skip=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kCpRegSkip) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l100 near misses: an integer, the absent fast-path key and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -2111,7 +2182,9 @@ void TestWhitelist() {
                           key == Key::kCpDrawPacketTscOff || key == Key::kCpFencePollOff ||
                           key == Key::kTextureHardMargin256 || key == Key::kTextureMinAge2000 ||
                           key == Key::kLeadLlGuardAdaptive || key == Key::kLeadLlGuardRearm ||
-                          key == Key::kLeadLlGuardOff;
+                          key == Key::kLeadLlGuardOff || key == Key::kCpRegSkip ||
+                          key == Key::kCpRegSkipVerify || key == Key::kCpDrawFastVerify ||
+                          key == Key::kGuestSpinBackoff64;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2877,7 +2950,7 @@ void TestWhitelist() {
     // plus the four l96 keys explicit false (114 keys); l97: plus the two l97
     // keys explicit false (116 keys); l98: plus the three l98 controls
     // explicit false (119 keys); l99: plus the five l99 keys explicit false
-    // (124 keys).
+    // (124 keys); l100: plus the four l100 keys explicit false (128 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2925,7 +2998,11 @@ void TestWhitelist() {
                                   "texture_min_age_2000=false\n"
                                   "lead_ll_guard_adaptive=false\n"
                                   "lead_ll_guard_rearm=false\n"
-                                  "lead_ll_guard_off=false\n";
+                                  "lead_ll_guard_off=false\n"
+                                  "cp_reg_skip=false\n"
+                                  "cp_reg_skip_verify=false\n"
+                                  "cp_draw_fast_verify=false\n"
+                                  "guest_spin_backoff_64=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3518,13 +3595,13 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l99: 124 keys, about 3.53 KB).
+    // former 2 KiB and accepted since l81 (l100: 128 keys, about 3.63 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3600, "full arm size");
-    full += "# " + std::string(3660 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 3700, "full arm size");
+    full += "# " + std::string(3760 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&

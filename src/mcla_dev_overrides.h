@@ -384,6 +384,17 @@
 //   frames / observe only: the guard never changes the mode), a conflict
 //   group of three. =false writes nothing for all five. An SDK without the
 //   l99 cvars logs the four SDK keys as unavailable.
+// - l100 (docs/evidence/M11-l100-sdk-deck-levers-20261114.md; command
+//   processor levers and the guest spin backoff, all default off):
+//   cp_reg_skip=true writes true to the SDK graphics-plugin bool
+//   cp_reg_write_skip_unchanged (unchanged register writes skip the
+//   per-register path and do not mark constant buffers); cp_reg_skip_verify
+//   writes true to cp_reg_write_skip_verify (normal path, proof counters;
+//   wins over cp_reg_skip); cp_draw_fast_verify writes true to
+//   cp_draw_const_only_verify (constants-only draw measurement, no fast
+//   path); guest_spin_backoff_64=true writes 64 to the host int
+//   mcla_guest_spin_backoff at startup. =false writes nothing for all four.
+//   An SDK without the l100 cvars logs the three SDK keys as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -551,8 +562,12 @@ enum class Key : uint8_t {
   kLeadLlGuardAdaptive,      // l99: d3d12_frame_lead_strict_low_latency_guard_action=1
   kLeadLlGuardRearm,         // l99: d3d12_frame_lead_strict_low_latency_guard_action=2
   kLeadLlGuardOff,           // l99: d3d12_frame_lead_strict_low_latency_guard_action=3
+  kCpRegSkip,                // l100: cp_reg_write_skip_unchanged=true
+  kCpRegSkipVerify,          // l100: cp_reg_write_skip_verify=true
+  kCpDrawFastVerify,         // l100: cp_draw_const_only_verify=true
+  kGuestSpinBackoff64,       // l100: mcla_guest_spin_backoff=64
 };
-inline constexpr size_t kKeyCount = 124;
+inline constexpr size_t kKeyCount = 128;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -854,6 +869,13 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
      "d3d12_frame_lead_strict_low_latency_guard_action", "2", ""},
     {"lead_ll_guard_off", Phase::kGraphicsPlugin,
      "d3d12_frame_lead_strict_low_latency_guard_action", "3", ""},
+    // l100 command-processor levers (SDK bools, graphics plugin, latched at
+    // every frame start) and the guest spin backoff (host int, startup);
+    // default off, =false writes nothing.
+    {"cp_reg_skip", Phase::kGraphicsPlugin, "cp_reg_write_skip_unchanged", "true", ""},
+    {"cp_reg_skip_verify", Phase::kGraphicsPlugin, "cp_reg_write_skip_verify", "true", ""},
+    {"cp_draw_fast_verify", Phase::kGraphicsPlugin, "cp_draw_const_only_verify", "true", ""},
+    {"guest_spin_backoff_64", Phase::kStartup, "mcla_guest_spin_backoff", "64", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1212,7 +1234,8 @@ std::optional<bool> AppliedValue(Key key);
 // mcla_album_preview_restore=false; since l86 raw_timer_hitch_hold=false; since l94
 // the three d3d12_frame_lead_strict keys =false; since l95 the six l95 keys
 // =false; since l96 the four l96 keys =false; since l97 the two l97 keys
-// =false; since l99 the five l99 keys =false).
+// =false; since l99 the five l99 keys =false; since l100 the four l100 keys
+// =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

@@ -4,6 +4,7 @@
 
 #include "mcla_perf_split.h"
 
+#include "mcla_guest_spin.h"
 #include "mcla_init.h"
 #include "mcla_logging.h"
 #include "mcla_texture_budget.h"
@@ -29,6 +30,25 @@
 
 #ifndef MCLA_PERF_SPLIT_DEFAULT
 #define MCLA_PERF_SPLIT_DEFAULT 0
+#endif
+
+// M11 l100 (mcla_guest_spin.h): backoff of the guest GPU-serial poll spin.
+REXCVAR_DEFINE_INT32(
+    mcla_guest_spin_backoff, 0, "MCLA",
+    "M11 l100: after this many consecutive db16cyc hints of one GPU-serial poll wait "
+    "(sub_82412F98, 32 hints per call) a guest thread yields the processor before its next "
+    "poll; 0 = off (the previous behaviour). Census and yields in MCLA_SPIN")
+    .range(0, mcla::guest_spin::kBackoffMax);
+
+#if MCLA_HAVE_PERF_SPLIT
+namespace mcla::perf_split {
+// M11 l100: the guest spin census (one per process; slots per guest thread).
+mcla::guest_spin::SpinCensus &GuestSpinCensus();
+mcla::guest_spin::SpinCensus &GuestSpinCensus() {
+  static mcla::guest_spin::SpinCensus census;
+  return census;
+}
+}  // namespace mcla::perf_split
 #endif
 
 namespace mcla::perf_split {
@@ -104,6 +124,7 @@ std::vector<ThreadCpuSample> SampleThreads() {
 // Off the CP thread: one Toolhelp walk per emitted split window.
 void RunThreadCpu(std::stop_token stop) {
   std::vector<ThreadCpuSample> previous = SampleThreads();
+  std::vector<mcla::guest_spin::SpinRow> spin_previous = GuestSpinCensus().Read();
   uint64_t seen_seq = rex::perf::GetPerfSplitSnapshot().last_window.seq;
   while (!stop.stop_requested()) {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -116,6 +137,14 @@ void RunThreadCpu(std::stop_token stop) {
     MCLA_GPU_INFO("{}", FormatThreadCpuLine(snapshot.last_window.reason, seen_seq,
                                             snapshot.last_window.wall_ms, previous, current));
     previous = std::move(current);
+    // M11 l100: the guest spin census of the same window (top threads).
+    auto spin = GuestSpinCensus().Read();
+    for (const auto &line : mcla::guest_spin::FormatSpinLines(
+             snapshot.last_window.reason, seen_seq, REXCVAR_GET(mcla_guest_spin_backoff),
+             mcla::guest_spin::SpinWindow(spin_previous, spin, snapshot.last_window.tsc_mhz))) {
+      MCLA_GPU_INFO("{}", line);
+    }
+    spin_previous = std::move(spin);
   }
 }
 #endif
@@ -234,15 +263,43 @@ REX_EXTERN(sub_82411E98) {
   --serial_wait_depth;
 }
 
+// M11 l100 spin census / backoff state of this guest thread.
+thread_local mcla::guest_spin::SpinBackoff spin_backoff;
+thread_local mcla::guest_spin::SpinSlot *spin_slot = nullptr;
+thread_local bool spin_slot_tried = false;
+
 // Strong override of the generated weak GPU-serial poll step, timed only
-// when called outside sub_82411E98 (five other call sites).
+// when called outside sub_82411E98 (five other call sites). M11 l100: every
+// call is counted (32 db16cyc hints each, mcla_guest_spin.h) and, with
+// mcla_guest_spin_backoff = N > 0, a thread that has run N consecutive hints
+// of one wait yields the processor before the next poll.
 REX_EXTERN(sub_82412F98) {
-  if (serial_wait_depth || !rex::perf::PerfSplitActive()) {
-    __imp__sub_82412F98(ctx, base);
-    return;
+  if (!spin_slot_tried) {
+    spin_slot_tried = true;
+#if defined(_WIN32)
+    spin_slot = mcla::perf_split::GuestSpinCensus().Register(uint32_t(GetCurrentThreadId()));
+#endif
   }
-  const uint64_t begin = rex::perf::ReadTsc();
+  uint64_t begin = rex::perf::ReadTsc();
+  const bool yielded = spin_backoff.BeforePoll(
+      begin, mcla::guest_spin::BackoffThreshold(REXCVAR_GET(mcla_guest_spin_backoff)));
+  if (yielded) {
+#if defined(_WIN32)
+    SwitchToThread();
+#else
+    std::this_thread::yield();
+#endif
+    begin = rex::perf::ReadTsc();
+  }
   __imp__sub_82412F98(ctx, base);
-  rex::perf::AddRenderSerialPollTicks(rex::perf::ReadTsc() - begin);
+  const uint64_t end = rex::perf::ReadTsc();
+  const uint64_t ticks = end >= begin ? end - begin : 0;
+  if (!serial_wait_depth && rex::perf::PerfSplitActive()) {
+    rex::perf::AddRenderSerialPollTicks(ticks);
+  }
+  spin_backoff.AfterPoll(end, yielded);
+  if (spin_slot) {
+    spin_slot->Note(yielded, ticks);
+  }
 }
 #endif
