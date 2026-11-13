@@ -20,7 +20,9 @@
 //   d3d12_wrm_event_wake=true, d3d12_replay_batched_wake=true,
 //   d3d12_readback_gpu_timing=false; under Wine/Proton only:
 //   shared_memory_upload_ahead_pages=16; since l94 on both platforms also
-//   d3d12_frame_lead_strict=1 (KI-074 fix, see below).
+//   d3d12_frame_lead_strict=1 (KI-074 fix, see below); since l98 on both
+//   platforms also cp_draw_packet_tsc=true and cp_fence_poll_interval=64
+//   (CP lever 1, see below).
 //
 // Each phase is the phase of the owner override key for the same cvar.
 //
@@ -63,6 +65,21 @@
 // applied override values; a =false line of the three lead keys writes
 // nothing and does not turn the default off (silent_false_is_arm false; only
 // the upload-ahead =false lines are the owner's off arm).
+//
+// l98 CP lever 1 (owner verdict on the l96 Deck runs,
+// docs/evidence/M11-l96-deck-analysis-20261113.md: packets_other 10.22 ->
+// 7.52 ms per frame, a bit smoother, no artefacts; PC l96 runs without
+// artefacts): cp_draw_packet_tsc=true (draw-packet timing from the TSC instead
+// of QueryPerformanceCounter, which costs about 110 ns under Proton) and
+// cp_fence_poll_interval=64 (the deferred fence service polls every 64
+// points or 20 us), written here because the l97 SDK keeps them default off.
+// On both platforms: they remove host clock calls and fence polls, which do
+// not depend on the OS; the Wine-only rule is for switches measured net
+// negative on Windows. Owner controls: cp_draw_packet_tsc_off (false) and
+// cp_fence_poll_off (0) win as applied override values; =false lines write
+// nothing and do not turn the defaults off. The IM_LOAD memo
+// (shader_im_load_memo) stays never written: 131 verify mismatches in l96.
+// docs/evidence/M11-l98-owner-build-20261113.md.
 //
 // Semantics kept from the SDK: targeted sync acts only while
 // d3d12_readback_sync_composite is on (MCLA_READBACK_SYNC_COMPOSITE_DEFAULT);
@@ -107,7 +124,7 @@ struct Default {
   bool silent_false_is_arm = false;
 };
 
-inline constexpr std::array<Default, 9> kDefaults = {{
+inline constexpr std::array<Default, 11> kDefaults = {{
     {"memory_watch_census", "false", Phase::kStartup, true},
     {"memory_watch_disarm_bridge_safe_gaps", "true", Phase::kStartup, false, Platform::kWineOnly},
     {"d3d12_readback_sync_targeted", "true", Phase::kGraphicsPlugin, false},
@@ -119,6 +136,9 @@ inline constexpr std::array<Default, 9> kDefaults = {{
      Platform::kWineOnly, true},
     // l94 KI-074 fix (both platforms; see above).
     {"d3d12_frame_lead_strict", "1", Phase::kGraphicsPlugin, false},
+    // l98 CP lever 1 (both platforms; see above).
+    {"cp_draw_packet_tsc", "true", Phase::kGraphicsPlugin, false},
+    {"cp_fence_poll_interval", "64", Phase::kGraphicsPlugin, false},
 }};
 
 // Cvars this module writes only under Wine/Proton, never on Windows.
@@ -130,7 +150,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 94> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 92> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -262,8 +282,10 @@ inline constexpr std::array<std::string_view, 94> kNeverWrittenCvars = {
     // host-owned; owner key raw_timer_stats only.
     "mcla_raw_timer_stats",
     // l87 KI-060: the engine-thread filter probe and the native voice filter
-    // with its self-check (default off) stay host-owned; owner keys
-    // audio_filter_probe / audio_filter_native / audio_filter_native_verify.
+    // with its self-check stay host-owned (the probe and the self-check
+    // default off; the native filters default on in the host itself since
+    // l98); owner keys audio_filter_probe / audio_filter_native /
+    // audio_filter_native_verify / audio_filter_native_off.
     "mcla_audio_filter_probe",
     "mcla_audio_filter_native",
     "mcla_audio_filter_native_verify",
@@ -303,11 +325,10 @@ inline constexpr std::array<std::string_view, 94> kNeverWrittenCvars = {
     "d3d12_low_latency_markers_only",
     "d3d12_low_latency_boost",
     "mcla_fma_bench",
-    // l96 Deck CP lever 1 (SDK, default off); owner keys cp_fence_poll_64,
-    // cp_draw_packet_tsc, shader_im_load_memo and shader_im_load_memo_verify
-    // only.
-    "cp_fence_poll_interval",
-    "cp_draw_packet_tsc",
+    // l96 Deck CP lever 1: the IM_LOAD memo and its self-check (SDK, default
+    // off); owner keys shader_im_load_memo and shader_im_load_memo_verify
+    // only. cp_fence_poll_interval and cp_draw_packet_tsc left this list in
+    // l98 (now defaults above).
     "shader_im_load_memo",
     "shader_im_load_memo_verify",
     // l97 low latency replaces strict (SDK, default 0); owner keys

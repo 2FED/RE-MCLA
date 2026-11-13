@@ -8,8 +8,16 @@
 // self-check (MCLA_AFILT_CH_VERIFY v=1), the `raced` classification and the
 // remaining-leaf probe.
 //
-// Strong overrides; with the init-only switches off (the default) each is
-// one static bool test and the original call:
+// l98 (docs/evidence/M11-l98-owner-build-20261113.md): the native filters are
+// default on (audio_filter::kNativeDefault). With the probe and the
+// self-check off (the default, af::Lean) the two filter hooks run the native
+// kernels with no timing and no per-call statistics, the frame hook calls the
+// original directly, and only fallbacks to the original are counted; one
+// MCLA_AFILT kind=config line at start-up shows the switches.
+//
+// Strong overrides; with the init-only switches off (native off by the
+// control key audio_filter_native_off) each is one static bool test and the
+// original call:
 //   sub_823EC248 (one engine frame): times the frame, counts the filter calls
 //     made during it and, with the probe on, writes one MCLA_AFILT line per
 //     second of frames;
@@ -61,9 +69,9 @@ REXCVAR_DEFINE_BOOL(mcla_audio_filter_probe, false, "MCLA",
     "MCLA_AFILT lines and the F10 audio_filter block; diagnostic, read-only)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REXCVAR_DEFINE_BOOL(mcla_audio_filter_native, false, "MCLA",
+REXCVAR_DEFINE_BOOL(mcla_audio_filter_native, mcla::audio_filter::kNativeDefault, "MCLA",
     "Run the voice filters sub_82146BE0 and sub_82147738 natively (KI-060; "
-    "same arithmetic and rounding as the recompiled code)")
+    "same arithmetic and rounding as the recompiled code; default on since l98)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(mcla_audio_filter_native_verify, false, "MCLA",
@@ -121,6 +129,12 @@ bool ChannelAnyOn() {
   return on;
 }
 
+// l98: native on, probe and self-check off (the default).
+bool LeanOn() {
+  static const bool on = af::Lean(NativeOn(), VerifyOn(), ProbeOn());
+  return on;
+}
+
 // steady_clock is QueryPerformanceCounter with the MSVC STL (the clock the
 // host's other timing probes use).
 uint64_t NowNs() {
@@ -147,6 +161,10 @@ struct Shared {
   std::atomic<uint64_t> verify_lines{0};
   std::atomic<uint64_t> ch_verify_counter{0};
   std::atomic<uint64_t> ch_verify_lines{0};
+  // l98 lean mode: fallbacks to the original (no buffer argument or sample
+  // pointer), the only counters it keeps.
+  std::atomic<uint64_t> lean_fallback{0};
+  std::atomic<uint64_t> lean_ch_fallback{0};
   // Leaf calls outside an engine frame (any thread) and the timing switch.
   std::array<std::atomic<uint64_t>, kLeafCount> leaf_outside{};
   std::array<std::atomic<bool>, kLeafCount> leaf_timed{true, true, true};
@@ -166,6 +184,10 @@ struct Local {
   af::Stats stats;
 };
 thread_local Local local;
+
+// l98 lean mode: the native kernels' per-call counters land here and are not
+// read (the lean mode keeps no statistics besides the fallbacks).
+thread_local af::Stats lean_sink;
 
 // Runs `fn` and adds the call to `stats` (probe).
 template <typename Fn>
@@ -621,6 +643,14 @@ void RunLeaf(LeafId leaf, Fn fn) {
 
 // Two-bank voice filter: r3 = effect object, r4 = buffer argument.
 REX_EXTERN(sub_82146BE0) {
+  if (LeanOn()) {
+    if (Native(ctx, base, lean_sink)) {
+      return;
+    }
+    State().lean_fallback.fetch_add(1, std::memory_order_relaxed);
+    __imp__sub_82146BE0(ctx, base);
+    return;
+  }
   if (!AnyOn()) {
     __imp__sub_82146BE0(ctx, base);
     return;
@@ -638,6 +668,16 @@ REX_EXTERN(sub_82146BE0) {
 
 // Per-channel biquad with gain: r3 = effect object, r4 = buffer argument.
 REX_EXTERN(sub_82147738) {
+  if (LeanOn()) {
+    if (ChannelNativeOn()) {
+      if (NativeChannel(ctx, base, lean_sink)) {
+        return;
+      }
+      State().lean_ch_fallback.fetch_add(1, std::memory_order_relaxed);
+    }
+    __imp__sub_82147738(ctx, base);
+    return;
+  }
   if (!ChannelAnyOn()) {
     __imp__sub_82147738(ctx, base);
     return;
@@ -681,7 +721,7 @@ REX_EXTERN(sub_823EE050) {
 // One engine frame: r3 = the engine object; the engine thread calls it from
 // 0x823EC968 (return 0x823EC96C).
 REX_EXTERN(sub_823EC248) {
-  if (!AnyOn()) {
+  if (!AnyOn() || LeanOn()) {
     __imp__sub_823EC248(ctx, base);
     return;
   }
@@ -754,6 +794,11 @@ REX_EXTERN(sub_823EC248) {
 }
 
 std::string MclaAudioFilterStateJson() {
+  if (LeanOn()) {
+    auto &s = State();
+    return af::LeanStateJson(s.lean_fallback.load(std::memory_order_relaxed),
+                             s.lean_ch_fallback.load(std::memory_order_relaxed), ChannelOff());
+  }
   if (!AnyOn()) {
     return {};
   }
@@ -764,4 +809,8 @@ std::string MclaAudioFilterStateJson() {
   const uint64_t now = NowNs();
   return af::StateJson(all, s.start_ns ? now - s.start_ns : 0, ProbeOn(), NativeOn(),
                        VerifyOn());
+}
+
+void MclaAudioFilterLogConfig() {
+  MCLA_APP_INFO("{}", af::ConfigLine(NativeOn(), VerifyOn(), ProbeOn(), ChannelOff()));
 }

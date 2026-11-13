@@ -1242,8 +1242,37 @@ void TestL89Pure() {
 
 }  // namespace
 
+// l98: the native default, the lean switch, the config line and the lean F10
+// object.
+void TestL98Pure() {
+  Check(af::kNativeDefault, "l98: the native voice filters are default on");
+  Check(af::Lean(true, false, false) && !af::Lean(false, false, false) &&
+            !af::Lean(true, true, false) && !af::Lean(true, false, true) &&
+            !af::Lean(true, true, true) && !af::Lean(false, true, true),
+        "lean only with native on and the self-check and the probe off");
+  Check(af::ConfigLine(true, false, false, false) ==
+            "MCLA_AFILT v=1 kind=config native=1 verify=0 probe=0 ch_off=0 lean=1",
+        "config line of the l98 default");
+  Check(af::ConfigLine(false, false, false, false) ==
+            "MCLA_AFILT v=1 kind=config native=0 verify=0 probe=0 ch_off=0 lean=0",
+        "config line of the audio-off control");
+  Check(af::ConfigLine(true, true, true, true) ==
+            "MCLA_AFILT v=1 kind=config native=1 verify=1 probe=1 ch_off=1 lean=0",
+        "config line with every switch on");
+  Check(af::LeanStateJson(0, 0, false) ==
+            "{\"version\": 1, \"probe\": false, \"native\": true, \"verify\": false, "
+            "\"lean\": true, \"ch_off\": false, \"fallback\": 0, \"ch_fallback\": 0}",
+        "lean F10 object");
+  Check(af::LeanStateJson(3, 18446744073709551615ull, true) ==
+            "{\"version\": 1, \"probe\": false, \"native\": true, \"verify\": false, "
+            "\"lean\": true, \"ch_off\": true, \"fallback\": 3, "
+            "\"ch_fallback\": 18446744073709551615}",
+        "lean F10 object: counts and the channel control");
+}
+
 int main() {
   TestPure();
+  TestL98Pure();
   TestStats();
   TestL89Pure();
   TestHandTransliteration();

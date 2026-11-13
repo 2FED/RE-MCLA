@@ -252,8 +252,9 @@ set(MCLA_SOURCES
 # sub_826D9578, sub_826D95B0, sub_822A7E28, sub_826D75D8, sub_82387A18,
 # sub_826FBA60 and sub_826FA8A8; both default off). l87 KI-060: XAudio
 # engine-thread filter probe and native two-bank voice filter with its
-# self-check (overrides sub_82146BE0, sub_82147738 and sub_823EC248; all three
-# switches default off). l89: native sub_82147738 too, and probe-only
+# self-check (overrides sub_82146BE0, sub_82147738 and sub_823EC248; the probe
+# and the self-check default off, the native filters on since l98). l89:
+# native sub_82147738 too, and probe-only
 # pass-through overrides of sub_823F4450, sub_823EFD30 and sub_823EE050.
 # l93: time of day (overrides sub_822F1DB0 and sub_822F1518; the MCLA_TOD log
 # is always on and read-only, the controls default off). l95: the FMA stage 0

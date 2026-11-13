@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 116, "one hundred and sixteen whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 119, "one hundred and nineteen whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -863,8 +863,10 @@ void TestWhitelist() {
           "l86 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
-    // l87 KI-060 keys: host init-only bools at startup (default off); =true
-    // writes true to the mcla_ cvar, =false writes nothing; no conflict pair.
+    // l87 KI-060 keys: host init-only bools at startup (the native filters
+    // default on since l98); =true writes true to the mcla_ cvar, =false
+    // writes nothing; only audio_filter_native has a conflict pair (with its
+    // l98 control audio_filter_native_off).
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
     using mcla::dev_overrides::Info;
@@ -884,11 +886,14 @@ void TestWhitelist() {
             "l87 key: =true writes true to its mcla_ cvar at startup, =false writes nothing");
       Check(!FindKey(cvars[k]), "the l87 cvar name is not a key");
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != keys[k] && pair.second != keys[k], "the l87 keys are in no pair");
+        const bool in_pair = pair.first == keys[k] || pair.second == keys[k];
+        Check(!in_pair || (pair.first == Key::kAudioFilterNative &&
+                           pair.second == Key::kAudioFilterNativeOff),
+              "the l87 keys are in no pair except native with its l98 control");
       }
     }
     Check(!FindKey("audio_filter") && !FindKey("audio_filter_probe_on") &&
-              !FindKey("audio_filter_native_off") && !FindKey("AUDIO_FILTER_PROBE") &&
+              !FindKey("audio_filter_probe_off") && !FindKey("AUDIO_FILTER_PROBE") &&
               !FindKey("audio_filter_verify") && !FindKey("audio_filter_native_verif"),
           "no prefix, suffix or case variants of the l87 keys");
     const Parsed on = Parse("audio_filter_probe=true\n"
@@ -1290,8 +1295,10 @@ void TestWhitelist() {
   {
     // l96: the Deck CP lever-1 keys (SDK graphics-plugin cvars, hot reload);
     // cp_fence_poll_64 writes 64 to the int cp_fence_poll_interval, the
-    // others true to the bools of their own names; =false writes nothing; no
-    // conflict pairs.
+    // others true to the bools of their own names; =false writes nothing;
+    // since l98 cp_fence_poll_64 and cp_draw_packet_tsc each form a conflict
+    // pair with their control (cp_fence_poll_off, cp_draw_packet_tsc_off), the
+    // memo keys none.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
     using mcla::dev_overrides::Info;
@@ -1315,9 +1322,19 @@ void TestWhitelist() {
                 CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
                 !info.overrides_user,
             "l96 key: graphics-plugin phase, its cvar and text, false writes nothing");
+      size_t pairs = 0;
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != k.key && pair.second != k.key, "the l96 keys have no conflict pair");
+        if (pair.first != k.key && pair.second != k.key) {
+          continue;
+        }
+        ++pairs;
+        Check((pair.first == Key::kCpFencePoll64 && pair.second == Key::kCpFencePollOff) ||
+                  (pair.first == Key::kCpDrawPacketTsc &&
+                   pair.second == Key::kCpDrawPacketTscOff),
+              "an l96 key pairs only with its l98 control");
       }
+      const bool lever1 = k.key == Key::kCpFencePoll64 || k.key == Key::kCpDrawPacketTsc;
+      Check(pairs == (lever1 ? 1u : 0u), "l96: one pair for each lever-1 key, none for the memo");
     }
     Check(!FindKey("cp_fence_poll_interval") && !FindKey("cp_fence_poll") &&
               !FindKey("cp_fence_poll_32") && !FindKey("CP_DRAW_PACKET_TSC") &&
@@ -1412,6 +1429,108 @@ void TestWhitelist() {
               bad.issues[1].issue == LineIssue::kUnknownName &&
               bad.issues[2].issue == LineIssue::kDuplicate,
           "l97 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
+    // l98: the controls of the three new defaults. audio_filter_native_off
+    // writes false to the host init-only bool mcla_audio_filter_native at
+    // startup; cp_draw_packet_tsc_off writes false to cp_draw_packet_tsc and
+    // cp_fence_poll_off 0 to cp_fence_poll_interval after the plugin loaded;
+    // =false writes nothing; each a conflict pair with its on key.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      Key on;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      const char *text;
+    } l98[] = {
+        {Key::kAudioFilterNativeOff, Key::kAudioFilterNative, "audio_filter_native_off",
+         Phase::kStartup, "mcla_audio_filter_native", "false"},
+        {Key::kCpDrawPacketTscOff, Key::kCpDrawPacketTsc, "cp_draw_packet_tsc_off",
+         Phase::kGraphicsPlugin, "cp_draw_packet_tsc", "false"},
+        {Key::kCpFencePollOff, Key::kCpFencePoll64, "cp_fence_poll_off", Phase::kGraphicsPlugin,
+         "cp_fence_poll_interval", "0"},
+    };
+    for (const auto &k : l98) {
+      const auto &info = Info(k.key);
+      const auto &on = Info(k.on);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l98 control: its phase, cvar and text, false writes nothing");
+      Check(CvarName(on) == CvarName(info) && on.phase == info.phase &&
+                !CvarText(on, true).empty() && CvarText(on, true) != CvarText(info, true) &&
+                CvarText(on, false).empty(),
+            "l98: the on key writes the new default to the same cvar in the same phase");
+      size_t pairs = 0;
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        if (pair.first == k.key || pair.second == k.key) {
+          Check(pair.first == k.on && pair.second == k.key,
+                "an l98 control pairs only with its on key");
+          ++pairs;
+        }
+      }
+      Check(pairs == 1, "one conflict pair for each l98 control");
+    }
+    Check(!FindKey("audio_filter_off") && !FindKey("audio_filter_native_of") &&
+              !FindKey("AUDIO_FILTER_NATIVE_OFF") && !FindKey("audio_filter_native_off_on") &&
+              !FindKey("cp_draw_packet_off") && !FindKey("cp_draw_packet_tsc_of") &&
+              !FindKey("cp_fence_poll") && !FindKey("cp_fence_poll_0") &&
+              !FindKey("cp_fence_poll_interval_off") && !FindKey("lever1_off"),
+          "no prefix, suffix, cvar-name or case variants of the l98 keys");
+    const Parsed audio_off = Parse("audio_filter_native_off=true\n");
+    Check(audio_off.ValueCount() == 1 && audio_off.issue_count == 0 &&
+              audio_off.Value(Key::kAudioFilterNativeOff) == true,
+          "the l98 audio-off arm parses");
+    const Parsed verify = Parse("audio_filter_probe=true\n"
+                                "audio_filter_native_verify=true\n");
+    Check(verify.ValueCount() == 2 && verify.issue_count == 0 &&
+              verify.Value(Key::kAudioFilterProbe) == true &&
+              verify.Value(Key::kAudioFilterNativeVerify) == true,
+          "the l98 audio-verify arm parses (native is the default)");
+    const Parsed lever_off = Parse("cp_draw_packet_tsc_off=true\n"
+                                   "cp_fence_poll_off=true\n");
+    Check(lever_off.ValueCount() == 2 && lever_off.issue_count == 0 &&
+              lever_off.Value(Key::kCpDrawPacketTscOff) == true &&
+              lever_off.Value(Key::kCpFencePollOff) == true,
+          "the l98 lever1-off arm parses");
+    const Parsed both = Parse("audio_filter_native=true\n"
+                              "present_stats=true\n"
+                              "audio_filter_native_off=true\n"
+                              "cp_fence_poll_64=true\n"
+                              "cp_fence_poll_off=true\n"
+                              "cp_draw_packet_tsc_off=true\n"
+                              "cp_draw_packet_tsc=true\n");
+    Check(both.ValueCount() == 1 && both.Value(Key::kPresentStats) == true &&
+              both.issue_count == 3 && both.issues[0].line == 3 && both.issues[1].line == 5 &&
+              both.issues[2].line == 7 && both.issues[0].issue == LineIssue::kConflict &&
+              both.issues[1].issue == LineIssue::kConflict &&
+              both.issues[2].issue == LineIssue::kConflict,
+          "each l98 control with its on key: neither applied, conflict on the later line");
+    const Parsed mixed = Parse("audio_filter_native=false\n"
+                               "audio_filter_native_off=true\n"
+                               "cp_fence_poll_64=false\n"
+                               "cp_fence_poll_off=true\n");
+    Check(mixed.ValueCount() == 4 && mixed.issue_count == 0 &&
+              mixed.Value(Key::kAudioFilterNativeOff) == true &&
+              mixed.Value(Key::kCpFencePollOff) == true,
+          "a control with its on key =false is no conflict");
+    const Parsed bad = Parse("audio_filter_native_off=1\n"
+                             "cp_fence_poll_off=0\n"
+                             "mcla_audio_filter_native=false\n"
+                             "cp_draw_packet_tsc_off=true\n"
+                             "cp_draw_packet_tsc_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 4 &&
+              bad.Value(Key::kCpDrawPacketTscOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kMalformed &&
+              bad.issues[2].issue == LineIssue::kUnknownName &&
+              bad.issues[3].issue == LineIssue::kDuplicate,
+          "l98 near misses: integers, the cvar name and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -1883,7 +2002,9 @@ void TestWhitelist() {
                           key == Key::kCpFencePoll64 || key == Key::kCpDrawPacketTsc ||
                           key == Key::kShaderImLoadMemo || key == Key::kShaderImLoadMemoVerify ||
                           key == Key::kLeadLlOffWhenReflex ||
-                          key == Key::kLeadLlAdaptiveWhenReflex;
+                          key == Key::kLeadLlAdaptiveWhenReflex ||
+                          key == Key::kAudioFilterNativeOff ||
+                          key == Key::kCpDrawPacketTscOff || key == Key::kCpFencePollOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1981,9 +2102,11 @@ void TestWhitelist() {
     // strict and adaptive lead keys (since l94 with frame_lead_strict_off a
     // group of three, listed as its three pairs); l93: the time-of-day rate
     // group of three and the two start keys; l95: the low-latency mode group
-    // of three; l97: the two strict-replacement keys.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 28,
-          "twenty-eight shared-cvar pairs");
+    // of three; l97: the two strict-replacement keys; l98: the native audio
+    // filter, the draw-packet clock and the fence poll keys with their
+    // controls.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 31,
+          "thirty-one shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -2645,7 +2768,8 @@ void TestWhitelist() {
     // l93 keys explicit false (103 keys); l94: plus the l94 key explicit false
     // (104 keys); l95: plus the six l95 keys explicit false (110 keys); l96:
     // plus the four l96 keys explicit false (114 keys); l97: plus the two l97
-    // keys explicit false (116 keys).
+    // keys explicit false (116 keys); l98: plus the three l98 controls
+    // explicit false (119 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2685,7 +2809,10 @@ void TestWhitelist() {
                                   "shader_im_load_memo=false\n"
                                   "shader_im_load_memo_verify=false\n"
                                   "lead_ll_off_when_reflex=false\n"
-                                  "lead_ll_adaptive_when_reflex=false\n";
+                                  "lead_ll_adaptive_when_reflex=false\n"
+                                  "audio_filter_native_off=false\n"
+                                  "cp_draw_packet_tsc_off=false\n"
+                                  "cp_fence_poll_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3278,13 +3405,13 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l97: 116 keys, about 3.31 KB).
+    // former 2 KiB and accepted since l81 (l98: 119 keys, about 3.40 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3400, "full arm size");
-    full += "# " + std::string(3360 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 3500, "full arm size");
+    full += "# " + std::string(3560 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&

@@ -4,8 +4,9 @@
 // filter probe (mcla_audio_filter_probe, MCLA_AFILT v=1) and of the native
 // replacement of the two-bank biquad effect sub_82146BE0
 // (mcla_audio_filter_native, with the bit-for-bit self-check
-// mcla_audio_filter_native_verify, MCLA_AFILT_VERIFY v=1). All three are
-// default off. The hooks are in mcla_audio_filter.cpp; everything here is
+// mcla_audio_filter_native_verify, MCLA_AFILT_VERIFY v=1). The probe and the
+// self-check are default off; the native filters are default on since l98
+// (kNativeDefault). The hooks are in mcla_audio_filter.cpp; everything here is
 // unit-tested (tests/mcla_audio_filter_test.cpp, which also runs the
 // generated loop body of sub_82146BE0 as an interpreter and checks the
 // offsets below against the generated code). Analysis:
@@ -776,6 +777,44 @@ inline std::string StateJson(const Stats &s, uint64_t session_ns, bool probe, bo
   return text + L89Fields(s, true) + "}";
 }
 
+// l98 (docs/evidence/M11-l98-owner-build-20261113.md): the default of the
+// host init-only cvar mcla_audio_filter_native. Off until l97, on since l98
+// on both platforms (owner verdict on the l96 Deck runs: engine 69 % -> 99.6 %
+// of real time, music perfect; PC by ear unchanged; native 2.36 M calls,
+// verified 28 k, mismatch 0, fallback 0;
+// docs/evidence/M11-l96-deck-analysis-20261113.md). The owner control key
+// audio_filter_native_off (mcla_dev_overrides.h) turns it off for one arm.
+inline constexpr bool kNativeDefault = true;
+
+// Native on with the probe and the self-check off (the l98 default): the
+// filter hooks run the native kernels without timing, per-call statistics or
+// engine-frame accounting; only fallbacks to the original are counted.
+constexpr bool Lean(bool native, bool verify, bool probe) {
+  return native && !verify && !probe;
+}
+
+// The one MCLA_AFILT config line at start-up (l98), in every log.
+inline std::string ConfigLine(bool native, bool verify, bool probe, bool ch_off) {
+  char text[128];
+  std::snprintf(text, sizeof(text),
+                "MCLA_AFILT v=1 kind=config native=%d verify=%d probe=%d ch_off=%d lean=%d",
+                native ? 1 : 0, verify ? 1 : 0, probe ? 1 : 0, ch_off ? 1 : 0,
+                Lean(native, verify, probe) ? 1 : 0);
+  return text;
+}
+
+// The F10 "audio_filter" object in the lean mode (l98): the switches and the
+// session's fallbacks to the original (no buffer argument or sample pointer).
+inline std::string LeanStateJson(uint64_t fallback, uint64_t ch_fallback, bool ch_off) {
+  char text[256];
+  std::snprintf(text, sizeof(text),
+                "{\"version\": 1, \"probe\": false, \"native\": true, \"verify\": false, "
+                "\"lean\": true, \"ch_off\": %s, \"fallback\": %llu, \"ch_fallback\": %llu}",
+                ch_off ? "true" : "false", static_cast<unsigned long long>(fallback),
+                static_cast<unsigned long long>(ch_fallback));
+  return text;
+}
+
 // Self-check sampling: one call in kVerifyEvery; at most kVerifyLines lines.
 inline constexpr uint64_t kVerifyEvery = 64;
 inline constexpr uint64_t kVerifyLines = 8;
@@ -785,3 +824,7 @@ inline constexpr uint64_t kLineIntervalNs = 1000000000ull;
 
 // The F10 state block "audio_filter"; empty when all switches are off.
 std::string MclaAudioFilterStateJson();
+
+// l98: logs the MCLA_AFILT config line once. Call at start-up after the
+// owner override file has been applied (the switches are init-only).
+void MclaAudioFilterLogConfig();

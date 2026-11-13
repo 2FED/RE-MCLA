@@ -26,7 +26,8 @@
 REXCVAR_DEFINE_BOOL(mcla_m10_speedup_defaults, true, "MCLA",
     "M10 volunteer speed-up defaults (targeted read-back wait, read-back "
     "elision, WAIT_REG_MEM event wake, batched replay wake, strict frame lead "
-    "bound; census and read-back GPU timing off; under Wine/Proton also disarm "
+    "bound, CP draw-packet clock and fence poll 64; census and read-back GPU "
+    "timing off; under Wine/Proton also disarm "
     "bridging and upload-ahead 16). false leaves every SDK switch at its "
     "default")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -155,10 +156,12 @@ void OnGraphicsPluginLoaded() {
   MCLA_GPU_INFO(
       "MCLA m10 defaults (graphics plugin): {} d3d12_readback_sync_composite={} "
       "readback_resolve={} memory_watch_disarm_bridge_safe_gaps={} "
-      "shared_memory_upload_ahead_pages={} d3d12_frame_lead_strict={}",
+      "shared_memory_upload_ahead_pages={} d3d12_frame_lead_strict={} "
+      "cp_draw_packet_tsc={} cp_fence_poll_interval={}",
       TallyText(tally, wine), ReportValue("d3d12_readback_sync_composite"),
       ReportValue("readback_resolve"), ReportValue(kWineOnlyCvars[0]),
-      ReportValue(kWineOnlyCvars[1]), ReportValue("d3d12_frame_lead_strict"));
+      ReportValue(kWineOnlyCvars[1]), ReportValue("d3d12_frame_lead_strict"),
+      ReportValue("cp_draw_packet_tsc"), ReportValue("cp_fence_poll_interval"));
 #endif
 }
 

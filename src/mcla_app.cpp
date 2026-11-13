@@ -1214,6 +1214,9 @@ void MclaApp::OnPostInitLogging() {
   // l95 FMA stage 0: one MCLA_FMA_BENCH line when mcla_fma_bench is set (dev
   // key fma_bench), before the guest runs.
   MclaFmaBenchAtStartup();
+  // l98 KI-060: one MCLA_AFILT kind=config line (the native voice filters are
+  // default on; the override file may have changed the switches above).
+  MclaAudioFilterLogConfig();
   // M10-003: record counts of the shader store this session starts with
   // (after the launcher seeding, before the SDK reads it).
   mcla::shader_store::LogStartupStore(rex::to_path(REXCVAR_GET(cache_root)));

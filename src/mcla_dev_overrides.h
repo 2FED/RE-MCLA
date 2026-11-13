@@ -358,6 +358,19 @@
 //   latches it back for the session. Both act only with a low_latency_* mode
 //   key that starts Reflex. =false writes nothing. An SDK without the l97
 //   cvar logs the two keys as unavailable.
+// - l98 (docs/evidence/M11-l98-owner-build-20261113.md; owner verdicts on the
+//   l96 Deck runs, docs/evidence/M11-l96-deck-analysis-20261113.md): three
+//   defaults on. The native voice filters are default on in the host itself
+//   (audio_filter::kNativeDefault, both platforms); audio_filter_native_off=true
+//   writes false to mcla_audio_filter_native at startup: the control, a
+//   conflict pair with audio_filter_native (which still writes true, the
+//   default now). CP lever 1 is default on through the m10 defaults
+//   (mcla_m10_defaults.h writes cp_draw_packet_tsc=true and
+//   cp_fence_poll_interval=64 at graphics-plugin load; the SDK defaults stay
+//   false / 0): cp_draw_packet_tsc_off=true writes false to cp_draw_packet_tsc
+//   and cp_fence_poll_off=true writes 0 to cp_fence_poll_interval, each a
+//   conflict pair with its l96 key. =false writes nothing for all three (no
+//   =false line turns a default off). The IM_LOAD memo stays default off.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -517,8 +530,11 @@ enum class Key : uint8_t {
   kShaderImLoadMemoVerify,   // l96 lever 1: shader_im_load_memo_verify=true
   kLeadLlOffWhenReflex,      // l97: d3d12_frame_lead_strict_low_latency=1
   kLeadLlAdaptiveWhenReflex, // l97: d3d12_frame_lead_strict_low_latency=2
+  kAudioFilterNativeOff,     // l98 KI-060 control: mcla_audio_filter_native=false
+  kCpDrawPacketTscOff,       // l98 lever 1 control: cp_draw_packet_tsc=false
+  kCpFencePollOff,           // l98 lever 1 control: cp_fence_poll_interval=0
 };
-inline constexpr size_t kKeyCount = 116;
+inline constexpr size_t kKeyCount = 119;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -726,8 +742,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // l86 control for the new KI-054 default: the hitch hold (host init-only,
     // startup); =false writes nothing.
     {"raw_timer_hitch_hold_off", Phase::kStartup, "mcla_raw_timer_hitch_hold", "false", ""},
-    // l87 KI-060: host init-only bools (mcla_audio_filter.cpp), default off,
-    // before the guest; =false writes nothing.
+    // l87 KI-060: host init-only bools (mcla_audio_filter.cpp), before the
+    // guest; default off, the native filters on since l98 (the control is
+    // audio_filter_native_off); =false writes nothing.
     {"audio_filter_probe", Phase::kStartup, "mcla_audio_filter_probe", "true", ""},
     {"audio_filter_native", Phase::kStartup, "mcla_audio_filter_native", "true", ""},
     {"audio_filter_native_verify", Phase::kStartup, "mcla_audio_filter_native_verify", "true", ""},
@@ -787,7 +804,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // guest; =false writes nothing.
     {"fma_bench", Phase::kStartup, "mcla_fma_bench", "true", ""},
     // l96 Deck CP lever 1: SDK graphics-plugin cvars (hot reload, latched at
-    // every frame start), default off; =false writes nothing.
+    // every frame start), SDK default off; since l98 the fence poll interval
+    // and the draw-packet clock are m10 defaults (controls below); =false
+    // writes nothing.
     {"cp_fence_poll_64", Phase::kGraphicsPlugin, "cp_fence_poll_interval", "64", ""},
     {"cp_draw_packet_tsc", Phase::kGraphicsPlugin, "cp_draw_packet_tsc", "true", ""},
     {"shader_im_load_memo", Phase::kGraphicsPlugin, "shader_im_load_memo", "true", ""},
@@ -799,6 +818,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
      "1", ""},
     {"lead_ll_adaptive_when_reflex", Phase::kGraphicsPlugin,
      "d3d12_frame_lead_strict_low_latency", "2", ""},
+    // l98 controls for the three new defaults: the native voice filters (host
+    // init-only, startup) and CP lever 1 (SDK graphics-plugin cvars written by
+    // the m10 defaults, after the plugin has loaded); =false writes nothing.
+    {"audio_filter_native_off", Phase::kStartup, "mcla_audio_filter_native", "false", ""},
+    {"cp_draw_packet_tsc_off", Phase::kGraphicsPlugin, "cp_draw_packet_tsc", "false", ""},
+    {"cp_fence_poll_off", Phase::kGraphicsPlugin, "cp_fence_poll_interval", "0", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -809,7 +834,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
 // d3d12_texture_placed_heaps, timer_queue_blocking_wait,
 // d3d12_blend_minmax_fix, mcla_album_preview_restore and
-// mcla_raw_timer_hitch_hold bools):
+// mcla_raw_timer_hitch_hold bools; since l98 also the int
+// cp_fence_poll_interval and the mcla_audio_filter_native and
+// cp_draw_packet_tsc bools):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -817,7 +844,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 28> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 31> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -846,6 +873,9 @@ inline constexpr std::array<ConflictPair, 28> kConflictPairs = {{
     {Key::kLowLatencyReflex, Key::kLowLatencyAuto},
     {Key::kLowLatencyAntiLag2, Key::kLowLatencyAuto},
     {Key::kLeadLlOffWhenReflex, Key::kLeadLlAdaptiveWhenReflex},
+    {Key::kAudioFilterNative, Key::kAudioFilterNativeOff},
+    {Key::kCpFencePoll64, Key::kCpFencePollOff},
+    {Key::kCpDrawPacketTsc, Key::kCpDrawPacketTscOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
