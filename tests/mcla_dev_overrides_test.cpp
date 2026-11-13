@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 114, "one hundred and fourteen whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 116, "one hundred and sixteen whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1347,6 +1347,73 @@ void TestWhitelist() {
           "l96 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
+    // l97: low latency replaces strict (SDK graphics-plugin int, hot reload);
+    // lead_ll_off_when_reflex writes 1 and lead_ll_adaptive_when_reflex 2 to
+    // d3d12_frame_lead_strict_low_latency; =false writes nothing; the two are
+    // a conflict pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *text;
+    } l97[] = {
+        {Key::kLeadLlOffWhenReflex, "lead_ll_off_when_reflex", "1"},
+        {Key::kLeadLlAdaptiveWhenReflex, "lead_ll_adaptive_when_reflex", "2"},
+    };
+    for (const auto &k : l97) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == "d3d12_frame_lead_strict_low_latency" &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l97 key: graphics-plugin phase, its cvar and text, false writes nothing");
+    }
+    size_t l97_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      l97_pairs += (pair.first == Key::kLeadLlOffWhenReflex &&
+                    pair.second == Key::kLeadLlAdaptiveWhenReflex)
+                       ? 1
+                       : 0;
+    }
+    Check(l97_pairs == 1, "the two l97 keys are one conflict pair");
+    Check(!FindKey("d3d12_frame_lead_strict_low_latency") && !FindKey("lead_ll_off") &&
+              !FindKey("lead_ll_adaptive") && !FindKey("LEAD_LL_OFF_WHEN_REFLEX") &&
+              !FindKey("lead_ll_off_when_reflex_on") && !FindKey("lead_ll_when_reflex"),
+          "no prefix, suffix, cvar-name or case variants of the l97 keys");
+    const Parsed arm = Parse("low_latency_auto=true\n"
+                             "lead_ll_off_when_reflex=true\n");
+    Check(arm.ValueCount() == 2 && arm.issue_count == 0 &&
+              arm.Value(Key::kLowLatencyAuto) == true &&
+              arm.Value(Key::kLeadLlOffWhenReflex) == true,
+          "an l97 auto arm parses (low_latency_auto + lead_ll_off_when_reflex)");
+    const Parsed adaptive = Parse("low_latency_auto=true\n"
+                                  "lead_ll_adaptive_when_reflex=true\n"
+                                  "lead_ll_off_when_reflex=false\n");
+    Check(adaptive.ValueCount() == 3 && adaptive.issue_count == 0 &&
+              adaptive.Value(Key::kLeadLlAdaptiveWhenReflex) == true &&
+              adaptive.Value(Key::kLeadLlOffWhenReflex) == false,
+          "an l97 auto-adaptive arm parses; the other key =false does not conflict");
+    const Parsed both = Parse("lead_ll_off_when_reflex=true\n"
+                              "lead_ll_adaptive_when_reflex=true\n");
+    Check(!both.Value(Key::kLeadLlOffWhenReflex).has_value() &&
+              !both.Value(Key::kLeadLlAdaptiveWhenReflex).has_value() &&
+              both.issue_count == 1 && both.issues[0].issue == LineIssue::kConflict,
+          "both l97 keys true: neither applies, one conflict issue");
+    const Parsed bad = Parse("lead_ll_off_when_reflex=1\n"
+                             "d3d12_frame_lead_strict_low_latency=true\n"
+                             "lead_ll_adaptive_when_reflex=true\n"
+                             "lead_ll_adaptive_when_reflex=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kLeadLlAdaptiveWhenReflex) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l97 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -1814,7 +1881,9 @@ void TestWhitelist() {
                           key == Key::kLowLatencyAuto || key == Key::kLowLatencyMarkers ||
                           key == Key::kLowLatencyBoost || key == Key::kFmaBench ||
                           key == Key::kCpFencePoll64 || key == Key::kCpDrawPacketTsc ||
-                          key == Key::kShaderImLoadMemo || key == Key::kShaderImLoadMemoVerify;
+                          key == Key::kShaderImLoadMemo || key == Key::kShaderImLoadMemoVerify ||
+                          key == Key::kLeadLlOffWhenReflex ||
+                          key == Key::kLeadLlAdaptiveWhenReflex;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -1912,9 +1981,9 @@ void TestWhitelist() {
     // strict and adaptive lead keys (since l94 with frame_lead_strict_off a
     // group of three, listed as its three pairs); l93: the time-of-day rate
     // group of three and the two start keys; l95: the low-latency mode group
-    // of three.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 27,
-          "twenty-seven shared-cvar pairs");
+    // of three; l97: the two strict-replacement keys.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 28,
+          "twenty-eight shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -2575,7 +2644,8 @@ void TestWhitelist() {
     // l92: plus the six l92 keys explicit false (98 keys); l93: plus the five
     // l93 keys explicit false (103 keys); l94: plus the l94 key explicit false
     // (104 keys); l95: plus the six l95 keys explicit false (110 keys); l96:
-    // plus the four l96 keys explicit false (114 keys).
+    // plus the four l96 keys explicit false (114 keys); l97: plus the two l97
+    // keys explicit false (116 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2613,7 +2683,9 @@ void TestWhitelist() {
                                   "cp_fence_poll_64=false\n"
                                   "cp_draw_packet_tsc=false\n"
                                   "shader_im_load_memo=false\n"
-                                  "shader_im_load_memo_verify=false\n";
+                                  "shader_im_load_memo_verify=false\n"
+                                  "lead_ll_off_when_reflex=false\n"
+                                  "lead_ll_adaptive_when_reflex=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3206,7 +3278,7 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l96: 114 keys, about 3.24 KB).
+    // former 2 KiB and accepted since l81 (l97: 116 keys, about 3.31 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

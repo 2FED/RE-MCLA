@@ -348,6 +348,16 @@
 //   to the SDK bools of the same names. =false writes nothing for all four;
 //   no conflict pairs (the verify key only acts with the memo key). An SDK
 //   without the l96 cvars logs the four keys as unavailable.
+// - l97 (docs/evidence/M11-l97-sdk-20261113.md; low latency replaces strict,
+//   default off): SDK graphics-plugin int d3d12_frame_lead_strict_low_latency
+//   (hot reload, read at every frame open). lead_ll_off_when_reflex=true
+//   writes 1 (while the Reflex sleep is active the frame's strict mode is
+//   off), lead_ll_adaptive_when_reflex=true writes 2 (adaptive instead); a
+//   conflict pair. Whenever the sleep is not active the configured
+//   d3d12_frame_lead_strict (the m10 default 1) applies, and a lead-2 guard
+//   latches it back for the session. Both act only with a low_latency_* mode
+//   key that starts Reflex. =false writes nothing. An SDK without the l97
+//   cvar logs the two keys as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -505,8 +515,10 @@ enum class Key : uint8_t {
   kCpDrawPacketTsc,          // l96 lever 1: cp_draw_packet_tsc=true
   kShaderImLoadMemo,         // l96 lever 1: shader_im_load_memo=true
   kShaderImLoadMemoVerify,   // l96 lever 1: shader_im_load_memo_verify=true
+  kLeadLlOffWhenReflex,      // l97: d3d12_frame_lead_strict_low_latency=1
+  kLeadLlAdaptiveWhenReflex, // l97: d3d12_frame_lead_strict_low_latency=2
 };
-inline constexpr size_t kKeyCount = 114;
+inline constexpr size_t kKeyCount = 116;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -781,10 +793,17 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"shader_im_load_memo", Phase::kGraphicsPlugin, "shader_im_load_memo", "true", ""},
     {"shader_im_load_memo_verify", Phase::kGraphicsPlugin, "shader_im_load_memo_verify", "true",
      ""},
+    // l97 low latency replaces strict: SDK graphics-plugin int (hot reload,
+    // read at every frame open), default 0; =false writes nothing.
+    {"lead_ll_off_when_reflex", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict_low_latency",
+     "1", ""},
+    {"lead_ll_adaptive_when_reflex", Phase::kGraphicsPlugin,
+     "d3d12_frame_lead_strict_low_latency", "2", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
-// d3d12_frame_lead_strict (l91 / l94) and the l93 mcla_tod_rate /
+// d3d12_frame_lead_strict (l91 / l94), d3d12_frame_lead_strict_low_latency
+// (l97) and the l93 mcla_tod_rate /
 // mcla_tod_start_minutes, the audio_speaker_config and (l95)
 // d3d12_low_latency_mode strings, or the xma_frame_walk_fix,
 // d3d12_readback_sync_steady_exempt, d3d12_fence_write_deferred,
@@ -798,7 +817,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 27> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 28> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -826,6 +845,7 @@ inline constexpr std::array<ConflictPair, 27> kConflictPairs = {{
     {Key::kLowLatencyReflex, Key::kLowLatencyAntiLag2},
     {Key::kLowLatencyReflex, Key::kLowLatencyAuto},
     {Key::kLowLatencyAntiLag2, Key::kLowLatencyAuto},
+    {Key::kLeadLlOffWhenReflex, Key::kLeadLlAdaptiveWhenReflex},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -1127,7 +1147,8 @@ std::optional<bool> AppliedValue(Key key);
 // SDK keys =false, also xma_dump_contexts_on=false and, since l81,
 // mcla_album_preview_restore=false; since l86 raw_timer_hitch_hold=false; since l94
 // the three d3d12_frame_lead_strict keys =false; since l95 the six l95 keys
-// =false; since l96 the four l96 keys =false).
+// =false; since l96 the four l96 keys =false; since l97 the two l97 keys
+// =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides
