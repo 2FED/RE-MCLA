@@ -119,6 +119,14 @@ constexpr StartLimits DecideStartLimits(uint64_t budget_mb, uint32_t scale, int3
   return out;
 }
 
+// l99 (mcla_texture_hard_margin_mb, docs/evidence/M11-l99-sdk-hitch-20261113.md):
+// the monitor's hard-limit floor. margin 0 keeps the start floor (the starting
+// soft limit); otherwise the floor is at least soft + margin, so a monitor
+// that steps over the DXGI budget never collapses hard onto soft.
+constexpr uint64_t HardFloorWithMargin(uint64_t floor_mb, uint64_t soft_mb, uint64_t margin_mb) {
+  return margin_mb ? std::max(floor_mb, soft_mb + margin_mb) : floor_mb;
+}
+
 // What ApplyTextureCacheBudget does at start-up.
 enum class BudgetAction : uint8_t {
   kWine,         // Wine/Proton: SDK limits, no monitor, no census

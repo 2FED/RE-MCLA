@@ -97,6 +97,26 @@ void TestStartLimits() {
   Check(std::string_view(SoftCapReasonName(SoftCapReason::kCapped)) == "capped", "reason name");
 }
 
+// l99: the hard-limit floor with the margin.
+void TestHardMargin() {
+  // The l98 soak: budget 7131 MB at scale 2, soft capped at 2048, hard 5595.
+  const StartLimits l = DecideStartLimits(7131, 2, kSoftCapDefaultMb);
+  Check(l.soft_mb == 2048 && l.floor_mb == 2048 && l.hard_mb == 5595,
+        "l98 start limits (soft 2048, hard 5595)");
+  Check(HardFloorWithMargin(l.floor_mb, l.soft_mb, 0) == 2048, "margin 0: the floor is soft");
+  Check(HardFloorWithMargin(l.floor_mb, l.soft_mb, 256) == 2304, "margin 256: soft + 256");
+  Check(HardFloorWithMargin(3000, 2048, 256) == 3000, "a higher floor is kept");
+  // Stepping 256 MB at a time from 5595 stops at the floor, never below it.
+  for (const uint64_t margin : {uint64_t(0), uint64_t(256), uint64_t(1024)}) {
+    const uint64_t floor = HardFloorWithMargin(l.floor_mb, l.soft_mb, margin);
+    uint64_t hard = l.hard_mb;
+    while (hard > floor) {
+      hard = std::max<uint64_t>(floor, hard > 256 ? hard - 256 : 0);
+    }
+    Check(hard == floor && hard >= l.soft_mb + margin, "steps end at soft + margin");
+  }
+}
+
 void TestBudgetAction() {
   Check(DecideBudgetAction(true, true, true) == BudgetAction::kWine, "Wine first");
   Check(DecideBudgetAction(false, true, true) == BudgetAction::kUserSet,
@@ -561,6 +581,7 @@ void TestCpuLine() {
 int main() {
   TestScale();
   TestStartLimits();
+  TestHardMargin();
   TestBudgetAction();
   TestReader();
   TestLine();

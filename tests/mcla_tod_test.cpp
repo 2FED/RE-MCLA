@@ -6,6 +6,8 @@
 
 #include "mcla_tod.h"
 
+#include "mcla_hitch_host.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -484,6 +486,39 @@ void TestGenerated() {
         "sub_822F1518 has seven callers; one returns to 0x8265D61C");
 }
 
+// l99: the MCLA_HITCH_HOST companion line (mcla_hitch_host.h).
+void TestHitchHost() {
+  namespace hitch = mcla::hitch;
+  hitch::Poller poller;
+  uint64_t missed = 99;
+  Check(!poller.Observe(0, missed) && missed == 0, "no SDK line yet (or no SDK entry): nothing");
+  Check(poller.Observe(1, missed) && missed == 0 && poller.last() == 1, "the first line");
+  Check(!poller.Observe(1, missed), "the same count: nothing");
+  Check(poller.Observe(4, missed) && missed == 2, "three lines between polls: two missed");
+  Check(!poller.Observe(3, missed), "a lower count never logs");
+  hitch::Last last;
+  last.seq = 7;
+  last.logged_seq = 4;
+  last.frame = 123456;
+  last.interval_us = 149700;
+  hitch::GameState game;
+  game.tod_valid = true;
+  game.hour = 10.7f;
+  game.paused = false;
+  game.warp = true;
+  Check(hitch::HostLine(last, 2, game) ==
+            "MCLA_HITCH_HOST v=1 seq=7 frame=123456 ms=149.7 tod_hour=10.70 paused=0 warp=1 "
+            "pursuit=na missed=2",
+        "the host line with the time of day");
+  Check(hitch::HostLine(last, 0, hitch::GameState{}) ==
+            "MCLA_HITCH_HOST v=1 seq=7 frame=123456 ms=149.7 tod_hour=na paused=na warp=na "
+            "pursuit=na missed=0",
+        "the host line without a plausible lighting manager");
+  Check(hitch::EntryLine(true) == "MCLA_HITCH_HOST v=1 kind=entry sdk_entry=found" &&
+            hitch::EntryLine(false) == "MCLA_HITCH_HOST v=1 kind=entry sdk_entry=absent",
+        "the entry lines");
+}
+
 }  // namespace
 
 int main() {
@@ -494,6 +529,7 @@ int main() {
   TestLines();
   TestBrightness();
   TestGenerated();
+  TestHitchHost();
   std::printf("mcla_tod_test: %d checks passed\n", checks);
   return 0;
 }

@@ -150,7 +150,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 92> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 95> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -334,6 +334,12 @@ inline constexpr std::array<std::string_view, 92> kNeverWrittenCvars = {
     // l97 low latency replaces strict (SDK, default 0); owner keys
     // lead_ll_off_when_reflex and lead_ll_adaptive_when_reflex only.
     "d3d12_frame_lead_strict_low_latency",
+    // l99 texture churn and the guard action (host / SDK, default off);
+    // owner keys texture_hard_margin_256, texture_min_age_2000 and
+    // lead_ll_guard_adaptive / _rearm / _off only.
+    "mcla_texture_hard_margin_mb",
+    "texture_cache_min_age_ms",
+    "d3d12_frame_lead_strict_low_latency_guard_action",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {

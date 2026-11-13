@@ -371,6 +371,19 @@
 //   and cp_fence_poll_off=true writes 0 to cp_fence_poll_interval, each a
 //   conflict pair with its l96 key. =false writes nothing for all three (no
 //   =false line turns a default off). The IM_LOAD memo stays default off.
+// - l99 (docs/evidence/M11-l99-sdk-hitch-20261113.md; texture churn and the
+//   Reflex guard actions, all default off): texture_hard_margin_256=true
+//   writes 256 to the host init-only int mcla_texture_hard_margin_mb at
+//   startup (the budget monitor keeps the hard limit at least 256 MB above
+//   the soft limit); texture_min_age_2000=true writes 2000 to the SDK
+//   graphics-plugin int texture_cache_min_age_ms (hot reload; above the hard
+//   limit a texture used within 2 s is not destroyed); lead_ll_guard_adaptive,
+//   lead_ll_guard_rearm and lead_ll_guard_off write 1, 2 and 3 to the SDK int
+//   d3d12_frame_lead_strict_low_latency_guard_action (a guard trip makes the
+//   relaxed frames adaptive for the session / latches strict until 5400 clean
+//   frames / observe only: the guard never changes the mode), a conflict
+//   group of three. =false writes nothing for all five. An SDK without the
+//   l99 cvars logs the four SDK keys as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -533,8 +546,13 @@ enum class Key : uint8_t {
   kAudioFilterNativeOff,     // l98 KI-060 control: mcla_audio_filter_native=false
   kCpDrawPacketTscOff,       // l98 lever 1 control: cp_draw_packet_tsc=false
   kCpFencePollOff,           // l98 lever 1 control: cp_fence_poll_interval=0
+  kTextureHardMargin256,     // l99: mcla_texture_hard_margin_mb=256
+  kTextureMinAge2000,        // l99: texture_cache_min_age_ms=2000
+  kLeadLlGuardAdaptive,      // l99: d3d12_frame_lead_strict_low_latency_guard_action=1
+  kLeadLlGuardRearm,         // l99: d3d12_frame_lead_strict_low_latency_guard_action=2
+  kLeadLlGuardOff,           // l99: d3d12_frame_lead_strict_low_latency_guard_action=3
 };
-inline constexpr size_t kKeyCount = 119;
+inline constexpr size_t kKeyCount = 124;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -824,6 +842,18 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"audio_filter_native_off", Phase::kStartup, "mcla_audio_filter_native", "false", ""},
     {"cp_draw_packet_tsc_off", Phase::kGraphicsPlugin, "cp_draw_packet_tsc", "false", ""},
     {"cp_fence_poll_off", Phase::kGraphicsPlugin, "cp_fence_poll_interval", "0", ""},
+    // l99 texture churn: the host init-only hard-limit margin (startup) and
+    // the SDK minimum texture age (graphics plugin, hot reload); the guard
+    // action of d3d12_frame_lead_strict_low_latency (SDK int, hot reload, read
+    // at every frame open and end); default off, =false writes nothing.
+    {"texture_hard_margin_256", Phase::kStartup, "mcla_texture_hard_margin_mb", "256", ""},
+    {"texture_min_age_2000", Phase::kGraphicsPlugin, "texture_cache_min_age_ms", "2000", ""},
+    {"lead_ll_guard_adaptive", Phase::kGraphicsPlugin,
+     "d3d12_frame_lead_strict_low_latency_guard_action", "1", ""},
+    {"lead_ll_guard_rearm", Phase::kGraphicsPlugin,
+     "d3d12_frame_lead_strict_low_latency_guard_action", "2", ""},
+    {"lead_ll_guard_off", Phase::kGraphicsPlugin,
+     "d3d12_frame_lead_strict_low_latency_guard_action", "3", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -836,7 +866,8 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // d3d12_blend_minmax_fix, mcla_album_preview_restore and
 // mcla_raw_timer_hitch_hold bools; since l98 also the int
 // cp_fence_poll_interval and the mcla_audio_filter_native and
-// cp_draw_packet_tsc bools):
+// cp_draw_packet_tsc bools; since l99 the int
+// d3d12_frame_lead_strict_low_latency_guard_action, a group of three):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -844,7 +875,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 31> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 34> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -876,6 +907,9 @@ inline constexpr std::array<ConflictPair, 31> kConflictPairs = {{
     {Key::kAudioFilterNative, Key::kAudioFilterNativeOff},
     {Key::kCpFencePoll64, Key::kCpFencePollOff},
     {Key::kCpDrawPacketTsc, Key::kCpDrawPacketTscOff},
+    {Key::kLeadLlGuardAdaptive, Key::kLeadLlGuardRearm},
+    {Key::kLeadLlGuardAdaptive, Key::kLeadLlGuardOff},
+    {Key::kLeadLlGuardRearm, Key::kLeadLlGuardOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -1178,7 +1212,7 @@ std::optional<bool> AppliedValue(Key key);
 // mcla_album_preview_restore=false; since l86 raw_timer_hitch_hold=false; since l94
 // the three d3d12_frame_lead_strict keys =false; since l95 the six l95 keys
 // =false; since l96 the four l96 keys =false; since l97 the two l97 keys
-// =false).
+// =false; since l99 the five l99 keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

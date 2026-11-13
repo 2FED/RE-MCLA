@@ -32,10 +32,19 @@
 //   clock, system and process CPU load, ACPI thermal zone temperature when
 //   readable (mcla_vram_census_win.h CpuReader/CpuWindow). Under Wine/Proton
 //   (no monitor) one "cpu=wine" line at start says the fields are unavailable.
+// - l99 (docs/evidence/M11-l99-sdk-hitch-20261113.md): mcla_texture_hard_margin_mb
+//   (default 0 = as before; owner key texture_hard_margin_256 writes 256) keeps
+//   the stepped hard limit at least that far above the starting soft limit, so
+//   over the DXGI budget the cache still has a soft-to-hard band instead of
+//   evicting at once (the l98 soak stepped hard down to soft). Every second
+//   the monitor also hands its local / non-local sample to the SDK
+//   (MclaSdkVramHostSample: MCLA_HITCH vram_over_mb, MCLA_VRAM_SDK); a no-op
+//   with an SDK without that entry point.
 
 #include "mcla_texture_budget.h"
 
 #include "mcla_logging.h"
+#include "mcla_low_latency.h"
 #include "mcla_vram_census_win.h"
 
 #include <rex/cvar.h>
@@ -67,6 +76,13 @@ REXCVAR_DEFINE_INT32(
     "KI-048: at draw resolution scale >= 2 on a video-memory budget under 10 GB, start the "
     "texture cache soft limit (and the budget monitor floor) at min(budget/2, this) MB; 0 = off")
     .range(0, 8192)
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+REXCVAR_DEFINE_INT32(
+    mcla_texture_hard_margin_mb, 0, "MCLA",
+    "l99: the budget monitor never steps the texture cache hard limit below the starting soft "
+    "limit plus this many MB (0 = the starting soft limit, as before l99)")
+    .range(0, 4096)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(
@@ -301,6 +317,13 @@ class Monitor {
       if (have) {
         const uint64_t usage_mb = info.CurrentUsage / kMb;
         last_budget_mb_ = info.Budget / kMb;
+        // l99: the SDK's view of the budget (no D3D query of its own).
+        if (tick) {
+          DXGI_QUERY_VIDEO_MEMORY_INFO non_local{};
+          const uint64_t non_local_mb =
+              QueryNonLocal(adapter_.Get(), non_local) ? non_local.CurrentUsage / kMb : 0;
+          MclaSdkVramHostSample(last_budget_mb_, usage_mb, non_local_mb);
+        }
         peak_mb_ = std::max(peak_mb_, usage_mb);
         const bool near_budget = usage_mb + kHeadroomMb > last_budget_mb_;
         if (tick && near_budget) ++near_seconds_;
@@ -427,7 +450,12 @@ void ApplyTextureCacheBudget() {
                 limits.legacy_soft_mb, limits.floor_mb, limits.hard_mb);
   MCLA_GPU_INFO("MCLA graphics: video-memory budget {} MB (in use {} MB); texture cache limits {}/{} MB",
                 budget_mb, info.CurrentUsage / kMb, limits.soft_mb, limits.hard_mb);
-  monitor.Start(std::move(adapter), limits.soft_mb, limits.hard_mb, limits.floor_mb, true, scale,
+  // l99: the hard-limit floor with the optional margin above the soft limit.
+  const uint64_t margin_mb = uint64_t(std::max(0, REXCVAR_GET(mcla_texture_hard_margin_mb)));
+  const uint64_t floor_mb = vram::HardFloorWithMargin(limits.floor_mb, limits.soft_mb, margin_mb);
+  MCLA_GPU_INFO("MCLA graphics: texture cache hard limit floor {} MB (soft {} MB, margin {} MB)",
+                floor_mb, limits.soft_mb, margin_mb);
+  monitor.Start(std::move(adapter), limits.soft_mb, limits.hard_mb, floor_mb, true, scale,
                 census);
 }
 

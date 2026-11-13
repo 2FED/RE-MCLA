@@ -24,8 +24,10 @@
 
 #include "mcla_tod.h"
 
+#include "mcla_hitch_host.h"
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_low_latency.h"
 
 #include <rex/cvar.h>
 
@@ -112,6 +114,8 @@ struct Shared {
   // l95: the preset watch (update thread) and the guest memory base for F10.
   tod::PresetWatch preset_watch;
   std::atomic<uint8_t *> base{nullptr};
+  // l99: the MCLA_HITCH companion poller (update thread).
+  mcla::hitch::Poller hitch_poller;
 };
 
 Shared &State() {
@@ -227,6 +231,26 @@ bool Control(uint8_t *base, Shared &s, uint32_t manager, float before, bool warp
   return true;
 }
 
+// l99 (mcla_hitch_host.h): one MCLA_HITCH_HOST line per new SDK MCLA_HITCH
+// line, with the game state of this update (sample null: the manager pointer
+// was not plausible, the time of day is unknown). One atomic load otherwise.
+void PollHitch(Shared &s, const tod::Sample *sample) {
+  uint64_t missed = 0;
+  if (!s.hitch_poller.Observe(MclaSdkHitchLoggedSequence(), missed)) {
+    return;
+  }
+  mcla::hitch::Last last;
+  MclaSdkHitchLast(last.seq, last.logged_seq, last.frame, last.interval_us);
+  mcla::hitch::GameState game;
+  if (sample && tod::HourValid(sample->hour)) {
+    game.tod_valid = true;
+    game.hour = sample->hour;
+    game.paused = sample->paused != 0;
+    game.warp = sample->warp != 0;
+  }
+  MCLA_APP_INFO("{}", mcla::hitch::HostLine(last, missed, game));
+}
+
 }  // namespace
 
 // Time-of-day update: r3 = the lighting manager (*0x8287E26C).
@@ -245,6 +269,7 @@ REX_EXTERN(sub_822F1DB0) {
 
   const uint32_t manager = REX_LOAD_U32(tod::kManagerPtr);
   if (!tod::PointerPlausible(manager)) {
+    PollHitch(State(), nullptr);
     return;
   }
   tod::Sample sample;
@@ -299,6 +324,7 @@ REX_EXTERN(sub_822F1DB0) {
   if (!line.empty()) {
     MCLA_APP_INFO("{}", line);
   }
+  PollHitch(s, &sample);
 }
 
 // Warp start: r3 = the manager, f1 = the target hour, f2 = the rate.

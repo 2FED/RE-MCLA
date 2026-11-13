@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 119, "one hundred and nineteen whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 124, "one hundred and twenty-four whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1533,6 +1533,110 @@ void TestWhitelist() {
           "l98 near misses: integers, the cvar name and a repeat are ignored");
   }
   {
+    // l99: texture churn and the guard actions (default off).
+    // texture_hard_margin_256 writes 256 to the host init-only int
+    // mcla_texture_hard_margin_mb at startup; texture_min_age_2000 writes 2000
+    // to the SDK int texture_cache_min_age_ms; lead_ll_guard_adaptive /
+    // _rearm / _off write 1 / 2 / 3 to the SDK int
+    // d3d12_frame_lead_strict_low_latency_guard_action (a conflict group of
+    // three); =false writes nothing.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      const char *text;
+    } l99[] = {
+        {Key::kTextureHardMargin256, "texture_hard_margin_256", Phase::kStartup,
+         "mcla_texture_hard_margin_mb", "256"},
+        {Key::kTextureMinAge2000, "texture_min_age_2000", Phase::kGraphicsPlugin,
+         "texture_cache_min_age_ms", "2000"},
+        {Key::kLeadLlGuardAdaptive, "lead_ll_guard_adaptive", Phase::kGraphicsPlugin,
+         "d3d12_frame_lead_strict_low_latency_guard_action", "1"},
+        {Key::kLeadLlGuardRearm, "lead_ll_guard_rearm", Phase::kGraphicsPlugin,
+         "d3d12_frame_lead_strict_low_latency_guard_action", "2"},
+        {Key::kLeadLlGuardOff, "lead_ll_guard_off", Phase::kGraphicsPlugin,
+         "d3d12_frame_lead_strict_low_latency_guard_action", "3"},
+    };
+    for (const auto &k : l99) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l99 key: its phase, cvar and text, false writes nothing");
+      const bool guard = k.key == Key::kLeadLlGuardAdaptive || k.key == Key::kLeadLlGuardRearm ||
+                         k.key == Key::kLeadLlGuardOff;
+      size_t pairs = 0;
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        if (pair.first == k.key || pair.second == k.key) {
+          ++pairs;
+        }
+      }
+      Check(pairs == (guard ? 2u : 0u), "l99: two pairs for each guard key, none for texture keys");
+    }
+    size_t guard_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      guard_pairs += (pair.first == Key::kLeadLlGuardAdaptive &&
+                      pair.second == Key::kLeadLlGuardRearm) ||
+                             (pair.first == Key::kLeadLlGuardAdaptive &&
+                              pair.second == Key::kLeadLlGuardOff) ||
+                             (pair.first == Key::kLeadLlGuardRearm &&
+                              pair.second == Key::kLeadLlGuardOff)
+                         ? 1
+                         : 0;
+    }
+    Check(guard_pairs == 3, "the three l99 guard keys are one group of three pairs");
+    Check(!FindKey("texture_hard_margin") && !FindKey("texture_hard_margin_512") &&
+              !FindKey("mcla_texture_hard_margin_mb") && !FindKey("texture_cache_min_age_ms") &&
+              !FindKey("texture_min_age") && !FindKey("TEXTURE_MIN_AGE_2000") &&
+              !FindKey("lead_ll_guard") && !FindKey("lead_ll_guard_on") &&
+              !FindKey("lead_ll_guard_observe") &&
+              !FindKey("d3d12_frame_lead_strict_low_latency_guard_action"),
+          "no prefix, suffix, cvar-name or case variants of the l99 keys");
+    const Parsed churn = Parse("texture_hard_margin_256=true\n"
+                               "texture_min_age_2000=true\n");
+    Check(churn.ValueCount() == 2 && churn.issue_count == 0 &&
+              churn.Value(Key::kTextureHardMargin256) == true &&
+              churn.Value(Key::kTextureMinAge2000) == true,
+          "the l99 churn arm parses");
+    const Parsed noguard = Parse("low_latency_auto=true\n"
+                                 "lead_ll_off_when_reflex=true\n"
+                                 "lead_ll_guard_off=true\n");
+    Check(noguard.ValueCount() == 3 && noguard.issue_count == 0 &&
+              noguard.Value(Key::kLeadLlGuardOff) == true &&
+              noguard.Value(Key::kLeadLlOffWhenReflex) == true,
+          "the l99 auto-noguard arm parses");
+    const Parsed g1 = Parse("low_latency_auto=true\n"
+                            "lead_ll_off_when_reflex=true\n"
+                            "lead_ll_guard_adaptive=true\n"
+                            "lead_ll_guard_rearm=false\n");
+    Check(g1.ValueCount() == 4 && g1.issue_count == 0 &&
+              g1.Value(Key::kLeadLlGuardAdaptive) == true,
+          "the l99 auto-g1 arm parses; another guard key =false does not conflict");
+    const Parsed both = Parse("lead_ll_guard_adaptive=true\n"
+                              "present_stats=true\n"
+                              "lead_ll_guard_off=true\n");
+    Check(both.ValueCount() == 1 && both.Value(Key::kPresentStats) == true &&
+              !both.Value(Key::kLeadLlGuardAdaptive).has_value() &&
+              !both.Value(Key::kLeadLlGuardOff).has_value() && both.issue_count == 1 &&
+              both.issues[0].line == 3 && both.issues[0].issue == LineIssue::kConflict,
+          "two l99 guard keys true: neither applies, conflict on the later line");
+    const Parsed bad = Parse("texture_hard_margin_256=1\n"
+                             "texture_cache_min_age_ms=true\n"
+                             "lead_ll_guard_off=true\n"
+                             "lead_ll_guard_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kLeadLlGuardOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l99 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -2004,7 +2108,10 @@ void TestWhitelist() {
                           key == Key::kLeadLlOffWhenReflex ||
                           key == Key::kLeadLlAdaptiveWhenReflex ||
                           key == Key::kAudioFilterNativeOff ||
-                          key == Key::kCpDrawPacketTscOff || key == Key::kCpFencePollOff;
+                          key == Key::kCpDrawPacketTscOff || key == Key::kCpFencePollOff ||
+                          key == Key::kTextureHardMargin256 || key == Key::kTextureMinAge2000 ||
+                          key == Key::kLeadLlGuardAdaptive || key == Key::kLeadLlGuardRearm ||
+                          key == Key::kLeadLlGuardOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2104,9 +2211,9 @@ void TestWhitelist() {
     // group of three and the two start keys; l95: the low-latency mode group
     // of three; l97: the two strict-replacement keys; l98: the native audio
     // filter, the draw-packet clock and the fence poll keys with their
-    // controls.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 31,
-          "thirty-one shared-cvar pairs");
+    // controls; l99: the guard-action group of three.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 34,
+          "thirty-four shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -2769,7 +2876,8 @@ void TestWhitelist() {
     // (104 keys); l95: plus the six l95 keys explicit false (110 keys); l96:
     // plus the four l96 keys explicit false (114 keys); l97: plus the two l97
     // keys explicit false (116 keys); l98: plus the three l98 controls
-    // explicit false (119 keys).
+    // explicit false (119 keys); l99: plus the five l99 keys explicit false
+    // (124 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -2812,7 +2920,12 @@ void TestWhitelist() {
                                   "lead_ll_adaptive_when_reflex=false\n"
                                   "audio_filter_native_off=false\n"
                                   "cp_draw_packet_tsc_off=false\n"
-                                  "cp_fence_poll_off=false\n";
+                                  "cp_fence_poll_off=false\n"
+                                  "texture_hard_margin_256=false\n"
+                                  "texture_min_age_2000=false\n"
+                                  "lead_ll_guard_adaptive=false\n"
+                                  "lead_ll_guard_rearm=false\n"
+                                  "lead_ll_guard_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3405,13 +3518,13 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l98: 119 keys, about 3.40 KB).
+    // former 2 KiB and accepted since l81 (l99: 124 keys, about 3.53 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3500, "full arm size");
-    full += "# " + std::string(3560 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 3600, "full arm size");
+    full += "# " + std::string(3660 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&
