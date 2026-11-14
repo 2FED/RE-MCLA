@@ -19,7 +19,11 @@ inline constexpr std::wstring_view kReportFile = L"report.txt";
 // closes (same text as mcla::diagnostics::kPackageReportPendingLine).
 inline constexpr std::string_view kPendingSessionLine =
     "launcher_session pending: the launcher adds build, mode and resolution after the game closes";
-inline constexpr size_t kMaximumPackages = 64;
+// Upper bound of listed packages. Volunteer builds keep at most 50 live
+// packages per session (plus crash packages); owner-internal builds (l102)
+// have no live retention limit, so the bound only guards against a runaway
+// directory.
+inline constexpr size_t kMaximumPackages = 1024;
 
 struct Package {
   std::wstring name;

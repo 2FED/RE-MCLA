@@ -394,6 +394,68 @@ inline std::string_view LiveMinidumpPolicyName(LiveMinidumpPolicy policy) {
   return "skipped-by-default";
 }
 
+// Owner decision 2026-11-14 (l102): retention of completed live (F10, wheel,
+// pad, probe) packages below <diagnostics>/live. Owner-internal builds (the
+// MCLA_DEV_OVERRIDES build option, the same switch that enables the owner
+// override file) keep every package: no count limit and no byte limit, so the
+// owner can press F10 at every fps dip. Instead they refuse a new package when
+// the diagnostics volume has less than 2 GiB free; older packages are never
+// deleted to make room. Volunteer builds keep the newest 50 packages within
+// 768 MiB (about 12 MiB per package, frame.bmp about 8 MiB of it) and have no
+// free-space floor. In both modes the newest package is always kept and
+// unfinished ".partial" folders older than 24 h are removed. Crash package
+// retention (mcla_crash_handler_win.cpp) is separate and unchanged.
+inline constexpr size_t kVolunteerLiveRetentionCount = 50;
+inline constexpr uint64_t kVolunteerLiveRetentionBytes = 768ull * 1024 * 1024;
+inline constexpr uint64_t kInternalLiveFreeSpaceFloorBytes =
+    2ull * 1024 * 1024 * 1024;
+
+struct LiveRetentionPolicy {
+  bool unlimited = false;   // no count and no byte limit
+  size_t keep_count = 0;    // ignored when unlimited
+  uint64_t keep_bytes = 0;  // ignored when unlimited
+  // A new package is refused below this many free bytes; 0 = no check.
+  uint64_t free_space_floor_bytes = 0;
+};
+
+inline constexpr LiveRetentionPolicy LiveRetentionFor(bool internal_build) {
+  if (internal_build) {
+    return {true, 0, 0, kInternalLiveFreeSpaceFloorBytes};
+  }
+  return {false, kVolunteerLiveRetentionCount, kVolunteerLiveRetentionBytes,
+          0};
+}
+
+// Completed packages are visited newest first; index is the position in that
+// order and retained_bytes the running total including this package.
+inline constexpr bool ShouldPruneLivePackage(const LiveRetentionPolicy &policy,
+                                             size_t index,
+                                             uint64_t retained_bytes) {
+  if (policy.unlimited || index == 0) {
+    return false;
+  }
+  return index >= policy.keep_count || retained_bytes > policy.keep_bytes;
+}
+
+// free_bytes: the volume's available bytes, or nullopt when the query failed
+// (an unknown value never blocks a report).
+inline constexpr bool LiveFreeSpaceAllowsPackage(
+    const LiveRetentionPolicy &policy, std::optional<uint64_t> free_bytes) {
+  return policy.free_space_floor_bytes == 0 || !free_bytes.has_value() ||
+         *free_bytes >= policy.free_space_floor_bytes;
+}
+
+// Start-up log line.
+inline std::string LiveRetentionLogLine(const LiveRetentionPolicy &policy) {
+  if (policy.unlimited) {
+    return "MCLA diagnostics: live report retention count=unlimited "
+           "bytes=unlimited";
+  }
+  return "MCLA diagnostics: live report retention count=" +
+         std::to_string(policy.keep_count) +
+         " bytes=" + std::to_string(policy.keep_bytes);
+}
+
 inline constexpr size_t kMaxSdkLogLinesPerKind = 32;
 inline constexpr size_t kMaxSdkLogLineBytes = 512;
 

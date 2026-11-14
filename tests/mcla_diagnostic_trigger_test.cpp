@@ -409,6 +409,88 @@ void TestLiveMinidumpPolicy() {
             "required-by-reason",
         "manifest name of the required policy");
 }
+
+// Mirrors PruneDirectories in mcla_diagnostics.cpp: count of packages kept
+// when `count` completed packages of `bytes` each are visited newest first.
+size_t KeptLivePackages(const LiveRetentionPolicy &policy, size_t count,
+                        uint64_t bytes) {
+  size_t kept = 0;
+  uint64_t retained = 0;
+  for (size_t i = 0; i < count; ++i) {
+    retained += bytes;
+    if (!ShouldPruneLivePackage(policy, i, retained)) {
+      ++kept;
+    }
+  }
+  return kept;
+}
+
+void TestLiveRetentionPolicy() {
+  constexpr uint64_t kMiB = 1024ull * 1024;
+  constexpr LiveRetentionPolicy internal = LiveRetentionFor(true);
+  constexpr LiveRetentionPolicy volunteer = LiveRetentionFor(false);
+  static_assert(internal.unlimited && !volunteer.unlimited);
+  Check(internal.unlimited, "internal build has no live retention limit");
+  Check(internal.free_space_floor_bytes == 2048 * kMiB,
+        "internal build refuses packages below 2 GiB free");
+  Check(!volunteer.unlimited && volunteer.keep_count == 50 &&
+            volunteer.keep_bytes == 768 * kMiB,
+        "volunteer build keeps 50 packages within 768 MiB");
+  Check(volunteer.free_space_floor_bytes == 0,
+        "volunteer build has no free-space floor");
+
+  for (const size_t index : {size_t{0}, size_t{1}, size_t{10}, size_t{49},
+                             size_t{50}, size_t{51}, size_t{1000},
+                             size_t{100000}}) {
+    Check(!ShouldPruneLivePackage(internal, index, UINT64_MAX),
+          "internal build never prunes a completed package");
+  }
+  Check(KeptLivePackages(internal, 1000, 12 * kMiB) == 1000,
+        "internal build keeps 1000 packages of 12 MiB");
+
+  Check(!ShouldPruneLivePackage(volunteer, 0, UINT64_MAX),
+        "newest package is kept even over the byte limit");
+  Check(!ShouldPruneLivePackage(volunteer, 10, 11 * 12 * kMiB),
+        "volunteer keeps the 11th package (old limit was 10)");
+  Check(!ShouldPruneLivePackage(volunteer, 49, 50 * 12 * kMiB),
+        "volunteer keeps the 50th package");
+  Check(ShouldPruneLivePackage(volunteer, 50, 51 * kMiB),
+        "volunteer prunes the 51st package");
+  Check(!ShouldPruneLivePackage(volunteer, 5, 768 * kMiB),
+        "volunteer keeps a package at exactly 768 MiB");
+  Check(ShouldPruneLivePackage(volunteer, 5, 768 * kMiB + 1),
+        "volunteer prunes past 768 MiB");
+  Check(KeptLivePackages(volunteer, 100, 12 * kMiB) == 50,
+        "volunteer keeps 50 typical 12 MiB packages");
+  Check(KeptLivePackages(volunteer, 100, 20 * kMiB) == 38,
+        "volunteer keeps 38 packages of 20 MiB (byte limit)");
+  Check(KeptLivePackages(volunteer, 3, 1024 * kMiB) == 1,
+        "volunteer keeps only the newest oversized package");
+  Check(KeptLivePackages(volunteer, 0, 12 * kMiB) == 0, "no packages");
+
+  Check(LiveFreeSpaceAllowsPackage(volunteer, uint64_t{0}),
+        "volunteer build writes regardless of free space");
+  Check(LiveFreeSpaceAllowsPackage(volunteer, std::nullopt),
+        "volunteer build with unknown free space");
+  Check(!LiveFreeSpaceAllowsPackage(internal, 2048 * kMiB - 1),
+        "internal build refuses below the floor");
+  Check(!LiveFreeSpaceAllowsPackage(internal, uint64_t{0}),
+        "internal build refuses on a full volume");
+  Check(LiveFreeSpaceAllowsPackage(internal, 2048 * kMiB),
+        "internal build writes at the floor");
+  Check(LiveFreeSpaceAllowsPackage(internal, std::nullopt),
+        "an unknown free space never blocks a report");
+
+  Check(LiveRetentionLogLine(internal) ==
+            "MCLA diagnostics: live report retention count=unlimited "
+            "bytes=unlimited",
+        "internal start-up line");
+  Check(LiveRetentionLogLine(volunteer) ==
+            "MCLA diagnostics: live report retention count=50 "
+            "bytes=805306368",
+        "volunteer start-up line");
+}
+
 } // namespace
 
 int main() {
@@ -421,5 +503,6 @@ int main() {
   TestPackageReport();
   TestGuestExitSnapshotPolicy();
   TestLiveMinidumpPolicy();
+  TestLiveRetentionPolicy();
   std::printf("PASS: %d diagnostic trigger checks\n", checks);
 }

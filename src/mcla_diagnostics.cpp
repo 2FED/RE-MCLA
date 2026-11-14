@@ -55,6 +55,12 @@
 #define MCLA_VERSION "0.0.0.0"
 #endif
 
+// Owner-internal build switch (CMake option MCLA_DEV_OVERRIDES, target-wide
+// for mcla): selects the live-report retention policy below.
+#ifndef MCLA_DEV_OVERRIDES
+#define MCLA_DEV_OVERRIDES 0
+#endif
+
 // KI-065: SDK content-transaction indicator (rexruntime of SDK branch
 // mcla/m10-content-logs). An older SDK does not export it; the linker then
 // binds the fallback, which reports the indicator as unavailable and leaves
@@ -98,8 +104,10 @@ constexpr uint32_t kMaxSaveEntries = 4096;
 constexpr uint64_t kMaxLiveDumpBytes = 128ull * 1024 * 1024;
 constexpr size_t kMaxLogEntries = 512;
 constexpr size_t kMaxLogBytes = 256 * 1024;
-constexpr size_t kLiveRetentionCount = 10;
-constexpr uint64_t kLiveRetentionBytes = 256ull * 1024 * 1024;
+// l102: unlimited in owner-internal builds, 50 / 768 MiB in volunteer builds
+// (LiveRetentionFor in mcla_diagnostic_trigger.h).
+constexpr LiveRetentionPolicy kLiveRetention =
+    LiveRetentionFor(MCLA_DEV_OVERRIDES != 0);
 constexpr uint64_t kJournalFileBytes = 8ull * 1024 * 1024;
 constexpr size_t kJournalRotatedFiles = 2;
 constexpr size_t kRuntimeRetentionCount = 12;
@@ -298,8 +306,8 @@ uint64_t DirectoryBytes(const std::filesystem::path &root) {
   return bytes;
 }
 
-void PruneDirectories(const std::filesystem::path &root, size_t keep_count,
-                      uint64_t keep_bytes) {
+void PruneDirectories(const std::filesystem::path &root,
+                      const LiveRetentionPolicy &policy) {
   struct Entry {
     std::filesystem::path path;
     std::filesystem::file_time_type time;
@@ -324,6 +332,9 @@ void PruneDirectories(const std::filesystem::path &root, size_t keep_count,
       ec.clear();
       continue;
     }
+    if (policy.unlimited) {
+      continue;  // l102: nothing to prune; skip the per-package size walk
+    }
     entries.push_back(
         {item.path(), item.last_write_time(ec), DirectoryBytes(item.path())});
   }
@@ -332,7 +343,7 @@ void PruneDirectories(const std::filesystem::path &root, size_t keep_count,
   uint64_t retained = 0;
   for (size_t i = 0; i < entries.size(); ++i) {
     retained += entries[i].bytes;
-    if (i == 0 || (i < keep_count && retained <= keep_bytes)) {
+    if (!ShouldPruneLivePackage(policy, i, retained)) {
       continue;
     }
     std::filesystem::remove_all(entries[i].path, ec);
@@ -1168,7 +1179,8 @@ public:
                    ec.message());
       return false;
     }
-    PruneDirectories(live_root_, kLiveRetentionCount, kLiveRetentionBytes);
+    PruneDirectories(live_root_, kLiveRetention);
+    REXLOG_INFO("{}", LiveRetentionLogLine(kLiveRetention));
     PruneRuntimeFiles(runtime_root_);
     provider_ = std::move(provider);
     capture_sink_ = std::make_shared<rex::LogCaptureSink>();
@@ -1320,6 +1332,29 @@ public:
     }
     if (trigger.source.empty()) {
       trigger.source = std::string(reason);
+    }
+    // l102: owner-internal builds keep every live package; below the free
+    // space floor the new package is refused (nothing is written, no older
+    // package is deleted). Volunteer builds have no floor.
+    if (kLiveRetention.free_space_floor_bytes != 0) {
+      std::error_code space_ec;
+      const auto space = std::filesystem::space(live_root_, space_ec);
+      const std::optional<uint64_t> free_bytes =
+          space_ec ? std::nullopt
+                   : std::optional<uint64_t>(static_cast<uint64_t>(space.available));
+      if (!free_bytes) {
+        REXLOG_WARN("MCLA diagnostics: free space query failed ({}); "
+                    "writing the package",
+                    space_ec.message());
+      }
+      if (!LiveFreeSpaceAllowsPackage(kLiveRetention, free_bytes)) {
+        REXLOG_WARN("MCLA diagnostics: snapshot refused: {} MiB free on the "
+                    "diagnostics volume is below the {} MiB floor; older "
+                    "packages are kept",
+                    *free_bytes / (1024 * 1024),
+                    kLiveRetention.free_space_floor_bytes / (1024 * 1024));
+        return false;
+      }
     }
     const uint64_t sequence = sequence_.fetch_add(1) + 1;
     const std::string name = "live-" + UtcStamp() + "-" +
@@ -1714,7 +1749,7 @@ public:
     }
     const bool pointer_written =
         WriteTextAtomic(diagnostics_root_ / "latest-live.txt", name + "\n");
-    PruneDirectories(live_root_, kLiveRetentionCount, kLiveRetentionBytes);
+    PruneDirectories(live_root_, kLiveRetention);
     const int64_t publish_ms = lap();
     REXLOG_INFO(
         "MCLA diagnostics: package timing source={} state_provider_ms={} "

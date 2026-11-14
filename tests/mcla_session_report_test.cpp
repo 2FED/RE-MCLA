@@ -25,8 +25,17 @@ int main() {
   Check(SessionPackages({L"", L"..\\escape", L"name with space", L"x/y", std::wstring(129, L'a')}, {}).empty(),
         "empty, traversal, spaced, slashed and oversized names are skipped");
   std::vector<std::wstring> many;
-  for (int i = 0; i < 100; ++i) many.push_back(L"live-" + std::to_wstring(1000 + i));
+  for (size_t i = 0; i < kMaximumPackages + 36; ++i) many.push_back(L"live-" + std::to_wstring(10000 + i));
   Check(SessionPackages(many, {}).size() == kMaximumPackages, "package list is bounded");
+  // l102: a volunteer session keeps 50 live packages plus up to 5 crash
+  // packages; an owner-internal session may keep hundreds: all are listed.
+  std::vector<std::wstring> volunteer_live, internal_live, crashes;
+  for (int i = 0; i < 50; ++i) volunteer_live.push_back(L"live-v-" + std::to_wstring(100 + i));
+  for (int i = 0; i < 500; ++i) internal_live.push_back(L"live-i-" + std::to_wstring(1000 + i));
+  for (int i = 0; i < 5; ++i) crashes.push_back(L"crash-" + std::to_wstring(10 + i));
+  Check(SessionPackages(volunteer_live, crashes).size() == 55, "50 live and 5 crash packages are all listed");
+  Check(SessionPackages(internal_live, crashes).size() == 505, "500 internal live packages are all listed");
+  Check(kMaximumPackages >= 50 + 5, "bound covers the volunteer retention");
 
   const auto prompt = PromptText(packages);
   Check(prompt.starts_with(L"3 reports were recorded in this session (1 crash)."), "prompt counts reports and crashes");
