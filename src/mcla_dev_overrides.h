@@ -404,6 +404,18 @@
 //   writes true to d3d12_rt_update_memo_verify (the full update always runs,
 //   mismatch counters; wins over rt_memo). =false writes nothing for all
 //   three. An SDK without the l101 cvars logs them as unavailable.
+// - l103 (docs/evidence/M11-l103-owner-build-20261114.md; the AMD Anti-Lag 2
+//   path gets the Reflex protection, both default off):
+//   lead_ll_count_antilag2=true writes true to the SDK graphics-plugin bool
+//   d3d12_frame_lead_strict_low_latency_antilag2 (hot reload, read at every
+//   frame open): the l97 replacement (lead_ll_off_when_reflex /
+//   lead_ll_adaptive_when_reflex), its lead-2 guard and the stale-sleep
+//   fallback then also count an active Anti-Lag 2 sleep, not only Reflex;
+//   low_latency_auto_antilag2=true writes true to the SDK rexruntime bool
+//   d3d12_low_latency_auto_antilag2 (read once at the first frame):
+//   low_latency_auto then selects Anti-Lag 2 on an AMD adapter (without it
+//   auto is off on AMD). =false writes nothing for both; no conflict pairs
+//   (different cvars). An SDK without the l97 cvars logs them as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -578,8 +590,10 @@ enum class Key : uint8_t {
   kTexMemoV2,                // l101: d3d12_fetch_identity_v2=true
   kRtMemo,                   // l101: d3d12_rt_update_memo=true
   kRtMemoVerify,             // l101: d3d12_rt_update_memo_verify=true
+  kLeadLlCountAntiLag2,      // l103: d3d12_frame_lead_strict_low_latency_antilag2=true
+  kLowLatencyAutoAntiLag2,   // l103: d3d12_low_latency_auto_antilag2=true
 };
-inline constexpr size_t kKeyCount = 131;
+inline constexpr size_t kKeyCount = 133;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -893,6 +907,14 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"tex_memo_v2", Phase::kGraphicsPlugin, "d3d12_fetch_identity_v2", "true", ""},
     {"rt_memo", Phase::kGraphicsPlugin, "d3d12_rt_update_memo", "true", ""},
     {"rt_memo_verify", Phase::kGraphicsPlugin, "d3d12_rt_update_memo_verify", "true", ""},
+    // l103 AMD Anti-Lag 2 path: the l97 replacement also counts its sleep (SDK
+    // graphics-plugin bool, hot reload) and auto selects it on AMD (SDK
+    // rexruntime bool, read once at the first frame); default off, =false
+    // writes nothing.
+    {"lead_ll_count_antilag2", Phase::kGraphicsPlugin,
+     "d3d12_frame_lead_strict_low_latency_antilag2", "true", ""},
+    {"low_latency_auto_antilag2", Phase::kStartup, "d3d12_low_latency_auto_antilag2", "true",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1252,7 +1274,8 @@ std::optional<bool> AppliedValue(Key key);
 // the three d3d12_frame_lead_strict keys =false; since l95 the six l95 keys
 // =false; since l96 the four l96 keys =false; since l97 the two l97 keys
 // =false; since l99 the five l99 keys =false; since l100 the four l100 keys
-// =false; since l101 the three l101 keys =false).
+// =false; since l101 the three l101 keys =false; since l103 the two l103
+// keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

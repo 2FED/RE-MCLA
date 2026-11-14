@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 131, "one hundred and thirty-one whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 133, "one hundred and thirty-three whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1772,6 +1772,84 @@ void TestWhitelist() {
           "l101 near misses: an integer, the absent tex_memo_verify key and a repeat are ignored");
   }
   {
+    // l103: the AMD Anti-Lag 2 path (default off). lead_ll_count_antilag2
+    // writes true to the SDK graphics-plugin bool
+    // d3d12_frame_lead_strict_low_latency_antilag2 (the l97 replacement, its
+    // guard and the stale-sleep fallback also count an Anti-Lag 2 sleep);
+    // low_latency_auto_antilag2 writes true to the SDK rexruntime bool
+    // d3d12_low_latency_auto_antilag2 at startup (auto selects Anti-Lag 2 on
+    // AMD). =false writes nothing; no conflict pairs (different cvars).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+    } l103[] = {
+        {Key::kLeadLlCountAntiLag2, "lead_ll_count_antilag2", Phase::kGraphicsPlugin,
+         "d3d12_frame_lead_strict_low_latency_antilag2"},
+        {Key::kLowLatencyAutoAntiLag2, "low_latency_auto_antilag2", Phase::kStartup,
+         "d3d12_low_latency_auto_antilag2"},
+    };
+    for (const auto &k : l103) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == "true" && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l103 key: its phase, cvar and text, false writes nothing");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "l103 keys are in no conflict pair");
+      }
+    }
+    Check(CvarName(Info(Key::kLeadLlOffWhenReflex)) == "d3d12_frame_lead_strict_low_latency" &&
+              CvarText(Info(Key::kLeadLlOffWhenReflex), true) == "1" &&
+              CvarName(Info(Key::kLowLatencyAuto)) == "d3d12_low_latency_mode" &&
+              CvarText(Info(Key::kLowLatencyAuto), true) == "auto",
+          "l103 leaves the l97 replacement and the l95 auto key unchanged");
+    Check(!FindKey("d3d12_frame_lead_strict_low_latency_antilag2") &&
+              !FindKey("d3d12_low_latency_auto_antilag2") && !FindKey("lead_ll_count") &&
+              !FindKey("lead_ll_count_antilag") && !FindKey("LEAD_LL_COUNT_ANTILAG2") &&
+              !FindKey("low_latency_auto_antilag") && !FindKey("lead_ll_off_when_antilag2") &&
+              !FindKey("low_latency_auto_antilag2_on") && !FindKey("auto_antilag2"),
+          "no prefix, suffix, cvar-name or case variants of the l103 keys");
+    const Parsed replace = Parse("low_latency_antilag2=true\n"
+                                 "lead_ll_off_when_reflex=true\n"
+                                 "lead_ll_count_antilag2=true\n");
+    Check(replace.ValueCount() == 3 && replace.issue_count == 0 &&
+              replace.Value(Key::kLowLatencyAntiLag2) == true &&
+              replace.Value(Key::kLeadLlOffWhenReflex) == true &&
+              replace.Value(Key::kLeadLlCountAntiLag2) == true,
+          "the l103 antilag2-replace lines parse");
+    const Parsed noguard = Parse("low_latency_antilag2=true\n"
+                                 "lead_ll_off_when_reflex=true\n"
+                                 "lead_ll_count_antilag2=true\n"
+                                 "lead_ll_guard_off=true\n");
+    Check(noguard.ValueCount() == 4 && noguard.issue_count == 0 &&
+              noguard.Value(Key::kLeadLlGuardOff) == true,
+          "the l103 antilag2-replace-noguard lines parse");
+    const Parsed amd_auto = Parse("low_latency_auto=true\n"
+                                  "low_latency_auto_antilag2=true\n"
+                                  "lead_ll_off_when_reflex=true\n"
+                                  "lead_ll_count_antilag2=true\n");
+    Check(amd_auto.ValueCount() == 4 && amd_auto.issue_count == 0 &&
+              amd_auto.Value(Key::kLowLatencyAuto) == true &&
+              amd_auto.Value(Key::kLowLatencyAutoAntiLag2) == true,
+          "the l103 amd auto lines parse (auto with its Anti-Lag 2 opt-in, no conflict)");
+    const Parsed bad = Parse("lead_ll_count_antilag2=1\n"
+                             "lead_ll_count=true\n"
+                             "low_latency_auto_antilag2=true\n"
+                             "low_latency_auto_antilag2=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kLowLatencyAutoAntiLag2) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l103 near misses: an integer, a prefix and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -2249,7 +2327,9 @@ void TestWhitelist() {
                           key == Key::kLeadLlGuardOff || key == Key::kCpRegSkip ||
                           key == Key::kCpRegSkipVerify || key == Key::kCpDrawFastVerify ||
                           key == Key::kGuestSpinBackoff64 || key == Key::kTexMemoV2 ||
-                          key == Key::kRtMemo || key == Key::kRtMemoVerify;
+                          key == Key::kRtMemo || key == Key::kRtMemoVerify ||
+                          key == Key::kLeadLlCountAntiLag2 ||
+                          key == Key::kLowLatencyAutoAntiLag2;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -3016,7 +3096,8 @@ void TestWhitelist() {
     // keys explicit false (116 keys); l98: plus the three l98 controls
     // explicit false (119 keys); l99: plus the five l99 keys explicit false
     // (124 keys); l100: plus the four l100 keys explicit false (128 keys);
-    // l101: plus the three l101 keys explicit false (131 keys).
+    // l101: plus the three l101 keys explicit false (131 keys); l103: plus the
+    // two l103 keys explicit false (133 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3071,7 +3152,9 @@ void TestWhitelist() {
                                   "guest_spin_backoff_64=false\n"
                                   "tex_memo_v2=false\n"
                                   "rt_memo=false\n"
-                                  "rt_memo_verify=false\n";
+                                  "rt_memo_verify=false\n"
+                                  "lead_ll_count_antilag2=false\n"
+                                  "low_latency_auto_antilag2=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3664,13 +3747,13 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l101: 131 keys, about 3.69 KB).
+    // former 2 KiB and accepted since l81 (l103: 133 keys, about 3.75 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3700, "full arm size");
-    full += "# " + std::string(3760 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 3800, "full arm size");
+    full += "# " + std::string(3860 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&
