@@ -13,6 +13,7 @@
 #endif
 #include <windows.h>
 #include <bcrypt.h>
+#include "mcla_test_owned_temp_win.h"
 
 #include <array>
 #include <filesystem>
@@ -1246,7 +1247,8 @@ int wmain(int argc, wchar_t **argv) {
   for (const auto b : random) { name += L"0123456789abcdef"[b >> 4]; name += L"0123456789abcdef"[b & 15]; }
   const auto root = std::filesystem::temp_directory_path() / name;
   if (!CreateDirectoryW(root.c_str(), nullptr)) return 2;
-  std::wcout << L"Owned synthetic controller fixture (preserved): " << root.wstring() << L'\n';
+  const mcla::test::OwnedTempFixture cleanup(root.wstring(), L"mcla-controller-test-");
+  std::wcout << L"Owned synthetic controller fixture (removed on exit): " << root.wstring() << L'\n';
   const auto build = root / L"build", game = root / L"game", bad_build = root / L"bad-build";
   for (const auto &path : {build, game, bad_build, root / L"store-a", root / L"store-b", root / L"store-c", root / L"profiles"})
     if (!CreateDirectoryW(path.c_str(), nullptr)) return 2;

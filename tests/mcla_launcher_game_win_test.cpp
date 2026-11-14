@@ -8,6 +8,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <bcrypt.h>
+#include "mcla_test_owned_temp_win.h"
 
 #include <array>
 #include <filesystem>
@@ -84,7 +85,8 @@ int wmain(int argc, wchar_t **) {
   constexpr wchar_t hex[] = L"0123456789abcdef";
   for (const auto byte : random) { root += hex[byte >> 4]; root += hex[byte & 15]; }
   if (!CreateDirectoryW(root.c_str(), nullptr)) return 2;
-  std::wcout << L"Owned synthetic game fixture (preserved; no game data read): " << root << L'\n';
+  const mcla::test::OwnedTempFixture cleanup(root, L"mcla-game-verifier-test-");
+  std::wcout << L"Owned synthetic game fixture (removed on exit; no game data read): " << root << L'\n';
   Check(Hash("abc") == "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", "independent SHA256 known answer");
   const auto supported = SupportedGameFiles();
   uint64_t total = 0;

@@ -36,10 +36,49 @@ function New-FixtureText([string]$Path, [string]$Text) {
     } finally { $stream.Dispose() }
 }
 
+# Removes the owned fixture on exit without following reparse points: a junction
+# or symbolic link is deleted as the link object and its target is never listed.
+# Only a direct child of TEMP named MclaStagingTest-* is accepted.
+function Remove-OwnedFixtureNoFollow([string]$Root) {
+    $temp = [IO.Path]::GetTempPath()
+    $name = Split-Path -Leaf $Root
+    if (-not $Root.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -or $Root.Substring($temp.Length) -cne $name -or
+        -not $name.StartsWith('MclaStagingTest-', [StringComparison]::Ordinal) -or $name.Length -le 16) {
+        Write-Warning ('Fixture cleanup refused outside the owned TEMP prefix: ' + $Root)
+        return
+    }
+    if ($env:MCLA_KEEP_TEST_FIXTURES -ceq '1') { Write-Output ('Owned fixture kept (MCLA_KEEP_TEST_FIXTURES=1): ' + $Root); return }
+    $script:cleanupLeft = 0
+    function Remove-FixtureEntry([IO.FileSystemInfo]$Item) {
+        try {
+            if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                if (($Item.Attributes -band [IO.FileAttributes]::Directory) -ne 0) { [IO.Directory]::Delete($Item.FullName, $false) }
+                else { [IO.File]::Delete($Item.FullName) }
+                return
+            }
+            if ($Item -is [IO.DirectoryInfo]) {
+                foreach ($child in @($Item.GetFileSystemInfos())) { Remove-FixtureEntry $child }
+                [IO.Directory]::Delete($Item.FullName, $false)
+                return
+            }
+            if (($Item.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) {
+                $Item.Attributes = $Item.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
+            }
+            [IO.File]::Delete($Item.FullName)
+        } catch { $script:cleanupLeft++ }
+    }
+    $rootItem = Get-Item -LiteralPath $Root -Force -ErrorAction SilentlyContinue
+    if ($null -ne $rootItem) { Remove-FixtureEntry $rootItem }
+    if ($script:cleanupLeft -or (Test-Path -LiteralPath $Root)) {
+        Write-Warning ('Owned fixture cleanup incomplete (' + $script:cleanupLeft + ' entries): ' + $Root)
+    } else { Write-Output ('Owned fixture removed: ' + $Root) }
+}
+
 # Only compiled allowlisted artifacts are read from supplied directories. No
 # game data, real profile, environment secret, or diagnostic package is read.
-# All writes are inside a NEW uniquely named temporary fixture, preserved on
-# success/failure. No executable in the fixture is ever launched.
+# All writes are inside a NEW uniquely named temporary fixture, removed on exit
+# (success or failure; set MCLA_KEEP_TEST_FIXTURES=1 to keep it). No executable
+# in the fixture is ever launched.
 $source = (Resolve-Path -LiteralPath $BuildDirectory).Path
 $crtSource = (Resolve-Path -LiteralPath $CrtDirectory).Path
 $policy = Get-PortableCppRuntimePolicy
@@ -48,7 +87,8 @@ foreach ($entry in $policy.files) {
 }
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('MclaStagingTest-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixture | Out-Null
-Write-Output ('Preserved synthetic fixture: ' + $fixture)
+try {
+Write-Output ('Owned synthetic fixture (removed on exit): ' + $fixture)
 $build = Join-Path $fixture 'source'
 $crt = Join-Path $fixture 'crt'
 New-Item -ItemType Directory -Path $build | Out-Null
@@ -130,12 +170,16 @@ try {
 Check (-not (Test-Path -LiteralPath $lockedTarget)) 'all-source pinning completes before candidate creation'
 # Shape-only synthetic tickets (staging checks shape and host binding, never
 # the signature): the source row plus a capabilities line and a zero signature.
+# The other inputs are hard links to the fixture copy: byte-identical (the ticket
+# binds the host SHA-256) without another full runtime copy per case.
 $ticketRow = ($sourceTicket -split "`n")[0..1] -join "`n"
 function New-GrantSource([string]$Name, [string]$Line) {
     $directory = Join-Path $fixture $Name
     New-Item -ItemType Directory -Path $directory | Out-Null
     foreach ($name in @($runtime) + @('MCLA-Launcher.exe')) {
-        if ($name -cne 'mcla-test-build.ticket') { Copy-FixtureFile (Join-Path $build $name) (Join-Path $directory $name) }
+        if ($name -cne 'mcla-test-build.ticket') {
+            New-Item -ItemType HardLink -Path (Join-Path $directory $name) -Target (Join-Path $build $name) -ErrorAction Stop | Out-Null
+        }
     }
     New-FixtureText (Join-Path $directory 'mcla-test-build.ticket') ($ticketRow + "`n" + $Line + "--SIGNATURE--`n" + ('0' * 512) + "`n")
     return $directory
@@ -175,7 +219,7 @@ if (Test-Path -LiteralPath $junction) {
     Check (-not (Test-Path -LiteralPath $linkTarget)) 'reparse rejection before candidate writes'
 }
 # The named stream is planted only on the fixture copy, after all other tests.
-# It is retained with the fixture; actual compiler outputs are never modified.
+# It is removed with the fixture; actual compiler outputs are never modified.
 Set-Content -LiteralPath (Join-Path $build 'MCLA-Launcher.exe') -Stream 'mcla-private-fixture' -Value 'SYNTHETIC-STREAM-NOT-A-SECRET'
 $adsTarget = Join-Path $fixture 'ads-rejected'
 Expect-Failure { & $stageScript -BuildDirectory $build -Destination $adsTarget -CrtDirectory $crt } 'alternate stream source rejected' 'alternate streams'
@@ -184,4 +228,5 @@ foreach ($name in $actualSourceHashes.Keys) {
     Check ((Get-FileHash -LiteralPath (Join-Path $source $name) -Algorithm SHA256).Hash -ceq $actualSourceHashes[$name]) 'actual compiled input remains unchanged'
 }
 [pscustomobject]@{checks=$script:checks; failures=$script:failures; skips=$script:skips; fixture=$fixture}
-if ($script:failures) { throw 'Internal launcher staging fixtures failed; preserve evidence.' }
+if ($script:failures) { throw 'Internal launcher staging fixtures failed; rerun with MCLA_KEEP_TEST_FIXTURES=1 to keep the fixture.' }
+} finally { Remove-OwnedFixtureNoFollow $fixture }

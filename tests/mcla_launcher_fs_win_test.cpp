@@ -7,6 +7,7 @@
 #include <winioctl.h>
 
 #include "mcla_host_platform_win.h"
+#include "mcla_test_owned_temp_win.h"
 
 #include <array>
 #include <cstring>
@@ -110,16 +111,17 @@ int wmain(int argc, wchar_t **argv) {
   constexpr wchar_t hex[] = L"0123456789abcdef";
   std::wstring root = std::wstring(temp, temp_length) + L"mcla-launcher-fs-test-";
   for (const auto byte : random) { root += hex[byte >> 4]; root += hex[byte & 15]; }
-  // CREATE_NEW-equivalent directory creation proves ownership. Nothing is
-  // recursively removed: preserve this unique synthetic fixture for inspection.
+  // CREATE_NEW-equivalent directory creation proves ownership. The guard
+  // removes this fixture on exit; junctions and links are removed as links.
   if (!CreateDirectoryW(root.c_str(), nullptr)) return 2;
+  const mcla::test::OwnedTempFixture cleanup(root, L"mcla-launcher-fs-test-");
   const auto a_path = root + L"\\a";
   const auto b_path = root + L"\\b";
   const auto nested_path = a_path + L"\\nested";
   if (!CreateDirectoryW(a_path.c_str(), nullptr) || !CreateDirectoryW(b_path.c_str(), nullptr) ||
       !CreateDirectoryW(nested_path.c_str(), nullptr) ||
       !CreateDirectoryW((b_path + L"\\child").c_str(), nullptr)) return 2;
-  std::wcout << L"Owned synthetic fixture (preserved): " << root << L'\n';
+  std::wcout << L"Owned synthetic fixture (removed on exit): " << root << L'\n';
   auto a = fs::OpenDirectory(a_path);
   auto b = fs::OpenDirectory(b_path);
   Check(a.has_value() && b.has_value(), "open owned fixed-drive directories");

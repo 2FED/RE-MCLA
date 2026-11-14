@@ -9,6 +9,7 @@
 #include <windows.h>
 #include <bcrypt.h>
 #include <winioctl.h>
+#include "mcla_test_owned_temp_win.h"
 
 #include <array>
 #include <cstring>
@@ -183,15 +184,16 @@ int main() {
     root += hex[byte >> 4];
     root += hex[byte & 15];
   }
-  // Owned synthetic fixture; nothing is recursively removed (preserved for
-  // inspection, as the other launcher filesystem tests do).
+  // Owned synthetic fixture, removed on exit; junctions are removed as links
+  // and never followed.
   if (!CreateDirectoryW(root.c_str(), nullptr)) return 2;
+  const mcla::test::OwnedTempFixture cleanup(root, L"mcla-store-seed-test-");
   {
     auto canonical = fs::OpenDirectory(root);
     if (!canonical) return 2;
     root = canonical->path();
   }
-  std::wcout << L"Owned synthetic fixture (preserved): " << root << L'\n';
+  std::wcout << L"Owned synthetic fixture (removed on exit): " << root << L'\n';
 
   const auto p1 = root + L"\\profile-main", p2 = root + L"\\profile-bench", hidden = root + L"\\outside";
   const auto target = p1 + L"\\cache\\" + Fingerprint(L'1');

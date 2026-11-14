@@ -6,6 +6,7 @@
 #endif
 #include <windows.h>
 #include <bcrypt.h>
+#include "mcla_test_owned_temp_win.h"
 
 #include <array>
 #include <filesystem>
@@ -387,12 +388,13 @@ int main() {
     for (const auto b : random) { name += L"0123456789abcdef"[b >> 4]; name += L"0123456789abcdef"[b & 15]; }
     const auto root = disk::temp_directory_path()/name;
     Need(CreateDirectoryW(root.c_str(), nullptr) != FALSE, "exclusive synthetic root creation failed");
-    std::wcout << L"Preserved synthetic diagnostic-export fixture: " << root.wstring() << L'\n';
+    const mcla::test::OwnedTempFixture cleanup(root.wstring(), L"mcla-diagnostic-export-test-");
+    std::wcout << L"Synthetic diagnostic-export fixture (removed on exit): " << root.wstring() << L'\n';
     Run(root);
     std::cout << "Diagnostic export native: " << checks << " checks, " << failures << " failures, " << skips << " skips\n";
     return failures ? 1 : 0;
   } catch (const std::exception &error) {
-    std::cerr << "Synthetic diagnostic-export setup failed; preserve fixture: " << error.what() << '\n';
+    std::cerr << "Synthetic diagnostic-export setup failed: " << error.what() << '\n';
     return 2;
   }
 }

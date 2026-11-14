@@ -8,6 +8,7 @@
 #include <windows.h>
 #include <bcrypt.h>
 #include <shlobj.h>
+#include "mcla_test_owned_temp_win.h"
 
 #include <array>
 #include <iostream>
@@ -397,7 +398,8 @@ void TestWritablePolicy(const std::wstring &root) {
 int main() {
   try {
     const auto root = NewFixture();
-    std::wcout << L"Preserved isolated fixture: " << root << L'\n';
+    const mcla::test::OwnedTempFixture cleanup(root, L"MclaStoreTest-");
+    std::wcout << L"Owned isolated fixture (removed on exit): " << root << L'\n';
     mcla::platform::SetWineOverrideForTesting(0);
     TestStore(root);
     mcla::platform::SetWineOverrideForTesting(-1);

@@ -9,6 +9,7 @@
 #endif
 #include <windows.h>
 #include <bcrypt.h>
+#include "mcla_test_owned_temp_win.h"
 #include <array>
 #include <filesystem>
 #include <iostream>
@@ -16,7 +17,8 @@
 #include <stdexcept>
 
 // Only CheckLeaseForTest is called. All keys are ephemeral, fetches are injected
-// lambdas, and every filesystem path belongs to a unique preserved TEMP tree.
+// lambdas, and every filesystem path belongs to a unique owned TEMP tree that
+// is removed on exit (links removed as links, never followed).
 namespace {
 using namespace mcla::lease;
 namespace fs = mcla::launcher::fs;
@@ -140,7 +142,8 @@ int main() {
     for (auto byte : random) { suffix += L"0123456789abcdef"[byte >> 4]; suffix += L"0123456789abcdef"[byte & 15]; }
     const auto root = path::path(temp.data()) / (L"mcla-lease-runtime-" + suffix);
     if (!CreateDirectoryW(root.c_str(), nullptr)) return 2;
-    std::wcout << L"Synthetic cache fixture preserved: " << root.wstring() << L'\n';
+    const mcla::test::OwnedTempFixture cleanup(root.wstring(), L"mcla-lease-runtime-");
+    std::wcout << L"Synthetic cache fixture (removed on exit): " << root.wstring() << L'\n';
     SigningKey signer, untrusted;
     const auto ticket = signer.Ticket(), proof = signer.Lease(extension_end);
     unsigned fetches = 0;

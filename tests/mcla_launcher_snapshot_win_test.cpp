@@ -5,6 +5,7 @@
 #endif
 #include <windows.h>
 #include <bcrypt.h>
+#include "mcla_test_owned_temp_win.h"
 
 #include <array>
 #include <filesystem>
@@ -70,7 +71,8 @@ int main() {
   for (const auto b : random) { name += L"0123456789abcdef"[b >> 4]; name += L"0123456789abcdef"[b & 15]; }
   const auto root = std::filesystem::temp_directory_path() / name;
   if (!Directory(root)) return 2;
-  std::wcout << L"Owned synthetic snapshot fixture (preserved): " << root.wstring() << L'\n';
+  const mcla::test::OwnedTempFixture cleanup(root.wstring(), L"mcla-snapshot-test-");
+  std::wcout << L"Owned synthetic snapshot fixture (removed on exit): " << root.wstring() << L'\n';
   auto owner = fs::OpenDirectory(root.wstring());
   if (!owner) return 2;
   // Writer coordination belongs outside copied source/destination trees.

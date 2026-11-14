@@ -14,6 +14,8 @@
 #include <string>
 #include <string_view>
 
+#include "mcla_test_owned_temp_win.h"
+
 // Integration of the production import action only. Never invokes Play, creates
 // a window, launches a child, or reads an existing owner's bundle/save.
 namespace {
@@ -132,7 +134,8 @@ int main() {
     for (auto b : bytes) { suffix += L"0123456789abcdef"[b >> 4]; suffix += L"0123456789abcdef"[b & 15]; }
     const auto root = path::path(temp.data()) / (L"mcli-import-" + suffix);
     if (!CreateDirectoryW(Native(root).c_str(), nullptr)) return 2;
-    std::wcout << L"Synthetic fixture preserved: " << root.wstring() << L'\n';
+    const mcla::test::OwnedTempFixture cleanup(root.wstring(), L"mcli-import-");
+    std::wcout << L"Synthetic fixture (removed on exit): " << root.wstring() << L'\n';
     path::create_directory(root / L"store");
     path::create_directory(root / L"destinations");
     auto store = OpenPreferenceStore((root / L"store").wstring());

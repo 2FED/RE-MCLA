@@ -1,5 +1,6 @@
 #include "mcla_diagnostic_image_client_win.h"
 #include "mcla_host_platform_win.h"
+#include "mcla_test_owned_temp_win.h"
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -100,12 +101,14 @@ int main(int argc, char **argv) {
       std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64());
   const auto real = fixture + L"\\real";
   const auto link = fixture + L"\\link";
-  const bool fixture_ready = temp_length && temp_length <= MAX_PATH &&
-      CreateDirectoryW(fixture.c_str(), nullptr) && CreateDirectoryW(real.c_str(), nullptr) &&
+  const bool root_created = temp_length && temp_length <= MAX_PATH && CreateDirectoryW(fixture.c_str(), nullptr);
+  mcla::test::OwnedTempFixture cleanup;
+  if (root_created) cleanup.Adopt(fixture, L"mcla-image-client-junction-");
+  const bool fixture_ready = root_created && CreateDirectoryW(real.c_str(), nullptr) &&
       CopyFileW(helper.c_str(), (real + L"\\helper.exe").c_str(), TRUE) && MakeJunction(link, real);
-  check(fixture_ready, "create owned junction fixture (preserved)");
+  check(fixture_ready, "create owned junction fixture");
   if (fixture_ready) {
-    std::printf("Owned junction fixture (preserved): %ls\n", fixture.c_str());
+    std::printf("Owned junction fixture (removed on exit): %ls\n", fixture.c_str());
     request.request_id = 1;
     const std::filesystem::path via = link + L"\\helper.exe";
     check(RunImageHelperForTest(request, via, expected, {}).failure == ClientFailure::kInvalidHelper,
