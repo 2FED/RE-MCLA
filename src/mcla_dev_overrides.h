@@ -395,6 +395,15 @@
 //   path); guest_spin_backoff_64=true writes 64 to the host int
 //   mcla_guest_spin_backoff at startup. =false writes nothing for all four.
 //   An SDK without the l100 cvars logs the three SDK keys as unavailable.
+// - l101 (docs/evidence/M11-l101-sdk-per-draw-levers-20261114.md; per-draw
+//   levers, all default off): tex_memo_v2=true writes true to the SDK
+//   graphics-plugin bool d3d12_fetch_identity_v2 (4096-entry 2-way texture
+//   binding memo without the creation bump; its verify is the existing
+//   fetch_identity_verify key); rt_memo=true writes true to
+//   d3d12_rt_update_memo (skip a no-op render-target update); rt_memo_verify
+//   writes true to d3d12_rt_update_memo_verify (the full update always runs,
+//   mismatch counters; wins over rt_memo). =false writes nothing for all
+//   three. An SDK without the l101 cvars logs them as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -566,8 +575,11 @@ enum class Key : uint8_t {
   kCpRegSkipVerify,          // l100: cp_reg_write_skip_verify=true
   kCpDrawFastVerify,         // l100: cp_draw_const_only_verify=true
   kGuestSpinBackoff64,       // l100: mcla_guest_spin_backoff=64
+  kTexMemoV2,                // l101: d3d12_fetch_identity_v2=true
+  kRtMemo,                   // l101: d3d12_rt_update_memo=true
+  kRtMemoVerify,             // l101: d3d12_rt_update_memo_verify=true
 };
-inline constexpr size_t kKeyCount = 128;
+inline constexpr size_t kKeyCount = 131;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -876,6 +888,11 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"cp_reg_skip_verify", Phase::kGraphicsPlugin, "cp_reg_write_skip_verify", "true", ""},
     {"cp_draw_fast_verify", Phase::kGraphicsPlugin, "cp_draw_const_only_verify", "true", ""},
     {"guest_spin_backoff_64", Phase::kStartup, "mcla_guest_spin_backoff", "64", ""},
+    // l101 per-draw levers (SDK bools, graphics plugin, latched at every frame
+    // start); default off, =false writes nothing.
+    {"tex_memo_v2", Phase::kGraphicsPlugin, "d3d12_fetch_identity_v2", "true", ""},
+    {"rt_memo", Phase::kGraphicsPlugin, "d3d12_rt_update_memo", "true", ""},
+    {"rt_memo_verify", Phase::kGraphicsPlugin, "d3d12_rt_update_memo_verify", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1235,7 +1252,7 @@ std::optional<bool> AppliedValue(Key key);
 // the three d3d12_frame_lead_strict keys =false; since l95 the six l95 keys
 // =false; since l96 the four l96 keys =false; since l97 the two l97 keys
 // =false; since l99 the five l99 keys =false; since l100 the four l100 keys
-// =false).
+// =false; since l101 the three l101 keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

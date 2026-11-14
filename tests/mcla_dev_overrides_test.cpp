@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 128, "one hundred and twenty-eight whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 131, "one hundred and thirty-one whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1708,6 +1708,70 @@ void TestWhitelist() {
           "l100 near misses: an integer, the absent fast-path key and a repeat are ignored");
   }
   {
+    // l101: per-draw levers (default off). tex_memo_v2 / rt_memo /
+    // rt_memo_verify write true to the SDK bools d3d12_fetch_identity_v2 /
+    // d3d12_rt_update_memo / d3d12_rt_update_memo_verify (graphics plugin);
+    // =false writes nothing; no conflict pairs (different cvars). The memo
+    // v2 verify is the existing fetch_identity_verify key.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+    } l101[] = {
+        {Key::kTexMemoV2, "tex_memo_v2", "d3d12_fetch_identity_v2"},
+        {Key::kRtMemo, "rt_memo", "d3d12_rt_update_memo"},
+        {Key::kRtMemoVerify, "rt_memo_verify", "d3d12_rt_update_memo_verify"},
+    };
+    for (const auto &k : l101) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == k.cvar && CvarText(info, true) == "true" &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l101 key: its phase, cvar and text, false writes nothing");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "l101 keys are in no conflict pair");
+      }
+    }
+    Check(FindKey("fetch_identity_verify") == Key::kFetchIdentityVerify &&
+              CvarName(Info(Key::kFetchIdentityVerify)) == "d3d12_fetch_identity_verify",
+          "the memo v2 verify is the existing fetch_identity_verify key");
+    Check(!FindKey("d3d12_fetch_identity_v2") && !FindKey("d3d12_rt_update_memo") &&
+              !FindKey("tex_memo_verify") && !FindKey("tex_memo") && !FindKey("rt_memo_on") &&
+              !FindKey("RT_MEMO") && !FindKey("pso_reuse") && !FindKey("rt_memo_verify_on"),
+          "no prefix, suffix, cvar-name or case variants of the l101 keys (no pso_reuse)");
+    const Parsed verify = Parse("fetch_identity_verify=true\n"
+                                "tex_memo_v2=true\n"
+                                "rt_memo_verify=true\n"
+                                "cp_reg_skip_verify=true\n"
+                                "cp_draw_fast_verify=true\n");
+    Check(verify.ValueCount() == 5 && verify.issue_count == 0 &&
+              verify.Value(Key::kTexMemoV2) == true && verify.Value(Key::kRtMemoVerify) == true &&
+              verify.Value(Key::kFetchIdentityVerify) == true,
+          "the l101 verify-all lever lines parse");
+    const Parsed fast = Parse("tex_memo_v2=true\n"
+                              "rt_memo=true\n");
+    Check(fast.ValueCount() == 2 && fast.issue_count == 0 && fast.Value(Key::kRtMemo) == true,
+          "the l101 fast lever lines parse");
+    const Parsed both = Parse("rt_memo=true\n"
+                              "rt_memo_verify=true\n");
+    Check(both.ValueCount() == 2 && both.issue_count == 0,
+          "rt_memo with its verify: both apply (the SDK verify wins), no conflict");
+    const Parsed bad = Parse("rt_memo=1\n"
+                             "tex_memo_verify=true\n"
+                             "rt_memo=true\n"
+                             "rt_memo=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 && bad.Value(Key::kRtMemo) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l101 near misses: an integer, the absent tex_memo_verify key and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -2184,7 +2248,8 @@ void TestWhitelist() {
                           key == Key::kLeadLlGuardAdaptive || key == Key::kLeadLlGuardRearm ||
                           key == Key::kLeadLlGuardOff || key == Key::kCpRegSkip ||
                           key == Key::kCpRegSkipVerify || key == Key::kCpDrawFastVerify ||
-                          key == Key::kGuestSpinBackoff64;
+                          key == Key::kGuestSpinBackoff64 || key == Key::kTexMemoV2 ||
+                          key == Key::kRtMemo || key == Key::kRtMemoVerify;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2950,7 +3015,8 @@ void TestWhitelist() {
     // plus the four l96 keys explicit false (114 keys); l97: plus the two l97
     // keys explicit false (116 keys); l98: plus the three l98 controls
     // explicit false (119 keys); l99: plus the five l99 keys explicit false
-    // (124 keys); l100: plus the four l100 keys explicit false (128 keys).
+    // (124 keys); l100: plus the four l100 keys explicit false (128 keys);
+    // l101: plus the three l101 keys explicit false (131 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3002,7 +3068,10 @@ void TestWhitelist() {
                                   "cp_reg_skip=false\n"
                                   "cp_reg_skip_verify=false\n"
                                   "cp_draw_fast_verify=false\n"
-                                  "guest_spin_backoff_64=false\n";
+                                  "guest_spin_backoff_64=false\n"
+                                  "tex_memo_v2=false\n"
+                                  "rt_memo=false\n"
+                                  "rt_memo_verify=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3595,7 +3664,7 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l100: 128 keys, about 3.63 KB).
+    // former 2 KiB and accepted since l81 (l101: 131 keys, about 3.69 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
