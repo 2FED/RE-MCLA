@@ -19,7 +19,7 @@
 // once at game start, because the launcher cannot pass extra command-line
 // flags. The file holds lines "name=true" or "name=false":
 //
-// - at most kMaxBytes (4 KiB since l81) bytes, ASCII only (no BOM); otherwise
+// - at most kMaxBytes (8 KiB since l106) bytes, ASCII only (no BOM); otherwise
 //   the whole file is rejected and nothing is applied (the launcher parses the
 //   same file with the same Parse, so the limit is the same there);
 // - lines end in LF or CRLF; empty lines and lines starting with '#' are
@@ -455,6 +455,12 @@
 //   anisotropic_override (the game's own anisotropic filtering instead of the
 //   SDK default 3, forced 4x; hot reload). An SDK without a cvar logs its key
 //   as unavailable.
+// - l106 (docs/evidence/M11-l106-guest-msaa-off-20261115.md; guest MSAA off,
+//   default off, =false writes nothing): guest_msaa_off=true writes true to
+//   the host init-only bool mcla_guest_msaa_off at startup (mcla_guest_msaa.cpp:
+//   after the game has created its renderer, its multisample mode +384 is set
+//   from 2 to 1 before any render target exists, so the game creates and
+//   draws its main scene with one sample; MCLA_GMSAA lines). No conflict pair.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -490,12 +496,15 @@ namespace mcla::dev_overrides {
 
 inline constexpr std::string_view kDirectory = "MCLA-R-Launcher-v1";
 inline constexpr std::string_view kFile = "mcla-dev-overrides.txt";
-// 4 KiB since l81 (2 KiB l73-l80, 1 KiB before): a full 71-key l80 arm (every
-// key explicit) was about 2.02 KB, so an editor re-save with CRLF would have
-// pushed it past 2 KiB and the whole file would have been rejected; a full
-// 75-key arm with CRLF is about 2.3 KB. Since l81 arms list only the keys
-// that differ from the defaults (private/l81-CHECKLIST.txt).
-inline constexpr size_t kMaxBytes = 4096;
+// 8 KiB since l106 (4 KiB l81-l105, 2 KiB l73-l80, 1 KiB before): a full 71-key
+// l80 arm (every key explicit) was about 2.02 KB, so an editor re-save with
+// CRLF would have pushed it past 2 KiB and the whole file would have been
+// rejected; a full 75-key arm with CRLF is about 2.3 KB. Since l81 arms list
+// only the keys that differ from the defaults (private/l81-CHECKLIST.txt).
+// The full 146-key CRLF arm of l105 was 4041 bytes, 55 under the 4 KiB limit;
+// 8 KiB leaves room for about as many keys again. The launcher reads the same
+// file with this Parse, so the limit is the same there.
+inline constexpr size_t kMaxBytes = 8192;
 
 enum class Key : uint8_t {
   kReadbackSyncComposite,
@@ -644,8 +653,9 @@ enum class Key : uint8_t {
   kCasSharpMax,              // l105: present_cas_additional_sharpness=1.0
   kFsrSharpMax,              // l105: present_fsr_sharpness_reduction=0.0
   kAnisoDefault,             // l105: anisotropic_override=-1
+  kGuestMsaaOff,             // l106: mcla_guest_msaa_off=true
 };
-inline constexpr size_t kKeyCount = 146;
+inline constexpr size_t kKeyCount = 147;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -992,6 +1002,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"cas_sharp_max", Phase::kStartup, "present_cas_additional_sharpness", "1.0", ""},
     {"fsr_sharp_max", Phase::kStartup, "present_fsr_sharpness_reduction", "0.0", ""},
     {"aniso_default", Phase::kGraphicsPlugin, "anisotropic_override", "-1", ""},
+    // l106 guest MSAA off: host init-only bool (mcla_guest_msaa.cpp), read
+    // when the game creates its renderer; default off, =false writes nothing.
+    {"guest_msaa_off", Phase::kStartup, "mcla_guest_msaa_off", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1368,7 +1381,7 @@ std::optional<bool> AppliedValue(Key key);
 // =false; since l99 the five l99 keys =false; since l100 the four l100 keys
 // =false; since l101 the three l101 keys =false; since l103 the two l103
 // keys =false; since l104 the six l104 controls =false; since l105 the
-// seven l105 keys =false).
+// seven l105 keys =false; since l106 guest_msaa_off=false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

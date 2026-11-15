@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 146, "one hundred and forty-six whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 147, "one hundred and forty-seven whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2079,6 +2079,52 @@ void TestWhitelist() {
           "l105 near misses: an integer, cvar lines and a repeat are ignored");
   }
   {
+    // l106: guest_msaa_off writes true to the host init-only bool
+    // mcla_guest_msaa_off at startup (=true only).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &info = Info(Key::kGuestMsaaOff);
+    Check(FindKey("guest_msaa_off") == Key::kGuestMsaaOff && info.phase == Phase::kStartup &&
+              CvarName(info) == "mcla_guest_msaa_off" && CvarText(info, true) == "true" &&
+              CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+              !info.overrides_user,
+          "l106 key: startup, mcla_guest_msaa_off=true, false writes nothing");
+    Check(static_cast<size_t>(Key::kGuestMsaaOff) == mcla::dev_overrides::kKeyCount - 1,
+          "l106 key is the last key");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kGuestMsaaOff && pair.second != Key::kGuestMsaaOff,
+            "guest_msaa_off is in no conflict pair");
+    }
+    Check(!FindKey("mcla_guest_msaa_off") && !FindKey("guest_msaa") && !FindKey("msaa_off") &&
+              !FindKey("guest_msaa_on") && !FindKey("GUEST_MSAA_OFF") &&
+              !FindKey("guest_msaa_off_2x") && !FindKey("msaa"),
+          "no prefix, suffix, cvar-name or case variants of the l106 key");
+    const Parsed arm = Parse("guest_msaa_off=true\n");
+    Check(arm.ValueCount() == 1 && arm.issue_count == 0 &&
+              arm.Value(Key::kGuestMsaaOff) == true,
+          "the l106 msaa-off arm line parses");
+    const Parsed fxaa = Parse("guest_msaa_off=true\npresent_fxaa=true\n");
+    Check(fxaa.ValueCount() == 2 && fxaa.issue_count == 0 &&
+              fxaa.Value(Key::kPresentFxaa) == true,
+          "msaa-off with FXAA (different cvars) combine");
+    const Parsed cat = Parse("gpu_cat=true\r\nguest_msaa_off=true\r\n");
+    Check(cat.ValueCount() == 2 && cat.issue_count == 0 && cat.Value(Key::kGpuCat) == true &&
+              cat.Value(Key::kGuestMsaaOff) == true,
+          "msaa-off with the GPU category timing combine (CRLF)");
+    const Parsed bad = Parse("guest_msaa_off=1\n"
+                             "mcla_guest_msaa_off=true\n"
+                             "guest_msaa_off=true\n"
+                             "guest_msaa_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kGuestMsaaOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l106 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -2564,7 +2610,8 @@ void TestWhitelist() {
                           key == Key::kLeadLlReplaceOff || key == Key::kGpuCat ||
                           key == Key::kPresentFxaa || key == Key::kPresentFsr ||
                           key == Key::kPresentCas || key == Key::kCasSharpMax ||
-                          key == Key::kFsrSharpMax || key == Key::kAnisoDefault;
+                          key == Key::kFsrSharpMax || key == Key::kAnisoDefault ||
+                          key == Key::kGuestMsaaOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -3338,7 +3385,7 @@ void TestWhitelist() {
     // l101: plus the three l101 keys explicit false (131 keys); l103: plus the
     // two l103 keys explicit false (133 keys); l104: plus the six l104 controls
     // explicit false (139 keys); l105: plus the seven l105 keys explicit false
-    // (146 keys).
+    // (146 keys); l106: plus guest_msaa_off explicit false (147 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3408,7 +3455,8 @@ void TestWhitelist() {
                                   "present_cas=false\n"
                                   "cas_sharp_max=false\n"
                                   "fsr_sharp_max=false\n"
-                                  "aniso_default=false\n";
+                                  "aniso_default=false\n"
+                                  "guest_msaa_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3824,7 +3872,8 @@ void TestWhitelist() {
   }
   Check(mcla::dev_overrides::kFile == "mcla-dev-overrides.txt", "file name (same as l55)");
   Check(mcla::dev_overrides::kDirectory == "MCLA-R-Launcher-v1", "launcher per-user directory");
-  Check(mcla::dev_overrides::kMaxBytes == 4096, "4 KiB limit (l81; 2 KiB l73-l80)");
+  Check(mcla::dev_overrides::kMaxBytes == 8192,
+        "8 KiB limit (l106; 4 KiB l81-l105, 2 KiB l73-l80)");
 }
 
 void TestValidFiles() {
@@ -3991,29 +4040,43 @@ void TestRejectedFiles() {
   {
     std::string padded = "d3d12_wrm_event_wake=true\n";
     padded += std::string(mcla::dev_overrides::kMaxBytes - padded.size(), '\n');
-    Check(padded.size() == 4096, "padded size");
+    Check(padded.size() == 8192, "padded size");
     const Parsed ok = Parse(padded);
     Check(ok.status == FileStatus::kParsed && ok.Value(Key::kWrmEventWake) == true,
-          "exactly 4 KiB accepted");
+          "exactly 8 KiB accepted");
     padded += '\n';
     const Parsed big = Parse(padded);
-    Check(big.status == FileStatus::kRejected && NoValues(big), "4097 bytes rejected");
+    Check(big.status == FileStatus::kRejected && NoValues(big), "8193 bytes rejected");
+  }
+  {
+    // l106: a file beyond the former 4 KiB limit (l81-l105) is accepted now.
+    std::string over = "guest_msaa_off=true\n";
+    over += std::string(4097 - over.size(), '\n');
+    const Parsed p = Parse(over);
+    Check(over.size() == 4097 && p.status == FileStatus::kParsed &&
+              p.Value(Key::kGuestMsaaOff) == true,
+          "4097 bytes (rejected l81-l105) accepted since l106");
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l105: 146 keys, about 4.04 KB; the
-    // next keys need a larger kMaxBytes for a full CRLF arm).
+    // former 2 KiB and accepted since l81 (l105: 146 keys, about 4.04 KB, 55
+    // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
+    // 4 KB of room for comments and later keys under 8 KiB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 4070, "full arm size");
-    full += "# " + std::string(4090 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() > 4000 && full.size() < 4096, "full arm size");
+    // A long comment block (CRLF lines of 100 bytes) up to 8190 bytes.
+    while (full.size() + 100 <= 8190) {
+      full += "# " + std::string(96, 'x') + "\r\n";
+    }
+    full += "# " + std::string(8190 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
-    Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
+    Check(full.size() == 8190 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&
               p.ValueCount() == mcla::dev_overrides::kKeyCount && p.ignored_lines == 0,
-          "full CRLF arm with a comment, between 2 and 4 KiB: accepted, every key");
+          "full CRLF arm with comments, between 4 and 8 KiB: accepted, every key");
   }
 }
 

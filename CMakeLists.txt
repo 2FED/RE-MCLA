@@ -68,7 +68,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
             readback_sync native_refcount dev_overrides m10_defaults save_copy_guard warp_probe
             album_probe pursuit_probe xma_consume_probe lock_probe ambient_dt_probe
-            step_smoother audio_filter tod)
+            step_smoother audio_filter tod guest_msaa)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -107,6 +107,10 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # addresses against the generated update, warp and preset code.
     target_compile_definitions(mcla_tod_test PRIVATE
         MCLA_TOD_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
+    # l106: the guest MSAA test checks its addresses, offsets and mode values
+    # against the generated renderer creation, set-up and scene code.
+    target_compile_definitions(mcla_guest_msaa_test PRIVATE
+        MCLA_GMSAA_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -274,6 +278,7 @@ list(APPEND MCLA_SOURCES
     src/mcla_photo_capture.cpp
     src/mcla_pursuit_probe.cpp
     src/mcla_tod.cpp
+    src/mcla_guest_msaa.cpp
     src/mcla_xma_consume_probe.cpp)
 # l89 KI-060: the native voice-filter kernels are scalar recurrences. SLP
 # vectorization packs their independent operations into vectors with

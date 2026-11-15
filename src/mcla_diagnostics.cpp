@@ -1132,6 +1132,9 @@ BuildStateJson(std::string_view reason, const SnapshotTrigger &trigger,
   if (!runtime.time_of_day_json.empty()) {
     out << "  \"time_of_day\": " << runtime.time_of_day_json << ",\n";
   }
+  if (!runtime.guest_msaa_json.empty()) {
+    out << "  \"guest_msaa\": " << runtime.guest_msaa_json << ",\n";
+  }
   if (!runtime.perf_split_json.empty()) {
     out << "  \"perf_split\": " << runtime.perf_split_json << ",\n";
   }

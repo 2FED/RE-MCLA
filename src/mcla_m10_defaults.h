@@ -187,7 +187,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 104> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 105> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -404,6 +404,9 @@ inline constexpr std::array<std::string_view, 104> kNeverWrittenCvars = {
     "present_cas_additional_sharpness",
     "present_fsr_sharpness_reduction",
     "anisotropic_override",
+    // l106 guest MSAA off (host mcla_guest_msaa.cpp, default off); owner key
+    // guest_msaa_off only.
+    "mcla_guest_msaa_off",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
