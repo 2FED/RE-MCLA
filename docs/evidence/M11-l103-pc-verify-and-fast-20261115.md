@@ -24,3 +24,17 @@ Per-draw cost in microseconds, sampled phases of the draw path:
 - The draw path is only about half of CP busy (1.42 us of about 2.97 us per draw): the rest is outside it (register writes, packet parsing). The register-write skip targets that part; arm `pc/fast2` (= fast + cp_reg_skip) was added by hand to the l103 arm set after the verifier result above.
 - MCLA_DIP (first use): 13 dips in about 6 minutes, 1-3 s each, 38-42 fps against a 51-55 median; hints mostly cp_draws, some gpu and cp_other.
 - Fourth clean Reflex-without-strict run by eye.
+
+## Run C, pc/fast2 = fast + cp_reg_skip (session fb4bf9d9, 6 qualifying minute windows; owner: no artefacts)
+
+| Session | Arm | draws/frame | CP ms/frame | CP us/draw | draw | tex | rt | bind | GPU ms/frame |
+|---|---|---|---|---|---|---|---|---|---|
+| 63fec055 | reflex-nostrict | 4934 | 15.3 | 3.10 | 1.59 | 0.490 | 0.206 | 0.466 | 17.4-18.9 |
+| aaf16693 | fast | 5020 | 14.9 | 2.97 | 1.42 | 0.399 | 0.127 | 0.476 | 17.7-19.5 |
+| fb4bf9d9 | fast2 | 4829 | 13.7 | 2.84 | 1.32 | 0.380 | 0.125 | 0.413 | 17.2-18.8 |
+
+- Register-write skip in the session: 32,870,348 register writes and 462,955,005 constant dwords skipped.
+- CP cost per draw 3.10 -> 2.84 us (-8.4 %) with all three levers; per window 2.70-2.97 against 3.02-3.18.
+- fps is unchanged in normal windows (47-54) because they are GPU-bound: GPU busy 17-19 ms per frame against CP 12.5-14.6 ms. With the CP levers the dips are now capped by the GPU as well (GPU about 14.7 ms + 1.14 us x draws: about 23.8 ms at 8 k draws).
+- MCLA_DIP: 15 dips in the session, 1-4 s, minimum 35.6-41.8 fps; hints cp_draws 10, gpu 2, unknown 3.
+- Conclusion: the CP levers are safe and worth keeping, but the next gain on this GPU must come from GPU time (a 14.7 ms base at 1080p is the larger term).
