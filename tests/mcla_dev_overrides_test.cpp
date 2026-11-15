@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 139, "one hundred and thirty-nine whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 146, "one hundred and forty-six whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2005,6 +2005,80 @@ void TestWhitelist() {
           "l104 near misses: an integer, a string value, the cvar line and a repeat are ignored");
   }
   {
+    // l105: the measurement and per-pixel / sharpness keys (=true only).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      const char *text;
+    } l105[] = {
+        {Key::kGpuCat, "gpu_cat", Phase::kGraphicsPlugin, "d3d12_gpu_category_timing", "true"},
+        {Key::kPresentFxaa, "present_fxaa", Phase::kGraphicsPlugin, "swap_post_effect", "fxaa"},
+        {Key::kPresentFsr, "present_fsr", Phase::kStartup, "present_effect", "fsr"},
+        {Key::kPresentCas, "present_cas", Phase::kStartup, "present_effect", "cas"},
+        {Key::kCasSharpMax, "cas_sharp_max", Phase::kStartup, "present_cas_additional_sharpness",
+         "1.0"},
+        {Key::kFsrSharpMax, "fsr_sharp_max", Phase::kStartup, "present_fsr_sharpness_reduction",
+         "0.0"},
+        {Key::kAnisoDefault, "aniso_default", Phase::kGraphicsPlugin, "anisotropic_override",
+         "-1"},
+    };
+    for (const auto &k : l105) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l105 key: its phase, cvar and text, false writes nothing");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        const bool presenter = pair.first == Key::kPresentFsr && pair.second == Key::kPresentCas;
+        Check(presenter || (pair.first != k.key && pair.second != k.key),
+              "l105 keys are in no conflict pair (present_fsr / present_cas: only with each other)");
+      }
+    }
+    Check(!FindKey("gpu_category_timing") && !FindKey("gpu_cat_on") && !FindKey("GPU_CAT") &&
+              !FindKey("present_fsr2") && !FindKey("present_fsr3") &&
+              !FindKey("present_fxaa_extreme") && !FindKey("present_effect") &&
+              !FindKey("present_bilinear") && !FindKey("swap_post_effect") &&
+              !FindKey("aniso_off") && !FindKey("anisotropic_override") &&
+              !FindKey("cas_sharp") && !FindKey("fsr_sharp"),
+          "no prefix, suffix, cvar-name or case variants of the l105 keys");
+    const Parsed gpu = Parse("gpu_cat=true\n");
+    Check(gpu.ValueCount() == 1 && gpu.issue_count == 0 && gpu.Value(Key::kGpuCat) == true,
+          "the l105 gpu-cat arm line parses");
+    const Parsed fsr = Parse("present_fsr=true\nfsr_sharp_max=true\npresent_fxaa=false\n");
+    Check(fsr.ValueCount() == 3 && fsr.issue_count == 0 && fsr.Value(Key::kPresentFsr) == true &&
+              fsr.Value(Key::kFsrSharpMax) == true && fsr.Value(Key::kPresentFxaa) == false,
+          "an FSR arm with a sharpness key and FXAA =false parses");
+    const Parsed combo = Parse("present_fxaa=true\npresent_cas=true\ncas_sharp_max=true\n"
+                               "aniso_default=true\ngpu_cat=true\n");
+    Check(combo.ValueCount() == 5 && combo.issue_count == 0,
+          "FXAA, CAS, sharpness, anisotropy and the timing combine (different cvars)");
+    const Parsed both = Parse("present_cas=true\nrt_memo=true\npresent_fsr=true\n");
+    Check(both.ValueCount() == 1 && both.Value(Key::kRtMemo) == true && both.issue_count == 1 &&
+              both.issues[0].line == 3 && both.issues[0].issue == LineIssue::kConflict,
+          "present_fsr with present_cas: neither applied, conflict on the later line");
+    const Parsed off = Parse("present_cas=true\npresent_fsr=false\n");
+    Check(off.ValueCount() == 2 && off.issue_count == 0 && off.Value(Key::kPresentCas) == true,
+          "present_cas with present_fsr=false is no conflict");
+    const Parsed bad = Parse("gpu_cat=1\n"
+                             "present_effect=fsr\n"
+                             "anisotropic_override=-1\n"
+                             "aniso_default=true\n"
+                             "aniso_default=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 4 &&
+              bad.Value(Key::kAnisoDefault) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kMalformed &&
+              bad.issues[2].issue == LineIssue::kMalformed &&
+              bad.issues[3].issue == LineIssue::kDuplicate,
+          "l105 near misses: an integer, cvar lines and a repeat are ignored");
+  }
+  {
     // M11-007d keys: host init-only bools at startup, true/false written.
     using mcla::dev_overrides::CvarName;
     using mcla::dev_overrides::CvarText;
@@ -2487,7 +2561,10 @@ void TestWhitelist() {
                           key == Key::kLowLatencyAutoAntiLag2 || key == Key::kTexMemoV2Off ||
                           key == Key::kRtMemoOff || key == Key::kCpRegSkipOff ||
                           key == Key::kLowLatencyOff || key == Key::kLowLatencyAutoAntiLag2Off ||
-                          key == Key::kLeadLlReplaceOff;
+                          key == Key::kLeadLlReplaceOff || key == Key::kGpuCat ||
+                          key == Key::kPresentFxaa || key == Key::kPresentFsr ||
+                          key == Key::kPresentCas || key == Key::kCasSharpMax ||
+                          key == Key::kFsrSharpMax || key == Key::kAnisoDefault;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2590,9 +2667,10 @@ void TestWhitelist() {
     // controls; l99: the guard-action group of three; l104: the texture memo
     // v2, render-target memo, register skip and auto Anti-Lag 2 keys with
     // their controls, low_latency_off joining the mode group (four keys, six
-    // pairs) and lead_ll_replace_off the l97 pair (three keys, three pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 43,
-          "forty-three shared-cvar pairs");
+    // pairs) and lead_ll_replace_off the l97 pair (three keys, three pairs);
+    // l105: present_fsr and present_cas (the present_effect string).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 44,
+          "forty-four shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -3259,7 +3337,8 @@ void TestWhitelist() {
     // (124 keys); l100: plus the four l100 keys explicit false (128 keys);
     // l101: plus the three l101 keys explicit false (131 keys); l103: plus the
     // two l103 keys explicit false (133 keys); l104: plus the six l104 controls
-    // explicit false (139 keys).
+    // explicit false (139 keys); l105: plus the seven l105 keys explicit false
+    // (146 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3322,7 +3401,14 @@ void TestWhitelist() {
                                   "cp_reg_skip_off=false\n"
                                   "low_latency_off=false\n"
                                   "low_latency_auto_antilag2_off=false\n"
-                                  "lead_ll_replace_off=false\n";
+                                  "lead_ll_replace_off=false\n"
+                                  "gpu_cat=false\n"
+                                  "present_fxaa=false\n"
+                                  "present_fsr=false\n"
+                                  "present_cas=false\n"
+                                  "cas_sharp_max=false\n"
+                                  "fsr_sharp_max=false\n"
+                                  "aniso_default=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3915,13 +4001,14 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l104: 139 keys, about 3.9 KB).
+    // former 2 KiB and accepted since l81 (l105: 146 keys, about 4.04 KB; the
+    // next keys need a larger kMaxBytes for a full CRLF arm).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3980, "full arm size");
-    full += "# " + std::string(4040 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 4070, "full arm size");
+    full += "# " + std::string(4090 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&

@@ -437,6 +437,24 @@
 //   four), lead_ll_replace_off with the two l97 keys (a group of three). The
 //   verify keys (fetch_identity_verify, rt_memo_verify, cp_reg_skip_verify)
 //   write other cvars and still win in the SDK with the levers on.
+// - l105 (docs/evidence/M11-l105-owner-build-20261115.md; measurement and
+//   per-pixel / sharpness arms, all default off, =false writes nothing):
+//   gpu_cat=true writes true to the SDK graphics-plugin bool
+//   d3d12_gpu_category_timing (GPU timestamps by command category,
+//   MCLA_GPU_CAT lines; hot reload); present_fxaa=true writes fxaa to the SDK
+//   graphics-plugin string swap_post_effect (FXAA on the guest output at the
+//   swap, read when the graphics system is set up, so the plugin phase is in
+//   time); present_fsr=true and present_cas=true write fsr and cas to the SDK
+//   rexruntime string present_effect (the presenter's FSR1 EASU + RCAS or
+//   CAS pass, read when the presenter is initialised; only an SDK built with
+//   REXGLUE_ENABLE_FFX_PRESENTER_SHADERS accepts them, others keep bilinear),
+//   a conflict pair; cas_sharp_max=true writes 1.0 to
+//   present_cas_additional_sharpness and fsr_sharp_max=true writes 0.0 to
+//   present_fsr_sharpness_reduction (startup, the same SDK condition);
+//   aniso_default=true writes -1 to the SDK graphics-plugin int
+//   anisotropic_override (the game's own anisotropic filtering instead of the
+//   SDK default 3, forced 4x; hot reload). An SDK without a cvar logs its key
+//   as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -619,8 +637,15 @@ enum class Key : uint8_t {
   kLowLatencyOff,            // l104 control: d3d12_low_latency_mode=off
   kLowLatencyAutoAntiLag2Off,  // l104 control: d3d12_low_latency_auto_antilag2=false
   kLeadLlReplaceOff,         // l104 control: d3d12_frame_lead_strict_low_latency=0
+  kGpuCat,                   // l105: d3d12_gpu_category_timing=true
+  kPresentFxaa,              // l105: swap_post_effect=fxaa
+  kPresentFsr,               // l105: present_effect=fsr
+  kPresentCas,               // l105: present_effect=cas
+  kCasSharpMax,              // l105: present_cas_additional_sharpness=1.0
+  kFsrSharpMax,              // l105: present_fsr_sharpness_reduction=0.0
+  kAnisoDefault,             // l105: anisotropic_override=-1
 };
-inline constexpr size_t kKeyCount = 139;
+inline constexpr size_t kKeyCount = 146;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -955,6 +980,18 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
      "false", ""},
     {"lead_ll_replace_off", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict_low_latency", "0",
      ""},
+    // l105 measurement and per-pixel / sharpness arms: the GPU category timing,
+    // FXAA at the swap and the anisotropic override (SDK graphics-plugin
+    // cvars, after the plugin has loaded) and the presenter effect and its
+    // sharpness (SDK rexruntime cvars read at presenter initialisation,
+    // startup); default off, =false writes nothing.
+    {"gpu_cat", Phase::kGraphicsPlugin, "d3d12_gpu_category_timing", "true", ""},
+    {"present_fxaa", Phase::kGraphicsPlugin, "swap_post_effect", "fxaa", ""},
+    {"present_fsr", Phase::kStartup, "present_effect", "fsr", ""},
+    {"present_cas", Phase::kStartup, "present_effect", "cas", ""},
+    {"cas_sharp_max", Phase::kStartup, "present_cas_additional_sharpness", "1.0", ""},
+    {"fsr_sharp_max", Phase::kStartup, "present_fsr_sharpness_reduction", "0.0", ""},
+    {"aniso_default", Phase::kGraphicsPlugin, "anisotropic_override", "-1", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -972,7 +1009,8 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // l104 the d3d12_fetch_identity_v2, d3d12_rt_update_memo,
 // cp_reg_write_skip_unchanged and d3d12_low_latency_auto_antilag2 bools, the
 // d3d12_low_latency_mode string as a group of four and the int
-// d3d12_frame_lead_strict_low_latency as a group of three):
+// d3d12_frame_lead_strict_low_latency as a group of three; since l105 the
+// present_effect string):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -980,7 +1018,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 43> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 44> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -1024,6 +1062,7 @@ inline constexpr std::array<ConflictPair, 43> kConflictPairs = {{
     {Key::kLowLatencyAutoAntiLag2, Key::kLowLatencyAutoAntiLag2Off},
     {Key::kLeadLlOffWhenReflex, Key::kLeadLlReplaceOff},
     {Key::kLeadLlAdaptiveWhenReflex, Key::kLeadLlReplaceOff},
+    {Key::kPresentFsr, Key::kPresentCas},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -1328,7 +1367,8 @@ std::optional<bool> AppliedValue(Key key);
 // =false; since l96 the four l96 keys =false; since l97 the two l97 keys
 // =false; since l99 the five l99 keys =false; since l100 the four l100 keys
 // =false; since l101 the three l101 keys =false; since l103 the two l103
-// keys =false; since l104 the six l104 controls =false).
+// keys =false; since l104 the six l104 controls =false; since l105 the
+// seven l105 keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

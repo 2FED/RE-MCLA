@@ -187,7 +187,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 98> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 104> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -393,6 +393,17 @@ inline constexpr std::array<std::string_view, 98> kNeverWrittenCvars = {
     // d3d12_low_latency_auto_antilag2 left this list in l104 (now a default
     // above).
     "d3d12_frame_lead_strict_low_latency_antilag2",
+    // l105 measurement and per-pixel / sharpness arms (SDK, defaults: timing
+    // off, swap_post_effect none, present_effect bilinear, CAS additional
+    // sharpness 0, FSR sharpness reduction 0.2, anisotropic_override 3); owner
+    // keys gpu_cat, present_fxaa, present_fsr / present_cas, cas_sharp_max,
+    // fsr_sharp_max and aniso_default only.
+    "d3d12_gpu_category_timing",
+    "swap_post_effect",
+    "present_effect",
+    "present_cas_additional_sharpness",
+    "present_fsr_sharpness_reduction",
+    "anisotropic_override",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
