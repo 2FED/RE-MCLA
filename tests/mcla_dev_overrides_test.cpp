@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 133, "one hundred and thirty-three whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 139, "one hundred and thirty-nine whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1236,23 +1236,25 @@ void TestWhitelist() {
                 !info.overrides_user,
             "l95 key: startup phase, its cvar and text, false writes nothing");
     }
+    // Since l104 the mode group has a fourth key, the control low_latency_off.
     size_t mode_pairs = 0;
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
       const bool first = pair.first == Key::kLowLatencyReflex ||
                          pair.first == Key::kLowLatencyAntiLag2 ||
-                         pair.first == Key::kLowLatencyAuto;
+                         pair.first == Key::kLowLatencyAuto || pair.first == Key::kLowLatencyOff;
       const bool second = pair.second == Key::kLowLatencyReflex ||
                           pair.second == Key::kLowLatencyAntiLag2 ||
-                          pair.second == Key::kLowLatencyAuto;
-      Check(first == second, "the l95 mode keys pair only among themselves");
+                          pair.second == Key::kLowLatencyAuto ||
+                          pair.second == Key::kLowLatencyOff;
+      Check(first == second, "the l95 mode keys pair only among themselves and low_latency_off");
       mode_pairs += first ? 1 : 0;
       for (const Key other : {Key::kLowLatencyMarkers, Key::kLowLatencyBoost, Key::kFmaBench}) {
         Check(pair.first != other && pair.second != other,
               "the l95 markers, boost and fma keys have no conflict pair");
       }
     }
-    Check(mode_pairs == 3, "the three l95 mode keys are a group of three");
-    Check(!FindKey("low_latency") && !FindKey("low_latency_off") &&
+    Check(mode_pairs == 6, "the three l95 mode keys and low_latency_off are a group of four");
+    Check(!FindKey("low_latency") && FindKey("low_latency_off") == Key::kLowLatencyOff &&
               !FindKey("low_latency_mode") && !FindKey("LOW_LATENCY_REFLEX") &&
               !FindKey("d3d12_low_latency_mode") && !FindKey("low_latency_antilag") &&
               !FindKey("low_latency_markers_only") && !FindKey("fma_bench_on") &&
@@ -1670,7 +1672,10 @@ void TestWhitelist() {
                 info.true_source == TextSource::kLiteral && !info.overrides_user,
             "l100 key: its phase, cvar and text, false writes nothing");
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != k.key && pair.second != k.key, "l100 keys are in no conflict pair");
+        // Since l104 cp_reg_skip pairs with its control cp_reg_skip_off.
+        const bool control = pair.first == Key::kCpRegSkip && pair.second == Key::kCpRegSkipOff;
+        Check(control || (pair.first != k.key && pair.second != k.key),
+              "l100 keys are in no conflict pair (cp_reg_skip: only with cp_reg_skip_off)");
       }
     }
     Check(!FindKey("cp_reg_write_skip_unchanged") && !FindKey("cp_reg_write_skip_verify") &&
@@ -1734,7 +1739,12 @@ void TestWhitelist() {
                 !info.overrides_user,
             "l101 key: its phase, cvar and text, false writes nothing");
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != k.key && pair.second != k.key, "l101 keys are in no conflict pair");
+        // Since l104 the two levers pair with their controls.
+        const bool control =
+            (pair.first == Key::kTexMemoV2 && pair.second == Key::kTexMemoV2Off) ||
+            (pair.first == Key::kRtMemo && pair.second == Key::kRtMemoOff);
+        Check(control || (pair.first != k.key && pair.second != k.key),
+              "l101 keys are in no conflict pair (the levers: only with their l104 controls)");
       }
     }
     Check(FindKey("fetch_identity_verify") == Key::kFetchIdentityVerify &&
@@ -1801,7 +1811,11 @@ void TestWhitelist() {
                 info.true_source == TextSource::kLiteral && !info.overrides_user,
             "l103 key: its phase, cvar and text, false writes nothing");
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != k.key && pair.second != k.key, "l103 keys are in no conflict pair");
+        // Since l104 the auto opt-in pairs with its control.
+        const bool control = pair.first == Key::kLowLatencyAutoAntiLag2 &&
+                             pair.second == Key::kLowLatencyAutoAntiLag2Off;
+        Check(control || (pair.first != k.key && pair.second != k.key),
+              "l103 keys are in no conflict pair (the auto opt-in: only with its l104 control)");
       }
     }
     Check(CvarName(Info(Key::kLeadLlOffWhenReflex)) == "d3d12_frame_lead_strict_low_latency" &&
@@ -1848,6 +1862,147 @@ void TestWhitelist() {
               bad.issues[1].issue == LineIssue::kUnknownName &&
               bad.issues[2].issue == LineIssue::kDuplicate,
           "l103 near misses: an integer, a prefix and a repeat are ignored");
+  }
+  {
+    // l104: the controls of the six new defaults (owner decisions
+    // 2026-11-15). tex_memo_v2_off / rt_memo_off / cp_reg_skip_off write false
+    // to d3d12_fetch_identity_v2 / d3d12_rt_update_memo /
+    // cp_reg_write_skip_unchanged and lead_ll_replace_off 0 to
+    // d3d12_frame_lead_strict_low_latency after the plugin loaded;
+    // low_latency_off writes off to d3d12_low_latency_mode and
+    // low_latency_auto_antilag2_off false to d3d12_low_latency_auto_antilag2
+    // at startup; =false writes nothing. Each pairs with the on keys of its
+    // cvar (the mode a group of four, the replacement a group of three).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      const char *text;
+      Key on[3];
+      size_t ons;
+    } l104[] = {
+        {Key::kTexMemoV2Off, "tex_memo_v2_off", Phase::kGraphicsPlugin, "d3d12_fetch_identity_v2",
+         "false", {Key::kTexMemoV2}, 1},
+        {Key::kRtMemoOff, "rt_memo_off", Phase::kGraphicsPlugin, "d3d12_rt_update_memo", "false",
+         {Key::kRtMemo}, 1},
+        {Key::kCpRegSkipOff, "cp_reg_skip_off", Phase::kGraphicsPlugin,
+         "cp_reg_write_skip_unchanged", "false", {Key::kCpRegSkip}, 1},
+        {Key::kLowLatencyOff, "low_latency_off", Phase::kStartup, "d3d12_low_latency_mode", "off",
+         {Key::kLowLatencyReflex, Key::kLowLatencyAntiLag2, Key::kLowLatencyAuto}, 3},
+        {Key::kLowLatencyAutoAntiLag2Off, "low_latency_auto_antilag2_off", Phase::kStartup,
+         "d3d12_low_latency_auto_antilag2", "false", {Key::kLowLatencyAutoAntiLag2}, 1},
+        {Key::kLeadLlReplaceOff, "lead_ll_replace_off", Phase::kGraphicsPlugin,
+         "d3d12_frame_lead_strict_low_latency", "0",
+         {Key::kLeadLlOffWhenReflex, Key::kLeadLlAdaptiveWhenReflex}, 2},
+    };
+    for (const auto &k : l104) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l104 control: its phase, cvar and text, false writes nothing");
+      size_t pairs = 0;
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        if (pair.first != k.key && pair.second != k.key) {
+          continue;
+        }
+        bool known = false;
+        for (size_t i = 0; i < k.ons; ++i) {
+          known = known || (pair.first == k.on[i] && pair.second == k.key);
+        }
+        Check(known, "an l104 control pairs only with the on keys of its cvar (on key first)");
+        ++pairs;
+      }
+      Check(pairs == k.ons, "one conflict pair for each on key of an l104 control");
+      for (size_t i = 0; i < k.ons; ++i) {
+        const auto &on = Info(k.on[i]);
+        Check(CvarName(on) == CvarName(info) && on.phase == info.phase &&
+                  !CvarText(on, true).empty() && CvarText(on, true) != CvarText(info, true) &&
+                  CvarText(on, false).empty(),
+              "l104: the on keys write other values to the same cvar in the same phase");
+      }
+    }
+    // The verify keys write other cvars: no pair with the lever controls.
+    for (const Key verify : {Key::kFetchIdentityVerify, Key::kRtMemoVerify, Key::kCpRegSkipVerify,
+                             Key::kCpDrawFastVerify, Key::kLeadLlCountAntiLag2}) {
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != verify && pair.second != verify,
+              "the verify and Anti-Lag 2 count keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("tex_memo_off") && !FindKey("tex_memo_v2_of") && !FindKey("TEX_MEMO_V2_OFF") &&
+              !FindKey("rt_memo_of") && !FindKey("rt_memo_verify_off") &&
+              !FindKey("cp_reg_skip_of") && !FindKey("cp_reg_write_skip_unchanged_off") &&
+              !FindKey("low_latency_of") && !FindKey("low_latency_none") &&
+              !FindKey("low_latency_auto_off") && !FindKey("lead_ll_off") &&
+              !FindKey("lead_ll_replace") && !FindKey("lead_ll_replace_off_on") &&
+              !FindKey("levers_off") && !FindKey("lowlat_off"),
+          "no prefix, suffix, cvar-name or case variants of the l104 keys");
+    const Parsed levers = Parse("tex_memo_v2_off=true\n"
+                                "rt_memo_off=true\n"
+                                "cp_reg_skip_off=true\n");
+    Check(levers.ValueCount() == 3 && levers.issue_count == 0 &&
+              levers.Value(Key::kTexMemoV2Off) == true && levers.Value(Key::kRtMemoOff) == true &&
+              levers.Value(Key::kCpRegSkipOff) == true,
+          "the l104 levers-off arm parses");
+    const Parsed lowlat = Parse("low_latency_off=true\n"
+                                "lead_ll_replace_off=true\n");
+    Check(lowlat.ValueCount() == 2 && lowlat.issue_count == 0 &&
+              lowlat.Value(Key::kLowLatencyOff) == true &&
+              lowlat.Value(Key::kLeadLlReplaceOff) == true,
+          "the l104 lowlat-off arm parses");
+    const Parsed verify = Parse("low_latency_reflex=true\n"
+                                "frame_lead_strict_off=true\n"
+                                "cp_reg_skip_verify=true\n"
+                                "cp_draw_fast_verify=true\n"
+                                "tex_memo_v2=true\n"
+                                "fetch_identity_verify=true\n"
+                                "rt_memo_verify=true\n");
+    Check(verify.ValueCount() == 7 && verify.issue_count == 0,
+          "the verify-all lines still parse with the l104 keys (no conflict with the verifies)");
+    const Parsed opt_out = Parse("low_latency_auto_antilag2_off=true\n"
+                                 "low_latency_auto=false\n");
+    Check(opt_out.ValueCount() == 2 && opt_out.issue_count == 0 &&
+              opt_out.Value(Key::kLowLatencyAutoAntiLag2Off) == true,
+          "the AMD opt-in control with an on key =false is no conflict");
+    const Parsed both = Parse("tex_memo_v2=true\n"
+                              "tex_memo_v2_off=true\n"
+                              "present_stats=true\n"
+                              "low_latency_off=true\n"
+                              "low_latency_auto=true\n"
+                              "lead_ll_replace_off=true\n"
+                              "lead_ll_adaptive_when_reflex=true\n"
+                              "low_latency_auto_antilag2_off=true\n"
+                              "low_latency_auto_antilag2=true\n");
+    Check(both.ValueCount() == 1 && both.Value(Key::kPresentStats) == true &&
+              both.issue_count == 4 && both.issues[0].line == 2 && both.issues[1].line == 5 &&
+              both.issues[2].line == 7 && both.issues[3].line == 9 &&
+              both.issues[0].issue == LineIssue::kConflict &&
+              both.issues[3].issue == LineIssue::kConflict,
+          "each l104 control with an on key: neither applied, conflict on the later line");
+    const Parsed group = Parse("low_latency_reflex=true\n"
+                               "low_latency_off=true\n"
+                               "low_latency_antilag2=true\n");
+    Check(group.ValueCount() == 0 && group.issue_count == 2 && group.issues[0].line == 2 &&
+              group.issues[1].line == 3,
+          "low_latency_off in the mode group: the whole group is dropped");
+    const Parsed bad = Parse("tex_memo_v2_off=1\n"
+                             "low_latency_off=off\n"
+                             "d3d12_low_latency_mode=off\n"
+                             "lead_ll_replace_off=true\n"
+                             "lead_ll_replace_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 4 &&
+              bad.Value(Key::kLeadLlReplaceOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kMalformed &&
+              bad.issues[2].issue == LineIssue::kMalformed &&
+              bad.issues[3].issue == LineIssue::kDuplicate,
+          "l104 near misses: an integer, a string value, the cvar line and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -2329,7 +2484,10 @@ void TestWhitelist() {
                           key == Key::kGuestSpinBackoff64 || key == Key::kTexMemoV2 ||
                           key == Key::kRtMemo || key == Key::kRtMemoVerify ||
                           key == Key::kLeadLlCountAntiLag2 ||
-                          key == Key::kLowLatencyAutoAntiLag2;
+                          key == Key::kLowLatencyAutoAntiLag2 || key == Key::kTexMemoV2Off ||
+                          key == Key::kRtMemoOff || key == Key::kCpRegSkipOff ||
+                          key == Key::kLowLatencyOff || key == Key::kLowLatencyAutoAntiLag2Off ||
+                          key == Key::kLeadLlReplaceOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2429,9 +2587,12 @@ void TestWhitelist() {
     // group of three and the two start keys; l95: the low-latency mode group
     // of three; l97: the two strict-replacement keys; l98: the native audio
     // filter, the draw-packet clock and the fence poll keys with their
-    // controls; l99: the guard-action group of three.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 34,
-          "thirty-four shared-cvar pairs");
+    // controls; l99: the guard-action group of three; l104: the texture memo
+    // v2, render-target memo, register skip and auto Anti-Lag 2 keys with
+    // their controls, low_latency_off joining the mode group (four keys, six
+    // pairs) and lead_ll_replace_off the l97 pair (three keys, three pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 43,
+          "forty-three shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -3097,7 +3258,8 @@ void TestWhitelist() {
     // explicit false (119 keys); l99: plus the five l99 keys explicit false
     // (124 keys); l100: plus the four l100 keys explicit false (128 keys);
     // l101: plus the three l101 keys explicit false (131 keys); l103: plus the
-    // two l103 keys explicit false (133 keys).
+    // two l103 keys explicit false (133 keys); l104: plus the six l104 controls
+    // explicit false (139 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3154,7 +3316,13 @@ void TestWhitelist() {
                                   "rt_memo=false\n"
                                   "rt_memo_verify=false\n"
                                   "lead_ll_count_antilag2=false\n"
-                                  "low_latency_auto_antilag2=false\n";
+                                  "low_latency_auto_antilag2=false\n"
+                                  "tex_memo_v2_off=false\n"
+                                  "rt_memo_off=false\n"
+                                  "cp_reg_skip_off=false\n"
+                                  "low_latency_off=false\n"
+                                  "low_latency_auto_antilag2_off=false\n"
+                                  "lead_ll_replace_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -3747,13 +3915,13 @@ void TestRejectedFiles() {
   }
   {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
-    // former 2 KiB and accepted since l81 (l103: 133 keys, about 3.75 KB).
+    // former 2 KiB and accepted since l81 (l104: 139 keys, about 3.9 KB).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() < 3800, "full arm size");
-    full += "# " + std::string(3860 - full.size() - 4, 'x') + "\r\n";
+    Check(full.size() < 3980, "full arm size");
+    full += "# " + std::string(4040 - full.size() - 4, 'x') + "\r\n";
     const Parsed p = Parse(full);
     Check(full.size() > 2048 && full.size() <= mcla::dev_overrides::kMaxBytes &&
               p.status == FileStatus::kParsed &&

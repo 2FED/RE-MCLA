@@ -416,6 +416,27 @@
 //   low_latency_auto then selects Anti-Lag 2 on an AMD adapter (without it
 //   auto is off on AMD). =false writes nothing for both; no conflict pairs
 //   (different cvars). An SDK without the l97 cvars logs them as unavailable.
+// - l104 (docs/evidence/M11-l104-owner-build-20261115.md; owner decisions
+//   2026-11-15): six SDK switches are build defaults through the m10 defaults
+//   (mcla_m10_defaults.h): the three per-draw levers d3d12_fetch_identity_v2,
+//   d3d12_rt_update_memo and cp_reg_write_skip_unchanged (true), and low
+//   latency d3d12_low_latency_mode=auto, d3d12_low_latency_auto_antilag2=true
+//   and d3d12_frame_lead_strict_low_latency=1 (NVIDIA: Reflex replaces the
+//   strict bound while its sleep is active; AMD: Anti-Lag 2 with the strict
+//   bound kept, because d3d12_frame_lead_strict_low_latency_antilag2 stays
+//   false; Intel and Wine/Proton: no backend, nothing changes). The controls,
+//   each =true only, =false writes nothing: tex_memo_v2_off (false to
+//   d3d12_fetch_identity_v2), rt_memo_off (false to d3d12_rt_update_memo),
+//   cp_reg_skip_off (false to cp_reg_write_skip_unchanged), low_latency_off
+//   (off to d3d12_low_latency_mode, startup), low_latency_auto_antilag2_off
+//   (false to d3d12_low_latency_auto_antilag2, startup) and
+//   lead_ll_replace_off (0 to d3d12_frame_lead_strict_low_latency: the strict
+//   bound is never replaced). Each forms conflict pairs with the keys of its
+//   cvar: tex_memo_v2, rt_memo, cp_reg_skip and low_latency_auto_antilag2
+//   one pair each, low_latency_off with the three l95 mode keys (a group of
+//   four), lead_ll_replace_off with the two l97 keys (a group of three). The
+//   verify keys (fetch_identity_verify, rt_memo_verify, cp_reg_skip_verify)
+//   write other cvars and still win in the SDK with the levers on.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -592,8 +613,14 @@ enum class Key : uint8_t {
   kRtMemoVerify,             // l101: d3d12_rt_update_memo_verify=true
   kLeadLlCountAntiLag2,      // l103: d3d12_frame_lead_strict_low_latency_antilag2=true
   kLowLatencyAutoAntiLag2,   // l103: d3d12_low_latency_auto_antilag2=true
+  kTexMemoV2Off,             // l104 control: d3d12_fetch_identity_v2=false
+  kRtMemoOff,                // l104 control: d3d12_rt_update_memo=false
+  kCpRegSkipOff,             // l104 control: cp_reg_write_skip_unchanged=false
+  kLowLatencyOff,            // l104 control: d3d12_low_latency_mode=off
+  kLowLatencyAutoAntiLag2Off,  // l104 control: d3d12_low_latency_auto_antilag2=false
+  kLeadLlReplaceOff,         // l104 control: d3d12_frame_lead_strict_low_latency=0
 };
-inline constexpr size_t kKeyCount = 133;
+inline constexpr size_t kKeyCount = 139;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -915,6 +942,19 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
      "d3d12_frame_lead_strict_low_latency_antilag2", "true", ""},
     {"low_latency_auto_antilag2", Phase::kStartup, "d3d12_low_latency_auto_antilag2", "true",
      ""},
+    // l104 controls for the six new defaults written by the m10 defaults: the
+    // per-draw levers and the strict replacement (SDK graphics-plugin cvars,
+    // after the plugin has loaded) and the low-latency mode and its AMD
+    // opt-in (SDK rexruntime cvars, read once at the first frame, startup);
+    // =false writes nothing.
+    {"tex_memo_v2_off", Phase::kGraphicsPlugin, "d3d12_fetch_identity_v2", "false", ""},
+    {"rt_memo_off", Phase::kGraphicsPlugin, "d3d12_rt_update_memo", "false", ""},
+    {"cp_reg_skip_off", Phase::kGraphicsPlugin, "cp_reg_write_skip_unchanged", "false", ""},
+    {"low_latency_off", Phase::kStartup, "d3d12_low_latency_mode", "off", ""},
+    {"low_latency_auto_antilag2_off", Phase::kStartup, "d3d12_low_latency_auto_antilag2",
+     "false", ""},
+    {"lead_ll_replace_off", Phase::kGraphicsPlugin, "d3d12_frame_lead_strict_low_latency", "0",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -928,7 +968,11 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // mcla_raw_timer_hitch_hold bools; since l98 also the int
 // cp_fence_poll_interval and the mcla_audio_filter_native and
 // cp_draw_packet_tsc bools; since l99 the int
-// d3d12_frame_lead_strict_low_latency_guard_action, a group of three):
+// d3d12_frame_lead_strict_low_latency_guard_action, a group of three; since
+// l104 the d3d12_fetch_identity_v2, d3d12_rt_update_memo,
+// cp_reg_write_skip_unchanged and d3d12_low_latency_auto_antilag2 bools, the
+// d3d12_low_latency_mode string as a group of four and the int
+// d3d12_frame_lead_strict_low_latency as a group of three):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -936,7 +980,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 34> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 43> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -971,6 +1015,15 @@ inline constexpr std::array<ConflictPair, 34> kConflictPairs = {{
     {Key::kLeadLlGuardAdaptive, Key::kLeadLlGuardRearm},
     {Key::kLeadLlGuardAdaptive, Key::kLeadLlGuardOff},
     {Key::kLeadLlGuardRearm, Key::kLeadLlGuardOff},
+    {Key::kTexMemoV2, Key::kTexMemoV2Off},
+    {Key::kRtMemo, Key::kRtMemoOff},
+    {Key::kCpRegSkip, Key::kCpRegSkipOff},
+    {Key::kLowLatencyReflex, Key::kLowLatencyOff},
+    {Key::kLowLatencyAntiLag2, Key::kLowLatencyOff},
+    {Key::kLowLatencyAuto, Key::kLowLatencyOff},
+    {Key::kLowLatencyAutoAntiLag2, Key::kLowLatencyAutoAntiLag2Off},
+    {Key::kLeadLlOffWhenReflex, Key::kLeadLlReplaceOff},
+    {Key::kLeadLlAdaptiveWhenReflex, Key::kLeadLlReplaceOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -1275,7 +1328,7 @@ std::optional<bool> AppliedValue(Key key);
 // =false; since l96 the four l96 keys =false; since l97 the two l97 keys
 // =false; since l99 the five l99 keys =false; since l100 the four l100 keys
 // =false; since l101 the three l101 keys =false; since l103 the two l103
-// keys =false).
+// keys =false; since l104 the six l104 controls =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

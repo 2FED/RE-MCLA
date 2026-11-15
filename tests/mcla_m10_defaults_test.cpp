@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -81,8 +82,16 @@ void TestTable() {
       {"d3d12_frame_lead_strict", "1", Phase::kGraphicsPlugin, false, Platform::kAll, true},
       {"cp_draw_packet_tsc", "true", Phase::kGraphicsPlugin, false, Platform::kAll, true},
       {"cp_fence_poll_interval", "64", Phase::kGraphicsPlugin, false, Platform::kAll, true},
+      {"d3d12_fetch_identity_v2", "true", Phase::kGraphicsPlugin, false, Platform::kAll, true},
+      {"d3d12_rt_update_memo", "true", Phase::kGraphicsPlugin, false, Platform::kAll, true},
+      {"cp_reg_write_skip_unchanged", "true", Phase::kGraphicsPlugin, false, Platform::kAll,
+       true},
+      {"d3d12_low_latency_mode", "auto", Phase::kStartup, false, Platform::kAll, true},
+      {"d3d12_low_latency_auto_antilag2", "true", Phase::kStartup, false, Platform::kAll, true},
+      {"d3d12_frame_lead_strict_low_latency", "1", Phase::kGraphicsPlugin, false, Platform::kAll,
+       true},
   };
-  Check(std::size(expected) == kDefaults.size(), "eleven defaults");
+  Check(std::size(expected) == kDefaults.size(), "seventeen defaults");
   for (const auto &e : expected) {
     const Default *entry = Find(e.cvar);
     Check(entry != nullptr, "every expected cvar is in the table");
@@ -110,8 +119,11 @@ void TestTable() {
   // census, disarm bridge, targeted, elide, wrm, batched, upload 16 and 64;
   // since l94 the three frame lead keys (strict, adaptive, strict_off);
   // since l98 the four lever-1 keys (cp_draw_packet_tsc / _off,
-  // cp_fence_poll_64 / _off).
-  Check(linked == 15, "fifteen override keys write default cvars");
+  // cp_fence_poll_64 / _off); since l104 the fifteen keys of the six l104
+  // defaults (tex_memo_v2 / _off, rt_memo / _off, cp_reg_skip / _off, the
+  // three l95 mode keys and low_latency_off, low_latency_auto_antilag2 /
+  // _off, the two l97 keys and lead_ll_replace_off).
+  Check(linked == 30, "thirty override keys write default cvars");
   // Upload-ahead: both keys write the same integer cvar; =true writes 16/64,
   // =false writes nothing (the runtime treats that line as the owner's arm).
   for (const auto key : {dev::Key::kUploadAhead16, dev::Key::kUploadAhead64}) {
@@ -226,7 +238,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("xma_honor_frame_trim") && IsNeverWritten("xma_frame_trim_block_granular") &&
             IsNeverWritten("xma_dump_contexts") && IsNeverWritten("xma_dump_all_rates") &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "KI-071 step 3 cvar names in the never-written set");
   for (const auto key : {dev::Key::kXmaFrameWalkTrace, dev::Key::kXmaFrameWalkFix,
                          dev::Key::kXmaDumpInput}) {
@@ -243,7 +255,7 @@ void TestTable() {
           "the M11-007d lock switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_lock_probe") && IsNeverWritten("mcla_lock_readback_ensure") &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "M11-007d cvar names in the never-written set");
   for (const auto key : {dev::Key::kFenceWriteDeferred, dev::Key::kXmaFrameWalkFixOff}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -251,7 +263,7 @@ void TestTable() {
           "the l77 switches keep their SDK defaults (owner keys only)");
   }
   Check(IsNeverWritten("d3d12_fence_write_deferred") && IsNeverWritten("xma_frame_walk_fix") &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "l77 cvar names in the never-written set");
   for (const auto key : {dev::Key::kRawTimerOff, dev::Key::kVblankHz72, dev::Key::kVblankHz80,
                          dev::Key::kVblankHz88}) {
@@ -261,7 +273,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_raw_timer") && IsNeverWritten("mcla_guest_vblank_hz") &&
             Find("mcla_raw_timer") == nullptr && Find("mcla_guest_vblank_hz") == nullptr &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "KI-074 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kReadbackSteadyExemptOff, dev::Key::kFenceWriteDeferredOff,
                          dev::Key::kFenceDeferGap2000}) {
@@ -272,7 +284,7 @@ void TestTable() {
   Check(IsNeverWritten("d3d12_fence_defer_min_gap_us") &&
             Find("d3d12_fence_defer_min_gap_us") == nullptr &&
             IsNeverWritten("d3d12_readback_sync_steady_exempt") &&
-            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 104,
+            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 98,
         "l78 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kXmaCanaryFixes, dev::Key::kTimerQueueBlockingWait,
                          dev::Key::kTexturePlacedHeaps, dev::Key::kTextureHeap64Mb}) {
@@ -284,7 +296,7 @@ void TestTable() {
             IsNeverWritten("d3d12_texture_placed_heaps") &&
             IsNeverWritten("d3d12_texture_heap_block_mb") &&
             Find("d3d12_texture_placed_heaps") == nullptr &&
-            Find("d3d12_texture_heap_block_mb") == nullptr && kNeverWrittenCvars.size() == 104,
+            Find("d3d12_texture_heap_block_mb") == nullptr && kNeverWrittenCvars.size() == 98,
         "l79 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kBlendMinmaxFix, dev::Key::kShortSleepNative,
                          dev::Key::kApuPriorityNormal, dev::Key::kTexturePlacedHeapsOff,
@@ -299,7 +311,7 @@ void TestTable() {
             Find("d3d12_blend_minmax_fix") == nullptr &&
             Find("ke_delay_short_sleep_mode") == nullptr &&
             Find("apu_worker_priority") == nullptr &&
-            Find("d3d12_texture_heap_precreate") == nullptr && kNeverWrittenCvars.size() == 104,
+            Find("d3d12_texture_heap_precreate") == nullptr && kNeverWrittenCvars.size() == 98,
         "l80 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kZeroDelayNative, dev::Key::kGuestAudioPrioNormal,
                          dev::Key::kBlendMinmaxFixOff, dev::Key::kAlbumPreviewRestoreOff}) {
@@ -318,7 +330,7 @@ void TestTable() {
             Find("ke_delay_zero_gap_us") == nullptr &&
             Find("guest_audio_thread_priority") == nullptr &&
             Find("guest_thread_priority_boost_start") == nullptr &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "l81 cvar names in the never-written set (76)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
@@ -327,7 +339,7 @@ void TestTable() {
         "the KI-056 fix A restore is host-owned (default on since l81), never an M10 default");
   Check(IsNeverWritten("cp_bulk_register_writes") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kCpBulkRegs))) &&
-            Find("cp_bulk_register_writes") == nullptr && kNeverWrittenCvars.size() == 104,
+            Find("cp_bulk_register_writes") == nullptr && kNeverWrittenCvars.size() == 98,
         "the l82 CP bulk register writes stay SDK-owned (owner key cp_bulk_regs only)");
   for (const auto key : {dev::Key::kAmbientDtProbe, dev::Key::kAmbientDtSnapshot,
                          dev::Key::kRawTimerHitchHold}) {
@@ -336,16 +348,16 @@ void TestTable() {
           "the l83 KI-054 switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_ambient_dt_probe") && IsNeverWritten("mcla_ambient_dt_snapshot") &&
-            IsNeverWritten("mcla_raw_timer_hitch_hold") && kNeverWrittenCvars.size() == 104,
+            IsNeverWritten("mcla_raw_timer_hitch_hold") && kNeverWrittenCvars.size() == 98,
         "l83 cvar names in the never-written set (76)");
   Check(IsNeverWritten("mcla_raw_timer_stats") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kRawTimerStats))) &&
-            Find("mcla_raw_timer_stats") == nullptr && kNeverWrittenCvars.size() == 104,
+            Find("mcla_raw_timer_stats") == nullptr && kNeverWrittenCvars.size() == 98,
         "the l84 raw timer statistics switch is host-owned (owner key raw_timer_stats only)");
   Check(IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kRawTimerHitchHoldOff))) &&
             dev::CvarName(dev::Info(dev::Key::kRawTimerHitchHoldOff)) ==
                 "mcla_raw_timer_hitch_hold" &&
-            Find("mcla_raw_timer_hitch_hold") == nullptr && kNeverWrittenCvars.size() == 104,
+            Find("mcla_raw_timer_hitch_hold") == nullptr && kNeverWrittenCvars.size() == 98,
         "the KI-054 hitch hold is host-owned (default on since l86), never an M10 default");
   for (const auto key : {dev::Key::kAudioFilterProbe, dev::Key::kAudioFilterNative,
                          dev::Key::kAudioFilterNativeVerify, dev::Key::kAudioFilterNativeOff}) {
@@ -354,17 +366,17 @@ void TestTable() {
           "the l87 KI-060 switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_audio_filter_probe") && IsNeverWritten("mcla_audio_filter_native") &&
-            IsNeverWritten("mcla_audio_filter_native_verify") && kNeverWrittenCvars.size() == 104,
+            IsNeverWritten("mcla_audio_filter_native_verify") && kNeverWrittenCvars.size() == 98,
         "l87 cvar names in the never-written set (76)");
   Check(IsNeverWritten("d3d12_readback_fenced_delivery") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kReadbackFencedDelivery))) &&
             Find("d3d12_readback_fenced_delivery") == nullptr &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "the l88 fenced read-back delivery stays SDK-owned (owner key only)");
   Check(IsNeverWritten("mcla_audio_filter_native_ch_off") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAudioFilterNativeChOff))) &&
             Find("mcla_audio_filter_native_ch_off") == nullptr &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "the l89 sub_82147738 native control is host-owned (owner key only)");
   for (const auto key : {dev::Key::kFrameLeadLimit1, dev::Key::kReadbackDeferredRelease}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -375,7 +387,7 @@ void TestTable() {
             IsNeverWritten("d3d12_readback_deferred_release") &&
             Find("d3d12_frame_lead_limit") == nullptr &&
             Find("d3d12_readback_deferred_release") == nullptr &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "l90 cvar names in the never-written set (76)");
   // l94: the strict frame lead bound left the never-written set and is a
   // default on both platforms; its three owner keys write that cvar.
@@ -387,7 +399,7 @@ void TestTable() {
   }
   Check(!IsNeverWritten("d3d12_frame_lead_strict") && Find("d3d12_frame_lead_strict") != nullptr &&
             !WineOnly(*Find("d3d12_frame_lead_strict")) &&
-            !Find("d3d12_frame_lead_strict")->diagnostic && kNeverWrittenCvars.size() == 104,
+            !Find("d3d12_frame_lead_strict")->diagnostic && kNeverWrittenCvars.size() == 98,
         "l94: the strict lead cvar is a default on both platforms, not a diagnostic (85)");
   Check(IsNeverWritten("d3d12_frame_lead_limit") && Find("d3d12_frame_lead_limit") == nullptr,
         "the l90 open-lead limit stays SDK-owned");
@@ -398,7 +410,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_warp_stall_fix") && IsNeverWritten("mcla_ki026_probe") &&
             Find("mcla_warp_stall_fix") == nullptr && Find("mcla_ki026_probe") == nullptr &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "KI-026 cvar names in the never-written set (78)");
   for (const auto key : {dev::Key::kReadbackReadWatch, dev::Key::kReadbackAgeInject2,
                          dev::Key::kOcclusionQueryBounded4, dev::Key::kPresentStats,
@@ -412,7 +424,7 @@ void TestTable() {
             IsNeverWritten("d3d12_occlusion_query_bounded_ms") &&
             IsNeverWritten("d3d12_present_stats") &&
             IsNeverWritten("d3d12_present_sync_interval") &&
-            IsNeverWritten("mcla_locked_tearing_off") && kNeverWrittenCvars.size() == 104,
+            IsNeverWritten("mcla_locked_tearing_off") && kNeverWrittenCvars.size() == 98,
         "l92 cvar names in the never-written set (84)");
   for (const auto key : {dev::Key::kTodRateX10, dev::Key::kTodRateX30, dev::Key::kTodFreeze,
                          dev::Key::kTodStart0430, dev::Key::kTodStart0530}) {
@@ -422,28 +434,34 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_tod_rate") && IsNeverWritten("mcla_tod_start_minutes") &&
             Find("mcla_tod_rate") == nullptr && Find("mcla_tod_start_minutes") == nullptr &&
-            kNeverWrittenCvars.size() == 104,
+            kNeverWrittenCvars.size() == 98,
         "l93 cvar names in the never-written set (86)");
-  for (const auto key : {dev::Key::kLowLatencyReflex, dev::Key::kLowLatencyAntiLag2,
-                         dev::Key::kLowLatencyAuto, dev::Key::kLowLatencyMarkers,
-                         dev::Key::kLowLatencyBoost, dev::Key::kFmaBench}) {
+  for (const auto key : {dev::Key::kLowLatencyMarkers, dev::Key::kLowLatencyBoost,
+                         dev::Key::kFmaBench}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
               Find(dev::CvarName(dev::Info(key))) == nullptr,
-          "the l95 low-latency and fma keys keep their defaults (owner keys only)");
+          "the l95 markers, boost and fma keys keep their defaults (owner keys only)");
   }
-  Check(IsNeverWritten("d3d12_low_latency_mode") &&
+  // l104: the l95 mode keys write the low-latency mode default's cvar.
+  for (const auto key : {dev::Key::kLowLatencyReflex, dev::Key::kLowLatencyAntiLag2,
+                         dev::Key::kLowLatencyAuto, dev::Key::kLowLatencyOff}) {
+    Check(!IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) != nullptr,
+          "l104: the l95 mode keys and low_latency_off write the mode default's cvar");
+  }
+  Check(!IsNeverWritten("d3d12_low_latency_mode") &&
             IsNeverWritten("d3d12_low_latency_markers_only") &&
             IsNeverWritten("d3d12_low_latency_boost") && IsNeverWritten("mcla_fma_bench") &&
             !IsNeverWritten("d3d12_low_latency_presleep_margin_us") &&
-            Find("d3d12_low_latency_mode") == nullptr && kNeverWrittenCvars.size() == 104,
-        "l95 cvar names in the never-written set (89)");
+            Find("d3d12_low_latency_mode") != nullptr && kNeverWrittenCvars.size() == 98,
+        "l95 cvar names in the never-written set; the mode is a default since l104");
   for (const auto key : {dev::Key::kShaderImLoadMemo, dev::Key::kShaderImLoadMemoVerify}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
               Find(dev::CvarName(dev::Info(key))) == nullptr,
           "the l96 IM_LOAD memo keys keep their SDK defaults (owner keys only)");
   }
   Check(IsNeverWritten("shader_im_load_memo") && IsNeverWritten("shader_im_load_memo_verify") &&
-            Find("shader_im_load_memo") == nullptr && kNeverWrittenCvars.size() == 104,
+            Find("shader_im_load_memo") == nullptr && kNeverWrittenCvars.size() == 98,
         "l96 memo cvar names in the never-written set");
   // l98: the fence poll interval and the draw-packet clock left the
   // never-written set (now defaults on both platforms); their l96 keys and
@@ -458,21 +476,23 @@ void TestTable() {
             !WineOnly(*Find("cp_fence_poll_interval")) &&
             !WineOnly(*Find("cp_draw_packet_tsc")) &&
             !Find("cp_fence_poll_interval")->diagnostic &&
-            !Find("cp_draw_packet_tsc")->diagnostic && kNeverWrittenCvars.size() == 104,
-        "l98: lever 1 is a default on both platforms, not a diagnostic (92 never written)");
-  // l97: the low-latency strict replacement stays SDK-owned (default 0, both
-  // owner keys write it); the strict bound itself stays an m10 default.
-  for (const auto key : {dev::Key::kLeadLlOffWhenReflex, dev::Key::kLeadLlAdaptiveWhenReflex}) {
-    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
-              Find(dev::CvarName(dev::Info(key))) == nullptr &&
+            !Find("cp_draw_packet_tsc")->diagnostic && kNeverWrittenCvars.size() == 98,
+        "l98: lever 1 is a default on both platforms, not a diagnostic");
+  // l97: the low-latency strict replacement is an m10 default since l104 (1);
+  // the two l97 keys and lead_ll_replace_off write it; the strict bound itself
+  // stays an m10 default.
+  for (const auto key : {dev::Key::kLeadLlOffWhenReflex, dev::Key::kLeadLlAdaptiveWhenReflex,
+                         dev::Key::kLeadLlReplaceOff}) {
+    Check(!IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) != nullptr &&
               dev::CvarName(dev::Info(key)) == "d3d12_frame_lead_strict_low_latency",
-          "the l97 keys keep their SDK default (owner keys only)");
+          "the l97 keys and lead_ll_replace_off write the l104 replacement default's cvar");
   }
-  Check(IsNeverWritten("d3d12_frame_lead_strict_low_latency") &&
-            Find("d3d12_frame_lead_strict_low_latency") == nullptr &&
+  Check(!IsNeverWritten("d3d12_frame_lead_strict_low_latency") &&
+            Find("d3d12_frame_lead_strict_low_latency") != nullptr &&
             !IsNeverWritten("d3d12_frame_lead_strict") &&
-            Find("d3d12_frame_lead_strict") != nullptr && kNeverWrittenCvars.size() == 104,
-        "l97 cvar name in the never-written set (94); strict stays a default");
+            Find("d3d12_frame_lead_strict") != nullptr && kNeverWrittenCvars.size() == 98,
+        "l97 cvar name is a default since l104; strict stays a default");
   // l99: the texture churn and guard-action keys keep their defaults (owner
   // keys only).
   for (const auto key : {dev::Key::kTextureHardMargin256, dev::Key::kTextureMinAge2000,
@@ -485,48 +505,62 @@ void TestTable() {
   Check(IsNeverWritten("mcla_texture_hard_margin_mb") &&
             IsNeverWritten("texture_cache_min_age_ms") &&
             IsNeverWritten("d3d12_frame_lead_strict_low_latency_guard_action") &&
-            Find("texture_cache_min_age_ms") == nullptr && kNeverWrittenCvars.size() == 104,
-        "l99 cvar names in the never-written set (95)");
-  // l100: the command-processor levers and the spin backoff keep their
-  // defaults (owner keys only).
-  for (const auto key : {dev::Key::kCpRegSkip, dev::Key::kCpRegSkipVerify,
-                         dev::Key::kCpDrawFastVerify, dev::Key::kGuestSpinBackoff64}) {
+            Find("texture_cache_min_age_ms") == nullptr && kNeverWrittenCvars.size() == 98,
+        "l99 cvar names in the never-written set");
+  // l100: the verifies and the spin backoff keep their defaults (owner keys
+  // only); the register-write skip is a default since l104 (cp_reg_skip and
+  // cp_reg_skip_off write it).
+  for (const auto key : {dev::Key::kCpRegSkipVerify, dev::Key::kCpDrawFastVerify,
+                         dev::Key::kGuestSpinBackoff64}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
               Find(dev::CvarName(dev::Info(key))) == nullptr,
-          "the l100 keys keep their defaults (owner keys only)");
+          "the l100 verify and spin keys keep their defaults (owner keys only)");
   }
-  Check(IsNeverWritten("cp_reg_write_skip_unchanged") &&
+  Check(!IsNeverWritten("cp_reg_write_skip_unchanged") &&
             IsNeverWritten("cp_reg_write_skip_verify") &&
             IsNeverWritten("cp_draw_const_only_verify") &&
             IsNeverWritten("mcla_guest_spin_backoff") &&
-            Find("cp_reg_write_skip_unchanged") == nullptr &&
-            Find("mcla_guest_spin_backoff") == nullptr && kNeverWrittenCvars.size() == 104,
-        "l100 cvar names in the never-written set (99)");
-  // l101: the per-draw levers keep their defaults (owner keys only).
-  for (const auto key : {dev::Key::kTexMemoV2, dev::Key::kRtMemo, dev::Key::kRtMemoVerify}) {
-    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
-              Find(dev::CvarName(dev::Info(key))) == nullptr,
-          "the l101 keys keep their defaults (owner keys only)");
+            Find("cp_reg_write_skip_unchanged") != nullptr &&
+            Find("mcla_guest_spin_backoff") == nullptr && kNeverWrittenCvars.size() == 98,
+        "l100 cvar names: the verifies never written, the skip a default since l104");
+  // l101: the render-target memo verify keeps its default (owner key only);
+  // the texture memo v2 and the render-target memo are defaults since l104.
+  Check(IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kRtMemoVerify))) &&
+            Find(dev::CvarName(dev::Info(dev::Key::kRtMemoVerify))) == nullptr,
+        "the l101 verify key keeps its default (owner key only)");
+  for (const auto key : {dev::Key::kTexMemoV2, dev::Key::kRtMemo, dev::Key::kTexMemoV2Off,
+                         dev::Key::kRtMemoOff, dev::Key::kCpRegSkip, dev::Key::kCpRegSkipOff}) {
+    Check(!IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) != nullptr,
+          "l104: the lever keys and their controls write the lever defaults' cvars");
   }
-  Check(IsNeverWritten("d3d12_fetch_identity_v2") && IsNeverWritten("d3d12_rt_update_memo") &&
+  Check(!IsNeverWritten("d3d12_fetch_identity_v2") && !IsNeverWritten("d3d12_rt_update_memo") &&
             IsNeverWritten("d3d12_rt_update_memo_verify") &&
-            Find("d3d12_fetch_identity_v2") == nullptr &&
-            Find("d3d12_rt_update_memo") == nullptr && kNeverWrittenCvars.size() == 104,
-        "l101 cvar names in the never-written set (102)");
-  // l103: the AMD Anti-Lag 2 path keys keep their SDK defaults (owner keys
-  // only); the l97 replacement and the l95 mode cvars stay never written.
-  for (const auto key : {dev::Key::kLeadLlCountAntiLag2, dev::Key::kLowLatencyAutoAntiLag2}) {
-    Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
-              Find(dev::CvarName(dev::Info(key))) == nullptr,
-          "the l103 keys keep their defaults (owner keys only)");
+            IsNeverWritten("d3d12_fetch_identity_verify") &&
+            Find("d3d12_fetch_identity_v2") != nullptr &&
+            Find("d3d12_rt_update_memo") != nullptr && kNeverWrittenCvars.size() == 98,
+        "l101 cvar names: the verifies never written, the levers defaults since l104");
+  // l103: the Anti-Lag 2 replacement count keeps its SDK default (owner key
+  // only: AMD keeps the strict bound); the auto opt-in is a default since
+  // l104 (low_latency_auto_antilag2 and its control write it).
+  Check(IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kLeadLlCountAntiLag2))) &&
+            Find(dev::CvarName(dev::Info(dev::Key::kLeadLlCountAntiLag2))) == nullptr,
+        "the l103 replacement-count key keeps its default (owner key only)");
+  for (const auto key : {dev::Key::kLowLatencyAutoAntiLag2, dev::Key::kLowLatencyAutoAntiLag2Off}) {
+    Check(!IsNeverWritten(dev::CvarName(dev::Info(key))) &&
+              Find(dev::CvarName(dev::Info(key))) != nullptr,
+          "l104: the auto Anti-Lag 2 keys write the auto opt-in default's cvar");
   }
   Check(IsNeverWritten("d3d12_frame_lead_strict_low_latency_antilag2") &&
-            IsNeverWritten("d3d12_low_latency_auto_antilag2") &&
+            !IsNeverWritten("d3d12_low_latency_auto_antilag2") &&
             Find("d3d12_frame_lead_strict_low_latency_antilag2") == nullptr &&
-            Find("d3d12_low_latency_auto_antilag2") == nullptr &&
-            IsNeverWritten("d3d12_frame_lead_strict_low_latency") &&
-            IsNeverWritten("d3d12_low_latency_mode") && kNeverWrittenCvars.size() == 104,
-        "l103 cvar names in the never-written set (104)");
+            Find("d3d12_low_latency_auto_antilag2") != nullptr &&
+            !IsNeverWritten("d3d12_frame_lead_strict_low_latency") &&
+            !IsNeverWritten("d3d12_low_latency_mode") &&
+            IsNeverWritten("d3d12_frame_lead_strict_low_latency_guard_action") &&
+            kNeverWrittenCvars.size() == 98,
+        "l104: six cvars left the never-written set (98); the Anti-Lag 2 count and the guard "
+        "action stay");
   // l81 arm rule: an arm without upload-ahead and bridge lines leaves the Wine
   // defaults to this module (decision applied on Wine, not on Windows); an
   // explicit =false line of those keys is the owner's off arm (the l71-l80
@@ -730,12 +764,13 @@ void TestExhaustive() {
   }
   Check(windows_wine_only_applies == 0, "Wine-only defaults never apply on Windows");
   // Free inputs in the apply case: measurement_build, dev_override_applied and
-  // wine. Seven keyed all-platform entries (four speed-ups and, since l94, the
-  // strict frame lead, since l98 the two lever-1 entries): 2 x 2 each
+  // wine. Thirteen keyed all-platform entries (four speed-ups and, since l94,
+  // the strict frame lead, since l98 the two lever-1 entries, since l104 the
+  // three per-draw levers and the three low-latency entries): 2 x 2 each
   // (applied false); census (keyed, diagnostic): 1 x 2; GPU timing (no key,
   // diagnostic): 2 x 2; the two keyed Wine-only speed-ups: 2 each (wine true,
   // applied false).
-  Check(applies == 7 * 4 + 2 + 4 + 2 * 2, "apply case count");
+  Check(applies == 13 * 4 + 2 + 4 + 2 * 2, "apply case count");
 }
 
 // The runtime's dev_override_applied for an entry (mcla_m10_defaults.cpp
@@ -934,6 +969,182 @@ void TestLever1Defaults() {
   }
 }
 
+// l104 defaults (owner decisions 2026-11-15): the three per-draw levers and
+// low latency (auto with the AMD opt-in, the strict replacement 1), and their
+// controls, as TestLever1Defaults.
+void TestL104Defaults() {
+  const Default *v2 = Find("d3d12_fetch_identity_v2");
+  const Default *rt = Find("d3d12_rt_update_memo");
+  const Default *reg = Find("cp_reg_write_skip_unchanged");
+  const Default *mode = Find("d3d12_low_latency_mode");
+  const Default *aa2 = Find("d3d12_low_latency_auto_antilag2");
+  const Default *repl = Find("d3d12_frame_lead_strict_low_latency");
+  const Default *const entries[] = {v2, rt, reg, mode, aa2, repl};
+  for (const Default *entry : entries) {
+    Check(entry != nullptr && !entry->diagnostic && entry->platform == Platform::kAll &&
+              !entry->silent_false_is_arm,
+          "l104: each new default on both platforms, not a diagnostic, =false not an arm");
+  }
+  Check(v2->value == "true" && rt->value == "true" && reg->value == "true" &&
+            v2->phase == Phase::kGraphicsPlugin && rt->phase == Phase::kGraphicsPlugin &&
+            reg->phase == Phase::kGraphicsPlugin,
+        "l104 A: the three levers true at graphics-plugin load");
+  Check(mode->value == "auto" && mode->phase == Phase::kStartup && aa2->value == "true" &&
+            aa2->phase == Phase::kStartup && repl->value == "1" &&
+            repl->phase == Phase::kGraphicsPlugin,
+        "l104 B: low latency auto and the AMD opt-in at startup, replacement 1 at plugin load");
+  // B keeps AMD strict: the replacement does not count an Anti-Lag 2 sleep, and
+  // the guard keeps its SDK action (latch strict for the session on a trip).
+  Check(Find("d3d12_frame_lead_strict_low_latency_antilag2") == nullptr &&
+            IsNeverWritten("d3d12_frame_lead_strict_low_latency_antilag2") &&
+            Find("d3d12_frame_lead_strict_low_latency_guard_action") == nullptr &&
+            IsNeverWritten("d3d12_frame_lead_strict_low_latency_guard_action") &&
+            Find("d3d12_low_latency_allow_wine") == nullptr &&
+            Find("d3d12_low_latency_markers_only") == nullptr,
+        "l104 B: Anti-Lag 2 count, guard action, Wine allowance and markers stay SDK defaults");
+  // The on keys write the default values, the controls the SDK defaults.
+  const struct {
+    const Default *entry;
+    dev::Key key;
+    const char *text;
+  } texts[] = {
+      {v2, dev::Key::kTexMemoV2, "true"},
+      {v2, dev::Key::kTexMemoV2Off, "false"},
+      {rt, dev::Key::kRtMemo, "true"},
+      {rt, dev::Key::kRtMemoOff, "false"},
+      {reg, dev::Key::kCpRegSkip, "true"},
+      {reg, dev::Key::kCpRegSkipOff, "false"},
+      {mode, dev::Key::kLowLatencyReflex, "reflex"},
+      {mode, dev::Key::kLowLatencyAntiLag2, "antilag2"},
+      {mode, dev::Key::kLowLatencyAuto, "auto"},
+      {mode, dev::Key::kLowLatencyOff, "off"},
+      {aa2, dev::Key::kLowLatencyAutoAntiLag2, "true"},
+      {aa2, dev::Key::kLowLatencyAutoAntiLag2Off, "false"},
+      {repl, dev::Key::kLeadLlOffWhenReflex, "1"},
+      {repl, dev::Key::kLeadLlAdaptiveWhenReflex, "2"},
+      {repl, dev::Key::kLeadLlReplaceOff, "0"},
+  };
+  for (const auto &t : texts) {
+    const auto &info = dev::Info(t.key);
+    Check(dev::CvarName(info) == t.entry->cvar && dev::CvarText(info, true) == t.text &&
+              dev::CvarText(info, false).empty(),
+          "l104: each key of a new default writes its text to that cvar; =false nothing");
+    Check(KeyLineWins(*t.entry, info, true, true), "an applied l104 key wins");
+    Check(!KeyLineWins(*t.entry, info, std::nullopt, false), "an l104 key =false line does not win");
+    Check(!KeyLineWins(*t.entry, info, std::nullopt, true),
+          "an l104 key =true line that was not applied (cvar unavailable) does not win");
+    Check(!KeyLineWins(*t.entry, info, std::nullopt, std::nullopt), "no line: no win");
+  }
+  Check(dev::CvarText(dev::Info(dev::Key::kTexMemoV2), true) == v2->value &&
+            dev::CvarText(dev::Info(dev::Key::kLowLatencyAuto), true) == mode->value &&
+            dev::CvarText(dev::Info(dev::Key::kLeadLlOffWhenReflex), true) == repl->value,
+        "the l101 / l95 / l97 on keys write the l104 default values");
+  // The verify keys and the other low-latency keys write other cvars: they
+  // never win over a default (the SDK lets each verify win over its lever).
+  Check(!KeyLineWins(*v2, dev::Info(dev::Key::kFetchIdentityVerify), true, true) &&
+            !KeyLineWins(*rt, dev::Info(dev::Key::kRtMemoVerify), true, true) &&
+            !KeyLineWins(*reg, dev::Info(dev::Key::kCpRegSkipVerify), true, true) &&
+            !KeyLineWins(*reg, dev::Info(dev::Key::kCpDrawFastVerify), true, true) &&
+            !KeyLineWins(*mode, dev::Info(dev::Key::kLowLatencyMarkers), true, true) &&
+            !KeyLineWins(*repl, dev::Info(dev::Key::kLeadLlCountAntiLag2), true, true) &&
+            !KeyLineWins(*repl, dev::Info(dev::Key::kLeadLlGuardOff), true, true) &&
+            !KeyLineWins(*repl, dev::Info(dev::Key::kFrameLeadStrictOff), true, true) &&
+            !KeyLineWins(*aa2, dev::Info(dev::Key::kLowLatencyOff), true, true),
+        "a key of another cvar never wins over an l104 default");
+  // Owner build (measurement build) on both platforms: the l104 arms. Order of
+  // the expected actions: v2, rt, reg, mode, aa2, repl.
+  const std::string base =
+      "mcla_readback_sync_composite=true\nmcla_native_d3d_refcount=true\n"
+      "mcla_native_xapi_interlocked=true\nd3d12_wrm_event_wake=true\n"
+      "d3d12_replay_batched_wake=true\nd3d12_readback_elide_unread=true\n"
+      "prewarm_seed_store=true\nd3d12_readback_sync_targeted=true\n"
+      "memory_watch_census=false\nmcla_warp_probe=true\nmcla_album_probe=true\n"
+      "mcla_pursuit_probe=true\n";
+  const Action ap = Action::kApply;
+  const Action dv = Action::kDevOverride;
+  struct Arm {
+    std::string file;
+    Action expected[6];
+    const char *message;
+  };
+  const Arm arms[] = {
+      {"", {ap, ap, ap, ap, ap, ap}, "no file: every l104 default applies"},
+      {base, {ap, ap, ap, ap, ap, ap}, "the sparse l104 pc/default arm: every default"},
+      {base + "tex_memo_v2_off=true\nrt_memo_off=true\ncp_reg_skip_off=true\n",
+       {dv, dv, dv, ap, ap, ap},
+       "pc/levers-off: the three lever controls win, low latency stays"},
+      {base + "low_latency_off=true\nlead_ll_replace_off=true\n",
+       {ap, ap, ap, dv, ap, dv},
+       "pc/lowlat-off: mode off and no replacement win, the levers stay"},
+      {base + "tex_memo_v2_off=true\nrt_memo_off=true\ncp_reg_skip_off=true\n"
+              "low_latency_off=true\nlead_ll_replace_off=true\n",
+       {dv, dv, dv, dv, ap, dv},
+       "pc/old-default: the l103 default behaviour (the AMD opt-in is inert with mode off)"},
+      {base + "low_latency_reflex=true\nframe_lead_strict_off=true\n"
+              "cp_reg_skip_verify=true\ncp_draw_fast_verify=true\ntex_memo_v2=true\n"
+              "fetch_identity_verify=true\nrt_memo_verify=true\n",
+       {dv, ap, ap, dv, ap, ap},
+       "pc/verify-all: reflex and tex_memo_v2 are own arms, the rt / reg defaults stay (their "
+       "verify wins in the SDK)"},
+      {base + "low_latency_reflex=true\nframe_lead_strict_off=true\n"
+              "tex_memo_v2=true\nrt_memo=true\ncp_reg_skip=true\n",
+       {dv, dv, dv, dv, ap, ap},
+       "pc/fast2: its keys write the default values (own arms)"},
+      {base + "low_latency_auto=true\nlow_latency_auto_antilag2=true\n"
+              "lead_ll_off_when_reflex=true\nlead_ll_count_antilag2=true\n",
+       {ap, ap, ap, dv, dv, dv},
+       "amd/auto: the l103 candidate keys are own arms (the count key is another cvar)"},
+      {base + "low_latency_antilag2=true\nframe_lead_strict_off=true\n",
+       {ap, ap, ap, dv, ap, ap},
+       "amd/antilag2-nostrict: the explicit mode wins, the replacement default stays"},
+      {"tex_memo_v2=false\ntex_memo_v2_off=false\nrt_memo=false\nrt_memo_off=false\n"
+       "cp_reg_skip=false\ncp_reg_skip_off=false\nlow_latency_auto=false\n"
+       "low_latency_off=false\nlow_latency_auto_antilag2=false\n"
+       "low_latency_auto_antilag2_off=false\nlead_ll_off_when_reflex=false\n"
+       "lead_ll_replace_off=false\n",
+       {ap, ap, ap, ap, ap, ap},
+       "=false lines of the l104 keys change nothing"},
+      {"tex_memo_v2=true\ntex_memo_v2_off=true\nrt_memo=true\nrt_memo_off=true\n"
+       "cp_reg_skip=true\ncp_reg_skip_off=true\nlow_latency_auto=true\nlow_latency_off=true\n"
+       "low_latency_auto_antilag2=true\nlow_latency_auto_antilag2_off=true\n"
+       "lead_ll_off_when_reflex=true\nlead_ll_replace_off=true\n",
+       {ap, ap, ap, ap, ap, ap},
+       "conflicting l104 keys: neither applied, the build defaults stay"},
+      {"low_latency_auto_antilag2_off=true\n", {ap, ap, ap, ap, dv, ap},
+       "the AMD opt-in control alone"},
+      {"lead_ll_adaptive_when_reflex=true\n", {ap, ap, ap, ap, ap, dv},
+       "the l97 adaptive key is its own arm of the replacement"},
+  };
+  for (const bool wine : {false, true}) {
+    for (const Arm &arm : arms) {
+      for (size_t i = 0; i < 6; ++i) {
+        Inputs in = Fresh(wine);
+        in.measurement_build = true;
+        in.dev_override_applied = SimulatedOverrideApplied(*entries[i], arm.file);
+        Check(Decide(*entries[i], in) == arm.expected[i], arm.message);
+      }
+    }
+    for (const Default *entry : entries) {
+      Inputs in = Fresh(wine);
+      Check(Decide(*entry, in) == Action::kApply, "a volunteer build applies every l104 default");
+      in.non_default = true;
+      Check(Decide(*entry, in) == Action::kUserSet, "a command-line l104 value is kept");
+      in = Fresh(wine);
+      in.registered = false;
+      Check(Decide(*entry, in) == Action::kUnavailable,
+            "SDK without the cvar (e.g. the gate SDK): unavailable");
+      in = Fresh(wine);
+      in.holds_value = true;
+      Check(Decide(*entry, in) == Action::kAlready, "an SDK whose default equals: already");
+      in = Fresh(wine);
+      in.switch_on = false;
+      Check(Decide(*entry, in) == Action::kOffBySwitch,
+            "--mcla_m10_speedup_defaults=false leaves the l104 switches at the SDK defaults");
+    }
+  }
+}
+
+
 void TestTally() {
   Tally tally;
   tally.Add(Action::kApply);
@@ -959,6 +1170,7 @@ int main() {
   TestExhaustive();
   TestFrameLeadStrictDefault();
   TestLever1Defaults();
+  TestL104Defaults();
   TestTally();
   std::printf("mcla_m10_defaults_test: %d checks passed\n", checks);
   return 0;

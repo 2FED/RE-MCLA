@@ -22,7 +22,12 @@
 //   shared_memory_upload_ahead_pages=16; since l94 on both platforms also
 //   d3d12_frame_lead_strict=1 (KI-074 fix, see below); since l98 on both
 //   platforms also cp_draw_packet_tsc=true and cp_fence_poll_interval=64
-//   (CP lever 1, see below).
+//   (CP lever 1, see below); since l104 on both platforms also
+//   d3d12_fetch_identity_v2=true, d3d12_rt_update_memo=true,
+//   cp_reg_write_skip_unchanged=true (the per-draw levers) and
+//   d3d12_frame_lead_strict_low_latency=1 (low latency, see below);
+// - since l104 also at startup on both platforms: d3d12_low_latency_mode=auto
+//   and d3d12_low_latency_auto_antilag2=true (low latency, see below).
 //
 // Each phase is the phase of the owner override key for the same cvar.
 //
@@ -81,6 +86,29 @@
 // (shader_im_load_memo) stays never written: 131 verify mismatches in l96.
 // docs/evidence/M11-l98-owner-build-20261113.md.
 //
+// l104 (owner decisions 2026-11-15, docs/evidence/M11-l104-owner-build-20261115.md):
+// A. the three per-draw levers (texture binding memo v2
+// d3d12_fetch_identity_v2, render-target update memo d3d12_rt_update_memo,
+// register-write skip cp_reg_write_skip_unchanged; l103 PC verify-all clean,
+// pc/fast2 -8.4 % CP per draw, docs/evidence/M11-l103-pc-verify-and-fast-20261115.md);
+// B. low latency from one vendor-independent set: d3d12_low_latency_mode=auto,
+// d3d12_low_latency_auto_antilag2=true and
+// d3d12_frame_lead_strict_low_latency=1, with
+// d3d12_frame_lead_strict_low_latency_antilag2 and the guard action left at
+// their SDK defaults (false, 0). The SDK then selects Reflex on NVIDIA and
+// replaces the strict bound only while the Reflex sleep is active (fresh,
+// succeeded, not markers only), with the lead-2 guard latching strict back
+// for the session; Anti-Lag 2 on AMD with the strict bound kept on (the
+// replacement does not count an Anti-Lag 2 sleep); no backend on Intel, on
+// other vendors and under Wine/Proton (auto is off under Wine whatever
+// d3d12_low_latency_allow_wine says), so nothing changes there. All six on
+// both platforms (the SDK itself gates low latency off under Wine). Owner
+// controls (applied values win; =false lines write nothing and do not turn
+// a default off): tex_memo_v2_off, rt_memo_off, cp_reg_skip_off,
+// low_latency_off, low_latency_auto_antilag2_off, lead_ll_replace_off; the
+// l95 / l97 / l100 / l101 / l103 on keys write the same cvars and are their
+// own arms. The verify keys write other cvars and still win in the SDK.
+//
 // Semantics kept from the SDK: targeted sync acts only while
 // d3d12_readback_sync_composite is on (MCLA_READBACK_SYNC_COMPOSITE_DEFAULT);
 // elision acts only in readback_resolve=some (the host default). Both are
@@ -124,7 +152,7 @@ struct Default {
   bool silent_false_is_arm = false;
 };
 
-inline constexpr std::array<Default, 11> kDefaults = {{
+inline constexpr std::array<Default, 17> kDefaults = {{
     {"memory_watch_census", "false", Phase::kStartup, true},
     {"memory_watch_disarm_bridge_safe_gaps", "true", Phase::kStartup, false, Platform::kWineOnly},
     {"d3d12_readback_sync_targeted", "true", Phase::kGraphicsPlugin, false},
@@ -139,6 +167,15 @@ inline constexpr std::array<Default, 11> kDefaults = {{
     // l98 CP lever 1 (both platforms; see above).
     {"cp_draw_packet_tsc", "true", Phase::kGraphicsPlugin, false},
     {"cp_fence_poll_interval", "64", Phase::kGraphicsPlugin, false},
+    // l104 A: the per-draw levers (both platforms; see above).
+    {"d3d12_fetch_identity_v2", "true", Phase::kGraphicsPlugin, false},
+    {"d3d12_rt_update_memo", "true", Phase::kGraphicsPlugin, false},
+    {"cp_reg_write_skip_unchanged", "true", Phase::kGraphicsPlugin, false},
+    // l104 B: low latency (both platforms; the SDK selects no backend under
+    // Wine/Proton; see above).
+    {"d3d12_low_latency_mode", "auto", Phase::kStartup, false},
+    {"d3d12_low_latency_auto_antilag2", "true", Phase::kStartup, false},
+    {"d3d12_frame_lead_strict_low_latency", "1", Phase::kGraphicsPlugin, false},
 }};
 
 // Cvars this module writes only under Wine/Proton, never on Windows.
@@ -150,7 +187,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 104> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 98> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -319,9 +356,9 @@ inline constexpr std::array<std::string_view, 104> kNeverWrittenCvars = {
     "mcla_tod_rate",
     "mcla_tod_start_minutes",
     // l95 low latency (SDK, default off) and the FMA stage 0 benchmark (host,
-    // default off); owner keys low_latency_reflex / _antilag2 / _auto,
-    // low_latency_markers, low_latency_boost and fma_bench only.
-    "d3d12_low_latency_mode",
+    // default off); owner keys low_latency_markers, low_latency_boost and
+    // fma_bench only. d3d12_low_latency_mode left this list in l104 (now a
+    // default above).
     "d3d12_low_latency_markers_only",
     "d3d12_low_latency_boost",
     "mcla_fma_bench",
@@ -331,31 +368,31 @@ inline constexpr std::array<std::string_view, 104> kNeverWrittenCvars = {
     // l98 (now defaults above).
     "shader_im_load_memo",
     "shader_im_load_memo_verify",
-    // l97 low latency replaces strict (SDK, default 0); owner keys
-    // lead_ll_off_when_reflex and lead_ll_adaptive_when_reflex only.
-    "d3d12_frame_lead_strict_low_latency",
+    // l97 low latency replaces strict: d3d12_frame_lead_strict_low_latency
+    // left this list in l104 (now a default above).
     // l99 texture churn and the guard action (host / SDK, default off);
     // owner keys texture_hard_margin_256, texture_min_age_2000 and
     // lead_ll_guard_adaptive / _rearm / _off only.
     "mcla_texture_hard_margin_mb",
     "texture_cache_min_age_ms",
     "d3d12_frame_lead_strict_low_latency_guard_action",
-    // l100 command-processor levers and the guest spin backoff (SDK / host,
-    // default off); owner keys cp_reg_skip, cp_reg_skip_verify,
-    // cp_draw_fast_verify and guest_spin_backoff_64 only.
-    "cp_reg_write_skip_unchanged",
+    // l100 command-processor lever verifies and the guest spin backoff (SDK /
+    // host, default off); owner keys cp_reg_skip_verify, cp_draw_fast_verify
+    // and guest_spin_backoff_64 only. cp_reg_write_skip_unchanged left this
+    // list in l104 (now a default above).
     "cp_reg_write_skip_verify",
     "cp_draw_const_only_verify",
     "mcla_guest_spin_backoff",
-    // l101 per-draw levers (SDK, default off); owner keys tex_memo_v2, rt_memo
-    // and rt_memo_verify only.
-    "d3d12_fetch_identity_v2",
-    "d3d12_rt_update_memo",
+    // l101 per-draw lever verify (SDK, default off); owner key rt_memo_verify
+    // only. d3d12_fetch_identity_v2 and d3d12_rt_update_memo left this list in
+    // l104 (now defaults above).
     "d3d12_rt_update_memo_verify",
-    // l103 AMD Anti-Lag 2 path (SDK, default off); owner keys
-    // lead_ll_count_antilag2 and low_latency_auto_antilag2 only.
+    // l103 AMD Anti-Lag 2 path (SDK, default off): the replacement counting
+    // an Anti-Lag 2 sleep stays off (owner decision 2026-11-15: AMD keeps the
+    // strict bound); owner key lead_ll_count_antilag2 only.
+    // d3d12_low_latency_auto_antilag2 left this list in l104 (now a default
+    // above).
     "d3d12_frame_lead_strict_low_latency_antilag2",
-    "d3d12_low_latency_auto_antilag2",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
