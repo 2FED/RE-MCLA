@@ -38,3 +38,15 @@ Per-draw cost in microseconds, sampled phases of the draw path:
 - fps is unchanged in normal windows (47-54) because they are GPU-bound: GPU busy 17-19 ms per frame against CP 12.5-14.6 ms. With the CP levers the dips are now capped by the GPU as well (GPU about 14.7 ms + 1.14 us x draws: about 23.8 ms at 8 k draws).
 - MCLA_DIP: 15 dips in the session, 1-4 s, minimum 35.6-41.8 fps; hints cp_draws 10, gpu 2, unknown 3.
 - Conclusion: the CP levers are safe and worth keeping, but the next gain on this GPU must come from GPU time (a 14.7 ms base at 1080p is the larger term).
+
+## Run D, pc/fast2 at 720p (session a5cbe38e, 7 qualifying minute windows), against Run C at 1080p
+
+| Mode | fps | draws/frame | CP ms/frame | CP us/draw | GPU ms/frame | copies/frame |
+|---|---|---|---|---|---|---|
+| 1080p (fb4bf9d9) | 51.5 | 4619 | 13.3 | 2.87 | 17.8 | about 60 |
+| 720p (a5cbe38e) | 66.0 (windows 62-76; DIP medians 70-82) | 4277 | 12.3 | 2.86 | 9.0 | 46-60 |
+
+- GPU time halves with 2.25x fewer pixels: 17.8 -> 9.0 ms (better than the 12-13 ms predicted from l53-era data). Two-point fit: about 2 ms fixed + 7 ms per 720p-worth of pixels, so nearly all GPU time on this card is per-pixel work, not per-draw work.
+- At 720p the frame is CP-bound again (CP 12.3 ms, GPU 9.0 ms, frame 13-16 ms); CP cost per draw is identical in both modes (2.86-2.87 us), so the CP levers are what limits 720p.
+- Dips at 720p: 49-56 fps at 6-7 k draws against medians of 70-82, hint cp_draws; F10 windows 46-64 fps at 5-6.7 k draws with CP 14.5-20.2 ms and GPU 9.5-11.4 ms.
+- Consequence: at 1080p the lever is per-pixel GPU cost (MSAA at 2x2 draw scale, resolves, post passes); at 720p it is CP cost per draw.
