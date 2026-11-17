@@ -187,7 +187,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 105> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 113> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -407,6 +407,22 @@ inline constexpr std::array<std::string_view, 105> kNeverWrittenCvars = {
     // l106 guest MSAA off (host mcla_guest_msaa.cpp, default off); owner key
     // guest_msaa_off only.
     "mcla_guest_msaa_off",
+    // l107 scene sample count and KI-082 traffic motion probe (host
+    // mcla_guest_tiling.cpp / mcla_traffic_motion.cpp, default off) and the
+    // KI-083 resolve fill (SDK, default true); owner keys
+    // guest_msaa_scene_1x / guest_msaa_scene_2x, traffic_motion_probe and
+    // resolve_fill_off only.
+    "mcla_guest_msaa_scene",
+    "mcla_traffic_motion_probe",
+    "resolve_resolution_scale_fill_half_pixel_offset",
+    // l107 SDK switches (default off; the timing interval default 1); owner
+    // keys force_hidef, resolve_fill_origin_only, stencil_uniform,
+    // stencil_uniform_verify and gpu_cat_every4 only.
+    "video_mode_force_hidef",
+    "resolve_fill_half_pixel_only_at_origin",
+    "d3d12_stencil_transfer_uniform",
+    "d3d12_stencil_transfer_uniform_verify",
+    "d3d12_gpu_category_timing_every",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {

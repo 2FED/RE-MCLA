@@ -7,7 +7,9 @@
 //     after the original, reads the renderer pointer and its mode +384 and
 //     writes one MCLA_GMSAA line (always). With mcla_guest_msaa_off (default
 //     false, off) and a plausible renderer whose mode is 2 or 4 it stores 1
-//     at +384 first.
+//     at +384 first; l107: also with mcla_guest_msaa_scene=1
+//     (mcla_guest_tiling.cpp), so the scene 1x control starts from the
+//     game's own 1x mode.
 //   sub_822E4CC8 (render-target set-up, r3 = the renderer): read-only; at the
 //     first call logs the mode the scene targets are about to be created
 //     with, then runs the original.
@@ -15,6 +17,7 @@
 
 #include "mcla_guest_msaa.h"
 
+#include "mcla_guest_tiling.h"
 #include "mcla_init.h"
 #include "mcla_logging.h"
 
@@ -35,7 +38,8 @@ namespace {
 namespace gm = mcla::guest_msaa;
 
 bool Requested() {
-  static const bool requested = REXCVAR_GET(mcla_guest_msaa_off);
+  static const bool requested =
+      REXCVAR_GET(mcla_guest_msaa_off) || MclaGuestTilingRequestsCreationOne();
   return requested;
 }
 

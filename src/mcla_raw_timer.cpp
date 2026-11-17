@@ -16,6 +16,7 @@
 #include "mcla_logging.h"
 #include "mcla_low_latency.h"
 #include "mcla_step_smoother.h"
+#include "mcla_traffic_motion.h"
 
 #include <rex/cvar.h>
 
@@ -210,6 +211,9 @@ REX_EXTERN(sub_821BDA90) {
   // l84 KI-054 probe v2: timer updates against the inline ambient steps
   // (a no-op unless mcla_ambient_dt_probe or _snapshot is on).
   if (timer == kMainTimer) MclaAmbientDtOnTimerUpdate(base, supplied);
+  // l107 KI-082 traffic motion probe: the update boundary (a no-op unless
+  // mcla_traffic_motion_probe is on).
+  if (timer == kMainTimer) MclaTrafficMotionOnTimerUpdate(base);
 }
 
 // Strong override of the generated weak sub_822D2478; the original body runs

@@ -68,7 +68,7 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     foreach(m9_hook_test IN ITEMS menu_state guest_sampler photo_capture perf_split livery_diag
             readback_sync native_refcount dev_overrides m10_defaults save_copy_guard warp_probe
             album_probe pursuit_probe xma_consume_probe lock_probe ambient_dt_probe
-            step_smoother audio_filter tod guest_msaa)
+            step_smoother audio_filter tod guest_msaa guest_tiling traffic_motion)
         add_executable(mcla_${m9_hook_test}_test EXCLUDE_FROM_ALL
             tests/mcla_${m9_hook_test}_test.cpp)
         target_include_directories(mcla_${m9_hook_test}_test PRIVATE src)
@@ -111,6 +111,13 @@ if(MCLA_BUILD_DIAGNOSTIC_TESTS)
     # against the generated renderer creation, set-up and scene code.
     target_compile_definitions(mcla_guest_msaa_test PRIVATE
         MCLA_GMSAA_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
+    # l107: the guest tiling test checks the tiling begin / end, its callers,
+    # the force-4 bytes and the EDRAM rule against the generated code; the
+    # KI-082 traffic motion test checks the collider's matrix branch.
+    target_compile_definitions(mcla_guest_tiling_test PRIVATE
+        MCLA_GTILE_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
+    target_compile_definitions(mcla_traffic_motion_test PRIVATE
+        MCLA_TRAFMOT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     add_executable(mcla_frame_signal_test EXCLUDE_FROM_ALL
         tests/mcla_frame_signal_test.cpp)
     target_include_directories(mcla_frame_signal_test PRIVATE src)
@@ -264,7 +271,10 @@ set(MCLA_SOURCES
 # is always on and read-only, the controls default off). l95: the FMA stage 0
 # start-up benchmark (mcla_fma_bench, default off) and the host side of the
 # SDK low-latency layer (resolved by name from rexruntime.dll; a no-op with an
-# SDK without it).
+# SDK without it). l106: guest MSAA off (overrides sub_822E4AB0 and
+# sub_822E4CC8; default off). l107: guest tiling line and scene MSAA control
+# (overrides sub_8217A470; the line always on, the control default off) and
+# the KI-082 traffic motion probe (overrides sub_826FA0F8; default off).
 list(APPEND MCLA_SOURCES
     src/mcla_album_probe.cpp
     src/mcla_ambient_dt_probe.cpp
@@ -279,6 +289,8 @@ list(APPEND MCLA_SOURCES
     src/mcla_pursuit_probe.cpp
     src/mcla_tod.cpp
     src/mcla_guest_msaa.cpp
+    src/mcla_guest_tiling.cpp
+    src/mcla_traffic_motion.cpp
     src/mcla_xma_consume_probe.cpp)
 # l89 KI-060: the native voice-filter kernels are scalar recurrences. SLP
 # vectorization packs their independent operations into vectors with

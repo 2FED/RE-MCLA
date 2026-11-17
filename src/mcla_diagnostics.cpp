@@ -1135,6 +1135,12 @@ BuildStateJson(std::string_view reason, const SnapshotTrigger &trigger,
   if (!runtime.guest_msaa_json.empty()) {
     out << "  \"guest_msaa\": " << runtime.guest_msaa_json << ",\n";
   }
+  if (!runtime.guest_tiling_json.empty()) {
+    out << "  \"guest_tiling\": " << runtime.guest_tiling_json << ",\n";
+  }
+  if (!runtime.traffic_motion_json.empty()) {
+    out << "  \"traffic_motion\": " << runtime.traffic_motion_json << ",\n";
+  }
   if (!runtime.perf_split_json.empty()) {
     out << "  \"perf_split\": " << runtime.perf_split_json << ",\n";
   }

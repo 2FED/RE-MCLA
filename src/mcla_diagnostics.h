@@ -102,6 +102,10 @@ struct RuntimeState {
   std::string time_of_day_json;
   // l106: "guest_msaa" object (pre-rendered JSON; always present).
   std::string guest_msaa_json;
+  // l107: "guest_tiling" object (pre-rendered JSON; always present) and
+  // "traffic_motion" object (empty when the KI-082 probe is off).
+  std::string guest_tiling_json;
+  std::string traffic_motion_json;
   // M10-001: "perf_split" object (pre-rendered JSON), empty when absent.
   std::string perf_split_json;
 };

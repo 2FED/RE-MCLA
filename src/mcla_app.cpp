@@ -79,6 +79,8 @@
 #include "mcla_pursuit_probe.h"
 #include "mcla_tod.h"
 #include "mcla_guest_msaa.h"
+#include "mcla_guest_tiling.h"
+#include "mcla_traffic_motion.h"
 #include "mcla_menu_state.h"
 #include "mcla_photo_capture.h"
 // End M9 host hooks.
@@ -3692,6 +3694,10 @@ mcla::diagnostics::RuntimeState MclaApp::CaptureDiagnosticState() {
   state.time_of_day_json = MclaTodStateJson();
   // l106: guest MSAA (always-on MCLA_GMSAA state and the default-off control).
   state.guest_msaa_json = MclaGuestMsaaStateJson();
+  // l107: guest tiling (always-on MCLA_GTILE state and the scene MSAA control)
+  // and the KI-082 traffic motion probe (empty when off).
+  state.guest_tiling_json = MclaGuestTilingStateJson();
+  state.traffic_motion_json = MclaTrafficMotionStateJson();
   // M10-001: cumulative cost-split totals (empty without the SDK split).
   state.perf_split_json = mcla::perf_split::StateJson();
   return state;
@@ -3735,6 +3741,8 @@ void MclaApp::RequestLiveSnapshot(mcla::diagnostics::SnapshotTrigger trigger,
         runtime() ? runtime()->kernel_state() : nullptr);
     // M10-001: cut the cost-split window at this snapshot.
     mcla::perf_split::Mark(reason);
+    // l107 KI-082: a 5 s per-update traffic motion burst (probe only).
+    MclaTrafficMotionMark();
   }
   if (diagnostic_status_dialog_) {
     auto *dialog =

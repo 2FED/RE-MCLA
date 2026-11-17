@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 147, "one hundred and forty-seven whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 156, "one hundred and fifty-six whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2091,8 +2091,8 @@ void TestWhitelist() {
               CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
               !info.overrides_user,
           "l106 key: startup, mcla_guest_msaa_off=true, false writes nothing");
-    Check(static_cast<size_t>(Key::kGuestMsaaOff) == mcla::dev_overrides::kKeyCount - 1,
-          "l106 key is the last key");
+    Check(static_cast<size_t>(Key::kGuestMsaaOff) == 146,
+          "l106 key follows the l105 keys (the l107 keys come after it)");
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
       Check(pair.first != Key::kGuestMsaaOff && pair.second != Key::kGuestMsaaOff,
             "guest_msaa_off is in no conflict pair");
@@ -2123,6 +2123,169 @@ void TestWhitelist() {
               bad.issues[1].issue == LineIssue::kUnknownName &&
               bad.issues[2].issue == LineIssue::kDuplicate,
           "l106 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
+    // l107: the scene sample count (a conflict pair writing 1 / 2 to the host
+    // init-only int mcla_guest_msaa_scene), the KI-082 traffic motion probe
+    // (host init-only bool) and the KI-083 resolve fill A/B (SDK graphics
+    // plugin bool, default true); =true only.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      const char *text;
+    } keys[] = {
+        {Key::kGuestMsaaScene1x, "guest_msaa_scene_1x", Phase::kStartup, "mcla_guest_msaa_scene",
+         "1"},
+        {Key::kGuestMsaaScene2x, "guest_msaa_scene_2x", Phase::kStartup, "mcla_guest_msaa_scene",
+         "2"},
+        {Key::kTrafficMotionProbe, "traffic_motion_probe", Phase::kStartup,
+         "mcla_traffic_motion_probe", "true"},
+        {Key::kResolveFillOff, "resolve_fill_off", Phase::kGraphicsPlugin,
+         "resolve_resolution_scale_fill_half_pixel_offset", "false"},
+    };
+    size_t index = static_cast<size_t>(Key::kGuestMsaaOff) + 1;
+    for (const auto &k : keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l107 key: phase, cvar and text; false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "l107 keys follow guest_msaa_off in order");
+    }
+    Check(index == static_cast<size_t>(Key::kForceHidef),
+          "the four host l107 keys come before the l107 SDK keys");
+    size_t pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const auto &k : keys) {
+        if (pair.first == k.key || pair.second == k.key) {
+          ++pairs;
+          Check(pair.first == Key::kGuestMsaaScene1x && pair.second == Key::kGuestMsaaScene2x,
+                "only the two scene keys form a pair");
+        }
+      }
+    }
+    Check(pairs == 2, "one l107 pair (counted from both keys)");
+    Check(!FindKey("mcla_guest_msaa_scene") && !FindKey("guest_msaa_scene") &&
+              !FindKey("guest_msaa_scene_4x") && !FindKey("guest_msaa_scene_1X") &&
+              !FindKey("guest_single_tile") && !FindKey("traffic_motion") &&
+              !FindKey("mcla_traffic_motion_probe") && !FindKey("resolve_fill") &&
+              !FindKey("resolve_fill_on") &&
+              !FindKey("resolve_resolution_scale_fill_half_pixel_offset"),
+          "no prefix, suffix, cvar-name or case variants of the l107 keys");
+    const Parsed two = Parse("guest_msaa_scene_2x=true\n");
+    Check(two.ValueCount() == 1 && two.issue_count == 0 &&
+              two.Value(Key::kGuestMsaaScene2x) == true,
+          "the l107 scene-2x arm line parses");
+    const Parsed cat = Parse("guest_msaa_scene_1x=true\r\ngpu_cat=true\r\n");
+    Check(cat.ValueCount() == 2 && cat.issue_count == 0 && cat.Value(Key::kGpuCat) == true,
+          "scene-1x with the GPU category timing (CRLF)");
+    const Parsed fxaa = Parse("guest_msaa_scene_1x=true\npresent_fxaa=true\nguest_msaa_off=true\n");
+    Check(fxaa.ValueCount() == 3 && fxaa.issue_count == 0,
+          "scene-1x with FXAA and guest_msaa_off (different cvars) combine");
+    const Parsed both = Parse("guest_msaa_scene_1x=true\ntraffic_motion_probe=true\n"
+                              "guest_msaa_scene_2x=true\n");
+    Check(both.ValueCount() == 1 && both.Value(Key::kTrafficMotionProbe) == true &&
+              both.issue_count == 1 && both.issues[0].line == 3 &&
+              both.issues[0].issue == LineIssue::kConflict,
+          "scene 1x with 2x: neither applied, conflict on the later line");
+    const Parsed off = Parse("guest_msaa_scene_1x=false\nguest_msaa_scene_2x=true\n");
+    Check(off.ValueCount() == 2 && off.issue_count == 0 &&
+              off.Value(Key::kGuestMsaaScene2x) == true,
+          "scene 2x with 1x=false is no conflict");
+    const Parsed probe = Parse("traffic_motion_probe=true\nresolve_fill_off=true\n");
+    Check(probe.ValueCount() == 2 && probe.issue_count == 0 &&
+              probe.Value(Key::kResolveFillOff) == true,
+          "the probe and the fill A/B combine");
+    const Parsed bad = Parse("guest_msaa_scene_2x=2\n"
+                             "mcla_guest_msaa_scene=true\n"
+                             "resolve_fill_off=true\n"
+                             "resolve_fill_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kResolveFillOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l107 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
+    // l107 SDK keys: forced HiDef (rexruntime, startup), the KI-083 fill at
+    // the origin only, the uniform-stencil skip and its verify, and the
+    // category-timing interval 4 (graphics plugin); =true only, no pairs.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      const char *text;
+    } keys[] = {
+        {Key::kForceHidef, "force_hidef", Phase::kStartup, "video_mode_force_hidef", "true"},
+        {Key::kResolveFillOriginOnly, "resolve_fill_origin_only", Phase::kGraphicsPlugin,
+         "resolve_fill_half_pixel_only_at_origin", "true"},
+        {Key::kStencilUniform, "stencil_uniform", Phase::kGraphicsPlugin,
+         "d3d12_stencil_transfer_uniform", "true"},
+        {Key::kStencilUniformVerify, "stencil_uniform_verify", Phase::kGraphicsPlugin,
+         "d3d12_stencil_transfer_uniform_verify", "true"},
+        {Key::kGpuCatEvery4, "gpu_cat_every4", Phase::kGraphicsPlugin,
+         "d3d12_gpu_category_timing_every", "4"},
+    };
+    size_t index = static_cast<size_t>(Key::kResolveFillOff) + 1;
+    for (const auto &k : keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l107 SDK key: phase, cvar and text; false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "l107 SDK keys follow resolve_fill_off");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "l107 SDK keys are in no pair");
+      }
+    }
+    Check(index == mcla::dev_overrides::kKeyCount, "the l107 SDK keys are the last five");
+    Check(!FindKey("video_mode_force_hidef") && !FindKey("force_hidef_off") &&
+              !FindKey("hidef") && !FindKey("FORCE_HIDEF") && !FindKey("stencil_uniform_off") &&
+              !FindKey("stencil_uniform_audit") && !FindKey("d3d12_stencil_transfer_uniform") &&
+              !FindKey("resolve_fill_origin") && !FindKey("gpu_cat_every") &&
+              !FindKey("gpu_cat_every2") && !FindKey("gpu_cat_every8"),
+          "no prefix, suffix, cvar-name or case variants of the l107 SDK keys");
+    const Parsed hidef = Parse("force_hidef=true\n");
+    Check(hidef.ValueCount() == 1 && hidef.issue_count == 0 &&
+              hidef.Value(Key::kForceHidef) == true,
+          "the hidef arm line parses");
+    const Parsed fast = Parse("force_hidef=true\r\nstencil_uniform=true\r\n");
+    Check(fast.ValueCount() == 2 && fast.issue_count == 0 &&
+              fast.Value(Key::kStencilUniform) == true,
+          "the gpu-fast arm (CRLF)");
+    const Parsed cat = Parse("force_hidef=true\ngpu_cat=true\ngpu_cat_every4=true\n");
+    Check(cat.ValueCount() == 3 && cat.issue_count == 0 && cat.Value(Key::kGpuCatEvery4) == true,
+          "timing with the interval key (different cvars)");
+    const Parsed seam = Parse("resolve_fill_origin_only=true\nresolve_fill_off=true\n");
+    Check(seam.ValueCount() == 2 && seam.issue_count == 0,
+          "the two fill keys write different cvars: no conflict");
+    const Parsed audit = Parse("stencil_uniform=false\nstencil_uniform_verify=true\n");
+    Check(audit.ValueCount() == 2 && audit.issue_count == 0 &&
+              audit.Value(Key::kStencilUniform) == false &&
+              audit.Value(Key::kStencilUniformVerify) == true,
+          "the stencil audit arm");
+    const Parsed bad = Parse("gpu_cat_every4=4\n"
+                             "video_mode_force_hidef=true\n"
+                             "force_hidef=true\n"
+                             "force_hidef=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kForceHidef) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l107 SDK near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -2611,7 +2774,11 @@ void TestWhitelist() {
                           key == Key::kPresentFxaa || key == Key::kPresentFsr ||
                           key == Key::kPresentCas || key == Key::kCasSharpMax ||
                           key == Key::kFsrSharpMax || key == Key::kAnisoDefault ||
-                          key == Key::kGuestMsaaOff;
+                          key == Key::kGuestMsaaOff || key == Key::kGuestMsaaScene1x ||
+                          key == Key::kGuestMsaaScene2x || key == Key::kTrafficMotionProbe ||
+                          key == Key::kResolveFillOff || key == Key::kForceHidef ||
+                          key == Key::kResolveFillOriginOnly || key == Key::kStencilUniform ||
+                          key == Key::kStencilUniformVerify || key == Key::kGpuCatEvery4;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2715,9 +2882,10 @@ void TestWhitelist() {
     // v2, render-target memo, register skip and auto Anti-Lag 2 keys with
     // their controls, low_latency_off joining the mode group (four keys, six
     // pairs) and lead_ll_replace_off the l97 pair (three keys, three pairs);
-    // l105: present_fsr and present_cas (the present_effect string).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 44,
-          "forty-four shared-cvar pairs");
+    // l105: present_fsr and present_cas (the present_effect string); l107:
+    // the two scene sample-count keys (mcla_guest_msaa_scene).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 45,
+          "forty-five shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -3385,7 +3553,9 @@ void TestWhitelist() {
     // l101: plus the three l101 keys explicit false (131 keys); l103: plus the
     // two l103 keys explicit false (133 keys); l104: plus the six l104 controls
     // explicit false (139 keys); l105: plus the seven l105 keys explicit false
-    // (146 keys); l106: plus guest_msaa_off explicit false (147 keys).
+    // (146 keys); l106: plus guest_msaa_off explicit false (147 keys); l107:
+    // plus the four l107 keys explicit false (151 keys) and the five l107
+    // SDK keys (156 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3456,7 +3626,16 @@ void TestWhitelist() {
                                   "cas_sharp_max=false\n"
                                   "fsr_sharp_max=false\n"
                                   "aniso_default=false\n"
-                                  "guest_msaa_off=false\n";
+                                  "guest_msaa_off=false\n"
+                                  "guest_msaa_scene_1x=false\n"
+                                  "guest_msaa_scene_2x=false\n"
+                                  "traffic_motion_probe=false\n"
+                                  "resolve_fill_off=false\n"
+                                  "force_hidef=false\n"
+                                  "resolve_fill_origin_only=false\n"
+                                  "stencil_uniform=false\n"
+                                  "stencil_uniform_verify=false\n"
+                                  "gpu_cat_every4=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4061,12 +4240,13 @@ void TestRejectedFiles() {
     // A full 75-key arm with CRLF line ends (an editor re-save) is beyond the
     // former 2 KiB and accepted since l81 (l105: 146 keys, about 4.04 KB, 55
     // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
-    // 4 KB of room for comments and later keys under 8 KiB).
+    // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
+    // above 4 KiB, still about 4 KB of room).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
     }
-    Check(full.size() > 4000 && full.size() < 4096, "full arm size");
+    Check(full.size() > 4096 && full.size() < 5000, "full arm size");
     // A long comment block (CRLF lines of 100 bytes) up to 8190 bytes.
     while (full.size() + 100 <= 8190) {
       full += "# " + std::string(96, 'x') + "\r\n";

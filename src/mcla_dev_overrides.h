@@ -461,6 +461,32 @@
 //   after the game has created its renderer, its multisample mode +384 is set
 //   from 2 to 1 before any render target exists, so the game creates and
 //   draws its main scene with one sample; MCLA_GMSAA lines). No conflict pair.
+// - l107 (docs/evidence/M11-l107-guest-tiling-and-msaa-20261117.md; default
+//   off, =false writes nothing): guest_msaa_scene_1x=true and
+//   guest_msaa_scene_2x=true write 1 and 2 to the host init-only int
+//   mcla_guest_msaa_scene at startup (mcla_guest_tiling.cpp: the sample count
+//   the game hands BeginTiledRendering for its scene and SD-output pass is
+//   lowered to it, so the 960x540 scene is drawn at 1x or 2x in one tile
+//   instead of 4x in two; 1x also makes the l106 creation write), a conflict
+//   pair; traffic_motion_probe=true writes true to the host init-only bool
+//   mcla_traffic_motion_probe (KI-082 MCLA_TRAFMOT lines, read-only);
+//   resolve_fill_off=true writes false to the SDK graphics-plugin bool
+//   resolve_resolution_scale_fill_half_pixel_offset (KI-083 A/B: no
+//   duplicated top row in scaled resolves, including the second tile's).
+//   l107 SDK keys (docs/evidence/M11-l107-sdk-transfers-20261117.md; default
+//   off, =false writes nothing): force_hidef=true writes true to the SDK
+//   rexruntime bool video_mode_force_hidef (init-only, startup: the guest
+//   video mode is reported as HiDef, so the game leaves its SD path: scene
+//   2x in one tile at 960x540; MCLA_VIDEOMODE); resolve_fill_origin_only=true
+//   writes true to the SDK graphics-plugin bool
+//   resolve_fill_half_pixel_only_at_origin (KI-083: no half-pixel fill for
+//   resolves with a window offset, i.e. the second tile); stencil_uniform=true
+//   and stencil_uniform_verify=true write true to the SDK graphics-plugin
+//   bools d3d12_stencil_transfer_uniform (skip known stencil bit passes) and
+//   d3d12_stencil_transfer_uniform_verify (init-only occlusion check, also an
+//   audit with the skip off; MCLA_XFER st= / verify=); gpu_cat_every4=true
+//   writes 4 to the SDK graphics-plugin int d3d12_gpu_category_timing_every
+//   (category timing on every 4th frame). No conflict pairs.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -654,8 +680,17 @@ enum class Key : uint8_t {
   kFsrSharpMax,              // l105: present_fsr_sharpness_reduction=0.0
   kAnisoDefault,             // l105: anisotropic_override=-1
   kGuestMsaaOff,             // l106: mcla_guest_msaa_off=true
+  kGuestMsaaScene1x,         // l107: mcla_guest_msaa_scene=1
+  kGuestMsaaScene2x,         // l107: mcla_guest_msaa_scene=2
+  kTrafficMotionProbe,       // l107 KI-082: mcla_traffic_motion_probe=true
+  kResolveFillOff,           // l107 KI-083: resolve_resolution_scale_fill_half_pixel_offset=false
+  kForceHidef,               // l107 SDK: video_mode_force_hidef=true
+  kResolveFillOriginOnly,    // l107 SDK KI-083: resolve_fill_half_pixel_only_at_origin=true
+  kStencilUniform,           // l107 SDK: d3d12_stencil_transfer_uniform=true
+  kStencilUniformVerify,     // l107 SDK: d3d12_stencil_transfer_uniform_verify=true
+  kGpuCatEvery4,             // l107: d3d12_gpu_category_timing_every=4
 };
-inline constexpr size_t kKeyCount = 147;
+inline constexpr size_t kKeyCount = 156;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1005,6 +1040,28 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // l106 guest MSAA off: host init-only bool (mcla_guest_msaa.cpp), read
     // when the game creates its renderer; default off, =false writes nothing.
     {"guest_msaa_off", Phase::kStartup, "mcla_guest_msaa_off", "true", ""},
+    // l107 scene sample count (host init-only int, mcla_guest_tiling.cpp, a
+    // conflict pair), the KI-082 traffic motion probe (host init-only bool)
+    // and the KI-083 resolve fill A/B (SDK graphics-plugin bool, default
+    // true, read at each resolve, so after the plugin has loaded); default
+    // off, =false writes nothing.
+    {"guest_msaa_scene_1x", Phase::kStartup, "mcla_guest_msaa_scene", "1", ""},
+    {"guest_msaa_scene_2x", Phase::kStartup, "mcla_guest_msaa_scene", "2", ""},
+    {"traffic_motion_probe", Phase::kStartup, "mcla_traffic_motion_probe", "true", ""},
+    {"resolve_fill_off", Phase::kGraphicsPlugin,
+     "resolve_resolution_scale_fill_half_pixel_offset", "false", ""},
+    // l107 SDK keys: the forced HiDef video mode (rexruntime, init-only, read
+    // at the first VdQueryVideoMode, so before the guest), the KI-083 fill at
+    // the origin only, the uniform-stencil transfer skip and its verify and
+    // the category-timing interval (graphics plugin, after it has loaded);
+    // default off, =false writes nothing.
+    {"force_hidef", Phase::kStartup, "video_mode_force_hidef", "true", ""},
+    {"resolve_fill_origin_only", Phase::kGraphicsPlugin,
+     "resolve_fill_half_pixel_only_at_origin", "true", ""},
+    {"stencil_uniform", Phase::kGraphicsPlugin, "d3d12_stencil_transfer_uniform", "true", ""},
+    {"stencil_uniform_verify", Phase::kGraphicsPlugin, "d3d12_stencil_transfer_uniform_verify",
+     "true", ""},
+    {"gpu_cat_every4", Phase::kGraphicsPlugin, "d3d12_gpu_category_timing_every", "4", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1023,7 +1080,7 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // cp_reg_write_skip_unchanged and d3d12_low_latency_auto_antilag2 bools, the
 // d3d12_low_latency_mode string as a group of four and the int
 // d3d12_frame_lead_strict_low_latency as a group of three; since l105 the
-// present_effect string):
+// present_effect string; since l107 the mcla_guest_msaa_scene int):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -1031,7 +1088,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 44> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 45> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -1076,6 +1133,7 @@ inline constexpr std::array<ConflictPair, 44> kConflictPairs = {{
     {Key::kLeadLlOffWhenReflex, Key::kLeadLlReplaceOff},
     {Key::kLeadLlAdaptiveWhenReflex, Key::kLeadLlReplaceOff},
     {Key::kPresentFsr, Key::kPresentCas},
+    {Key::kGuestMsaaScene1x, Key::kGuestMsaaScene2x},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
@@ -1381,7 +1439,8 @@ std::optional<bool> AppliedValue(Key key);
 // =false; since l99 the five l99 keys =false; since l100 the four l100 keys
 // =false; since l101 the three l101 keys =false; since l103 the two l103
 // keys =false; since l104 the six l104 controls =false; since l105 the
-// seven l105 keys =false; since l106 guest_msaa_off=false).
+// seven l105 keys =false; since l106 guest_msaa_off=false; since l107 the
+// four l107 keys and the five l107 SDK keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides
