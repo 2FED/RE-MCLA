@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 156, "one hundred and fifty-six whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 158, "one hundred and fifty-eight whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2250,7 +2250,8 @@ void TestWhitelist() {
         Check(pair.first != k.key && pair.second != k.key, "l107 SDK keys are in no pair");
       }
     }
-    Check(index == mcla::dev_overrides::kKeyCount, "the l107 SDK keys are the last five");
+    Check(index == static_cast<size_t>(Key::kXferElide),
+          "the five l107 SDK keys come before the l108 SDK keys");
     Check(!FindKey("video_mode_force_hidef") && !FindKey("force_hidef_off") &&
               !FindKey("hidef") && !FindKey("FORCE_HIDEF") && !FindKey("stencil_uniform_off") &&
               !FindKey("stencil_uniform_audit") && !FindKey("d3d12_stencil_transfer_uniform") &&
@@ -2286,6 +2287,62 @@ void TestWhitelist() {
               bad.issues[1].issue == LineIssue::kUnknownName &&
               bad.issues[2].issue == LineIssue::kDuplicate,
           "l107 SDK near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
+    // l108 SDK keys: the transfer elision and its verify (graphics plugin);
+    // =true only, no pairs.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+    } keys[] = {
+        {Key::kXferElide, "xfer_elide", "d3d12_transfer_elide_full_overwrite"},
+        {Key::kXferElideVerify, "xfer_elide_verify", "d3d12_transfer_elide_full_overwrite_verify"},
+    };
+    size_t index = static_cast<size_t>(Key::kGpuCatEvery4) + 1;
+    for (const auto &k : keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == k.cvar && CvarText(info, true) == "true" &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l108 SDK key: phase, cvar and text; false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "l108 SDK keys follow gpu_cat_every4");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "l108 SDK keys are in no pair");
+      }
+    }
+    Check(index == mcla::dev_overrides::kKeyCount, "the l108 SDK keys are the last two");
+    Check(!FindKey("xfer_elide_off") && !FindKey("xfer_elision") && !FindKey("XFER_ELIDE") &&
+              !FindKey("elide") && !FindKey("xfer_elide_audit") &&
+              !FindKey("d3d12_transfer_elide_full_overwrite") && !FindKey("xfer_elide_verify_on"),
+          "no prefix, suffix, cvar-name or case variants of the l108 SDK keys");
+    const Parsed elide = Parse("force_hidef=true\nxfer_elide=true\n");
+    Check(elide.ValueCount() == 2 && elide.issue_count == 0 &&
+              elide.Value(Key::kXferElide) == true && elide.Value(Key::kForceHidef) == true,
+          "the pc/elide arm");
+    const Parsed verify = Parse(
+        "force_hidef=true\r\nxfer_elide_verify=true\r\ngpu_cat=true\r\ngpu_cat_every4=true\r\n");
+    Check(verify.ValueCount() == 4 && verify.issue_count == 0 &&
+              verify.Value(Key::kXferElideVerify) == true,
+          "the pc/elide-verify arm (CRLF)");
+    const Parsed both = Parse("xfer_elide=true\nxfer_elide_verify=true\n");
+    Check(both.ValueCount() == 2 && both.issue_count == 0,
+          "both l108 keys write different cvars: no conflict");
+    const Parsed bad = Parse("xfer_elide=1\n"
+                             "d3d12_transfer_elide_full_overwrite=true\n"
+                             "xfer_elide_verify=true\n"
+                             "xfer_elide_verify=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 3 &&
+              bad.Value(Key::kXferElideVerify) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kUnknownName &&
+              bad.issues[2].issue == LineIssue::kDuplicate,
+          "l108 near misses: an integer, the cvar name and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -2778,7 +2835,8 @@ void TestWhitelist() {
                           key == Key::kGuestMsaaScene2x || key == Key::kTrafficMotionProbe ||
                           key == Key::kResolveFillOff || key == Key::kForceHidef ||
                           key == Key::kResolveFillOriginOnly || key == Key::kStencilUniform ||
-                          key == Key::kStencilUniformVerify || key == Key::kGpuCatEvery4;
+                          key == Key::kStencilUniformVerify || key == Key::kGpuCatEvery4 ||
+                          key == Key::kXferElide || key == Key::kXferElideVerify;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -3555,7 +3613,7 @@ void TestWhitelist() {
     // explicit false (139 keys); l105: plus the seven l105 keys explicit false
     // (146 keys); l106: plus guest_msaa_off explicit false (147 keys); l107:
     // plus the four l107 keys explicit false (151 keys) and the five l107
-    // SDK keys (156 keys).
+    // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3635,7 +3693,9 @@ void TestWhitelist() {
                                   "resolve_fill_origin_only=false\n"
                                   "stencil_uniform=false\n"
                                   "stencil_uniform_verify=false\n"
-                                  "gpu_cat_every4=false\n";
+                                  "gpu_cat_every4=false\n"
+                                  "xfer_elide=false\n"
+                                  "xfer_elide_verify=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4241,7 +4301,7 @@ void TestRejectedFiles() {
     // former 2 KiB and accepted since l81 (l105: 146 keys, about 4.04 KB, 55
     // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
-    // above 4 KiB, still about 4 KB of room).
+    // above 4 KiB, still about 4 KB of room; l108: 158 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

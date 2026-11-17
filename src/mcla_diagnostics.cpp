@@ -565,6 +565,8 @@ WindowFrameCapture CaptureWindowFrame(const std::filesystem::path &path,
 // most kGuestFrameWait and otherwise falls back; a stuck helper is left behind
 // (the host hard-exits at shutdown). Returns a written frame or nothing.
 constexpr auto kGuestFrameWait = std::chrono::milliseconds(1500);
+// l108 (S3): the provider's retries end well inside the wait.
+static_assert(kGuestFrameCaptureAttempts * kGuestFrameCaptureRetryDelay < kGuestFrameWait / 2);
 WindowFrameCapture CaptureGuestFrame(const std::filesystem::path &path,
                                      const GuestFrameProvider &provider,
                                      std::stop_token token) {

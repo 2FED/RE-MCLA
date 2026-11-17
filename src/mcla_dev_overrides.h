@@ -487,6 +487,16 @@
 //   audit with the skip off; MCLA_XFER st= / verify=); gpu_cat_every4=true
 //   writes 4 to the SDK graphics-plugin int d3d12_gpu_category_timing_every
 //   (category timing on every 4th frame). No conflict pairs.
+//   l108 SDK keys (docs/evidence/M11-l108-sdk-transfer-elision-20261117.md;
+//   default off, =false writes nothing): xfer_elide=true writes true to the
+//   SDK graphics-plugin bool d3d12_transfer_elide_full_overwrite (leave out
+//   the part of a draw-triggered ownership transfer the same draw provably
+//   overwrites in every sample; MCLA_XFER_ELIDE); xfer_elide_verify=true
+//   writes true to the SDK graphics-plugin bool
+//   d3d12_transfer_elide_full_overwrite_verify (init-only audit: every
+//   transfer performed, what would be left out counted, an occlusion query
+//   checks each proof; MCLA_XFER_ELIDE check=). No conflict pairs (with both
+//   true the verify wins in the SDK).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -689,8 +699,10 @@ enum class Key : uint8_t {
   kStencilUniform,           // l107 SDK: d3d12_stencil_transfer_uniform=true
   kStencilUniformVerify,     // l107 SDK: d3d12_stencil_transfer_uniform_verify=true
   kGpuCatEvery4,             // l107: d3d12_gpu_category_timing_every=4
+  kXferElide,                // l108 SDK: d3d12_transfer_elide_full_overwrite=true
+  kXferElideVerify,          // l108 SDK: d3d12_transfer_elide_full_overwrite_verify=true
 };
-inline constexpr size_t kKeyCount = 156;
+inline constexpr size_t kKeyCount = 158;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1062,6 +1074,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"stencil_uniform_verify", Phase::kGraphicsPlugin, "d3d12_stencil_transfer_uniform_verify",
      "true", ""},
     {"gpu_cat_every4", Phase::kGraphicsPlugin, "d3d12_gpu_category_timing_every", "4", ""},
+    // l108 SDK keys: the transfer elision and its verify (graphics plugin,
+    // after it has loaded; the verify is init-only, read when the render
+    // target cache is created); default off, =false writes nothing.
+    {"xfer_elide", Phase::kGraphicsPlugin, "d3d12_transfer_elide_full_overwrite", "true", ""},
+    {"xfer_elide_verify", Phase::kGraphicsPlugin, "d3d12_transfer_elide_full_overwrite_verify",
+     "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1440,7 +1458,8 @@ std::optional<bool> AppliedValue(Key key);
 // =false; since l101 the three l101 keys =false; since l103 the two l103
 // keys =false; since l104 the six l104 controls =false; since l105 the
 // seven l105 keys =false; since l106 guest_msaa_off=false; since l107 the
-// four l107 keys and the five l107 SDK keys =false).
+// four l107 keys and the five l107 SDK keys =false; since l108 the two
+// l108 SDK keys =false).
 std::optional<bool> FileValue(Key key);
 
 }  // namespace mcla::dev_overrides

@@ -122,6 +122,12 @@ struct GuestFrame {
   std::vector<uint8_t> rgbx;
 };
 using GuestFrameProvider = std::function<bool(GuestFrame &)>;
+// l108 (S3): the presenter refuses to read back a guest output that has not
+// been presented yet (a race with the producer), which used to send F10 to the
+// window capture (client size, e.g. 3840x2160 instead of the 1920x1080 guest
+// output). The provider retries for a few frames inside the worker's bound.
+inline constexpr int kGuestFrameCaptureAttempts = 40;
+inline constexpr std::chrono::milliseconds kGuestFrameCaptureRetryDelay{16};
 
 enum class SnapshotStatus : uint8_t {
   kIdle,

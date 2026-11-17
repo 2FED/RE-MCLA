@@ -1236,11 +1236,24 @@ void MclaApp::OnPostInitLogging() {
             REXCVAR_GET(mcla_crash_reporter_dialog))) {
       // F10 frames come from the game's presented output (KI-042); the
       // diagnostics worker bounds this GPU readback and falls back otherwise.
+      // l108 (S3): retry while the newest guest output is not presented yet
+      // (CaptureGuestOutput refuses it), so the capture stays the guest output
+      // at render-target size instead of the window client area.
       diagnostics_->SetGuestFrameProvider([this](mcla::diagnostics::GuestFrame &out) {
         auto *graphics = runtime() ? runtime()->graphics_system() : nullptr;
         auto *presenter = graphics ? graphics->presenter() : nullptr;
+        if (!presenter) return false;
         rex::ui::RawImage image;
-        if (!presenter || !presenter->CaptureGuestOutput(image)) return false;
+        bool captured = false;
+        for (int attempt = 0; attempt < mcla::diagnostics::kGuestFrameCaptureAttempts;
+             ++attempt) {
+          if (presenter->CaptureGuestOutput(image)) {
+            captured = true;
+            break;
+          }
+          std::this_thread::sleep_for(mcla::diagnostics::kGuestFrameCaptureRetryDelay);
+        }
+        if (!captured) return false;
         out.width = image.width;
         out.height = image.height;
         out.stride = image.stride;

@@ -187,7 +187,7 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 113> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 115> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -423,6 +423,10 @@ inline constexpr std::array<std::string_view, 113> kNeverWrittenCvars = {
     "d3d12_stencil_transfer_uniform",
     "d3d12_stencil_transfer_uniform_verify",
     "d3d12_gpu_category_timing_every",
+    // l108 SDK switches (default off); owner keys xfer_elide and
+    // xfer_elide_verify only.
+    "d3d12_transfer_elide_full_overwrite",
+    "d3d12_transfer_elide_full_overwrite_verify",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
