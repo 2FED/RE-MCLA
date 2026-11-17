@@ -23,6 +23,7 @@
 
 #include <rex/cvar.h>
 
+#include <atomic>
 #include <mutex>
 #include <string>
 
@@ -33,6 +34,12 @@ REXCVAR_DEFINE_INT32(mcla_guest_msaa_scene, 0, "MCLA",
     "(dev control; MCLA_GTILE)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
+REXCVAR_DEFINE_BOOL(mcla_guest_collector_2x, false, "MCLA",
+    "Hand the game's shadow / depth collector pass 2 samples instead of 4 "
+    "while its scene runs at 2x or lower (HiDef path), so the two share a "
+    "sample count (dev control; MCLA_GTILE where=shadow)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
 namespace {
 
 namespace gt = mcla::guest_tiling;
@@ -41,6 +48,14 @@ int32_t Cvar() {
   static const int32_t value = REXCVAR_GET(mcla_guest_msaa_scene);
   return value;
 }
+
+bool CollectorCvar() {
+  static const bool value = REXCVAR_GET(mcla_guest_collector_2x);
+  return value;
+}
+
+// l109: the count last handed to the scene pass (-1 before the first).
+std::atomic<int> g_scene_count{-1};
 
 struct Shared {
   std::mutex mutex;
@@ -65,7 +80,14 @@ REX_EXTERN(sub_8217A470) {
   const int32_t cvar = Cvar();
   const int requested = gt::RequestedCount(cvar);
   const int game_count = static_cast<int32_t>(ctx.r6.u32);
-  const int count = gt::AppliedCount(game_count, requested, where);
+  int count = gt::AppliedCount(game_count, requested, where);
+  // l109: the collector at the scene's sample count (collector_2x).
+  const bool collector = CollectorCvar();
+  count = gt::CollectorCount(count, collector, where,
+                             g_scene_count.load(std::memory_order_relaxed));
+  if (where == gt::Where::kScene) {
+    g_scene_count.store(count, std::memory_order_relaxed);
+  }
   const bool rewrote = count != game_count;
   if (rewrote) {
     ctx.r6.u64 = static_cast<uint64_t>(static_cast<int64_t>(count));
@@ -121,7 +143,8 @@ REX_EXTERN(sub_8217A470) {
     calls = w.calls;
   }
   if (write) {
-    MCLA_APP_INFO("{}", gt::Line(o, requested, where, calls));
+    MCLA_APP_INFO("{}", gt::Line(o, where == gt::Where::kShadow && collector ? 2 : requested,
+                                 where, calls));
   }
 }
 

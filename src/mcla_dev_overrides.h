@@ -497,6 +497,20 @@
 //   transfer performed, what would be left out counted, an occlusion query
 //   checks each proof; MCLA_XFER_ELIDE check=). No conflict pairs (with both
 //   true the verify wins in the SDK).
+// - l109 (docs/evidence/M11-l109-owner-build-20261117.md; default off, =false
+//   writes nothing): fps_cap_30, fps_cap_40 and fps_cap_60 write 60, 80 and
+//   120 to the SDK int mcla_guest_vblank_hz (graphics plugin, hot; the game
+//   presents every second guest vblank, so the cap is half the rate; like the
+//   vblank_hz keys they replace the launcher's Unlocked value and apply after
+//   the SDK's unlock delay and outside its UI cap), one group with the three
+//   vblank_hz keys (fifteen pairs; fps_cap_40 = vblank_hz_80); collector_2x
+//   writes true to the host init-only bool mcla_guest_collector_2x at startup
+//   (mcla_guest_tiling.cpp: the shadow / depth collector is handed 2 samples
+//   instead of 4 while the scene runs at 2x or lower); xfer_trig_profile and
+//   stencil_lazy_verify write true to the SDK graphics-plugin init-only bools
+//   d3d12_transfer_trigger_profile (MCLA_XFER_TRIG) and
+//   d3d12_stencil_transfer_lazy_verify (MCLA_XFER_LAZY; count mode only,
+//   docs/evidence/M11-l109-sdk-transfer-diagnostics-20261117.md).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -701,8 +715,14 @@ enum class Key : uint8_t {
   kGpuCatEvery4,             // l107: d3d12_gpu_category_timing_every=4
   kXferElide,                // l108 SDK: d3d12_transfer_elide_full_overwrite=true
   kXferElideVerify,          // l108 SDK: d3d12_transfer_elide_full_overwrite_verify=true
+  kFpsCap30,                 // l109: mcla_guest_vblank_hz=60 (30 fps cap)
+  kFpsCap40,                 // l109: mcla_guest_vblank_hz=80 (40 fps cap)
+  kFpsCap60,                 // l109: mcla_guest_vblank_hz=120 (60 fps cap)
+  kCollector2x,              // l109: mcla_guest_collector_2x=true
+  kXferTrigProfile,          // l109 SDK: d3d12_transfer_trigger_profile=true
+  kStencilLazyVerify,        // l109 SDK: d3d12_stencil_transfer_lazy_verify=true
 };
-inline constexpr size_t kKeyCount = 158;
+inline constexpr size_t kKeyCount = 164;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1080,6 +1100,21 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"xfer_elide", Phase::kGraphicsPlugin, "d3d12_transfer_elide_full_overwrite", "true", ""},
     {"xfer_elide_verify", Phase::kGraphicsPlugin, "d3d12_transfer_elide_full_overwrite_verify",
      "true", ""},
+    // l109: frame caps through the guest vblank rate (as the vblank_hz keys:
+    // after the plugin has loaded, replacing the launcher value), the
+    // collector sample count (host init-only bool, startup) and the two SDK
+    // transfer diagnostics (graphics plugin, init-only, read when the render
+    // target cache is created); default off, =false writes nothing.
+    {"fps_cap_30", Phase::kGraphicsPlugin, "mcla_guest_vblank_hz", "60", "", TextSource::kLiteral,
+     true},
+    {"fps_cap_40", Phase::kGraphicsPlugin, "mcla_guest_vblank_hz", "80", "", TextSource::kLiteral,
+     true},
+    {"fps_cap_60", Phase::kGraphicsPlugin, "mcla_guest_vblank_hz", "120", "",
+     TextSource::kLiteral, true},
+    {"collector_2x", Phase::kStartup, "mcla_guest_collector_2x", "true", ""},
+    {"xfer_trig_profile", Phase::kGraphicsPlugin, "d3d12_transfer_trigger_profile", "true", ""},
+    {"stencil_lazy_verify", Phase::kGraphicsPlugin, "d3d12_stencil_transfer_lazy_verify", "true",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1098,7 +1133,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // cp_reg_write_skip_unchanged and d3d12_low_latency_auto_antilag2 bools, the
 // d3d12_low_latency_mode string as a group of four and the int
 // d3d12_frame_lead_strict_low_latency as a group of three; since l105 the
-// present_effect string; since l107 the mcla_guest_msaa_scene int):
+// present_effect string; since l107 the mcla_guest_msaa_scene int; since l109
+// the three fps_cap keys join the vblank_hz group of mcla_guest_vblank_hz,
+// six keys listed as their fifteen pairs):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -1106,7 +1143,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 45> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 57> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -1117,6 +1154,19 @@ inline constexpr std::array<ConflictPair, 45> kConflictPairs = {{
     {Key::kVblankHz72, Key::kVblankHz80},
     {Key::kVblankHz72, Key::kVblankHz88},
     {Key::kVblankHz80, Key::kVblankHz88},
+    // l109: the fps_cap keys (mcla_guest_vblank_hz) with the vblank group.
+    {Key::kVblankHz72, Key::kFpsCap30},
+    {Key::kVblankHz72, Key::kFpsCap40},
+    {Key::kVblankHz72, Key::kFpsCap60},
+    {Key::kVblankHz80, Key::kFpsCap30},
+    {Key::kVblankHz80, Key::kFpsCap40},
+    {Key::kVblankHz80, Key::kFpsCap60},
+    {Key::kVblankHz88, Key::kFpsCap30},
+    {Key::kVblankHz88, Key::kFpsCap40},
+    {Key::kVblankHz88, Key::kFpsCap60},
+    {Key::kFpsCap30, Key::kFpsCap40},
+    {Key::kFpsCap30, Key::kFpsCap60},
+    {Key::kFpsCap40, Key::kFpsCap60},
     {Key::kReadbackSteadyExempt, Key::kReadbackSteadyExemptOff},
     {Key::kFenceWriteDeferred, Key::kFenceWriteDeferredOff},
     {Key::kTimerQueueBlockingWait, Key::kTimerBlockingOff},

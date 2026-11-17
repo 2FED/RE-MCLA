@@ -61,6 +61,18 @@
 // With 2 +384 already reads 2 (stock). Single-tile rendering then follows
 // from the game's own rule (960x540 at 2x or 1x is one tile); 4x is never
 // forced into one tile (it needs 3264 EDRAM tiles, our SDK has 2048).
+//
+// l109 collector control (default off, init-only host bool
+// mcla_guest_collector_2x, owner key collector_2x): the shadow / depth
+// collector sub_825F48E8 always hands 4 (`li r6,4`, return 0x825F494C), so
+// in the HiDef path (scene 2x in one tile) its 4x tile surfaces share EDRAM
+// with the 2x scene depth and every frame pays 2x <-> 4x depth / stencil
+// ownership transfers (docs/evidence/M11-l108-sdk-transfer-elision-20261117.md
+// section 6). With the control the collector is handed 2 instead of 4, only
+// while the scene pass itself was last handed 2 or fewer samples; with the
+// SD path (scene 4x) it stays 4. Visual risk: the collector's depth / shadow
+// surfaces have half the samples (shadow edge quality, shadow aliasing or
+// flicker).
 
 #include <algorithm>
 #include <array>
@@ -150,6 +162,18 @@ constexpr int AppliedCount(int game_count, int requested, Where where) {
     return game_count;
   }
   return requested;
+}
+
+// l109: the count handed to the tiling for the collector: 2 instead of a
+// higher game count when the control is on and the scene's last count
+// (scene_count, -1 before the first scene call) is 1 or 2; otherwise the
+// game's count. Every other caller is left alone.
+constexpr int CollectorCount(int game_count, bool enabled, Where where, int scene_count) {
+  if (!enabled || where != Where::kShadow || game_count <= 2 || scene_count < 1 ||
+      scene_count > 2) {
+    return game_count;
+  }
+  return 2;
 }
 
 // The base count the game starts from before its force-4 bytes (scene:

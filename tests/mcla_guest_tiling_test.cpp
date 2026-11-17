@@ -94,6 +94,36 @@ void TestControl() {
                 "sub_822E5B30: the pending value only on a thread whose TLS byte is 0");
 }
 
+void TestCollector() {
+  // l109 collector_2x: only the collector, only with the control on, only
+  // while the scene runs at 1x or 2x, never raised.
+  static_assert(gt::CollectorCount(4, true, Where::kShadow, 2) == 2);
+  static_assert(gt::CollectorCount(4, true, Where::kShadow, 1) == 2);
+  static_assert(gt::CollectorCount(4, true, Where::kShadow, 4) == 4, "SD path: scene 4x");
+  static_assert(gt::CollectorCount(4, true, Where::kShadow, -1) == 4, "scene not seen yet");
+  static_assert(gt::CollectorCount(4, false, Where::kShadow, 2) == 4, "off");
+  static_assert(gt::CollectorCount(4, true, Where::kScene, 2) == 4, "scene untouched");
+  static_assert(gt::CollectorCount(4, true, Where::kSdPass, 2) == 4, "SD pass untouched");
+  static_assert(gt::CollectorCount(4, true, Where::kOther, 2) == 4, "unknown caller untouched");
+  static_assert(gt::CollectorCount(2, true, Where::kShadow, 2) == 2 &&
+                    gt::CollectorCount(1, true, Where::kShadow, 2) == 1,
+                "never raised");
+  for (int game = -1; game <= 4; ++game) {
+    for (int scene = -1; scene <= 4; ++scene) {
+      for (int w = 0; w < static_cast<int>(Where::kCount); ++w) {
+        Check(gt::CollectorCount(game, false, static_cast<Where>(w), scene) == game,
+              "control off: never changes r6");
+        const int c = gt::CollectorCount(game, true, static_cast<Where>(w), scene);
+        Check(c == game || (c == 2 && game > 2 && static_cast<Where>(w) == Where::kShadow &&
+                            (scene == 1 || scene == 2)),
+              "control on: only the collector lowered to 2");
+      }
+    }
+  }
+  // The 960x540 collector surface at 2x is one tile under the game's rule.
+  Check(gt::GameTileRule(960, 540, 2, false, 0).count == 1, "2x collector: one tile");
+}
+
 void TestRule() {
   static_assert(gt::EdramTile(1).width == 80 && gt::EdramTile(1).height == 16 &&
                 gt::EdramTile(2).width == 80 && gt::EdramTile(2).height == 8 &&
@@ -369,6 +399,7 @@ void TestGenerated() {
 int main() {
   TestLayout();
   TestControl();
+  TestCollector();
   TestRule();
   TestLinesAndState();
   TestGenerated();

@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 158, "one hundred and fifty-eight whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 164, "one hundred and sixty-four whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -241,19 +241,23 @@ void TestWhitelist() {
     for (const auto &info : mcla::dev_overrides::kKeys) {
       overriding += info.overrides_user ? 1 : 0;
     }
-    Check(overriding == 3, "only the three vblank keys replace a command-line value");
+    Check(overriding == 6,
+          "only the three vblank keys and (l109) the three fps_cap keys replace a command-line "
+          "value");
     size_t cap_pairs = 0;
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
       Check(pair.first != Key::kRawTimerOff && pair.second != Key::kRawTimerOff,
             "the raw timer key is in no conflict pair");
-      const bool first_cap = pair.first == Key::kVblankHz72 || pair.first == Key::kVblankHz80 ||
-                             pair.first == Key::kVblankHz88;
-      const bool second_cap = pair.second == Key::kVblankHz72 ||
-                              pair.second == Key::kVblankHz80 || pair.second == Key::kVblankHz88;
-      Check(first_cap == second_cap, "vblank keys pair only with each other");
+      auto is_cap = [](Key k) {
+        return k == Key::kVblankHz72 || k == Key::kVblankHz80 || k == Key::kVblankHz88 ||
+               k == Key::kFpsCap30 || k == Key::kFpsCap40 || k == Key::kFpsCap60;
+      };
+      const bool first_cap = is_cap(pair.first);
+      const bool second_cap = is_cap(pair.second);
+      Check(first_cap == second_cap, "vblank and fps_cap keys pair only with each other");
       cap_pairs += first_cap ? 1 : 0;
     }
-    Check(cap_pairs == 3, "the vblank group is listed as its three pairs");
+    Check(cap_pairs == 15, "the vblank group (with the l109 fps_cap keys) is its fifteen pairs");
     Check(!FindKey("raw_timer") && !FindKey("raw_timer_on") && !FindKey("mcla_raw_timer") &&
               !FindKey("mcla_raw_timer_off") && !FindKey("RAW_TIMER_OFF") &&
               !FindKey("vblank_hz_60") && !FindKey("vblank_hz_120") &&
@@ -2316,7 +2320,8 @@ void TestWhitelist() {
         Check(pair.first != k.key && pair.second != k.key, "l108 SDK keys are in no pair");
       }
     }
-    Check(index == mcla::dev_overrides::kKeyCount, "the l108 SDK keys are the last two");
+    Check(index == static_cast<size_t>(Key::kFpsCap30),
+          "the two l108 SDK keys come before the l109 keys");
     Check(!FindKey("xfer_elide_off") && !FindKey("xfer_elision") && !FindKey("XFER_ELIDE") &&
               !FindKey("elide") && !FindKey("xfer_elide_audit") &&
               !FindKey("d3d12_transfer_elide_full_overwrite") && !FindKey("xfer_elide_verify_on"),
@@ -2343,6 +2348,86 @@ void TestWhitelist() {
               bad.issues[1].issue == LineIssue::kUnknownName &&
               bad.issues[2].issue == LineIssue::kDuplicate,
           "l108 near misses: an integer, the cvar name and a repeat are ignored");
+  }
+  {
+    // l109 keys: the three frame caps (mcla_guest_vblank_hz, with the vblank
+    // group), the collector sample count (host, startup) and the two SDK
+    // transfer diagnostics (graphics plugin); =true only.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+      const char *text;
+      Phase phase;
+      bool overrides;
+    } keys[] = {
+        {Key::kFpsCap30, "fps_cap_30", "mcla_guest_vblank_hz", "60", Phase::kGraphicsPlugin, true},
+        {Key::kFpsCap40, "fps_cap_40", "mcla_guest_vblank_hz", "80", Phase::kGraphicsPlugin, true},
+        {Key::kFpsCap60, "fps_cap_60", "mcla_guest_vblank_hz", "120", Phase::kGraphicsPlugin, true},
+        {Key::kCollector2x, "collector_2x", "mcla_guest_collector_2x", "true", Phase::kStartup,
+         false},
+        {Key::kXferTrigProfile, "xfer_trig_profile", "d3d12_transfer_trigger_profile", "true",
+         Phase::kGraphicsPlugin, false},
+        {Key::kStencilLazyVerify, "stencil_lazy_verify", "d3d12_stencil_transfer_lazy_verify",
+         "true", Phase::kGraphicsPlugin, false},
+    };
+    size_t index = static_cast<size_t>(Key::kXferElideVerify) + 1;
+    for (const auto &k : keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == k.text && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && info.overrides_user == k.overrides,
+            "l109 key: phase, cvar and text; false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "l109 keys follow xfer_elide_verify");
+    }
+    Check(index == mcla::dev_overrides::kKeyCount, "the l109 keys are the last six");
+    size_t cap_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      for (const Key k : {Key::kCollector2x, Key::kXferTrigProfile, Key::kStencilLazyVerify}) {
+        Check(pair.first != k && pair.second != k, "the l109 non-cap keys are in no pair");
+      }
+      const bool fps = pair.first == Key::kFpsCap30 || pair.first == Key::kFpsCap40 ||
+                       pair.first == Key::kFpsCap60 || pair.second == Key::kFpsCap30 ||
+                       pair.second == Key::kFpsCap40 || pair.second == Key::kFpsCap60;
+      cap_pairs += fps ? 1 : 0;
+    }
+    Check(cap_pairs == 12, "the fps_cap keys: twelve pairs with the vblank group and each other");
+    Check(!FindKey("fps_cap") && !FindKey("fps_cap_50") && !FindKey("fps_cap_120") &&
+              !FindKey("FPS_CAP_40") && !FindKey("fps_cap_40_on") && !FindKey("collector_4x") &&
+              !FindKey("collector") && !FindKey("mcla_guest_collector_2x") &&
+              !FindKey("xfer_trig") && !FindKey("stencil_lazy") &&
+              !FindKey("d3d12_stencil_transfer_lazy_verify"),
+          "no prefix, suffix, cvar-name, case or numeric variants of the l109 keys");
+    const Parsed audit = Parse(
+        "force_hidef=true\nxfer_elide_verify=true\ngpu_cat=true\ngpu_cat_every4=true\n"
+        "xfer_trig_profile=true\nstencil_lazy_verify=true\n");
+    Check(audit.ValueCount() == 6 && audit.issue_count == 0 &&
+              audit.Value(Key::kXferTrigProfile) == true &&
+              audit.Value(Key::kStencilLazyVerify) == true,
+          "the pc/refuse-audit arm");
+    const Parsed cap = Parse("force_hidef=true\r\nfps_cap_40=true\r\n");
+    Check(cap.ValueCount() == 2 && cap.issue_count == 0 && cap.Value(Key::kFpsCap40) == true,
+          "the pc/hidef-cap40 arm (CRLF)");
+    const Parsed caps = Parse("fps_cap_40=true\nfps_cap_60=true\n");
+    Check(!caps.Value(Key::kFpsCap40) && !caps.Value(Key::kFpsCap60) && caps.issue_count == 1 &&
+              caps.issues[0].issue == LineIssue::kConflict,
+          "two fps caps in one file: neither applied");
+    const Parsed mixed = Parse("vblank_hz_88=true\nfps_cap_30=true\n");
+    Check(!mixed.Value(Key::kVblankHz88) && !mixed.Value(Key::kFpsCap30),
+          "an fps cap with a vblank key: neither applied");
+    const Parsed collector = Parse("force_hidef=true\ncollector_2x=true\n");
+    Check(collector.ValueCount() == 2 && collector.issue_count == 0 &&
+              collector.Value(Key::kCollector2x) == true,
+          "the pc/collector-2x arm");
+    const Parsed bad = Parse("fps_cap_60=1\ncollector_2x=true\ncollector_2x=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l109 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -2836,7 +2921,10 @@ void TestWhitelist() {
                           key == Key::kResolveFillOff || key == Key::kForceHidef ||
                           key == Key::kResolveFillOriginOnly || key == Key::kStencilUniform ||
                           key == Key::kStencilUniformVerify || key == Key::kGpuCatEvery4 ||
-                          key == Key::kXferElide || key == Key::kXferElideVerify;
+                          key == Key::kXferElide || key == Key::kXferElideVerify ||
+                          key == Key::kFpsCap30 || key == Key::kFpsCap40 ||
+                          key == Key::kFpsCap60 || key == Key::kCollector2x ||
+                          key == Key::kXferTrigProfile || key == Key::kStencilLazyVerify;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -2941,9 +3029,10 @@ void TestWhitelist() {
     // their controls, low_latency_off joining the mode group (four keys, six
     // pairs) and lead_ll_replace_off the l97 pair (three keys, three pairs);
     // l105: present_fsr and present_cas (the present_effect string); l107:
-    // the two scene sample-count keys (mcla_guest_msaa_scene).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 45,
-          "forty-five shared-cvar pairs");
+    // the two scene sample-count keys (mcla_guest_msaa_scene); l109: the
+    // three fps_cap keys join the vblank group (six keys, fifteen pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 57,
+          "fifty-seven shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -3613,7 +3702,8 @@ void TestWhitelist() {
     // explicit false (139 keys); l105: plus the seven l105 keys explicit false
     // (146 keys); l106: plus guest_msaa_off explicit false (147 keys); l107:
     // plus the four l107 keys explicit false (151 keys) and the five l107
-    // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys).
+    // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys); l109:
+    // plus the six l109 keys (164 keys).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3695,7 +3785,13 @@ void TestWhitelist() {
                                   "stencil_uniform_verify=false\n"
                                   "gpu_cat_every4=false\n"
                                   "xfer_elide=false\n"
-                                  "xfer_elide_verify=false\n";
+                                  "xfer_elide_verify=false\n"
+                                  "fps_cap_30=false\n"
+                                  "fps_cap_40=false\n"
+                                  "fps_cap_60=false\n"
+                                  "collector_2x=false\n"
+                                  "xfer_trig_profile=false\n"
+                                  "stencil_lazy_verify=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4301,7 +4397,7 @@ void TestRejectedFiles() {
     // former 2 KiB and accepted since l81 (l105: 146 keys, about 4.04 KB, 55
     // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
-    // above 4 KiB, still about 4 KB of room; l108: 158 keys).
+    // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
