@@ -27,7 +27,11 @@
 //   cp_reg_write_skip_unchanged=true (the per-draw levers) and
 //   d3d12_frame_lead_strict_low_latency=1 (low latency, see below);
 // - since l104 also at startup on both platforms: d3d12_low_latency_mode=auto
-//   and d3d12_low_latency_auto_antilag2=true (low latency, see below).
+//   and d3d12_low_latency_auto_antilag2=true (low latency, see below);
+// - since l111 at startup on both platforms video_mode_force_hidef=true, and
+//   at graphics-plugin load on Windows only
+//   d3d12_transfer_elide_full_overwrite=true and
+//   d3d12_draw_extent_from_rect=true (ownership transfers, see below).
 //
 // Each phase is the phase of the owner override key for the same cvar.
 //
@@ -109,6 +113,25 @@
 // l95 / l97 / l100 / l101 / l103 on keys write the same cvars and are their
 // own arms. The verify keys write other cvars and still win in the SDK.
 //
+// l111 (owner decision 2026-11-18, "yes, turn on by default and build l111";
+// docs/evidence/M11-l111-owner-build-20261118.md, measured in
+// docs/evidence/M11-l110-pc-extent-20261118.md: RTX 5060 GPU busy 19.1 ->
+// 12.7 ms, 48 -> 66-69 fps in driving minutes, both audits bad=0):
+// video_mode_force_hidef=true (startup, init-only, as its key: the guest
+// video mode is reported as HiDef also below 1280x720, so the 1080p target's
+// 960x540 guest mode leaves the game's SD path; at 1280x720 and above the
+// SDK derivation is unchanged, so it is a no-op there and on both
+// platforms); d3d12_transfer_elide_full_overwrite=true (l108 transfer
+// elision) and d3d12_draw_extent_from_rect=true (l110 rectangle extent bound)
+// on Windows only (Platform::kWindowsOnly) until a Wine/Proton verify run
+// has passed: under Wine they are not written (action windows_only) and the
+// Deck keeps the SDK default false. Owner controls (applied values win;
+// =false lines write nothing and do not turn a default off):
+// force_hidef_off, xfer_elide_off, xfer_extent_off; the l107 / l108 / l110
+// on keys write the same cvars and are their own arms (on the Deck they turn
+// the elision and the bound on). The verify keys xfer_elide_verify and
+// xfer_extent_verify write other cvars and win in the SDK over the defaults.
+//
 // Semantics kept from the SDK: targeted sync acts only while
 // d3d12_readback_sync_composite is on (MCLA_READBACK_SYNC_COMPOSITE_DEFAULT);
 // elision acts only in readback_resolve=some (the host default). Both are
@@ -135,8 +158,9 @@ enum class Phase : uint8_t {
 };
 
 enum class Platform : uint8_t {
-  kAll,       // Windows and Wine/Proton
-  kWineOnly,  // only under Wine/Proton (net negative on Windows, l63)
+  kAll,          // Windows and Wine/Proton
+  kWineOnly,     // only under Wine/Proton (net negative on Windows, l63)
+  kWindowsOnly,  // only on Windows (not yet verified under Wine/Proton, l111)
 };
 
 struct Default {
@@ -152,7 +176,7 @@ struct Default {
   bool silent_false_is_arm = false;
 };
 
-inline constexpr std::array<Default, 17> kDefaults = {{
+inline constexpr std::array<Default, 20> kDefaults = {{
     {"memory_watch_census", "false", Phase::kStartup, true},
     {"memory_watch_disarm_bridge_safe_gaps", "true", Phase::kStartup, false, Platform::kWineOnly},
     {"d3d12_readback_sync_targeted", "true", Phase::kGraphicsPlugin, false},
@@ -176,6 +200,14 @@ inline constexpr std::array<Default, 17> kDefaults = {{
     {"d3d12_low_latency_mode", "auto", Phase::kStartup, false},
     {"d3d12_low_latency_auto_antilag2", "true", Phase::kStartup, false},
     {"d3d12_frame_lead_strict_low_latency", "1", Phase::kGraphicsPlugin, false},
+    // l111: the forced HiDef mode (both platforms; a no-op at 1280x720 and
+    // above) and the ownership-transfer elision and extent bound (Windows
+    // only until a Wine/Proton verify run; see above).
+    {"video_mode_force_hidef", "true", Phase::kStartup, false},
+    {"d3d12_transfer_elide_full_overwrite", "true", Phase::kGraphicsPlugin, false,
+     Platform::kWindowsOnly},
+    {"d3d12_draw_extent_from_rect", "true", Phase::kGraphicsPlugin, false,
+     Platform::kWindowsOnly},
 }};
 
 // Cvars this module writes only under Wine/Proton, never on Windows.
@@ -184,10 +216,16 @@ inline constexpr std::array<std::string_view, 2> kWineOnlyCvars = {
     "shared_memory_upload_ahead_pages",
 };
 
+// Cvars this module writes only on Windows, never under Wine/Proton (l111).
+inline constexpr std::array<std::string_view, 2> kWindowsOnlyCvars = {
+    "d3d12_transfer_elide_full_overwrite",
+    "d3d12_draw_extent_from_rect",
+};
+
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 120> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 117> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -416,16 +454,16 @@ inline constexpr std::array<std::string_view, 120> kNeverWrittenCvars = {
     "mcla_traffic_motion_probe",
     "resolve_resolution_scale_fill_half_pixel_offset",
     // l107 SDK switches (default off; the timing interval default 1); owner
-    // keys force_hidef, resolve_fill_origin_only, stencil_uniform,
-    // stencil_uniform_verify and gpu_cat_every4 only.
-    "video_mode_force_hidef",
+    // keys resolve_fill_origin_only, stencil_uniform, stencil_uniform_verify
+    // and gpu_cat_every4 only. video_mode_force_hidef left this list in l111
+    // (now a default above).
     "resolve_fill_half_pixel_only_at_origin",
     "d3d12_stencil_transfer_uniform",
     "d3d12_stencil_transfer_uniform_verify",
     "d3d12_gpu_category_timing_every",
-    // l108 SDK switches (default off); owner keys xfer_elide and
-    // xfer_elide_verify only.
-    "d3d12_transfer_elide_full_overwrite",
+    // l108 SDK verify (default off); owner key xfer_elide_verify only.
+    // d3d12_transfer_elide_full_overwrite left this list in l111 (now a
+    // Windows default above).
     "d3d12_transfer_elide_full_overwrite_verify",
     // l109: the collector sample count (host init-only bool) and the SDK
     // transfer diagnostics (default off); owner keys collector_2x,
@@ -433,9 +471,9 @@ inline constexpr std::array<std::string_view, 120> kNeverWrittenCvars = {
     "mcla_guest_collector_2x",
     "d3d12_transfer_trigger_profile",
     "d3d12_stencil_transfer_lazy_verify",
-    // l110: the SDK draw extent bound and its verify (default off); owner
-    // keys xfer_extent and xfer_extent_verify only.
-    "d3d12_draw_extent_from_rect",
+    // l110: the SDK draw extent verify (default off); owner key
+    // xfer_extent_verify only. d3d12_draw_extent_from_rect left this list in
+    // l111 (now a Windows default above).
     "d3d12_draw_extent_from_rect_verify",
 };
 
@@ -500,6 +538,7 @@ enum class Action : uint8_t {
   kDisabledByOption,  // build without MCLA_M10_SPEEDUP_DEFAULTS
   kOffBySwitch,       // --mcla_m10_speedup_defaults=false
   kNotThisPlatform,   // Wine-only entry on Windows
+  kWindowsOnly,       // Windows-only entry under Wine/Proton (l111)
   kMeasurementBuild,  // diagnostic switch in an MCLA_DEV_OVERRIDES build
   kDevOverride,       // the owner override file wrote (or set off) this cvar
   kUnavailable,       // the cvar is not registered (e.g. an older SDK)
@@ -507,7 +546,7 @@ enum class Action : uint8_t {
   kAlready,           // the cvar already holds the value (SDK default equal)
   kApply,             // write the value
 };
-inline constexpr size_t kActionCount = 9;
+inline constexpr size_t kActionCount = 10;
 
 struct Inputs {
   bool option_on = false;          // MCLA_M10_SPEEDUP_DEFAULTS
@@ -531,6 +570,9 @@ constexpr Action Decide(const Default &entry, const Inputs &in) {
   }
   if (entry.platform == Platform::kWineOnly && !in.wine) {
     return Action::kNotThisPlatform;
+  }
+  if (entry.platform == Platform::kWindowsOnly && in.wine) {
+    return Action::kWindowsOnly;
   }
   if (entry.diagnostic && in.measurement_build) {
     return Action::kMeasurementBuild;
@@ -560,6 +602,8 @@ constexpr const char *ActionName(Action action) {
       return "switch_off";
     case Action::kNotThisPlatform:
       return "wine_only";
+    case Action::kWindowsOnly:
+      return "windows_only";
     case Action::kMeasurementBuild:
       return "measurement_build";
     case Action::kDevOverride:

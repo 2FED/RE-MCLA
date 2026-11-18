@@ -25,6 +25,7 @@ using mcla::m10_defaults::IsNeverWritten;
 using mcla::m10_defaults::KeyLineWins;
 using mcla::m10_defaults::kDefaults;
 using mcla::m10_defaults::kNeverWrittenCvars;
+using mcla::m10_defaults::kWindowsOnlyCvars;
 using mcla::m10_defaults::kWineOnlyCvars;
 using mcla::m10_defaults::Phase;
 using mcla::m10_defaults::Platform;
@@ -42,6 +43,18 @@ const Default *Find(std::string_view cvar) {
 
 bool WineOnly(const Default &entry) {
   return entry.platform == Platform::kWineOnly;
+}
+
+bool WindowsOnly(const Default &entry) {
+  return entry.platform == Platform::kWindowsOnly;
+}
+
+// The three l111 defaults (TestL111Defaults); the arms of earlier builds that
+// name force_hidef / xfer_elide / xfer_extent are those defaults' own arms.
+bool L111Default(const Default &entry) {
+  return entry.cvar == "video_mode_force_hidef" ||
+         entry.cvar == "d3d12_transfer_elide_full_overwrite" ||
+         entry.cvar == "d3d12_draw_extent_from_rect";
 }
 
 // A volunteer build at a fresh start: option on, switch on, cvar registered
@@ -90,8 +103,13 @@ void TestTable() {
       {"d3d12_low_latency_auto_antilag2", "true", Phase::kStartup, false, Platform::kAll, true},
       {"d3d12_frame_lead_strict_low_latency", "1", Phase::kGraphicsPlugin, false, Platform::kAll,
        true},
+      {"video_mode_force_hidef", "true", Phase::kStartup, false, Platform::kAll, true},
+      {"d3d12_transfer_elide_full_overwrite", "true", Phase::kGraphicsPlugin, false,
+       Platform::kWindowsOnly, true},
+      {"d3d12_draw_extent_from_rect", "true", Phase::kGraphicsPlugin, false,
+       Platform::kWindowsOnly, true},
   };
-  Check(std::size(expected) == kDefaults.size(), "seventeen defaults");
+  Check(std::size(expected) == kDefaults.size(), "twenty defaults");
   for (const auto &e : expected) {
     const Default *entry = Find(e.cvar);
     Check(entry != nullptr, "every expected cvar is in the table");
@@ -122,8 +140,10 @@ void TestTable() {
   // cp_fence_poll_64 / _off); since l104 the fifteen keys of the six l104
   // defaults (tex_memo_v2 / _off, rt_memo / _off, cp_reg_skip / _off, the
   // three l95 mode keys and low_latency_off, low_latency_auto_antilag2 /
-  // _off, the two l97 keys and lead_ll_replace_off).
-  Check(linked == 30, "thirty override keys write default cvars");
+  // _off, the two l97 keys and lead_ll_replace_off); since l111 the six keys
+  // of the three l111 defaults (force_hidef / _off, xfer_elide / _off,
+  // xfer_extent / _off).
+  Check(linked == 36, "thirty-six override keys write default cvars");
   // Upload-ahead: both keys write the same integer cvar; =true writes 16/64,
   // =false writes nothing (the runtime treats that line as the owner's arm).
   for (const auto key : {dev::Key::kUploadAhead16, dev::Key::kUploadAhead64}) {
@@ -238,7 +258,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("xma_honor_frame_trim") && IsNeverWritten("xma_frame_trim_block_granular") &&
             IsNeverWritten("xma_dump_contexts") && IsNeverWritten("xma_dump_all_rates") &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "KI-071 step 3 cvar names in the never-written set");
   for (const auto key : {dev::Key::kXmaFrameWalkTrace, dev::Key::kXmaFrameWalkFix,
                          dev::Key::kXmaDumpInput}) {
@@ -255,7 +275,7 @@ void TestTable() {
           "the M11-007d lock switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_lock_probe") && IsNeverWritten("mcla_lock_readback_ensure") &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "M11-007d cvar names in the never-written set");
   for (const auto key : {dev::Key::kFenceWriteDeferred, dev::Key::kXmaFrameWalkFixOff}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -263,7 +283,7 @@ void TestTable() {
           "the l77 switches keep their SDK defaults (owner keys only)");
   }
   Check(IsNeverWritten("d3d12_fence_write_deferred") && IsNeverWritten("xma_frame_walk_fix") &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "l77 cvar names in the never-written set");
   for (const auto key : {dev::Key::kRawTimerOff, dev::Key::kVblankHz72, dev::Key::kVblankHz80,
                          dev::Key::kVblankHz88}) {
@@ -273,7 +293,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_raw_timer") && IsNeverWritten("mcla_guest_vblank_hz") &&
             Find("mcla_raw_timer") == nullptr && Find("mcla_guest_vblank_hz") == nullptr &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "KI-074 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kReadbackSteadyExemptOff, dev::Key::kFenceWriteDeferredOff,
                          dev::Key::kFenceDeferGap2000}) {
@@ -284,7 +304,7 @@ void TestTable() {
   Check(IsNeverWritten("d3d12_fence_defer_min_gap_us") &&
             Find("d3d12_fence_defer_min_gap_us") == nullptr &&
             IsNeverWritten("d3d12_readback_sync_steady_exempt") &&
-            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 120,
+            IsNeverWritten("d3d12_fence_write_deferred") && kNeverWrittenCvars.size() == 117,
         "l78 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kXmaCanaryFixes, dev::Key::kTimerQueueBlockingWait,
                          dev::Key::kTexturePlacedHeaps, dev::Key::kTextureHeap64Mb}) {
@@ -296,7 +316,7 @@ void TestTable() {
             IsNeverWritten("d3d12_texture_placed_heaps") &&
             IsNeverWritten("d3d12_texture_heap_block_mb") &&
             Find("d3d12_texture_placed_heaps") == nullptr &&
-            Find("d3d12_texture_heap_block_mb") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("d3d12_texture_heap_block_mb") == nullptr && kNeverWrittenCvars.size() == 117,
         "l79 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kBlendMinmaxFix, dev::Key::kShortSleepNative,
                          dev::Key::kApuPriorityNormal, dev::Key::kTexturePlacedHeapsOff,
@@ -311,7 +331,7 @@ void TestTable() {
             Find("d3d12_blend_minmax_fix") == nullptr &&
             Find("ke_delay_short_sleep_mode") == nullptr &&
             Find("apu_worker_priority") == nullptr &&
-            Find("d3d12_texture_heap_precreate") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("d3d12_texture_heap_precreate") == nullptr && kNeverWrittenCvars.size() == 117,
         "l80 cvar names in the never-written set (63)");
   for (const auto key : {dev::Key::kZeroDelayNative, dev::Key::kGuestAudioPrioNormal,
                          dev::Key::kBlendMinmaxFixOff, dev::Key::kAlbumPreviewRestoreOff}) {
@@ -330,7 +350,7 @@ void TestTable() {
             Find("ke_delay_zero_gap_us") == nullptr &&
             Find("guest_audio_thread_priority") == nullptr &&
             Find("guest_thread_priority_boost_start") == nullptr &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "l81 cvar names in the never-written set (76)");
   Check(IsNeverWritten("mcla_album_preview_restore") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAlbumPreviewRestore))) &&
@@ -339,7 +359,7 @@ void TestTable() {
         "the KI-056 fix A restore is host-owned (default on since l81), never an M10 default");
   Check(IsNeverWritten("cp_bulk_register_writes") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kCpBulkRegs))) &&
-            Find("cp_bulk_register_writes") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("cp_bulk_register_writes") == nullptr && kNeverWrittenCvars.size() == 117,
         "the l82 CP bulk register writes stay SDK-owned (owner key cp_bulk_regs only)");
   for (const auto key : {dev::Key::kAmbientDtProbe, dev::Key::kAmbientDtSnapshot,
                          dev::Key::kRawTimerHitchHold}) {
@@ -348,16 +368,16 @@ void TestTable() {
           "the l83 KI-054 switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_ambient_dt_probe") && IsNeverWritten("mcla_ambient_dt_snapshot") &&
-            IsNeverWritten("mcla_raw_timer_hitch_hold") && kNeverWrittenCvars.size() == 120,
+            IsNeverWritten("mcla_raw_timer_hitch_hold") && kNeverWrittenCvars.size() == 117,
         "l83 cvar names in the never-written set (76)");
   Check(IsNeverWritten("mcla_raw_timer_stats") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kRawTimerStats))) &&
-            Find("mcla_raw_timer_stats") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("mcla_raw_timer_stats") == nullptr && kNeverWrittenCvars.size() == 117,
         "the l84 raw timer statistics switch is host-owned (owner key raw_timer_stats only)");
   Check(IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kRawTimerHitchHoldOff))) &&
             dev::CvarName(dev::Info(dev::Key::kRawTimerHitchHoldOff)) ==
                 "mcla_raw_timer_hitch_hold" &&
-            Find("mcla_raw_timer_hitch_hold") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("mcla_raw_timer_hitch_hold") == nullptr && kNeverWrittenCvars.size() == 117,
         "the KI-054 hitch hold is host-owned (default on since l86), never an M10 default");
   for (const auto key : {dev::Key::kAudioFilterProbe, dev::Key::kAudioFilterNative,
                          dev::Key::kAudioFilterNativeVerify, dev::Key::kAudioFilterNativeOff}) {
@@ -366,17 +386,17 @@ void TestTable() {
           "the l87 KI-060 switches keep their defaults (owner keys only)");
   }
   Check(IsNeverWritten("mcla_audio_filter_probe") && IsNeverWritten("mcla_audio_filter_native") &&
-            IsNeverWritten("mcla_audio_filter_native_verify") && kNeverWrittenCvars.size() == 120,
+            IsNeverWritten("mcla_audio_filter_native_verify") && kNeverWrittenCvars.size() == 117,
         "l87 cvar names in the never-written set (76)");
   Check(IsNeverWritten("d3d12_readback_fenced_delivery") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kReadbackFencedDelivery))) &&
             Find("d3d12_readback_fenced_delivery") == nullptr &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "the l88 fenced read-back delivery stays SDK-owned (owner key only)");
   Check(IsNeverWritten("mcla_audio_filter_native_ch_off") &&
             IsNeverWritten(dev::CvarName(dev::Info(dev::Key::kAudioFilterNativeChOff))) &&
             Find("mcla_audio_filter_native_ch_off") == nullptr &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "the l89 sub_82147738 native control is host-owned (owner key only)");
   for (const auto key : {dev::Key::kFrameLeadLimit1, dev::Key::kReadbackDeferredRelease}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -387,7 +407,7 @@ void TestTable() {
             IsNeverWritten("d3d12_readback_deferred_release") &&
             Find("d3d12_frame_lead_limit") == nullptr &&
             Find("d3d12_readback_deferred_release") == nullptr &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "l90 cvar names in the never-written set (76)");
   // l94: the strict frame lead bound left the never-written set and is a
   // default on both platforms; its three owner keys write that cvar.
@@ -399,7 +419,7 @@ void TestTable() {
   }
   Check(!IsNeverWritten("d3d12_frame_lead_strict") && Find("d3d12_frame_lead_strict") != nullptr &&
             !WineOnly(*Find("d3d12_frame_lead_strict")) &&
-            !Find("d3d12_frame_lead_strict")->diagnostic && kNeverWrittenCvars.size() == 120,
+            !Find("d3d12_frame_lead_strict")->diagnostic && kNeverWrittenCvars.size() == 117,
         "l94: the strict lead cvar is a default on both platforms, not a diagnostic (85)");
   Check(IsNeverWritten("d3d12_frame_lead_limit") && Find("d3d12_frame_lead_limit") == nullptr,
         "the l90 open-lead limit stays SDK-owned");
@@ -410,7 +430,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_warp_stall_fix") && IsNeverWritten("mcla_ki026_probe") &&
             Find("mcla_warp_stall_fix") == nullptr && Find("mcla_ki026_probe") == nullptr &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "KI-026 cvar names in the never-written set (78)");
   for (const auto key : {dev::Key::kReadbackReadWatch, dev::Key::kReadbackAgeInject2,
                          dev::Key::kOcclusionQueryBounded4, dev::Key::kPresentStats,
@@ -424,7 +444,7 @@ void TestTable() {
             IsNeverWritten("d3d12_occlusion_query_bounded_ms") &&
             IsNeverWritten("d3d12_present_stats") &&
             IsNeverWritten("d3d12_present_sync_interval") &&
-            IsNeverWritten("mcla_locked_tearing_off") && kNeverWrittenCvars.size() == 120,
+            IsNeverWritten("mcla_locked_tearing_off") && kNeverWrittenCvars.size() == 117,
         "l92 cvar names in the never-written set (84)");
   for (const auto key : {dev::Key::kTodRateX10, dev::Key::kTodRateX30, dev::Key::kTodFreeze,
                          dev::Key::kTodStart0430, dev::Key::kTodStart0530}) {
@@ -434,7 +454,7 @@ void TestTable() {
   }
   Check(IsNeverWritten("mcla_tod_rate") && IsNeverWritten("mcla_tod_start_minutes") &&
             Find("mcla_tod_rate") == nullptr && Find("mcla_tod_start_minutes") == nullptr &&
-            kNeverWrittenCvars.size() == 120,
+            kNeverWrittenCvars.size() == 117,
         "l93 cvar names in the never-written set (86)");
   for (const auto key : {dev::Key::kLowLatencyMarkers, dev::Key::kLowLatencyBoost,
                          dev::Key::kFmaBench}) {
@@ -453,7 +473,7 @@ void TestTable() {
             IsNeverWritten("d3d12_low_latency_markers_only") &&
             IsNeverWritten("d3d12_low_latency_boost") && IsNeverWritten("mcla_fma_bench") &&
             !IsNeverWritten("d3d12_low_latency_presleep_margin_us") &&
-            Find("d3d12_low_latency_mode") != nullptr && kNeverWrittenCvars.size() == 120,
+            Find("d3d12_low_latency_mode") != nullptr && kNeverWrittenCvars.size() == 117,
         "l95 cvar names in the never-written set; the mode is a default since l104");
   for (const auto key : {dev::Key::kShaderImLoadMemo, dev::Key::kShaderImLoadMemoVerify}) {
     Check(IsNeverWritten(dev::CvarName(dev::Info(key))) &&
@@ -461,7 +481,7 @@ void TestTable() {
           "the l96 IM_LOAD memo keys keep their SDK defaults (owner keys only)");
   }
   Check(IsNeverWritten("shader_im_load_memo") && IsNeverWritten("shader_im_load_memo_verify") &&
-            Find("shader_im_load_memo") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("shader_im_load_memo") == nullptr && kNeverWrittenCvars.size() == 117,
         "l96 memo cvar names in the never-written set");
   // l98: the fence poll interval and the draw-packet clock left the
   // never-written set (now defaults on both platforms); their l96 keys and
@@ -476,7 +496,7 @@ void TestTable() {
             !WineOnly(*Find("cp_fence_poll_interval")) &&
             !WineOnly(*Find("cp_draw_packet_tsc")) &&
             !Find("cp_fence_poll_interval")->diagnostic &&
-            !Find("cp_draw_packet_tsc")->diagnostic && kNeverWrittenCvars.size() == 120,
+            !Find("cp_draw_packet_tsc")->diagnostic && kNeverWrittenCvars.size() == 117,
         "l98: lever 1 is a default on both platforms, not a diagnostic");
   // l97: the low-latency strict replacement is an m10 default since l104 (1);
   // the two l97 keys and lead_ll_replace_off write it; the strict bound itself
@@ -491,7 +511,7 @@ void TestTable() {
   Check(!IsNeverWritten("d3d12_frame_lead_strict_low_latency") &&
             Find("d3d12_frame_lead_strict_low_latency") != nullptr &&
             !IsNeverWritten("d3d12_frame_lead_strict") &&
-            Find("d3d12_frame_lead_strict") != nullptr && kNeverWrittenCvars.size() == 120,
+            Find("d3d12_frame_lead_strict") != nullptr && kNeverWrittenCvars.size() == 117,
         "l97 cvar name is a default since l104; strict stays a default");
   // l99: the texture churn and guard-action keys keep their defaults (owner
   // keys only).
@@ -505,7 +525,7 @@ void TestTable() {
   Check(IsNeverWritten("mcla_texture_hard_margin_mb") &&
             IsNeverWritten("texture_cache_min_age_ms") &&
             IsNeverWritten("d3d12_frame_lead_strict_low_latency_guard_action") &&
-            Find("texture_cache_min_age_ms") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("texture_cache_min_age_ms") == nullptr && kNeverWrittenCvars.size() == 117,
         "l99 cvar names in the never-written set");
   // l100: the verifies and the spin backoff keep their defaults (owner keys
   // only); the register-write skip is a default since l104 (cp_reg_skip and
@@ -521,7 +541,7 @@ void TestTable() {
             IsNeverWritten("cp_draw_const_only_verify") &&
             IsNeverWritten("mcla_guest_spin_backoff") &&
             Find("cp_reg_write_skip_unchanged") != nullptr &&
-            Find("mcla_guest_spin_backoff") == nullptr && kNeverWrittenCvars.size() == 120,
+            Find("mcla_guest_spin_backoff") == nullptr && kNeverWrittenCvars.size() == 117,
         "l100 cvar names: the verifies never written, the skip a default since l104");
   // l101: the render-target memo verify keeps its default (owner key only);
   // the texture memo v2 and the render-target memo are defaults since l104.
@@ -538,7 +558,7 @@ void TestTable() {
             IsNeverWritten("d3d12_rt_update_memo_verify") &&
             IsNeverWritten("d3d12_fetch_identity_verify") &&
             Find("d3d12_fetch_identity_v2") != nullptr &&
-            Find("d3d12_rt_update_memo") != nullptr && kNeverWrittenCvars.size() == 120,
+            Find("d3d12_rt_update_memo") != nullptr && kNeverWrittenCvars.size() == 117,
         "l101 cvar names: the verifies never written, the levers defaults since l104");
   // l103: the Anti-Lag 2 replacement count keeps its SDK default (owner key
   // only: AMD keeps the strict bound); the auto opt-in is a default since
@@ -558,9 +578,9 @@ void TestTable() {
             !IsNeverWritten("d3d12_frame_lead_strict_low_latency") &&
             !IsNeverWritten("d3d12_low_latency_mode") &&
             IsNeverWritten("d3d12_frame_lead_strict_low_latency_guard_action") &&
-            kNeverWrittenCvars.size() == 120,
-        "l104: six cvars left the never-written set (98; l105: 104); the Anti-Lag 2 count "
-        "and the guard action stay");
+            kNeverWrittenCvars.size() == 117,
+        "l104: six cvars left the never-written set (98; l105: 104; l111: 117); the Anti-Lag 2 "
+        "count and the guard action stay");
   // l81 arm rule: an arm without upload-ahead and bridge lines leaves the Wine
   // defaults to this module (decision applied on Wine, not on Windows); an
   // explicit =false line of those keys is the owner's off arm (the l71-l80
@@ -638,7 +658,12 @@ void TestPlatform() {
   for (const auto &entry : kDefaults) {
     const Action windows = Decide(entry, Fresh(false));
     const Action wine = Decide(entry, Fresh(true));
-    Check(wine == Action::kApply, "fresh Wine/Proton start applies every default");
+    if (WindowsOnly(entry)) {
+      Check(wine == Action::kWindowsOnly, "Wine/Proton: Windows-only default not applied");
+      Check(windows == Action::kApply, "Windows: Windows-only default applied");
+      continue;
+    }
+    Check(wine == Action::kApply, "fresh Wine/Proton start applies every other default");
     if (WineOnly(entry)) {
       Check(windows == Action::kNotThisPlatform, "Windows: Wine-only default not applied");
     } else {
@@ -675,7 +700,7 @@ void TestPlatform() {
 void TestDecision() {
   for (const bool wine : {false, true}) {
     for (const auto &entry : kDefaults) {
-      if (WineOnly(entry) && !wine) {
+      if ((WineOnly(entry) && !wine) || (WindowsOnly(entry) && wine)) {
         continue;  // TestPlatform
       }
       Check(Decide(entry, Fresh(wine)) == Action::kApply, "fresh volunteer start applies");
@@ -738,6 +763,7 @@ void TestExhaustive() {
   // build.
   size_t applies = 0;
   size_t windows_wine_only_applies = 0;
+  size_t wine_windows_only_applies = 0;
   for (const auto &entry : kDefaults) {
     for (unsigned bits = 0; bits < 256; ++bits) {
       Inputs in;
@@ -752,6 +778,7 @@ void TestExhaustive() {
       const bool expect_apply = in.option_on && in.switch_on && in.registered &&
                                 !in.non_default && !in.holds_value &&
                                 (in.wine || !WineOnly(entry)) &&
+                                (!in.wine || !WindowsOnly(entry)) &&
                                 !(HasOverrideKey(entry) && in.dev_override_applied) &&
                                 !(entry.diagnostic && in.measurement_build);
       const Action action = Decide(entry, in);
@@ -760,17 +787,22 @@ void TestExhaustive() {
       if (WineOnly(entry) && !in.wine && action == Action::kApply) {
         ++windows_wine_only_applies;
       }
+      if (WindowsOnly(entry) && in.wine && action == Action::kApply) {
+        ++wine_windows_only_applies;
+      }
     }
   }
   Check(windows_wine_only_applies == 0, "Wine-only defaults never apply on Windows");
+  Check(wine_windows_only_applies == 0, "Windows-only defaults never apply under Wine/Proton");
   // Free inputs in the apply case: measurement_build, dev_override_applied and
-  // wine. Thirteen keyed all-platform entries (four speed-ups and, since l94,
+  // wine. Fourteen keyed all-platform entries (four speed-ups and, since l94,
   // the strict frame lead, since l98 the two lever-1 entries, since l104 the
-  // three per-draw levers and the three low-latency entries): 2 x 2 each
-  // (applied false); census (keyed, diagnostic): 1 x 2; GPU timing (no key,
-  // diagnostic): 2 x 2; the two keyed Wine-only speed-ups: 2 each (wine true,
-  // applied false).
-  Check(applies == 13 * 4 + 2 + 4 + 2 * 2, "apply case count");
+  // three per-draw levers and the three low-latency entries, since l111 the
+  // forced HiDef mode): 2 x 2 each (applied false); census (keyed,
+  // diagnostic): 1 x 2; GPU timing (no key, diagnostic): 2 x 2; the two keyed
+  // Wine-only speed-ups: 2 each (wine true, applied false); the two keyed
+  // Windows-only l111 entries: 2 each (wine false, applied false).
+  Check(applies == 14 * 4 + 2 + 4 + 2 * 2 + 2 * 2, "apply case count");
 }
 
 // The runtime's dev_override_applied for an entry (mcla_m10_defaults.cpp
@@ -1174,9 +1206,9 @@ void TestL105Keys() {
             "l105: no l105 line wins over any m10 default");
     }
   }
-  Check(kDefaults.size() == 17 && kNeverWrittenCvars.size() == 120,
-        "l105: seventeen defaults (unchanged), 115 never-written cvars (98 + 6 + l106 1 + l107 8 "
-        "+ l108 2)");
+  Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 117,
+        "l105: seventeen defaults (l111: twenty), 115 never-written cvars (98 + 6 + l106 1 + "
+        "l107 8 + l108 2; l111: 117)");
   // The l105 arms leave every m10 default as it is (owner build, both
   // platforms).
   const std::string arms[] = {
@@ -1235,9 +1267,9 @@ void TestL106Keys() {
     Check(!KeyLineWins(entry, info, true, true) && !KeyLineWins(entry, info, std::nullopt, false),
           "l106: the l106 line wins over no m10 default");
   }
-  Check(kDefaults.size() == 17 && kNeverWrittenCvars.size() == 120,
-        "l106: seventeen defaults (unchanged), 115 never-written cvars (104 + 1 + l107 8 + "
-        "l108 2)");
+  Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 117,
+        "l106: seventeen defaults (l111: twenty), 115 never-written cvars (104 + 1 + l107 8 + "
+        "l108 2; l111: 117)");
   // The l106 arms (pc/msaa-off, pc/msaa-off-fxaa, pc/msaa-off-gpu-cat and the
   // AMD / Deck msaa-off arms) leave every m10 default as it is.
   const std::string arms[] = {
@@ -1286,9 +1318,9 @@ void TestL107Keys() {
             "l107: no l107 line wins over any m10 default");
     }
   }
-  Check(kDefaults.size() == 17 && kNeverWrittenCvars.size() == 120,
-        "l107: seventeen defaults (unchanged), 115 never-written cvars (105 + 3 + 5 SDK + l108 "
-        "2)");
+  Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 117,
+        "l107: seventeen defaults (l111: twenty), 115 never-written cvars (105 + 3 + 5 SDK + "
+        "l108 2; l111: 117)");
   // The l107 SDK keys write never-written SDK cvars and win over no default.
   const struct {
     dev::Key key;
@@ -1296,7 +1328,7 @@ void TestL107Keys() {
     const char *text;
     dev::Phase phase;
   } sdk_keys[] = {
-      {dev::Key::kForceHidef, "video_mode_force_hidef", "true", dev::Phase::kStartup},
+      // force_hidef: an l111 default since l111 (TestL111Defaults).
       {dev::Key::kResolveFillOriginOnly, "resolve_fill_half_pixel_only_at_origin", "true",
        dev::Phase::kGraphicsPlugin},
       {dev::Key::kStencilUniform, "d3d12_stencil_transfer_uniform", "true",
@@ -1343,7 +1375,8 @@ void TestL107Keys() {
         Inputs in = Fresh(wine);
         in.measurement_build = true;
         in.dev_override_applied = SimulatedOverrideApplied(entry, arm);
-        Check(!in.dev_override_applied, "l107 arms touch no m10 default");
+        Check(!in.dev_override_applied || L111Default(entry),
+              "l107 arms touch no m10 default (l111: force_hidef is its default's own arm)");
       }
     }
   }
@@ -1356,7 +1389,7 @@ void TestL108Keys() {
     dev::Key key;
     const char *cvar;
   } keys[] = {
-      {dev::Key::kXferElide, "d3d12_transfer_elide_full_overwrite"},
+      // xfer_elide: an l111 Windows default since l111 (TestL111Defaults).
       {dev::Key::kXferElideVerify, "d3d12_transfer_elide_full_overwrite_verify"},
   };
   for (const auto &k : keys) {
@@ -1371,8 +1404,9 @@ void TestL108Keys() {
             "l108: no l108 line wins over any m10 default");
     }
   }
-  Check(kDefaults.size() == 17 && kNeverWrittenCvars.size() == 120,
-        "l108: seventeen defaults (unchanged), 115 never-written cvars (113 + 2 SDK)");
+  Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 117,
+        "l108: seventeen defaults (l111: twenty), 115 never-written cvars (113 + 2 SDK; l111: "
+        "117)");
   // The l108 arms leave every m10 default as it is, on both platforms.
   const std::string arms[] = {
       "force_hidef=true\nxfer_elide=true\n",
@@ -1388,7 +1422,8 @@ void TestL108Keys() {
         Inputs in = Fresh(wine);
         in.measurement_build = true;
         in.dev_override_applied = SimulatedOverrideApplied(entry, arm);
-        Check(!in.dev_override_applied, "l108 arms touch no m10 default");
+        Check(!in.dev_override_applied || L111Default(entry),
+              "l108 arms touch no m10 default (l111: their keys are the defaults' own arms)");
       }
     }
   }
@@ -1420,9 +1455,9 @@ void TestL109Keys() {
             "l109: no l109 line wins over any m10 default");
     }
   }
-  Check(kDefaults.size() == 17 && kNeverWrittenCvars.size() == 120,
-        "l109: seventeen defaults (unchanged), 118 never-written cvars (115 + 1 host + 2 SDK; "
-        "l110: 120)");
+  Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 117,
+        "l109: seventeen defaults (l111: twenty), 118 never-written cvars (115 + 1 host + 2 SDK; "
+        "l110: 120; l111: 117)");
   const std::string arms[] = {
       "force_hidef=true\nxfer_elide_verify=true\ngpu_cat=true\ngpu_cat_every4=true\n"
       "xfer_trig_profile=true\nstencil_lazy_verify=true\n",
@@ -1441,7 +1476,8 @@ void TestL109Keys() {
         Inputs in = Fresh(wine);
         in.measurement_build = true;
         in.dev_override_applied = SimulatedOverrideApplied(entry, arm);
-        Check(!in.dev_override_applied, "l109 arms touch no m10 default");
+        Check(!in.dev_override_applied || L111Default(entry),
+              "l109 arms touch no m10 default (l111: their keys are the defaults' own arms)");
       }
     }
   }
@@ -1454,7 +1490,7 @@ void TestL110Keys() {
     dev::Key key;
     const char *cvar;
   } keys[] = {
-      {dev::Key::kXferExtent, "d3d12_draw_extent_from_rect"},
+      // xfer_extent: an l111 Windows default since l111 (TestL111Defaults).
       {dev::Key::kXferExtentVerify, "d3d12_draw_extent_from_rect_verify"},
   };
   for (const auto &k : keys) {
@@ -1468,8 +1504,9 @@ void TestL110Keys() {
             "l110: no l110 line wins over any m10 default");
     }
   }
-  Check(kDefaults.size() == 17 && kNeverWrittenCvars.size() == 120,
-        "l110: seventeen defaults (unchanged), 120 never-written cvars (118 + 2 SDK)");
+  Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 117,
+        "l110: seventeen defaults (l111: twenty), 120 never-written cvars (118 + 2 SDK; l111: "
+        "117)");
   const std::string arms[] = {
       "force_hidef=true\nxfer_elide_verify=true\nxfer_extent_verify=true\ngpu_cat=true\n"
       "gpu_cat_every4=true\nxfer_trig_profile=true\n",
@@ -1486,9 +1523,185 @@ void TestL110Keys() {
         Inputs in = Fresh(wine);
         in.measurement_build = true;
         in.dev_override_applied = SimulatedOverrideApplied(entry, arm);
-        Check(!in.dev_override_applied, "l110 arms touch no m10 default");
+        Check(!in.dev_override_applied || L111Default(entry),
+              "l110 arms touch no m10 default (l111: their keys are the defaults' own arms)");
       }
     }
+  }
+}
+
+// l111 defaults (owner decision 2026-11-18): the forced HiDef mode on both
+// platforms and the ownership-transfer elision and extent bound on Windows
+// only, and their controls, as TestL104Defaults.
+void TestL111Defaults() {
+  const Default *hidef = Find("video_mode_force_hidef");
+  const Default *elide = Find("d3d12_transfer_elide_full_overwrite");
+  const Default *extent = Find("d3d12_draw_extent_from_rect");
+  const Default *const entries[] = {hidef, elide, extent};
+  for (const Default *entry : entries) {
+    Check(entry != nullptr && entry->value == "true" && !entry->diagnostic &&
+              !entry->silent_false_is_arm && !IsNeverWritten(entry->cvar) &&
+              HasOverrideKey(*entry),
+          "l111: each new default true, not a diagnostic, =false not an arm, keyed");
+  }
+  Check(hidef->phase == Phase::kStartup && hidef->platform == Platform::kAll,
+        "l111 A: forced HiDef at startup (init-only, as force_hidef), both platforms");
+  Check(elide->phase == Phase::kGraphicsPlugin && extent->phase == Phase::kGraphicsPlugin &&
+            elide->platform == Platform::kWindowsOnly &&
+            extent->platform == Platform::kWindowsOnly,
+        "l111 B/C: elision and extent bound at graphics-plugin load, Windows only");
+  Check(kWindowsOnlyCvars.size() == 2 && kWindowsOnlyCvars[0] == elide->cvar &&
+            kWindowsOnlyCvars[1] == extent->cvar,
+        "l111: the Windows-only list names exactly the elision and the bound");
+  size_t windows_only = 0;
+  for (const auto &entry : kDefaults) {
+    windows_only += WindowsOnly(entry) ? 1 : 0;
+  }
+  Check(windows_only == kWindowsOnlyCvars.size(), "exactly the listed cvars are Windows-only");
+  // The verifies stay never written: owner keys only (they win in the SDK).
+  Check(IsNeverWritten("d3d12_transfer_elide_full_overwrite_verify") &&
+            IsNeverWritten("d3d12_draw_extent_from_rect_verify") &&
+            Find("d3d12_transfer_elide_full_overwrite_verify") == nullptr &&
+            Find("d3d12_draw_extent_from_rect_verify") == nullptr &&
+            IsNeverWritten("d3d12_stencil_transfer_uniform") &&
+            IsNeverWritten("mcla_guest_collector_2x") && kNeverWrittenCvars.size() == 117,
+        "l111: the verifies, the stencil skip and the collector stay never written (117)");
+  const struct {
+    const Default *entry;
+    dev::Key key;
+    const char *text;
+    dev::Phase phase;
+  } texts[] = {
+      {hidef, dev::Key::kForceHidef, "true", dev::Phase::kStartup},
+      {hidef, dev::Key::kForceHidefOff, "false", dev::Phase::kStartup},
+      {elide, dev::Key::kXferElide, "true", dev::Phase::kGraphicsPlugin},
+      {elide, dev::Key::kXferElideOff, "false", dev::Phase::kGraphicsPlugin},
+      {extent, dev::Key::kXferExtent, "true", dev::Phase::kGraphicsPlugin},
+      {extent, dev::Key::kXferExtentOff, "false", dev::Phase::kGraphicsPlugin},
+  };
+  for (const auto &t : texts) {
+    const auto &info = dev::Info(t.key);
+    Check(dev::CvarName(info) == t.entry->cvar && dev::CvarText(info, true) == t.text &&
+              dev::CvarText(info, false).empty() && info.phase == t.phase,
+          "l111: each key of a new default writes its text to that cvar in its phase; =false "
+          "nothing");
+    Check(KeyLineWins(*t.entry, info, true, true), "an applied l111 key wins");
+    Check(!KeyLineWins(*t.entry, info, std::nullopt, false), "an l111 key =false line does not win");
+    Check(!KeyLineWins(*t.entry, info, std::nullopt, true),
+          "an l111 key =true line that was not applied (cvar unavailable) does not win");
+    Check(!KeyLineWins(*t.entry, info, std::nullopt, std::nullopt), "no line: no win");
+  }
+  Check(!KeyLineWins(*elide, dev::Info(dev::Key::kXferElideVerify), true, true) &&
+            !KeyLineWins(*extent, dev::Info(dev::Key::kXferExtentVerify), true, true) &&
+            !KeyLineWins(*extent, dev::Info(dev::Key::kXferElide), true, true) &&
+            !KeyLineWins(*elide, dev::Info(dev::Key::kXferExtentOff), true, true) &&
+            !KeyLineWins(*hidef, dev::Info(dev::Key::kGuestMsaaScene2x), true, true) &&
+            !KeyLineWins(*extent, dev::Info(dev::Key::kStencilUniform), true, true),
+        "a key of another cvar (the verifies among them) never wins over an l111 default");
+  // Owner build (measurement build): the l111 arms. Order of the expected
+  // actions: hidef, elide, extent; on Windows and under Wine/Proton (the Deck).
+  const std::string base =
+      "mcla_readback_sync_composite=true\nmcla_native_d3d_refcount=true\n"
+      "mcla_native_xapi_interlocked=true\nd3d12_wrm_event_wake=true\n"
+      "d3d12_replay_batched_wake=true\nd3d12_readback_elide_unread=true\n"
+      "prewarm_seed_store=true\nd3d12_readback_sync_targeted=true\n"
+      "memory_watch_census=false\nmcla_warp_probe=true\nmcla_album_probe=true\n"
+      "mcla_pursuit_probe=true\n";
+  const std::string deck =
+      "mcla_readback_sync_composite=true\nmcla_native_d3d_refcount=true\n"
+      "mcla_native_xapi_interlocked=true\nd3d12_wrm_event_wake=true\n"
+      "d3d12_replay_batched_wake=true\nd3d12_readback_elide_unread=true\n"
+      "prewarm_seed_store=true\nd3d12_readback_sync_targeted=true\n"
+      "memory_watch_census=false\n";
+  const Action ap = Action::kApply;
+  const Action dv = Action::kDevOverride;
+  const Action wo = Action::kWindowsOnly;
+  struct Arm {
+    std::string file;
+    Action windows[3];
+    Action wine[3];
+    const char *message;
+  };
+  const Arm arms[] = {
+      {"", {ap, ap, ap}, {ap, wo, wo}, "no file: the l111 defaults apply (Deck: HiDef only)"},
+      {base, {ap, ap, ap}, {ap, wo, wo}, "the sparse l111 pc/default (clear) arm"},
+      {deck, {ap, ap, ap}, {ap, wo, wo}, "the sparse l111 deck/default arm"},
+      {base + "force_hidef_off=true\nxfer_elide_off=true\nxfer_extent_off=true\n",
+       {dv, dv, dv}, {dv, wo, wo}, "pc/gpu-old: the three controls win (the l110 default)"},
+      {base + "xfer_elide_off=true\nxfer_extent_off=true\n", {ap, dv, dv}, {ap, wo, wo},
+       "pc/hidef-only: HiDef stays, the elision and the bound are off"},
+      {base + "xfer_extent_off=true\n", {ap, ap, dv}, {ap, wo, wo},
+       "pc/extent-off: only the bound is off"},
+      {base + "xfer_elide_verify=true\nxfer_extent_verify=true\ngpu_cat=true\n"
+              "gpu_cat_every4=true\nxfer_trig_profile=true\n",
+       {ap, ap, ap}, {ap, wo, wo},
+       "pc/verify-gpu: the defaults stay written; the verifies win in the SDK"},
+      {base + "gpu_cat=true\ngpu_cat_every4=true\n", {ap, ap, ap}, {ap, wo, wo},
+       "pc/gpu-cat: the defaults with category timing"},
+      {deck + "xfer_elide_verify=true\nxfer_extent_verify=true\ngpu_cat=true\n"
+              "gpu_cat_every4=true\n",
+       {ap, ap, ap}, {ap, wo, wo},
+       "deck/verify-gpu: on the Deck the elision and the bound stay off, the verifies audit"},
+      {deck + "xfer_elide=true\nxfer_extent=true\n", {ap, dv, dv}, {ap, wo, wo},
+       "deck/gpu-new: the on keys turn the two on under Wine (the module writes nothing)"},
+      {base + "force_hidef=true\nxfer_elide=true\nxfer_extent=true\n", {dv, dv, dv},
+       {dv, wo, wo}, "the l110 pc/extent body: its keys write the default values (own arms)"},
+      {base + "force_hidef=true\n", {dv, ap, ap}, {dv, wo, wo},
+       "the l107 pc/hidef body: force_hidef is its own arm"},
+      {"force_hidef=false\nforce_hidef_off=false\nxfer_elide=false\nxfer_elide_off=false\n"
+       "xfer_extent=false\nxfer_extent_off=false\n",
+       {ap, ap, ap}, {ap, wo, wo}, "=false lines of the l111 keys change nothing"},
+      {"force_hidef=true\nforce_hidef_off=true\nxfer_elide=true\nxfer_elide_off=true\n"
+       "xfer_extent=true\nxfer_extent_off=true\n",
+       {ap, ap, ap}, {ap, wo, wo},
+       "conflicting l111 keys: neither applied, the build defaults stay"},
+      {"collector_2x=true\nstencil_uniform=true\nstencil_lazy_verify=true\n", {ap, ap, ap},
+       {ap, wo, wo}, "other transfer keys do not touch the l111 defaults"},
+  };
+  for (const bool wine : {false, true}) {
+    for (const Arm &arm : arms) {
+      for (size_t i = 0; i < 3; ++i) {
+        Inputs in = Fresh(wine);
+        in.measurement_build = true;
+        in.dev_override_applied = SimulatedOverrideApplied(*entries[i], arm.file);
+        Check(Decide(*entries[i], in) == (wine ? arm.wine[i] : arm.windows[i]), arm.message);
+      }
+    }
+    for (const Default *entry : entries) {
+      const bool off_platform = wine && WindowsOnly(*entry);
+      Inputs in = Fresh(wine);
+      Check(Decide(*entry, in) == (off_platform ? Action::kWindowsOnly : Action::kApply),
+            "a volunteer build applies every l111 default on its platform");
+      in.non_default = true;
+      Check(Decide(*entry, in) == (off_platform ? Action::kWindowsOnly : Action::kUserSet),
+            "a command-line l111 value is kept");
+      in = Fresh(wine);
+      in.registered = false;
+      Check(Decide(*entry, in) == (off_platform ? Action::kWindowsOnly : Action::kUnavailable),
+            "SDK without the cvar (e.g. the gate SDK): unavailable");
+      in = Fresh(wine);
+      in.holds_value = true;
+      Check(Decide(*entry, in) == (off_platform ? Action::kWindowsOnly : Action::kAlready),
+            "an SDK whose default equals: already");
+      in = Fresh(wine);
+      in.switch_on = false;
+      Check(Decide(*entry, in) == Action::kOffBySwitch,
+            "--mcla_m10_speedup_defaults=false leaves the l111 switches at the SDK defaults");
+    }
+  }
+  // Under Wine/Proton the Windows-only entries are never written, whatever
+  // else holds; on Windows they follow the ordinary rules.
+  for (const auto cvar : kWindowsOnlyCvars) {
+    const Default &entry = *Find(cvar);
+    Inputs in = Fresh(true);
+    in.dev_override_applied = true;
+    in.non_default = true;
+    in.measurement_build = true;
+    Check(Decide(entry, in) == Action::kWindowsOnly, "Wine: reported as Windows-only");
+    in = Fresh(false);
+    in.measurement_build = true;
+    in.dev_override_applied = true;
+    Check(Decide(entry, in) == Action::kDevOverride, "Windows: the owner arm wins");
   }
 }
 
@@ -1506,6 +1719,12 @@ void TestTally() {
         "action name");
   Check(std::string_view(mcla::m10_defaults::ActionName(Action::kNotThisPlatform)) == "wine_only",
         "Wine-only action name");
+  tally.Add(Action::kWindowsOnly);
+  Check(tally.Count(Action::kWindowsOnly) == 1 && tally.Count(Action::kNotThisPlatform) == 1,
+        "Windows-only count");
+  Check(std::string_view(mcla::m10_defaults::ActionName(Action::kWindowsOnly)) == "windows_only",
+        "Windows-only action name");
+  Check(mcla::m10_defaults::kActionCount == 10, "ten actions");
   Check(mcla::m10_defaults::ValueText(false) == "false", "value text");
 }
 }  // namespace
@@ -1524,6 +1743,7 @@ int main() {
   TestL108Keys();
   TestL109Keys();
   TestL110Keys();
+  TestL111Defaults();
   TestTally();
   std::printf("mcla_m10_defaults_test: %d checks passed\n", checks);
   return 0;

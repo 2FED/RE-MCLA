@@ -1,5 +1,5 @@
-// M10 volunteer speed-up defaults (l65; Wine/Proton entries l66). See
-// mcla_m10_defaults.h.
+// M10 volunteer speed-up defaults (l65; Wine/Proton entries l66; Windows-only
+// entries l111). See mcla_m10_defaults.h.
 
 #include "mcla_m10_defaults.h"
 
@@ -29,10 +29,11 @@ REXCVAR_DEFINE_BOOL(mcla_m10_speedup_defaults, true, "MCLA",
     "bound, CP draw-packet clock and fence poll 64, texture memo v2, "
     "render-target update memo, register-write skip, low latency auto (Reflex "
     "on NVIDIA replacing the strict bound while it sleeps; Anti-Lag 2 on AMD "
-    "with the strict bound kept; none on Intel or under Wine); census and "
-    "read-back GPU timing off; under Wine/Proton also disarm "
-    "bridging and upload-ahead 16). false leaves every SDK switch at its "
-    "default")
+    "with the strict bound kept; none on Intel or under Wine), forced HiDef "
+    "video mode; census and read-back GPU timing off; under Wine/Proton also "
+    "disarm bridging and upload-ahead 16; on Windows also the ownership "
+    "transfer elision and the rectangle extent bound). false leaves every SDK "
+    "switch at its default")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 #endif
 
@@ -124,6 +125,7 @@ std::string TallyText(const Tally &tally, bool wine) {
          " dev_override=" + std::to_string(tally.Count(Action::kDevOverride)) +
          " measurement_build=" + std::to_string(tally.Count(Action::kMeasurementBuild)) +
          " wine_only=" + std::to_string(tally.Count(Action::kNotThisPlatform)) +
+         " windows_only=" + std::to_string(tally.Count(Action::kWindowsOnly)) +
          " already=" + std::to_string(tally.Count(Action::kAlready)) +
          " unavailable=" + std::to_string(tally.Count(Action::kUnavailable));
 }
@@ -144,10 +146,12 @@ void OnStartup() {
   MCLA_APP_INFO(
       "MCLA m10 defaults (startup): {} mcla_native_d3d_refcount={} "
       "mcla_native_xapi_interlocked={} memory_watch_disarm_bridge_safe_gaps={} "
-      "d3d12_low_latency_mode={} d3d12_low_latency_auto_antilag2={}",
+      "d3d12_low_latency_mode={} d3d12_low_latency_auto_antilag2={} "
+      "video_mode_force_hidef={}",
       TallyText(tally, wine), ReportValue("mcla_native_d3d_refcount"),
       ReportValue("mcla_native_xapi_interlocked"), ReportValue(kWineOnlyCvars[0]),
-      ReportValue("d3d12_low_latency_mode"), ReportValue("d3d12_low_latency_auto_antilag2"));
+      ReportValue("d3d12_low_latency_mode"), ReportValue("d3d12_low_latency_auto_antilag2"),
+      ReportValue("video_mode_force_hidef"));
 #endif
 }
 
@@ -164,14 +168,16 @@ void OnGraphicsPluginLoaded() {
       "shared_memory_upload_ahead_pages={} d3d12_frame_lead_strict={} "
       "cp_draw_packet_tsc={} cp_fence_poll_interval={} d3d12_fetch_identity_v2={} "
       "d3d12_rt_update_memo={} cp_reg_write_skip_unchanged={} "
-      "d3d12_frame_lead_strict_low_latency={}",
+      "d3d12_frame_lead_strict_low_latency={} d3d12_transfer_elide_full_overwrite={} "
+      "d3d12_draw_extent_from_rect={}",
       TallyText(tally, wine), ReportValue("d3d12_readback_sync_composite"),
       ReportValue("readback_resolve"), ReportValue(kWineOnlyCvars[0]),
       ReportValue(kWineOnlyCvars[1]), ReportValue("d3d12_frame_lead_strict"),
       ReportValue("cp_draw_packet_tsc"), ReportValue("cp_fence_poll_interval"),
       ReportValue("d3d12_fetch_identity_v2"), ReportValue("d3d12_rt_update_memo"),
       ReportValue("cp_reg_write_skip_unchanged"),
-      ReportValue("d3d12_frame_lead_strict_low_latency"));
+      ReportValue("d3d12_frame_lead_strict_low_latency"), ReportValue(kWindowsOnlyCvars[0]),
+      ReportValue(kWindowsOnlyCvars[1]));
 #endif
 }
 

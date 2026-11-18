@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 166, "one hundred and sixty-six whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 169, "one hundred and sixty-nine whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2251,13 +2251,14 @@ void TestWhitelist() {
             "l107 SDK key: phase, cvar and text; false writes nothing");
       Check(static_cast<size_t>(k.key) == index++, "l107 SDK keys follow resolve_fill_off");
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != k.key && pair.second != k.key, "l107 SDK keys are in no pair");
+        Check((pair.first != k.key && pair.second != k.key) ||
+                  (pair.first == Key::kForceHidef && pair.second == Key::kForceHidefOff),
+              "l107 SDK keys are in no pair (since l111 force_hidef with force_hidef_off)");
       }
     }
     Check(index == static_cast<size_t>(Key::kXferElide),
           "the five l107 SDK keys come before the l108 SDK keys");
-    Check(!FindKey("video_mode_force_hidef") && !FindKey("force_hidef_off") &&
-              !FindKey("hidef") && !FindKey("FORCE_HIDEF") && !FindKey("stencil_uniform_off") &&
+    Check(!FindKey("video_mode_force_hidef") && !FindKey("hidef") && !FindKey("FORCE_HIDEF") && !FindKey("stencil_uniform_off") &&
               !FindKey("stencil_uniform_audit") && !FindKey("d3d12_stencil_transfer_uniform") &&
               !FindKey("resolve_fill_origin") && !FindKey("gpu_cat_every") &&
               !FindKey("gpu_cat_every2") && !FindKey("gpu_cat_every8"),
@@ -2317,12 +2318,14 @@ void TestWhitelist() {
             "l108 SDK key: phase, cvar and text; false writes nothing");
       Check(static_cast<size_t>(k.key) == index++, "l108 SDK keys follow gpu_cat_every4");
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != k.key && pair.second != k.key, "l108 SDK keys are in no pair");
+        Check((pair.first != k.key && pair.second != k.key) ||
+                  (pair.first == Key::kXferElide && pair.second == Key::kXferElideOff),
+              "l108 SDK keys are in no pair (since l111 xfer_elide with xfer_elide_off)");
       }
     }
     Check(index == static_cast<size_t>(Key::kFpsCap30),
           "the two l108 SDK keys come before the l109 keys");
-    Check(!FindKey("xfer_elide_off") && !FindKey("xfer_elision") && !FindKey("XFER_ELIDE") &&
+    Check(!FindKey("xfer_elision") && !FindKey("XFER_ELIDE") &&
               !FindKey("elide") && !FindKey("xfer_elide_audit") &&
               !FindKey("d3d12_transfer_elide_full_overwrite") && !FindKey("xfer_elide_verify_on"),
           "no prefix, suffix, cvar-name or case variants of the l108 SDK keys");
@@ -2455,10 +2458,13 @@ void TestWhitelist() {
             "l110 key: phase, cvar and text; false writes nothing");
       Check(static_cast<size_t>(k.key) == index++, "l110 keys follow stencil_lazy_verify");
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
-        Check(pair.first != k.key && pair.second != k.key, "the l110 keys are in no pair");
+        Check((pair.first != k.key && pair.second != k.key) ||
+                  (pair.first == Key::kXferExtent && pair.second == Key::kXferExtentOff),
+              "the l110 keys are in no pair (since l111 xfer_extent with xfer_extent_off)");
       }
     }
-    Check(index == mcla::dev_overrides::kKeyCount, "the l110 keys are the last two");
+    Check(index == static_cast<size_t>(Key::kForceHidefOff),
+          "the l110 keys come before the l111 controls");
     Check(!FindKey("xfer_extent_on") && !FindKey("XFER_EXTENT") && !FindKey("xfer_extents") &&
               !FindKey("extent") && !FindKey("xfer_extent_verify2") &&
               !FindKey("d3d12_draw_extent_from_rect") &&
@@ -2483,6 +2489,120 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l110 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l111: the controls of the three new defaults (owner decision
+    // 2026-11-18). force_hidef_off writes false to video_mode_force_hidef at
+    // startup; xfer_elide_off / xfer_extent_off write false to
+    // d3d12_transfer_elide_full_overwrite / d3d12_draw_extent_from_rect after
+    // the plugin loaded; =false writes nothing. Each pairs with the on key of
+    // its cvar; the verify keys write other cvars and are in no pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      Phase phase;
+      const char *cvar;
+      Key on;
+    } l111[] = {
+        {Key::kForceHidefOff, "force_hidef_off", Phase::kStartup, "video_mode_force_hidef",
+         Key::kForceHidef},
+        {Key::kXferElideOff, "xfer_elide_off", Phase::kGraphicsPlugin,
+         "d3d12_transfer_elide_full_overwrite", Key::kXferElide},
+        {Key::kXferExtentOff, "xfer_extent_off", Phase::kGraphicsPlugin,
+         "d3d12_draw_extent_from_rect", Key::kXferExtent},
+    };
+    size_t index = static_cast<size_t>(Key::kXferExtentVerify) + 1;
+    for (const auto &k : l111) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == k.phase && CvarName(info) == k.cvar &&
+                CvarText(info, true) == "false" && CvarText(info, false).empty() &&
+                info.true_source == TextSource::kLiteral && !info.overrides_user,
+            "l111 control: its phase, cvar and text, false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "l111 controls follow xfer_extent_verify");
+      size_t pairs = 0;
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        if (pair.first != k.key && pair.second != k.key) {
+          continue;
+        }
+        Check(pair.first == k.on && pair.second == k.key,
+              "an l111 control pairs only with the on key of its cvar (on key first)");
+        ++pairs;
+      }
+      Check(pairs == 1, "one conflict pair for each l111 control");
+      const auto &on = Info(k.on);
+      Check(CvarName(on) == CvarName(info) && on.phase == info.phase &&
+                CvarText(on, true) == "true" && CvarText(on, false).empty(),
+            "l111: the on key writes true to the same cvar in the same phase");
+    }
+    Check(index == mcla::dev_overrides::kKeyCount, "the l111 controls are the last three");
+    for (const Key verify : {Key::kXferElideVerify, Key::kXferExtentVerify}) {
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != verify && pair.second != verify,
+              "the transfer verify keys are in no conflict pair");
+      }
+    }
+    Check(!FindKey("force_hidef_of") && !FindKey("FORCE_HIDEF_OFF") && !FindKey("hidef_off") &&
+              !FindKey("video_mode_force_hidef_off") && !FindKey("xfer_elide_of") &&
+              !FindKey("xfer_elide_verify_off") && !FindKey("elide_off") &&
+              !FindKey("xfer_extent_of") && !FindKey("xfer_extent_verify_off") &&
+              !FindKey("extent_off") && !FindKey("xfer_off") && !FindKey("gpu_old") &&
+              !FindKey("d3d12_draw_extent_from_rect_off"),
+          "no prefix, suffix, cvar-name or case variants of the l111 keys");
+    const Parsed old = Parse("force_hidef_off=true\nxfer_elide_off=true\nxfer_extent_off=true\n");
+    Check(old.ValueCount() == 3 && old.issue_count == 0 &&
+              old.Value(Key::kForceHidefOff) == true && old.Value(Key::kXferElideOff) == true &&
+              old.Value(Key::kXferExtentOff) == true,
+          "the l111 pc/gpu-old arm parses");
+    const Parsed hidef_only = Parse("xfer_elide_off=true\r\nxfer_extent_off=true\r\n");
+    Check(hidef_only.ValueCount() == 2 && hidef_only.issue_count == 0 &&
+              hidef_only.Value(Key::kXferElideOff) == true,
+          "the l111 pc/hidef-only arm parses (CRLF)");
+    const Parsed verify = Parse(
+        "xfer_elide_verify=true\nxfer_extent_verify=true\ngpu_cat=true\ngpu_cat_every4=true\n"
+        "xfer_trig_profile=true\n");
+    Check(verify.ValueCount() == 5 && verify.issue_count == 0 &&
+              verify.Value(Key::kXferElideVerify) == true &&
+              verify.Value(Key::kXferExtentVerify) == true,
+          "the l111 pc/verify-gpu arm parses (no control needed: the verifies win in the SDK)");
+    const Parsed verify_off = Parse("xfer_extent_verify=true\nxfer_extent_off=true\n"
+                                    "xfer_elide_verify=true\nxfer_elide_off=true\n");
+    Check(verify_off.ValueCount() == 4 && verify_off.issue_count == 0,
+          "a verify with its default's control: different cvars, no conflict");
+    const Parsed deck = Parse("xfer_elide=true\nxfer_extent=true\n");
+    Check(deck.ValueCount() == 2 && deck.issue_count == 0 && deck.Value(Key::kXferElide) == true &&
+              deck.Value(Key::kXferExtent) == true,
+          "the l111 deck/gpu-new arm parses");
+    const Parsed both = Parse("force_hidef=true\n"
+                              "force_hidef_off=true\n"
+                              "gpu_cat=true\n"
+                              "xfer_elide_off=true\n"
+                              "xfer_elide=true\n"
+                              "xfer_extent=true\n"
+                              "xfer_extent_off=true\n");
+    Check(both.ValueCount() == 1 && both.Value(Key::kGpuCat) == true && both.issue_count == 3 &&
+              both.issues[0].line == 2 && both.issues[1].line == 5 && both.issues[2].line == 7 &&
+              both.issues[0].issue == LineIssue::kConflict &&
+              both.issues[2].issue == LineIssue::kConflict,
+          "each l111 control with its on key: neither applied, conflict on the later line");
+    const Parsed mixed = Parse("force_hidef=false\nforce_hidef_off=true\nxfer_elide=true\n"
+                               "xfer_elide_off=false\n");
+    Check(mixed.ValueCount() == 4 && mixed.issue_count == 0 &&
+              mixed.Value(Key::kForceHidefOff) == true && mixed.Value(Key::kXferElide) == true,
+          "an on key =false with its control =true (and the reverse) is no conflict");
+    const Parsed bad = Parse("force_hidef_off=1\n"
+                             "xfer_elide_off=off\n"
+                             "d3d12_draw_extent_from_rect=false\n"
+                             "xfer_extent_off=true\n"
+                             "xfer_extent_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 4 &&
+              bad.Value(Key::kXferExtentOff) == true &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[3].issue == LineIssue::kDuplicate,
+          "l111 near misses: an integer, a string value, the cvar line and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -2980,7 +3100,9 @@ void TestWhitelist() {
                           key == Key::kFpsCap30 || key == Key::kFpsCap40 ||
                           key == Key::kFpsCap60 || key == Key::kCollector2x ||
                           key == Key::kXferTrigProfile || key == Key::kStencilLazyVerify ||
-                          key == Key::kXferExtent || key == Key::kXferExtentVerify;
+                          key == Key::kXferExtent || key == Key::kXferExtentVerify ||
+                          key == Key::kForceHidefOff || key == Key::kXferElideOff ||
+                          key == Key::kXferExtentOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -3086,9 +3208,10 @@ void TestWhitelist() {
     // pairs) and lead_ll_replace_off the l97 pair (three keys, three pairs);
     // l105: present_fsr and present_cas (the present_effect string); l107:
     // the two scene sample-count keys (mcla_guest_msaa_scene); l109: the
-    // three fps_cap keys join the vblank group (six keys, fifteen pairs).
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 57,
-          "fifty-seven shared-cvar pairs");
+    // three fps_cap keys join the vblank group (six keys, fifteen pairs);
+    // l111: force_hidef, xfer_elide and xfer_extent with their controls.
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 60,
+          "sixty shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -3759,7 +3882,8 @@ void TestWhitelist() {
     // (146 keys); l106: plus guest_msaa_off explicit false (147 keys); l107:
     // plus the four l107 keys explicit false (151 keys) and the five l107
     // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys); l109:
-    // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166).
+    // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166);
+    // l111: plus the three l111 controls (169).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3849,7 +3973,10 @@ void TestWhitelist() {
                                   "xfer_trig_profile=false\n"
                                   "stencil_lazy_verify=false\n"
                                   "xfer_extent=false\n"
-                                  "xfer_extent_verify=false\n";
+                                  "xfer_extent_verify=false\n"
+                                  "force_hidef_off=false\n"
+                                  "xfer_elide_off=false\n"
+                                  "xfer_extent_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4456,7 +4583,7 @@ void TestRejectedFiles() {
     // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
-    // l110: 166 keys).
+    // l110: 166 keys; l111: 169 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

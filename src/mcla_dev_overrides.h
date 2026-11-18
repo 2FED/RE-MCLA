@@ -521,6 +521,19 @@
 //   checks the rows below the bound;
 //   docs/evidence/M11-l110-sdk-draw-extent-20261118.md). No conflict pair
 //   (with both true the verify wins in the SDK).
+// - l111 (owner decision 2026-11-18, docs/evidence/M11-l111-owner-build-20261118.md):
+//   video_mode_force_hidef, d3d12_transfer_elide_full_overwrite and
+//   d3d12_draw_extent_from_rect are build defaults through the m10 defaults
+//   (mcla_m10_defaults.h; the forced HiDef mode on both platforms, the
+//   elision and the extent bound on Windows only). The controls, each =true
+//   only, =false writes nothing: force_hidef_off (false to
+//   video_mode_force_hidef, startup), xfer_elide_off (false to
+//   d3d12_transfer_elide_full_overwrite) and xfer_extent_off (false to
+//   d3d12_draw_extent_from_rect; graphics plugin). Each forms one conflict
+//   pair with the on key of its cvar (force_hidef, xfer_elide, xfer_extent),
+//   which stays its own arm. The verify keys xfer_elide_verify and
+//   xfer_extent_verify write other cvars and still win in the SDK with the
+//   defaults on (every transfer as before, savings only counted).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -733,8 +746,11 @@ enum class Key : uint8_t {
   kStencilLazyVerify,        // l109 SDK: d3d12_stencil_transfer_lazy_verify=true
   kXferExtent,               // l110 SDK: d3d12_draw_extent_from_rect=true
   kXferExtentVerify,         // l110 SDK: d3d12_draw_extent_from_rect_verify=true
+  kForceHidefOff,            // l111 control: video_mode_force_hidef=false
+  kXferElideOff,             // l111 control: d3d12_transfer_elide_full_overwrite=false
+  kXferExtentOff,            // l111 control: d3d12_draw_extent_from_rect=false
 };
-inline constexpr size_t kKeyCount = 166;
+inline constexpr size_t kKeyCount = 169;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1133,6 +1149,14 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"xfer_extent", Phase::kGraphicsPlugin, "d3d12_draw_extent_from_rect", "true", ""},
     {"xfer_extent_verify", Phase::kGraphicsPlugin, "d3d12_draw_extent_from_rect_verify", "true",
      ""},
+    // l111 controls for the three new defaults written by the m10 defaults: the
+    // forced HiDef mode (rexruntime, init-only, startup, as force_hidef) and the
+    // elision and the extent bound (graphics plugin, after it has loaded);
+    // =false writes nothing.
+    {"force_hidef_off", Phase::kStartup, "video_mode_force_hidef", "false", ""},
+    {"xfer_elide_off", Phase::kGraphicsPlugin, "d3d12_transfer_elide_full_overwrite", "false",
+     ""},
+    {"xfer_extent_off", Phase::kGraphicsPlugin, "d3d12_draw_extent_from_rect", "false", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1153,7 +1177,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // d3d12_frame_lead_strict_low_latency as a group of three; since l105 the
 // present_effect string; since l107 the mcla_guest_msaa_scene int; since l109
 // the three fps_cap keys join the vblank_hz group of mcla_guest_vblank_hz,
-// six keys listed as their fifteen pairs):
+// six keys listed as their fifteen pairs; since l111 the
+// video_mode_force_hidef, d3d12_transfer_elide_full_overwrite and
+// d3d12_draw_extent_from_rect bools):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -1161,7 +1187,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 57> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 60> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -1220,6 +1246,9 @@ inline constexpr std::array<ConflictPair, 57> kConflictPairs = {{
     {Key::kLeadLlAdaptiveWhenReflex, Key::kLeadLlReplaceOff},
     {Key::kPresentFsr, Key::kPresentCas},
     {Key::kGuestMsaaScene1x, Key::kGuestMsaaScene2x},
+    {Key::kForceHidef, Key::kForceHidefOff},
+    {Key::kXferElide, Key::kXferElideOff},
+    {Key::kXferExtent, Key::kXferExtentOff},
 }};
 
 constexpr const KeyInfo &Info(Key key) {
