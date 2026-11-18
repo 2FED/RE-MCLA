@@ -511,6 +511,16 @@
 //   d3d12_transfer_trigger_profile (MCLA_XFER_TRIG) and
 //   d3d12_stencil_transfer_lazy_verify (MCLA_XFER_LAZY; count mode only,
 //   docs/evidence/M11-l109-sdk-transfer-diagnostics-20261117.md).
+// - l110 (docs/evidence/M11-l110-owner-build-20261118.md; default off, =false
+//   writes nothing): xfer_extent and xfer_extent_verify write true to the SDK
+//   graphics-plugin bools d3d12_draw_extent_from_rect (hot: the rows a
+//   clip-disabled rectangle-list draw takes ownership of are bounded by its
+//   CPU-interpreted rectangle, so ownership transfers shrink) and
+//   d3d12_draw_extent_from_rect_verify (init-only: transfers as before,
+//   MCLA_XFER_EXTENT counts what the bound would save, an occlusion query
+//   checks the rows below the bound;
+//   docs/evidence/M11-l110-sdk-draw-extent-20261118.md). No conflict pair
+//   (with both true the verify wins in the SDK).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -721,8 +731,10 @@ enum class Key : uint8_t {
   kCollector2x,              // l109: mcla_guest_collector_2x=true
   kXferTrigProfile,          // l109 SDK: d3d12_transfer_trigger_profile=true
   kStencilLazyVerify,        // l109 SDK: d3d12_stencil_transfer_lazy_verify=true
+  kXferExtent,               // l110 SDK: d3d12_draw_extent_from_rect=true
+  kXferExtentVerify,         // l110 SDK: d3d12_draw_extent_from_rect_verify=true
 };
-inline constexpr size_t kKeyCount = 164;
+inline constexpr size_t kKeyCount = 166;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1114,6 +1126,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"collector_2x", Phase::kStartup, "mcla_guest_collector_2x", "true", ""},
     {"xfer_trig_profile", Phase::kGraphicsPlugin, "d3d12_transfer_trigger_profile", "true", ""},
     {"stencil_lazy_verify", Phase::kGraphicsPlugin, "d3d12_stencil_transfer_lazy_verify", "true",
+     ""},
+    // l110: the draw extent bound of rectangle-list draws and its verify
+    // (graphics plugin; the verify is init-only, read when the render target
+    // cache is created); default off, =false writes nothing.
+    {"xfer_extent", Phase::kGraphicsPlugin, "d3d12_draw_extent_from_rect", "true", ""},
+    {"xfer_extent_verify", Phase::kGraphicsPlugin, "d3d12_draw_extent_from_rect_verify", "true",
      ""},
 }};
 
