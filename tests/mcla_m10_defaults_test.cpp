@@ -106,8 +106,8 @@ void TestTable() {
       {"video_mode_force_hidef", "true", Phase::kStartup, false, Platform::kAll, true},
       {"d3d12_transfer_elide_full_overwrite", "true", Phase::kGraphicsPlugin, false,
        Platform::kWindowsOnly, true},
-      // l112 (KI-084): the bound's entry holds the SDK default false.
-      {"d3d12_draw_extent_from_rect", "false", Phase::kGraphicsPlugin, false,
+      // l115: the bound's entry holds true again (false in l112-l114, KI-084).
+      {"d3d12_draw_extent_from_rect", "true", Phase::kGraphicsPlugin, false,
        Platform::kWindowsOnly, true},
   };
   Check(std::size(expected) == kDefaults.size(), "twenty defaults");
@@ -1540,19 +1540,19 @@ void TestL111Defaults() {
   const Default *extent = Find("d3d12_draw_extent_from_rect");
   const Default *const entries[] = {hidef, elide, extent};
   for (const Default *entry : entries) {
-    // l112 (KI-084): the extent bound's entry holds false (the SDK default:
-    // nothing is written, the bound is off by default); hidef and elide true.
-    Check(entry != nullptr && entry->value == (entry == extent ? "false" : "true") &&
-              !entry->diagnostic && !entry->silent_false_is_arm &&
-              !IsNeverWritten(entry->cvar) && HasOverrideKey(*entry),
-          "l111/l112: hidef and elide true, the bound false; not diagnostics, =false not an "
-          "arm, keyed");
+    // l115: all three hold true again (the bound was false in l112-l114,
+    // KI-084).
+    Check(entry != nullptr && entry->value == "true" && !entry->diagnostic &&
+              !entry->silent_false_is_arm && !IsNeverWritten(entry->cvar) &&
+              HasOverrideKey(*entry),
+          "l111/l115: hidef, elide and the bound true; not diagnostics, =false not an arm, "
+          "keyed");
   }
-  // l112: the bound's on key writes the other value (its own arm), the off key
-  // the entry's value (a valid control that changes nothing by default).
-  Check(dev::CvarText(dev::Info(dev::Key::kXferExtent), true) == "true" &&
-            dev::CvarText(dev::Info(dev::Key::kXferExtentOff), true) == extent->value,
-        "l112: xfer_extent writes true (pc/extent-new), xfer_extent_off the default false");
+  // l115: the bound's on key writes the entry's value (pc/extent-new equals the
+  // defaults), the off key the other value (the fallback arm pc/extent-off).
+  Check(dev::CvarText(dev::Info(dev::Key::kXferExtent), true) == extent->value &&
+            dev::CvarText(dev::Info(dev::Key::kXferExtentOff), true) == "false",
+        "l115: xfer_extent writes the default true, xfer_extent_off false (the fallback)");
   Check(hidef->phase == Phase::kStartup && hidef->platform == Platform::kAll,
         "l111 A: forced HiDef at startup (init-only, as force_hidef), both platforms");
   Check(elide->phase == Phase::kGraphicsPlugin && extent->phase == Phase::kGraphicsPlugin &&
@@ -1739,8 +1739,9 @@ void TestL113Keys() {
   }
   const Default *extent = Find("d3d12_draw_extent_from_rect");
   Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 120 && extent != nullptr &&
-            extent->value == "false",
-        "l113: twenty defaults (unchanged, the bound false), 119 never-written cvars (117 + 2 SDK)");
+            extent->value == "true",
+        "l113/l115: twenty defaults (the bound true again since l115), 120 never-written cvars "
+        "(117 + 2 l113 SDK + 1 l114 SDK)");
   const std::string arms[] = {
       "xfer_extent=true\nxfer_extent_deferred_off=true\n",
       "xfer_extent_verify=true\nxfer_trig_profile=true\nverify_every4=true\n",
@@ -1763,7 +1764,7 @@ void TestL113Keys() {
 
 void TestL114Keys() {
   // l114: the exact deferred mode key writes a never-written cvar; no l114 line
-  // wins over any m10 default (the bound's default stays false).
+  // wins over any m10 default (since l115 the bound's default is true).
   const auto &info = dev::Info(dev::Key::kXferExtentModeExact);
   Check(dev::CvarName(info) == "d3d12_draw_extent_deferred_mode" &&
             dev::CvarText(info, true) == "2" && dev::CvarText(info, false).empty(),
@@ -1777,8 +1778,9 @@ void TestL114Keys() {
   }
   const Default *extent = Find("d3d12_draw_extent_from_rect");
   Check(kDefaults.size() == 20 && kNeverWrittenCvars.size() == 120 && extent != nullptr &&
-            extent->value == "false",
-        "l114: twenty defaults (the bound false), 120 never-written cvars (119 + 1 SDK)");
+            extent->value == "true",
+        "l114/l115: twenty defaults (the bound true since l115), 120 never-written cvars "
+        "(119 + 1 SDK)");
   const std::string arms[] = {
       "xfer_extent=true\nxfer_extent_mode_exact=true\n",
       "xfer_extent_mode_exact=true\n",
@@ -1795,6 +1797,95 @@ void TestL114Keys() {
       }
     }
   }
+}
+
+// l115 (owner decision 2026-11-18, the l114 pc/extent-new run without
+// flicker): the rectangle draw-extent bound is a Windows default again; the
+// resolve-only fix is the SDK default of the never-written deferred mode.
+void TestL115Defaults() {
+  const Default *hidef = Find("video_mode_force_hidef");
+  const Default *elide = Find("d3d12_transfer_elide_full_overwrite");
+  const Default *extent = Find("d3d12_draw_extent_from_rect");
+  Check(extent != nullptr && extent->value == "true" && extent->phase == Phase::kGraphicsPlugin &&
+            extent->platform == Platform::kWindowsOnly && !extent->diagnostic &&
+            !extent->silent_false_is_arm && HasOverrideKey(*extent),
+        "l115: the bound true, graphics plugin, Windows only (the l111 scope)");
+  Check(kDefaults.size() == 20 && kWindowsOnlyCvars.size() == 2 &&
+            kNeverWrittenCvars.size() == 120,
+        "l115: twenty defaults, two Windows-only cvars, 120 never-written cvars (unchanged)");
+  for (const auto cvar : {"d3d12_draw_extent_deferred_mode", "d3d12_draw_extent_deferred_claims",
+                          "d3d12_verify_query_every", "d3d12_draw_extent_from_rect_verify"}) {
+    Check(IsNeverWritten(cvar) && Find(cvar) == nullptr,
+          "l115: the fix's mode, its switch and the verifies stay never written (SDK defaults)");
+  }
+  // The keys: off is the fallback, the others write other cvars (no win).
+  Check(KeyLineWins(*extent, dev::Info(dev::Key::kXferExtentOff), true, true) &&
+            KeyLineWins(*extent, dev::Info(dev::Key::kXferExtent), true, true) &&
+            !KeyLineWins(*extent, dev::Info(dev::Key::kXferExtentDeferredOff), true, true) &&
+            !KeyLineWins(*extent, dev::Info(dev::Key::kXferExtentModeExact), true, true) &&
+            !KeyLineWins(*extent, dev::Info(dev::Key::kXferExtentVerify), true, true) &&
+            !KeyLineWins(*extent, dev::Info(dev::Key::kVerifyEvery4), true, true),
+        "l115: xfer_extent_off and xfer_extent win, the mode / switch / verify keys do not");
+  const std::string base =
+      "mcla_readback_sync_composite=true\nmcla_native_d3d_refcount=true\n"
+      "mcla_native_xapi_interlocked=true\nd3d12_wrm_event_wake=true\n"
+      "d3d12_replay_batched_wake=true\nd3d12_readback_elide_unread=true\n"
+      "prewarm_seed_store=true\nd3d12_readback_sync_targeted=true\n"
+      "memory_watch_census=false\nmcla_warp_probe=true\nmcla_album_probe=true\n"
+      "mcla_pursuit_probe=true\n";
+  const std::string cat = "gpu_cat=true\ngpu_cat_every4=true\n";
+  const Action ap = Action::kApply;
+  const Action dv = Action::kDevOverride;
+  const Action wo = Action::kWindowsOnly;
+  const Default *const entries[] = {hidef, elide, extent};
+  struct Arm {
+    std::string file;
+    Action windows[3];
+    Action wine[3];
+    const char *message;
+  };
+  const Arm arms[] = {
+      {"", {ap, ap, ap}, {ap, wo, wo}, "l115 clear: the bound applied on Windows, not under Wine"},
+      {base, {ap, ap, ap}, {ap, wo, wo}, "l115 pc/default: the defaults apply"},
+      {base + cat, {ap, ap, ap}, {ap, wo, wo},
+       "l115 pc/gpu-cat-race: the defaults with category timing, no verify key"},
+      {base + "xfer_extent=true\n", {ap, ap, dv}, {ap, wo, wo},
+       "l115 pc/extent-new: its key writes the default value (own arm)"},
+      {base + "xfer_extent_off=true\n", {ap, ap, dv}, {ap, wo, wo},
+       "l115 pc/extent-off: the fallback, only the bound off"},
+      {base + "xfer_extent=true\nxfer_extent_deferred_off=true\n", {ap, ap, dv}, {ap, wo, wo},
+       "l115 pc/extent-l111: the bound on, the fix off in the SDK (mode 0)"},
+      {base + "xfer_extent=true\nxfer_extent_mode_exact=true\n", {ap, ap, dv}, {ap, wo, wo},
+       "l115 pc/extent-exact: the bound on, the exact rule in the SDK (mode 2)"},
+      {base + "xfer_extent_deferred_off=true\n", {ap, ap, ap}, {ap, wo, wo},
+       "l115: the deferred switch alone touches no m10 default"},
+      {base + "xfer_extent_mode_exact=true\n", {ap, ap, ap}, {ap, wo, wo},
+       "l115: the exact mode alone touches no m10 default"},
+      {base + "xfer_extent_verify=true\nxfer_trig_profile=true\nverify_every4=true\n",
+       {ap, ap, ap}, {ap, wo, wo}, "l115 pc/extent-audit: the verify wins in the SDK"},
+      {base + "force_hidef_off=true\nxfer_elide_off=true\nxfer_extent_off=true\n",
+       {dv, dv, dv}, {dv, wo, wo}, "l115 pc/gpu-old: the three controls win (the l110 default)"},
+      {base + "xfer_elide_off=true\nxfer_extent_off=true\n", {ap, dv, dv}, {ap, wo, wo},
+       "l115 pc/hidef-only: HiDef stays, the elision and the bound off"},
+  };
+  for (const bool wine : {false, true}) {
+    for (const Arm &arm : arms) {
+      for (size_t i = 0; i < 3; ++i) {
+        Inputs in = Fresh(wine);
+        in.measurement_build = true;
+        in.dev_override_applied = SimulatedOverrideApplied(*entries[i], arm.file);
+        Check(Decide(*entries[i], in) == (wine ? arm.wine[i] : arm.windows[i]), arm.message);
+      }
+    }
+  }
+  // The m10 summaries: on Windows the bound is written (applied, was already
+  // in l112-l114 because false equals the SDK default); under Wine windows_only.
+  Inputs in = Fresh(false);
+  Check(Decide(*extent, in) == Action::kApply, "l115 Windows: the bound applied (l114: already)");
+  in.holds_value = true;
+  Check(Decide(*extent, in) == Action::kAlready, "an SDK whose default is true: already");
+  in = Fresh(true);
+  Check(Decide(*extent, in) == Action::kWindowsOnly, "l115 Wine: the bound windows_only");
 }
 
 void TestTally() {
@@ -1838,6 +1929,7 @@ int main() {
   TestL111Defaults();
   TestL113Keys();
   TestL114Keys();
+  TestL115Defaults();
   TestTally();
   std::printf("mcla_m10_defaults_test: %d checks passed\n", checks);
   return 0;

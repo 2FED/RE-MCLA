@@ -30,9 +30,10 @@
 //   and d3d12_low_latency_auto_antilag2=true (low latency, see below);
 // - since l111 at startup on both platforms video_mode_force_hidef=true, and
 //   at graphics-plugin load on Windows only
-//   d3d12_transfer_elide_full_overwrite=true and (l111 only)
-//   d3d12_draw_extent_from_rect=true (ownership transfers, see below); since
-//   l112 the bound's entry holds false (KI-084, see below).
+//   d3d12_transfer_elide_full_overwrite=true and
+//   d3d12_draw_extent_from_rect=true (ownership transfers, see below); in
+//   l112-l114 the bound's entry held false (KI-084), since l115 it holds true
+//   again with the SDK's resolve-only fix (see below).
 //
 // Each phase is the phase of the owner override key for the same cvar.
 //
@@ -143,6 +144,18 @@
 // writes the same false), xfer_extent_verify audits it (and the l112 SDK's
 // below audit) as before.
 //
+// l115 (owner decision 2026-11-18: the bound is a default; owner l114 run of
+// pc/extent-new, 10 minutes of races: no minimap flicker, 46-907 deferred
+// claims completed per minute before resolves, GPU time at the l111 level;
+// docs/evidence/M11-l115-owner-build-20261119.md): the bound's entry holds
+// "true" again (same place, phase, Windows-only platform and keys; Deck/Wine
+// keeps the SDK default false). The fix itself is the SDK default of
+// d3d12_draw_extent_deferred_mode (1, resolve-only), which this module never
+// writes (kNeverWrittenCvars). Owner controls: xfer_extent_off (the bound off,
+// the fallback if the flicker returns), xfer_extent_deferred_off (mode 0, the
+// l111 behaviour), xfer_extent_mode_exact (mode 2, the l113 rule);
+// xfer_extent writes the default value and is its own arm (pc/extent-new).
+//
 // Semantics kept from the SDK: targeted sync acts only while
 // d3d12_readback_sync_composite is on (MCLA_READBACK_SYNC_COMPOSITE_DEFAULT);
 // elision acts only in readback_resolve=some (the host default). Both are
@@ -217,9 +230,10 @@ inline constexpr std::array<Default, 20> kDefaults = {{
     {"video_mode_force_hidef", "true", Phase::kStartup, false},
     {"d3d12_transfer_elide_full_overwrite", "true", Phase::kGraphicsPlugin, false,
      Platform::kWindowsOnly},
-    // l112 (KI-084): "false", the SDK default, until the minimap flicker of
-    // the bound is fixed (see above); xfer_extent turns it on.
-    {"d3d12_draw_extent_from_rect", "false", Phase::kGraphicsPlugin, false,
+    // l115: "true" again (false in l112-l114, KI-084), with the SDK's
+    // resolve-only deferred mode as the fix (see above); xfer_extent_off
+    // turns it off.
+    {"d3d12_draw_extent_from_rect", "true", Phase::kGraphicsPlugin, false,
      Platform::kWindowsOnly},
 }};
 
