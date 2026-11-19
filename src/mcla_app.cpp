@@ -82,6 +82,7 @@
 #include "mcla_guest_tiling.h"
 #include "mcla_traffic_motion.h"
 #include "mcla_menu_state.h"
+#include "mcla_low_latency.h"
 #include "mcla_photo_capture.h"
 // End M9 host hooks.
 #include "mcla_logging.h"
@@ -1423,6 +1424,9 @@ void LogWindowEvent(const char *event, rex::ui::Window *window) {
 
 void MclaApp::OnWindowFocusChanged(bool focused) {
   LogWindowEvent(focused ? "focus-gained" : "focus-lost", window());
+  // l116 (KI-087): the SDK's lead-2 guard and hitch / dip causes skip the
+  // frames while the window is unfocused.
+  MclaSdkPlayWindowFocus(focused);
   if (cursor_autohide_) {
     mcla::cursor::NotifyFocusChanged(*cursor_autohide_, focused);
   }

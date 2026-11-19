@@ -28,3 +28,14 @@ bool MclaSdkHitchLast(uint64_t &seq, uint64_t &logged_seq, uint64_t &frame,
 // The host's DXGI video-memory sample (MB) for the SDK's MCLA_HITCH
 // vram_over_mb and MCLA_VRAM_SDK lines.
 void MclaSdkVramHostSample(uint64_t budget_mb, uint64_t usage_mb, uint64_t nonlocal_mb);
+
+// l116 (KI-087, docs/evidence/M11-l116-sdk-guard-and-thin-frames-20261119.md):
+// the play state the SDK's lead-2 guard, MCLA_HITCH / MCLA_DIP cause and
+// thin-frame probe use (rex_play_window_focus / rex_play_game_paused,
+// rexruntime.dll l116 and later), resolved by name like the others; with an
+// SDK without them every call is a no-op. One MCLA_PLAY_HOST kind=entry line
+// at the first call. The window focus (UI thread, at every focus event).
+void MclaSdkPlayWindowFocus(bool focused);
+// The game's own pause / menu-limiter state (the menu-state hook, at every
+// change of the paused flag).
+void MclaSdkPlayGamePaused(bool paused);

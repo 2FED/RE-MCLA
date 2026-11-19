@@ -552,6 +552,18 @@
 //   docs/evidence/M11-l114-sdk-resolve-only-mode-20261119.md). One key, no
 //   conflict pair (xfer_extent_deferred_off writes the other cvar and wins:
 //   mode 0).
+// - l116 (docs/evidence/M11-l116-owner-build-20261119.md; default off, =false
+//   writes nothing; the SDK l116 guard, KI-087,
+//   docs/evidence/M11-l116-sdk-guard-and-thin-frames-20261119.md):
+//   lead_guard_latch_session writes 0 to the SDK int
+//   d3d12_frame_lead_strict_low_latency_guard_action (the l97-l115 session
+//   latch; the l116 SDK default is 4, a cool-down of counted play with
+//   exponential back-off), joining the l99 guard-action group (four keys, six
+//   pairs); lead_guard_skip_off writes false to the SDK bool
+//   d3d12_frame_lead_strict_low_latency_guard_skip (unfocused, paused and
+//   outlier frames count in the guard window again, as l115). Both together
+//   restore the l115 guard. An SDK without the l116 cvars logs
+//   lead_guard_skip_off as unavailable (guard action 0 exists since l99).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -770,8 +782,10 @@ enum class Key : uint8_t {
   kXferExtentDeferredOff,    // l113 SDK: d3d12_draw_extent_deferred_claims=false
   kVerifyEvery4,             // l113 SDK: d3d12_verify_query_every=4
   kXferExtentModeExact,      // l114 SDK: d3d12_draw_extent_deferred_mode=2
+  kLeadGuardLatchSession,    // l116 SDK: d3d12_frame_lead_strict_low_latency_guard_action=0
+  kLeadGuardSkipOff,         // l116 SDK: d3d12_frame_lead_strict_low_latency_guard_skip=false
 };
-inline constexpr size_t kKeyCount = 172;
+inline constexpr size_t kKeyCount = 174;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1188,6 +1202,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // default off, =false writes nothing.
     {"xfer_extent_mode_exact", Phase::kGraphicsPlugin, "d3d12_draw_extent_deferred_mode", "2",
      ""},
+    // l116: the l97-l115 guard (graphics plugin, hot): the session latch and
+    // every frame counted; default off, =false writes nothing.
+    {"lead_guard_latch_session", Phase::kGraphicsPlugin,
+     "d3d12_frame_lead_strict_low_latency_guard_action", "0", ""},
+    {"lead_guard_skip_off", Phase::kGraphicsPlugin,
+     "d3d12_frame_lead_strict_low_latency_guard_skip", "false", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
@@ -1210,7 +1230,8 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
 // the three fps_cap keys join the vblank_hz group of mcla_guest_vblank_hz,
 // six keys listed as their fifteen pairs; since l111 the
 // video_mode_force_hidef, d3d12_transfer_elide_full_overwrite and
-// d3d12_draw_extent_from_rect bools):
+// d3d12_draw_extent_from_rect bools; since l116 lead_guard_latch_session joins
+// the guard-action group, four keys listed as their six pairs):
 // both true in one file is contradictory and
 // neither is applied. A group of three keys for one cvar is listed as its
 // three pairs (first < second in Key order); see ResolveConflicts.
@@ -1218,7 +1239,7 @@ struct ConflictPair {
   Key first;
   Key second;
 };
-inline constexpr std::array<ConflictPair, 60> kConflictPairs = {{
+inline constexpr std::array<ConflictPair, 63> kConflictPairs = {{
     {Key::kUploadAhead16, Key::kUploadAhead64},
     {Key::kHotBlocksShadow, Key::kHotBlocksOn},
     {Key::kAudioSpeakerStereo, Key::kAudioSpeakerSurround},
@@ -1280,6 +1301,10 @@ inline constexpr std::array<ConflictPair, 60> kConflictPairs = {{
     {Key::kForceHidef, Key::kForceHidefOff},
     {Key::kXferElide, Key::kXferElideOff},
     {Key::kXferExtent, Key::kXferExtentOff},
+    // l116: the session-latch key joins the l99 guard-action group.
+    {Key::kLeadLlGuardAdaptive, Key::kLeadGuardLatchSession},
+    {Key::kLeadLlGuardRearm, Key::kLeadGuardLatchSession},
+    {Key::kLeadLlGuardOff, Key::kLeadGuardLatchSession},
 }};
 
 constexpr const KeyInfo &Info(Key key) {

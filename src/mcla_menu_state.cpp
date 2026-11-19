@@ -51,6 +51,7 @@
 
 #include "mcla_init.h"
 #include "mcla_logging.h"
+#include "mcla_low_latency.h"
 #include "mcla_wheel_ffb_resync.h"
 
 #include <rex/cvar.h>
@@ -86,6 +87,9 @@ mcla::menu_state::Controller controller;
 // KI-022: wheel FFB resync edges, guarded by controller_mutex.
 mcla::menu_state::WheelResyncEdges wheel_resync_edges;
 bool wheel_resync_unavailable_logged = false;
+// l116 (KI-087): the paused flag last published to the SDK (-1: never),
+// guarded by controller_mutex.
+int published_paused = -1;
 
 bool GuestPauseWanted() {
   static const bool wanted = REXCVAR_GET(mcla_ui_cap_guest_pause);
@@ -190,6 +194,12 @@ REX_EXTERN(sub_822D29E8) {
   const uint8_t racer_off = ReadRacerInputOff(base);
   const bool paused = mcla::menu_state::CapPaused(simulation, local, racer_off);
   std::lock_guard lock(controller_mutex);
+  if (!controller.stopped() && published_paused != (paused ? 1 : 0)) {
+    // l116 (KI-087): the SDK's lead-2 guard and hitch / dip causes skip the
+    // frames while the game is paused (published at every change).
+    published_paused = paused ? 1 : 0;
+    MclaSdkPlayGamePaused(paused);
+  }
   if (!controller.stopped()) {
     const auto resync = wheel_resync_edges.Observe(paused, racer_off);
     if (const char *reason = mcla::menu_state::WheelResyncReason(resync)) {

@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 172, "one hundred and seventy-two whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 174, "one hundred and seventy-four whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -1582,7 +1582,9 @@ void TestWhitelist() {
           ++pairs;
         }
       }
-      Check(pairs == (guard ? 2u : 0u), "l99: two pairs for each guard key, none for texture keys");
+      Check(pairs == (guard ? 3u : 0u),
+            "l99: three pairs for each guard key (l116: the session-latch key joined the "
+            "group), none for texture keys");
     }
     size_t guard_pairs = 0;
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
@@ -2678,8 +2680,8 @@ void TestWhitelist() {
     Check(static_cast<size_t>(Key::kXferExtentModeExact) ==
                   static_cast<size_t>(Key::kVerifyEvery4) + 1 &&
               static_cast<size_t>(Key::kXferExtentModeExact) + 1 ==
-                  mcla::dev_overrides::kKeyCount,
-          "the l114 key follows verify_every4 and is the last");
+                  static_cast<size_t>(Key::kLeadGuardLatchSession),
+          "the l114 key follows verify_every4 and comes before the l116 keys");
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
       Check(pair.first != Key::kXferExtentModeExact && pair.second != Key::kXferExtentModeExact,
             "the l114 key is in no pair");
@@ -2701,6 +2703,76 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l114 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l116 keys (KI-087): the l97-l115 guard for an A/B. lead_guard_latch_session
+    // writes 0 to the guard action (joining the l99 group of three: four keys,
+    // six pairs); lead_guard_skip_off writes false to the SDK bool guard skip
+    // (no pair); =false writes nothing for both.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+      const char *text;
+    } keys[] = {
+        {Key::kLeadGuardLatchSession, "lead_guard_latch_session",
+         "d3d12_frame_lead_strict_low_latency_guard_action", "0"},
+        {Key::kLeadGuardSkipOff, "lead_guard_skip_off",
+         "d3d12_frame_lead_strict_low_latency_guard_skip", "false"},
+    };
+    size_t index = static_cast<size_t>(Key::kXferExtentModeExact) + 1;
+    for (const auto &k : keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == k.cvar && CvarText(info, true) == k.text &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l116 key: phase, cvar and text; false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "the l116 keys follow the l114 key");
+    }
+    Check(index == mcla::dev_overrides::kKeyCount, "the l116 keys are the last two");
+    size_t latch_pairs = 0;
+    size_t skip_pairs = 0;
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      if (pair.second == Key::kLeadGuardLatchSession) {
+        Check(pair.first == Key::kLeadLlGuardAdaptive || pair.first == Key::kLeadLlGuardRearm ||
+                  pair.first == Key::kLeadLlGuardOff,
+              "the session-latch key pairs only with the l99 guard keys");
+        ++latch_pairs;
+      }
+      Check(pair.first != Key::kLeadGuardLatchSession, "the session-latch key is always second");
+      skip_pairs += pair.first == Key::kLeadGuardSkipOff || pair.second == Key::kLeadGuardSkipOff;
+    }
+    Check(latch_pairs == 3 && skip_pairs == 0,
+          "the session-latch key joins the guard group (3 pairs); the skip key is in none");
+    Check(!FindKey("lead_guard_latch") && !FindKey("lead_guard_latch_session_on") &&
+              !FindKey("LEAD_GUARD_SKIP_OFF") && !FindKey("lead_guard_skip") &&
+              !FindKey("d3d12_frame_lead_strict_low_latency_guard_skip"),
+          "no prefix, suffix, cvar-name or case variants of the l116 keys");
+    const Parsed l115 = Parse("lead_guard_latch_session=true\r\nlead_guard_skip_off=true\r\n");
+    Check(l115.ValueCount() == 2 && l115.issue_count == 0 &&
+              l115.Value(Key::kLeadGuardLatchSession) == true &&
+              l115.Value(Key::kLeadGuardSkipOff) == true,
+          "the l116 pc/guard-l115 arm parses (CRLF)");
+    const Parsed both = Parse("lead_ll_guard_rearm=true\nlead_guard_latch_session=true\n");
+    Check(both.ValueCount() == 0 && both.issue_count == 1 && both.issues[0].line == 2 &&
+              both.issues[0].issue == LineIssue::kConflict,
+          "the session latch with another guard action: neither applies, conflict on the later "
+          "line");
+    const Parsed off = Parse("lead_ll_guard_off=false\nlead_guard_latch_session=true\n");
+    Check(off.ValueCount() == 2 && off.issue_count == 0 &&
+              off.Value(Key::kLeadGuardLatchSession) == true,
+          "another guard key =false does not conflict");
+    const Parsed bad = Parse("lead_guard_skip_off=0\nlead_guard_skip_off=true\n"
+                             "lead_guard_skip_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l116 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3201,7 +3273,8 @@ void TestWhitelist() {
                           key == Key::kXferExtent || key == Key::kXferExtentVerify ||
                           key == Key::kForceHidefOff || key == Key::kXferElideOff ||
                           key == Key::kXferExtentOff || key == Key::kXferExtentDeferredOff ||
-                          key == Key::kVerifyEvery4 || key == Key::kXferExtentModeExact;
+                          key == Key::kVerifyEvery4 || key == Key::kXferExtentModeExact ||
+                          key == Key::kLeadGuardLatchSession || key == Key::kLeadGuardSkipOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -3308,9 +3381,11 @@ void TestWhitelist() {
     // l105: present_fsr and present_cas (the present_effect string); l107:
     // the two scene sample-count keys (mcla_guest_msaa_scene); l109: the
     // three fps_cap keys join the vblank group (six keys, fifteen pairs);
-    // l111: force_hidef, xfer_elide and xfer_extent with their controls.
-    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 60,
-          "sixty shared-cvar pairs");
+    // l111: force_hidef, xfer_elide and xfer_extent with their controls;
+    // l116: lead_guard_latch_session joins the guard-action group (four keys,
+    // six pairs).
+    Check(shared == mcla::dev_overrides::kConflictPairs.size() && shared == 63,
+          "sixty-three shared-cvar pairs");
   }
   {
     // The step 1/2 arm files.
@@ -3983,7 +4058,7 @@ void TestWhitelist() {
     // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys); l109:
     // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166);
     // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171); l114: plus the l114 key
-    // (172).
+    // (172); l116: plus the two l116 keys (174).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -4079,7 +4154,9 @@ void TestWhitelist() {
                                   "xfer_extent_off=false\n"
                                   "xfer_extent_deferred_off=false\n"
                                   "verify_every4=false\n"
-                                  "xfer_extent_mode_exact=false\n";
+                                  "xfer_extent_mode_exact=false\n"
+                                  "lead_guard_latch_session=false\n"
+                                  "lead_guard_skip_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4686,7 +4763,8 @@ void TestRejectedFiles() {
     // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
-    // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys).
+    // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys; l116: 174
+    // keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

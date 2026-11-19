@@ -109,3 +109,54 @@ void MclaSdkVramHostSample(uint64_t budget_mb, uint64_t usage_mb, uint64_t nonlo
     entry.vram(budget_mb, usage_mb, nonlocal_mb);
   }
 }
+
+namespace {
+
+// l116: the SDK play-state entry points (KI-087). Resolved separately from
+// the l99 hitch entries, so an l99-l115 SDK keeps those.
+using PlayFlagFn = void (*)(int);
+
+struct PlayEntry {
+  PlayFlagFn focus = nullptr;
+  PlayFlagFn paused = nullptr;
+};
+
+PlayEntry ResolvePlay() {
+  PlayEntry entry;
+#if defined(_WIN32)
+  HMODULE runtime = GetModuleHandleW(L"rexruntime.dll");
+  if (runtime) {
+    entry.focus = reinterpret_cast<PlayFlagFn>(
+        reinterpret_cast<void *>(GetProcAddress(runtime, "rex_play_window_focus")));
+    entry.paused = reinterpret_cast<PlayFlagFn>(
+        reinterpret_cast<void *>(GetProcAddress(runtime, "rex_play_game_paused")));
+    if (!entry.focus || !entry.paused) {
+      entry = {};
+    }
+  }
+#endif
+  MCLA_APP_INFO("MCLA_PLAY_HOST v=1 kind=entry sdk_entry={}",
+                entry.focus ? "found" : "absent");
+  return entry;
+}
+
+const PlayEntry &Play() {
+  static const PlayEntry entry = ResolvePlay();
+  return entry;
+}
+
+}  // namespace
+
+void MclaSdkPlayWindowFocus(bool focused) {
+  const PlayEntry &entry = Play();
+  if (entry.focus) {
+    entry.focus(focused ? 1 : 0);
+  }
+}
+
+void MclaSdkPlayGamePaused(bool paused) {
+  const PlayEntry &entry = Play();
+  if (entry.paused) {
+    entry.paused(paused ? 1 : 0);
+  }
+}
