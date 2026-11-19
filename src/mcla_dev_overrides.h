@@ -564,6 +564,20 @@
 //   outlier frames count in the guard window again, as l115). Both together
 //   restore the l115 guard. An SDK without the l116 cvars logs
 //   lead_guard_skip_off as unavailable (guard action 0 exists since l99).
+// - l117 (docs/evidence/M11-l117-owner-build-20261119.md; default off, =false
+//   writes nothing; the SDK l117 per-draw CP levers,
+//   docs/evidence/M11-l117-sdk-cp-per-draw-20261119.md): cb_reuse /
+//   cb_reuse_verify write true to the SDK bools d3d12_cb_reuse /
+//   d3d12_cb_reuse_verify (L1: constant buffers of the current frame reused;
+//   the verify uploads as before and counts would-reuse mismatches, and wins
+//   in the SDK); ib_cache / ib_cache_verify to d3d12_ib_view_cache /
+//   d3d12_ib_view_cache_verify (L2: an index buffer view equal to the one
+//   last set on the command list is not set again); tex_narrow /
+//   tex_narrow_verify to d3d12_tex_outdated_narrow /
+//   d3d12_tex_outdated_narrow_verify (L3: an outdated texture resets only the
+//   bindings of outdated textures). Six cvars, no pairs (a verify and its
+//   lever may both be on: the SDK runs the verify). An SDK without the l117
+//   cvars logs every one of them as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -784,8 +798,14 @@ enum class Key : uint8_t {
   kXferExtentModeExact,      // l114 SDK: d3d12_draw_extent_deferred_mode=2
   kLeadGuardLatchSession,    // l116 SDK: d3d12_frame_lead_strict_low_latency_guard_action=0
   kLeadGuardSkipOff,         // l116 SDK: d3d12_frame_lead_strict_low_latency_guard_skip=false
+  kCbReuse,                  // l117 SDK: d3d12_cb_reuse=true
+  kCbReuseVerify,            // l117 SDK: d3d12_cb_reuse_verify=true
+  kIbCache,                  // l117 SDK: d3d12_ib_view_cache=true
+  kIbCacheVerify,            // l117 SDK: d3d12_ib_view_cache_verify=true
+  kTexNarrow,                // l117 SDK: d3d12_tex_outdated_narrow=true
+  kTexNarrowVerify,          // l117 SDK: d3d12_tex_outdated_narrow_verify=true
 };
-inline constexpr size_t kKeyCount = 174;
+inline constexpr size_t kKeyCount = 180;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1208,6 +1228,16 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
      "d3d12_frame_lead_strict_low_latency_guard_action", "0", ""},
     {"lead_guard_skip_off", Phase::kGraphicsPlugin,
      "d3d12_frame_lead_strict_low_latency_guard_skip", "false", ""},
+    // l117: the per-draw CP levers and their verifies (graphics plugin, hot,
+    // latched by the SDK at the next frame); default off, =false writes
+    // nothing.
+    {"cb_reuse", Phase::kGraphicsPlugin, "d3d12_cb_reuse", "true", ""},
+    {"cb_reuse_verify", Phase::kGraphicsPlugin, "d3d12_cb_reuse_verify", "true", ""},
+    {"ib_cache", Phase::kGraphicsPlugin, "d3d12_ib_view_cache", "true", ""},
+    {"ib_cache_verify", Phase::kGraphicsPlugin, "d3d12_ib_view_cache_verify", "true", ""},
+    {"tex_narrow", Phase::kGraphicsPlugin, "d3d12_tex_outdated_narrow", "true", ""},
+    {"tex_narrow_verify", Phase::kGraphicsPlugin, "d3d12_tex_outdated_narrow_verify", "true",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them

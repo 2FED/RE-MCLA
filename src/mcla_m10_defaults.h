@@ -252,7 +252,7 @@ inline constexpr std::array<std::string_view, 2> kWindowsOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 121> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 127> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -514,6 +514,15 @@ inline constexpr std::array<std::string_view, 121> kNeverWrittenCvars = {
     // lead_guard_skip_off only. The guard action (default 4 since l116) is
     // listed with the l99 keys above.
     "d3d12_frame_lead_strict_low_latency_guard_skip",
+    // l117: the per-draw CP levers (default off); owner keys cb_reuse,
+    // cb_reuse_verify, ib_cache, ib_cache_verify, tex_narrow and
+    // tex_narrow_verify only.
+    "d3d12_cb_reuse",
+    "d3d12_cb_reuse_verify",
+    "d3d12_ib_view_cache",
+    "d3d12_ib_view_cache_verify",
+    "d3d12_tex_outdated_narrow",
+    "d3d12_tex_outdated_narrow_verify",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {

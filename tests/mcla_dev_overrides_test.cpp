@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 174, "one hundred and seventy-four whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 180, "one hundred and eighty whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2734,7 +2734,7 @@ void TestWhitelist() {
             "l116 key: phase, cvar and text; false writes nothing");
       Check(static_cast<size_t>(k.key) == index++, "the l116 keys follow the l114 key");
     }
-    Check(index == mcla::dev_overrides::kKeyCount, "the l116 keys are the last two");
+    Check(index == static_cast<size_t>(Key::kCbReuse), "the l116 keys come before the l117 keys");
     size_t latch_pairs = 0;
     size_t skip_pairs = 0;
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
@@ -2773,6 +2773,64 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l116 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l117 keys: the per-draw CP levers and their verifies, each writing true
+    // to its own SDK bool; =false writes nothing; no pairs (the SDK lets a
+    // verify win over its lever).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+    } keys[] = {
+        {Key::kCbReuse, "cb_reuse", "d3d12_cb_reuse"},
+        {Key::kCbReuseVerify, "cb_reuse_verify", "d3d12_cb_reuse_verify"},
+        {Key::kIbCache, "ib_cache", "d3d12_ib_view_cache"},
+        {Key::kIbCacheVerify, "ib_cache_verify", "d3d12_ib_view_cache_verify"},
+        {Key::kTexNarrow, "tex_narrow", "d3d12_tex_outdated_narrow"},
+        {Key::kTexNarrowVerify, "tex_narrow_verify", "d3d12_tex_outdated_narrow_verify"},
+    };
+    size_t index = static_cast<size_t>(Key::kLeadGuardSkipOff) + 1;
+    for (const auto &k : keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == k.cvar && CvarText(info, true) == "true" &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l117 key: phase, cvar and text; false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "the l117 keys follow the l116 keys");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "the l117 keys are in no pair");
+      }
+    }
+    Check(index == mcla::dev_overrides::kKeyCount, "the l117 keys are the last six");
+    Check(!FindKey("cb_reuse_on") && !FindKey("CB_REUSE") && !FindKey("ib_view_cache") &&
+              !FindKey("d3d12_cb_reuse") && !FindKey("tex_outdated_narrow") &&
+              !FindKey("tex_narrow_verify_on") && !FindKey("ib_cache_off"),
+          "no prefix, suffix, cvar-name or case variants of the l117 keys");
+    const Parsed verify2 =
+        Parse("cb_reuse_verify=true\r\nib_cache_verify=true\r\ntex_narrow_verify=true\r\n");
+    Check(verify2.ValueCount() == 3 && verify2.issue_count == 0 &&
+              verify2.Value(Key::kCbReuseVerify) == true &&
+              verify2.Value(Key::kIbCacheVerify) == true &&
+              verify2.Value(Key::kTexNarrowVerify) == true,
+          "the l117 pc/cp-verify2 body parses (CRLF)");
+    const Parsed fast2 = Parse("cb_reuse=true\nib_cache=true\ntex_narrow=true\n");
+    Check(fast2.ValueCount() == 3 && fast2.issue_count == 0 && fast2.Value(Key::kCbReuse) == true &&
+              fast2.Value(Key::kIbCache) == true && fast2.Value(Key::kTexNarrow) == true,
+          "the l117 pc/cp-fast2 body parses");
+    const Parsed both = Parse("cb_reuse=true\ncb_reuse_verify=true\n");
+    Check(both.ValueCount() == 2 && both.issue_count == 0,
+          "a lever and its verify together: no conflict (the SDK runs the verify)");
+    const Parsed bad = Parse("tex_narrow=1\ntex_narrow=true\ntex_narrow=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l117 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3274,7 +3332,10 @@ void TestWhitelist() {
                           key == Key::kForceHidefOff || key == Key::kXferElideOff ||
                           key == Key::kXferExtentOff || key == Key::kXferExtentDeferredOff ||
                           key == Key::kVerifyEvery4 || key == Key::kXferExtentModeExact ||
-                          key == Key::kLeadGuardLatchSession || key == Key::kLeadGuardSkipOff;
+                          key == Key::kLeadGuardLatchSession || key == Key::kLeadGuardSkipOff ||
+                          key == Key::kCbReuse || key == Key::kCbReuseVerify ||
+                          key == Key::kIbCache || key == Key::kIbCacheVerify ||
+                          key == Key::kTexNarrow || key == Key::kTexNarrowVerify;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -4058,7 +4119,8 @@ void TestWhitelist() {
     // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys); l109:
     // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166);
     // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171); l114: plus the l114 key
-    // (172); l116: plus the two l116 keys (174).
+    // (172); l116: plus the two l116 keys (174); l117: plus the six l117 keys
+    // (180).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -4156,7 +4218,13 @@ void TestWhitelist() {
                                   "verify_every4=false\n"
                                   "xfer_extent_mode_exact=false\n"
                                   "lead_guard_latch_session=false\n"
-                                  "lead_guard_skip_off=false\n";
+                                  "lead_guard_skip_off=false\n"
+                                  "cb_reuse=false\n"
+                                  "cb_reuse_verify=false\n"
+                                  "ib_cache=false\n"
+                                  "ib_cache_verify=false\n"
+                                  "tex_narrow=false\n"
+                                  "tex_narrow_verify=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4764,7 +4832,7 @@ void TestRejectedFiles() {
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
     // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys; l116: 174
-    // keys).
+    // keys; l117: 180 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
