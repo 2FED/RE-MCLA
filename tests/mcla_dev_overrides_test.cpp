@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 171, "one hundred and seventy-one whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 172, "one hundred and seventy-two whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2635,7 +2635,8 @@ void TestWhitelist() {
         Check(pair.first != k.key && pair.second != k.key, "the l113 keys are in no pair");
       }
     }
-    Check(index == mcla::dev_overrides::kKeyCount, "the l113 keys are the last two");
+    Check(index == static_cast<size_t>(Key::kXferExtentModeExact),
+          "the two l113 keys come before the l114 key");
     Check(!FindKey("xfer_extent_deferred") && !FindKey("xfer_extent_deferred_on") &&
               !FindKey("XFER_EXTENT_DEFERRED_OFF") && !FindKey("deferred_off") &&
               !FindKey("verify_every") && !FindKey("verify_every_4") &&
@@ -2659,6 +2660,47 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l113 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l114 key: the exact deferred mode of the bound (2), graphics plugin;
+    // =true only, in no conflict pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &info = Info(Key::kXferExtentModeExact);
+    Check(FindKey("xfer_extent_mode_exact") == Key::kXferExtentModeExact &&
+              info.phase == Phase::kGraphicsPlugin &&
+              CvarName(info) == "d3d12_draw_extent_deferred_mode" && CvarText(info, true) == "2" &&
+              CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+              !info.overrides_user,
+          "l114 key: phase, cvar and text; false writes nothing");
+    Check(static_cast<size_t>(Key::kXferExtentModeExact) ==
+                  static_cast<size_t>(Key::kVerifyEvery4) + 1 &&
+              static_cast<size_t>(Key::kXferExtentModeExact) + 1 ==
+                  mcla::dev_overrides::kKeyCount,
+          "the l114 key follows verify_every4 and is the last");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kXferExtentModeExact && pair.second != Key::kXferExtentModeExact,
+            "the l114 key is in no pair");
+    }
+    Check(!FindKey("xfer_extent_mode") && !FindKey("xfer_extent_exact") &&
+              !FindKey("XFER_EXTENT_MODE_EXACT") && !FindKey("xfer_extent_mode_exact2") &&
+              !FindKey("d3d12_draw_extent_deferred_mode"),
+          "no prefix, suffix, cvar-name or case variants of the l114 key");
+    const Parsed exact = Parse("xfer_extent=true\r\nxfer_extent_mode_exact=true\r\n");
+    Check(exact.ValueCount() == 2 && exact.issue_count == 0 &&
+              exact.Value(Key::kXferExtentModeExact) == true,
+          "the l114 pc/extent-exact arm parses (CRLF)");
+    const Parsed both = Parse("xfer_extent_mode_exact=true\nxfer_extent_deferred_off=true\n");
+    Check(both.ValueCount() == 2 && both.issue_count == 0,
+          "the exact mode with the deferred switch off: different cvars, no conflict");
+    const Parsed bad = Parse("xfer_extent_mode_exact=2\nxfer_extent_mode_exact=true\n"
+                             "xfer_extent_mode_exact=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l114 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3159,7 +3201,7 @@ void TestWhitelist() {
                           key == Key::kXferExtent || key == Key::kXferExtentVerify ||
                           key == Key::kForceHidefOff || key == Key::kXferElideOff ||
                           key == Key::kXferExtentOff || key == Key::kXferExtentDeferredOff ||
-                          key == Key::kVerifyEvery4;
+                          key == Key::kVerifyEvery4 || key == Key::kXferExtentModeExact;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -3940,7 +3982,8 @@ void TestWhitelist() {
     // plus the four l107 keys explicit false (151 keys) and the five l107
     // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys); l109:
     // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166);
-    // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171).
+    // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171); l114: plus the l114 key
+    // (172).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -4035,7 +4078,8 @@ void TestWhitelist() {
                                   "xfer_elide_off=false\n"
                                   "xfer_extent_off=false\n"
                                   "xfer_extent_deferred_off=false\n"
-                                  "verify_every4=false\n";
+                                  "verify_every4=false\n"
+                                  "xfer_extent_mode_exact=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4642,7 +4686,7 @@ void TestRejectedFiles() {
     // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
-    // l110: 166 keys; l111: 169 keys; l113: 171 keys).
+    // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

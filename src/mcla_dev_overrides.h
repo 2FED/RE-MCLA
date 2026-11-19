@@ -544,6 +544,14 @@
 //   extent and elision verifies measure every fourth candidate draw, KI-085;
 //   docs/evidence/M11-l113-sdk-deferred-claims-20261119.md). One key per
 //   cvar, no conflict pair.
+// - l114 (docs/evidence/M11-l114-owner-build-20261119.md; default off, =false
+//   writes nothing): xfer_extent_mode_exact writes 2 to the SDK int
+//   d3d12_draw_extent_deferred_mode (hot, default 1 = resolve-only: an owed
+//   claim of the bound is completed only before a resolve reads it; 2 = the
+//   exact l113 rule, also before every lossy later claim;
+//   docs/evidence/M11-l114-sdk-resolve-only-mode-20261119.md). One key, no
+//   conflict pair (xfer_extent_deferred_off writes the other cvar and wins:
+//   mode 0).
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -761,8 +769,9 @@ enum class Key : uint8_t {
   kXferExtentOff,            // l111 control: d3d12_draw_extent_from_rect=false
   kXferExtentDeferredOff,    // l113 SDK: d3d12_draw_extent_deferred_claims=false
   kVerifyEvery4,             // l113 SDK: d3d12_verify_query_every=4
+  kXferExtentModeExact,      // l114 SDK: d3d12_draw_extent_deferred_mode=2
 };
-inline constexpr size_t kKeyCount = 171;
+inline constexpr size_t kKeyCount = 172;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1175,6 +1184,10 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"xfer_extent_deferred_off", Phase::kGraphicsPlugin, "d3d12_draw_extent_deferred_claims",
      "false", ""},
     {"verify_every4", Phase::kGraphicsPlugin, "d3d12_verify_query_every", "4", ""},
+    // l114: the exact deferred mode of the bound (graphics plugin, hot);
+    // default off, =false writes nothing.
+    {"xfer_extent_mode_exact", Phase::kGraphicsPlugin, "d3d12_draw_extent_deferred_mode", "2",
+     ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
