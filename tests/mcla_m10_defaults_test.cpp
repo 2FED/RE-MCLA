@@ -106,7 +106,8 @@ void TestTable() {
       {"video_mode_force_hidef", "true", Phase::kStartup, false, Platform::kAll, true},
       {"d3d12_transfer_elide_full_overwrite", "true", Phase::kGraphicsPlugin, false,
        Platform::kWindowsOnly, true},
-      {"d3d12_draw_extent_from_rect", "true", Phase::kGraphicsPlugin, false,
+      // l112 (KI-084): the bound's entry holds the SDK default false.
+      {"d3d12_draw_extent_from_rect", "false", Phase::kGraphicsPlugin, false,
        Platform::kWindowsOnly, true},
   };
   Check(std::size(expected) == kDefaults.size(), "twenty defaults");
@@ -1539,11 +1540,19 @@ void TestL111Defaults() {
   const Default *extent = Find("d3d12_draw_extent_from_rect");
   const Default *const entries[] = {hidef, elide, extent};
   for (const Default *entry : entries) {
-    Check(entry != nullptr && entry->value == "true" && !entry->diagnostic &&
-              !entry->silent_false_is_arm && !IsNeverWritten(entry->cvar) &&
-              HasOverrideKey(*entry),
-          "l111: each new default true, not a diagnostic, =false not an arm, keyed");
+    // l112 (KI-084): the extent bound's entry holds false (the SDK default:
+    // nothing is written, the bound is off by default); hidef and elide true.
+    Check(entry != nullptr && entry->value == (entry == extent ? "false" : "true") &&
+              !entry->diagnostic && !entry->silent_false_is_arm &&
+              !IsNeverWritten(entry->cvar) && HasOverrideKey(*entry),
+          "l111/l112: hidef and elide true, the bound false; not diagnostics, =false not an "
+          "arm, keyed");
   }
+  // l112: the bound's on key writes the other value (its own arm), the off key
+  // the entry's value (a valid control that changes nothing by default).
+  Check(dev::CvarText(dev::Info(dev::Key::kXferExtent), true) == "true" &&
+            dev::CvarText(dev::Info(dev::Key::kXferExtentOff), true) == extent->value,
+        "l112: xfer_extent writes true (pc/extent-new), xfer_extent_off the default false");
   Check(hidef->phase == Phase::kStartup && hidef->platform == Platform::kAll,
         "l111 A: forced HiDef at startup (init-only, as force_hidef), both platforms");
   Check(elide->phase == Phase::kGraphicsPlugin && extent->phase == Phase::kGraphicsPlugin &&

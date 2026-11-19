@@ -30,8 +30,9 @@
 //   and d3d12_low_latency_auto_antilag2=true (low latency, see below);
 // - since l111 at startup on both platforms video_mode_force_hidef=true, and
 //   at graphics-plugin load on Windows only
-//   d3d12_transfer_elide_full_overwrite=true and
-//   d3d12_draw_extent_from_rect=true (ownership transfers, see below).
+//   d3d12_transfer_elide_full_overwrite=true and (l111 only)
+//   d3d12_draw_extent_from_rect=true (ownership transfers, see below); since
+//   l112 the bound's entry holds false (KI-084, see below).
 //
 // Each phase is the phase of the owner override key for the same cvar.
 //
@@ -132,6 +133,16 @@
 // the elision and the bound on). The verify keys xfer_elide_verify and
 // xfer_extent_verify write other cvars and win in the SDK over the defaults.
 //
+// l112 (KI-084, the minimap flicker on the l111 defaults; owner A/B: arm
+// pc/extent-off, only the bound off, shows no flicker;
+// docs/evidence/M11-l112-sdk-extent-fix-20261119.md): the bound's entry keeps
+// its place, phase, platform and keys but holds "false", the SDK default, so
+// the module writes nothing for it (action already) and the bound is off by
+// default again until its cause is fixed. The owner key xfer_extent turns it
+// on (its own arm, pc/extent-new), xfer_extent_off stays a valid control (it
+// writes the same false), xfer_extent_verify audits it (and the l112 SDK's
+// below audit) as before.
+//
 // Semantics kept from the SDK: targeted sync acts only while
 // d3d12_readback_sync_composite is on (MCLA_READBACK_SYNC_COMPOSITE_DEFAULT);
 // elision acts only in readback_resolve=some (the host default). Both are
@@ -206,7 +217,9 @@ inline constexpr std::array<Default, 20> kDefaults = {{
     {"video_mode_force_hidef", "true", Phase::kStartup, false},
     {"d3d12_transfer_elide_full_overwrite", "true", Phase::kGraphicsPlugin, false,
      Platform::kWindowsOnly},
-    {"d3d12_draw_extent_from_rect", "true", Phase::kGraphicsPlugin, false,
+    // l112 (KI-084): "false", the SDK default, until the minimap flicker of
+    // the bound is fixed (see above); xfer_extent turns it on.
+    {"d3d12_draw_extent_from_rect", "false", Phase::kGraphicsPlugin, false,
      Platform::kWindowsOnly},
 }};
 
