@@ -534,6 +534,16 @@
 //   which stays its own arm. The verify keys xfer_elide_verify and
 //   xfer_extent_verify write other cvars and still win in the SDK with the
 //   defaults on (every transfer as before, savings only counted).
+// - l113 (docs/evidence/M11-l113-owner-build-20261119.md; default off, =false
+//   writes nothing): xfer_extent_deferred_off writes false to the SDK
+//   graphics-plugin bool d3d12_draw_extent_deferred_claims (hot, default true:
+//   with the bound on, the tiles it leaves with another owner are owed to the
+//   bounded render target and completed before a resolve or a lossy claim
+//   reads them, the KI-084 fix; false reproduces the l111 bound for an A/B);
+//   verify_every4 writes 4 to the SDK int d3d12_verify_query_every (hot: the
+//   extent and elision verifies measure every fourth candidate draw, KI-085;
+//   docs/evidence/M11-l113-sdk-deferred-claims-20261119.md). One key per
+//   cvar, no conflict pair.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -749,8 +759,10 @@ enum class Key : uint8_t {
   kForceHidefOff,            // l111 control: video_mode_force_hidef=false
   kXferElideOff,             // l111 control: d3d12_transfer_elide_full_overwrite=false
   kXferExtentOff,            // l111 control: d3d12_draw_extent_from_rect=false
+  kXferExtentDeferredOff,    // l113 SDK: d3d12_draw_extent_deferred_claims=false
+  kVerifyEvery4,             // l113 SDK: d3d12_verify_query_every=4
 };
-inline constexpr size_t kKeyCount = 169;
+inline constexpr size_t kKeyCount = 171;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1157,6 +1169,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"xfer_elide_off", Phase::kGraphicsPlugin, "d3d12_transfer_elide_full_overwrite", "false",
      ""},
     {"xfer_extent_off", Phase::kGraphicsPlugin, "d3d12_draw_extent_from_rect", "false", ""},
+    // l113: the deferred claims of the bound (the l111 behaviour for an A/B)
+    // and the lighter verify sampling (graphics plugin, hot); default off,
+    // =false writes nothing.
+    {"xfer_extent_deferred_off", Phase::kGraphicsPlugin, "d3d12_draw_extent_deferred_claims",
+     "false", ""},
+    {"verify_every4", Phase::kGraphicsPlugin, "d3d12_verify_query_every", "4", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them

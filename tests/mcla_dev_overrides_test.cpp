@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 169, "one hundred and sixty-nine whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 171, "one hundred and seventy-one whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2538,7 +2538,8 @@ void TestWhitelist() {
                 CvarText(on, true) == "true" && CvarText(on, false).empty(),
             "l111: the on key writes true to the same cvar in the same phase");
     }
-    Check(index == mcla::dev_overrides::kKeyCount, "the l111 controls are the last three");
+    Check(index == static_cast<size_t>(Key::kXferExtentDeferredOff),
+          "the three l111 controls come before the l113 keys");
     for (const Key verify : {Key::kXferElideVerify, Key::kXferExtentVerify}) {
       for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
         Check(pair.first != verify && pair.second != verify,
@@ -2603,6 +2604,61 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[3].issue == LineIssue::kDuplicate,
           "l111 near misses: an integer, a string value, the cvar line and a repeat are ignored");
+  }
+  {
+    // l113 keys: the deferred claims of the bound (false) and the verify
+    // sampling (4), graphics plugin; =true only, in no conflict pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const struct {
+      Key key;
+      const char *name;
+      const char *cvar;
+      const char *text;
+    } keys[] = {
+        {Key::kXferExtentDeferredOff, "xfer_extent_deferred_off",
+         "d3d12_draw_extent_deferred_claims", "false"},
+        {Key::kVerifyEvery4, "verify_every4", "d3d12_verify_query_every", "4"},
+    };
+    size_t index = static_cast<size_t>(Key::kXferExtentOff) + 1;
+    for (const auto &k : keys) {
+      const auto &info = Info(k.key);
+      Check(FindKey(k.name) == k.key && info.phase == Phase::kGraphicsPlugin &&
+                CvarName(info) == k.cvar && CvarText(info, true) == k.text &&
+                CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+                !info.overrides_user,
+            "l113 key: phase, cvar and text; false writes nothing");
+      Check(static_cast<size_t>(k.key) == index++, "l113 keys follow xfer_extent_off");
+      for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+        Check(pair.first != k.key && pair.second != k.key, "the l113 keys are in no pair");
+      }
+    }
+    Check(index == mcla::dev_overrides::kKeyCount, "the l113 keys are the last two");
+    Check(!FindKey("xfer_extent_deferred") && !FindKey("xfer_extent_deferred_on") &&
+              !FindKey("XFER_EXTENT_DEFERRED_OFF") && !FindKey("deferred_off") &&
+              !FindKey("verify_every") && !FindKey("verify_every_4") &&
+              !FindKey("verify_every2") && !FindKey("d3d12_draw_extent_deferred_claims") &&
+              !FindKey("d3d12_verify_query_every"),
+          "no prefix, suffix, cvar-name or case variants of the l113 keys");
+    const Parsed l111 = Parse("xfer_extent=true\nxfer_extent_deferred_off=true\n");
+    Check(l111.ValueCount() == 2 && l111.issue_count == 0 &&
+              l111.Value(Key::kXferExtent) == true &&
+              l111.Value(Key::kXferExtentDeferredOff) == true,
+          "the l113 pc/extent-l111 arm parses (the l111 bound for an A/B)");
+    const Parsed audit = Parse(
+        "xfer_extent_verify=true\r\nxfer_trig_profile=true\r\nverify_every4=true\r\n");
+    Check(audit.ValueCount() == 3 && audit.issue_count == 0 &&
+              audit.Value(Key::kVerifyEvery4) == true &&
+              audit.Value(Key::kXferExtentVerify) == true,
+          "the l113 pc/extent-audit arm parses (CRLF)");
+    const Parsed bad = Parse("verify_every4=4\nxfer_extent_deferred_off=true\n"
+                             "xfer_extent_deferred_off=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l113 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3102,7 +3158,8 @@ void TestWhitelist() {
                           key == Key::kXferTrigProfile || key == Key::kStencilLazyVerify ||
                           key == Key::kXferExtent || key == Key::kXferExtentVerify ||
                           key == Key::kForceHidefOff || key == Key::kXferElideOff ||
-                          key == Key::kXferExtentOff;
+                          key == Key::kXferExtentOff || key == Key::kXferExtentDeferredOff ||
+                          key == Key::kVerifyEvery4;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -3883,7 +3940,7 @@ void TestWhitelist() {
     // plus the four l107 keys explicit false (151 keys) and the five l107
     // SDK keys (156 keys); l108: plus the two l108 SDK keys (158 keys); l109:
     // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166);
-    // l111: plus the three l111 controls (169).
+    // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -3976,7 +4033,9 @@ void TestWhitelist() {
                                   "xfer_extent_verify=false\n"
                                   "force_hidef_off=false\n"
                                   "xfer_elide_off=false\n"
-                                  "xfer_extent_off=false\n";
+                                  "xfer_extent_off=false\n"
+                                  "xfer_extent_deferred_off=false\n"
+                                  "verify_every4=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4583,7 +4642,7 @@ void TestRejectedFiles() {
     // bytes under the former 4 KiB; l106: 147 keys, about 4.06 KB, with about
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
-    // l110: 166 keys; l111: 169 keys).
+    // l110: 166 keys; l111: 169 keys; l113: 171 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

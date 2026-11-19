@@ -238,7 +238,7 @@ inline constexpr std::array<std::string_view, 2> kWindowsOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 117> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 119> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -488,6 +488,11 @@ inline constexpr std::array<std::string_view, 117> kNeverWrittenCvars = {
     // xfer_extent_verify only. d3d12_draw_extent_from_rect left this list in
     // l111 (now a Windows default above).
     "d3d12_draw_extent_from_rect_verify",
+    // l113: the deferred claims of the bound (default true) and the verify
+    // sampling (default 1); owner keys xfer_extent_deferred_off and
+    // verify_every4 only.
+    "d3d12_draw_extent_deferred_claims",
+    "d3d12_verify_query_every",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
