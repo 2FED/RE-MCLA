@@ -140,3 +140,10 @@ stencil transfers 1.3 ms, texture loads 1.0 ms; (3) CP: shared-memory uploads + 
   `M11-l116-sdk-guard-and-thin-frames-20261119.md`. KI-084: `M11-l114-sdk-resolve-only-mode-20261119.md`.
 - Deck: `M11-l96-deck-analysis-20261113.md`, `M11-deck-cp-budget-and-levers-20261112.md`. Builds:
   `M11-lNN-owner-build-*.md` and the SDK reports (l95-l117); older pointers in README-AI 17c.
+
+## Addendum 2026-11-20 night (owner away until 2026-11-22)
+
+- Current staged owner build: **l119** (unsigned; supersedes l118; SDK c503e32 local). New since l117: KI-088 fix default on (vertex request skips validated; counters `MCLA_VB`), `rt_memo2` (off, verify first), scene-1x arms for the 1280x720 guest (one tile), `MCLA_SHM` census and `MCLA_FAULT_PROBE`, Canary invalidation fix (default on; control key `inval_unwatched_off`). Unsafe l117 arms removed.
+- Findings filed: KI-088 (stale vertex data possible; in the published SDK and l117v; not yet observed), shared-memory study, predicated-tiling RE, one-tile 2x scene not feasible without Canary's extended EDRAM and shader sources.
+- Owner next (in order): Deck on l119 per `private/l119-DECK-CHECKLIST.txt` (deck/default, then deck/scene-1x: the main new run, then deck/gpu-new); PC `pc/shm-census` 10 minutes daylight incl. a race at 1080p then 5 minutes at 1440p; read `MCLA_VB vb_*_skip_invalid`: non-zero means KI-088 is live and a volunteer update should follow; KI-082 A/B clear against pc/vb-old next to moving traffic.
+- Agent next after those runs: build (a2)/(e1) if the census supports them; extent estimator only if 2x MSAA must be kept at 1280x720; upstream SDK report for KI-088 only with the owner's consent.

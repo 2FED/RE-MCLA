@@ -589,6 +589,18 @@
 //   valid; the control restores the old skips for an A/B against KI-082; =false
 //   writes nothing; no pair: no key writes true). An SDK without the l118
 //   cvars logs them as unavailable.
+// - l119 (docs/evidence/M11-l119-owner-build-20261120.md; startup, rexruntime
+//   cvars; =false writes nothing): shm_census writes true to the SDK bool
+//   mcla_shm_census (default off: the MCLA_SHM census beyond the always-on
+//   counters: first touch per submission, sampled same-bytes hashing, hot
+//   256 KiB block statistics, fault time by thread class; hot, latched at the
+//   next frame end). inval_unwatched_off writes false to the SDK bool
+//   memory_invalidate_unwatched (default TRUE since the l119 SDK: the port of
+//   Xenia Canary aed81ca9, a guest protect-to-writable, decommit or release
+//   invalidates the GPU copy of a range with no watch armed; the control
+//   restores the old behaviour for an A/B). No pairs (different cvars; no key
+//   writes the opposite value). An SDK without the l119 cvars logs them as
+//   unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -817,8 +829,10 @@ enum class Key : uint8_t {
   kTexNarrowVerify,          // l117 SDK: d3d12_tex_outdated_narrow_verify=true
   kRtMemo2,                  // l118 SDK: d3d12_rt_update_memo2=true
   kVbSkipValidateOff,        // l118 SDK: d3d12_vb_skip_validate=false
+  kShmCensus,                // l119 SDK: mcla_shm_census=true
+  kInvalUnwatchedOff,        // l119 SDK: memory_invalidate_unwatched=false
 };
-inline constexpr size_t kKeyCount = 182;
+inline constexpr size_t kKeyCount = 184;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1258,6 +1272,12 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // l118: the old vertex-slot skips without the validity check (the SDK
     // default is the fix); =true only, =false writes nothing.
     {"vb_skip_validate_off", Phase::kGraphicsPlugin, "d3d12_vb_skip_validate", "false", ""},
+    // l119: the MCLA_SHM census (rexruntime, hot, latched at the next frame
+    // end); =true only, =false writes nothing.
+    {"shm_census", Phase::kStartup, "mcla_shm_census", "true", ""},
+    // l119: the unwatched invalidation of the Canary aed81ca9 port off (the
+    // SDK default is on); =true only, =false writes nothing.
+    {"inval_unwatched_off", Phase::kStartup, "memory_invalidate_unwatched", "false", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them

@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 182, "one hundred and eighty-two whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 184, "one hundred and eighty-four whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2847,8 +2847,8 @@ void TestWhitelist() {
           "l118 key: phase, cvar and text; false writes nothing");
     Check(static_cast<size_t>(Key::kRtMemo2) == static_cast<size_t>(Key::kTexNarrowVerify) + 1 &&
               static_cast<size_t>(Key::kVbSkipValidateOff) == static_cast<size_t>(Key::kRtMemo2) + 1 &&
-              static_cast<size_t>(Key::kVbSkipValidateOff) + 1 == mcla::dev_overrides::kKeyCount,
-          "the two l118 keys follow the l117 keys and are the last");
+              static_cast<size_t>(Key::kShmCensus) == static_cast<size_t>(Key::kVbSkipValidateOff) + 1,
+          "the two l118 keys follow the l117 keys and come before the l119 keys");
     const auto &vb = Info(Key::kVbSkipValidateOff);
     Check(FindKey("vb_skip_validate_off") == Key::kVbSkipValidateOff &&
               vb.phase == Phase::kGraphicsPlugin && CvarName(vb) == "d3d12_vb_skip_validate" &&
@@ -2891,6 +2891,56 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l118 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l119 keys: the MCLA_SHM census and the control of the Canary aed81ca9
+    // port (startup, rexruntime cvars); =false writes nothing; no pairs.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &census = Info(Key::kShmCensus);
+    Check(FindKey("shm_census") == Key::kShmCensus && census.phase == Phase::kStartup &&
+              CvarName(census) == "mcla_shm_census" && CvarText(census, true) == "true" &&
+              CvarText(census, false).empty() && census.true_source == TextSource::kLiteral &&
+              !census.overrides_user,
+          "l119 key: shm_census writes true to mcla_shm_census at startup; false writes nothing");
+    const auto &inval = Info(Key::kInvalUnwatchedOff);
+    Check(FindKey("inval_unwatched_off") == Key::kInvalUnwatchedOff &&
+              inval.phase == Phase::kStartup && CvarName(inval) == "memory_invalidate_unwatched" &&
+              CvarText(inval, true) == "false" && CvarText(inval, false).empty() &&
+              inval.true_source == TextSource::kLiteral && !inval.overrides_user,
+          "l119 control: inval_unwatched_off writes false to memory_invalidate_unwatched");
+    Check(static_cast<size_t>(Key::kInvalUnwatchedOff) == static_cast<size_t>(Key::kShmCensus) + 1 &&
+              static_cast<size_t>(Key::kInvalUnwatchedOff) + 1 == mcla::dev_overrides::kKeyCount,
+          "the two l119 keys follow the l118 keys and are the last");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kShmCensus && pair.second != Key::kShmCensus &&
+                pair.first != Key::kInvalUnwatchedOff && pair.second != Key::kInvalUnwatchedOff,
+            "the l119 keys are in no pair");
+    }
+    Check(!FindKey("shm_census_off") && !FindKey("SHM_CENSUS") && !FindKey("mcla_shm_census") &&
+              !FindKey("shm_census_on") && !FindKey("inval_unwatched") &&
+              !FindKey("memory_invalidate_unwatched") && !FindKey("fault_probe") &&
+              !FindKey("mcla_fault_probe") && !FindKey("single_range_fast_off"),
+          "no variants of the l119 keys; no fault-probe or fast-path key");
+    const Parsed census_arm = Parse("shm_census=true\r\n");
+    Check(census_arm.ValueCount() == 1 && census_arm.issue_count == 0 &&
+              census_arm.Value(Key::kShmCensus) == true,
+          "the l119 pc/shm-census body parses (CRLF)");
+    const Parsed old_vb = Parse("shm_census=true\nvb_skip_validate_off=true\n");
+    Check(old_vb.ValueCount() == 2 && old_vb.issue_count == 0 &&
+              old_vb.Value(Key::kVbSkipValidateOff) == true,
+          "the l119 pc/shm-census-old-vb body parses: no conflict");
+    const Parsed with_census_off =
+        Parse("shm_census=true\nmemory_watch_census=false\ninval_unwatched_off=true\n");
+    Check(with_census_off.ValueCount() == 3 && with_census_off.issue_count == 0,
+          "shm_census and memory_watch_census write different cvars: no pair");
+    const Parsed bad = Parse("shm_census=1\nshm_census=true\nshm_census=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l119 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3396,7 +3446,8 @@ void TestWhitelist() {
                           key == Key::kCbReuse || key == Key::kCbReuseVerify ||
                           key == Key::kIbCache || key == Key::kIbCacheVerify ||
                           key == Key::kTexNarrow || key == Key::kTexNarrowVerify ||
-                          key == Key::kRtMemo2 || key == Key::kVbSkipValidateOff;
+                          key == Key::kRtMemo2 || key == Key::kVbSkipValidateOff ||
+                          key == Key::kShmCensus || key == Key::kInvalUnwatchedOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -4181,7 +4232,8 @@ void TestWhitelist() {
     // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166);
     // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171); l114: plus the l114 key
     // (172); l116: plus the two l116 keys (174); l117: plus the six l117 keys
-    // (180); l118: plus the two l118 keys (182).
+    // (180); l118: plus the two l118 keys (182); l119: plus the two l119 keys
+    // (184).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -4287,7 +4339,9 @@ void TestWhitelist() {
                                   "tex_narrow=false\n"
                                   "tex_narrow_verify=false\n"
                                   "rt_memo2=false\n"
-                                  "vb_skip_validate_off=false\n";
+                                  "vb_skip_validate_off=false\n"
+                                  "shm_census=false\n"
+                                  "inval_unwatched_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4895,7 +4949,7 @@ void TestRejectedFiles() {
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
     // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys; l116: 174
-    // keys; l117: 180 keys; l118: 182 keys).
+    // keys; l117: 180 keys; l118: 182 keys; l119: 184 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

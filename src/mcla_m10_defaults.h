@@ -252,7 +252,7 @@ inline constexpr std::array<std::string_view, 2> kWindowsOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 129> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 131> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -529,6 +529,11 @@ inline constexpr std::array<std::string_view, 129> kNeverWrittenCvars = {
     // l118: the vertex-slot skip validation (SDK default true, a correctness
     // fix); owner control vb_skip_validate_off only.
     "d3d12_vb_skip_validate",
+    // l119: the MCLA_SHM census (SDK default off; owner key shm_census only)
+    // and the unwatched invalidation of the Canary aed81ca9 port (SDK default
+    // true, a correctness fix; owner control inval_unwatched_off only).
+    "mcla_shm_census",
+    "memory_invalidate_unwatched",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
