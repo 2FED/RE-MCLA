@@ -16,7 +16,10 @@ contains no game files.
      "30 FPS (recommended)", then CHECK SETUP (it shows "Setup saved."), then
      START GAME.
    - On a first setup the graphics card is preselected (the only one, or the
-     one with the most video memory); you can change it.
+     one with the most video memory); you can change it. On a laptop with
+     two graphics chips choose the dedicated card (NVIDIA or AMD): the game
+     runs on the card chosen here, and NVIDIA Reflex or AMD Anti-Lag 2 is
+     switched on for that card automatically.
    - Be online when you start: the build checks a signed list on the internet.
      Offline it starts for 3 days after it was built, or for 24 hours after
      the last successful online check. A running game is never stopped.
@@ -30,9 +33,12 @@ contains no game files.
      than an 8 GB graphics card has.
    - Unlocked, known limits: menus over the city (pause, map, Arcade, meet
      spot) stay at 30; the race victory screen can be lit wrongly.
-     Better than the last build: on PC busy junctions stutter less, though
-     they can still drop to 30-40 FPS; the flicker of buildings and signs is
-     fixed.
+     Better than l81v: at 1080p the frame rate is much higher (on an
+     RTX 5060 about 66-69 FPS while driving instead of about 48), frames are
+     more even, and the night flicker of buildings and signs is fixed.
+   - Low latency: NVIDIA Reflex (NVIDIA cards) and AMD Anti-Lag 2 (AMD
+     cards) are on by default; there is nothing to set. Intel graphics and
+     the Steam Deck run without them, as before.
 
 3. WHEN SOMETHING GOES WRONG
    - Bug: at the moment it happens press F10 on the keyboard, or R2 on the
@@ -50,6 +56,8 @@ contains no game files.
      nothing on your wheel, use F10 and write your wheel model in
      report.txt.
    - If the game crashes, it saves a report by itself.
+   - The game keeps your newest 50 reports (at most about 768 MB); older
+     ones are deleted automatically, so send reports soon after a session.
    - Every report folder has its own report.txt, prefilled by the game
      (version, time, kind "general", "wheel" or "crash"; an L2 report also
      names your wheel). Answer its four questions and save it. The picture in
@@ -68,9 +76,18 @@ contains no game files.
      and continue from the last autosave.
    - The wheel can lose its centering force: press wheel L2 when it happens.
    - Some signs show plain coloured blocks or stripes; F10 is welcome.
-   - Steam Deck: the sound can crackle when the game is busy (for example
-     driving fast in the city). This is being worked on; report it only if
-     it is worse than before.
+   - Steam Deck: the crackling sound should be fixed (music must be clean);
+     other sounds can still crackle very rarely when many cars are around.
+     Report any crackle that is more than that.
+   - Integrated AMD Radeon graphics (for example Radeon 860M): world
+     textures can flash white for a moment (probably the driver). F10 is
+     welcome if you see it on another card.
+   - Traffic cars close to you can tremble slightly, also at 30 FPS. This
+     looks like the game's own behaviour; no need to report it.
+   - At 06:00 in the game, when night turns into day, trees can blink once
+     or twice. Known; no need to report it.
+   - A single black frame may flash across the screen once in a long
+     session. We are not sure it is ours: press F10 at once if you see it.
    - Cars can disappear on the results screen after a race. This is normal
      game behaviour; no need to report it.
    - Should be fixed, please report if you see it: a broken first photo in
@@ -78,7 +95,9 @@ contains no game files.
      Steam Deck, a "storage device removed" message when you save (saving
      twice in a row now works); a cut-scene voice that sounds doubled or
      hollow; an album slot preview that does not show the photo you just
-     took.
+     took; flickering buildings, fences or signs at night; a thin horizontal
+     line of broken pixels across the screen at 1080p; traffic cars jumping
+     back and forth when the frame rate drops.
 
 5. IF THE LAUNCHER SAYS
    - "This test build was withdrawn": get the current build from the owner.
@@ -105,7 +124,10 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      "30 FPS (recommended)", потім CHECK SETUP (з'явиться "Setup saved."),
      потім START GAME.
    - Під час першого налаштування відеокарту вибрано заздалегідь (єдину або
-     ту, що має найбільше відеопам'яті); її можна змінити.
+     ту, що має найбільше відеопам'яті); її можна змінити. На ноутбуці з
+     двома графічними чипами виберіть дискретну відеокарту (NVIDIA або AMD):
+     гра працює на вибраній тут картці, і для неї автоматично вмикається
+     NVIDIA Reflex або AMD Anti-Lag 2.
    - Під час запуску будьте онлайн: збірка перевіряє підписаний список в
      інтернеті. Без інтернету вона запускається 3 дні після збирання або
      24 години після останньої успішної онлайн-перевірки. Запущену гру
@@ -121,9 +143,12 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
    - Unlocked, відомі обмеження: меню поверх міста (пауза, мапа, Arcade,
      місце зустрічі) лишаються на 30; екран перемоги після гонки може бути
      неправильно освітлений.
-     Краще, ніж у попередній збірці: на ПК завантажені перехрестя менше
-     смикаються, хоча FPS там ще може падати до 30-40; мерехтіння будинків і
-     вивісок виправлено.
+     Краще, ніж у l81v: при 1080p частота кадрів значно вища (на RTX 5060
+     під час їзди близько 66-69 FPS замість приблизно 48), кадри рівніші, а
+     нічне мерехтіння будинків і вивісок виправлено.
+   - Мала затримка: NVIDIA Reflex (картки NVIDIA) і AMD Anti-Lag 2 (картки
+     AMD) увімкнені за замовчуванням; налаштовувати нічого не треба. Графіка
+     Intel і Steam Deck працюють без них, як раніше.
 
 3. ЯКЩО ЩОСЬ НЕ ТАК
    - Баг: саме в цей момент натисніть F10 на клавіатурі, або R2 на кермі,
@@ -142,6 +167,8 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      вашому кермі вони нічого не роблять, натискайте F10 і вкажіть модель
      керма в report.txt.
    - Якщо гра впаде, звіт збережеться сам.
+   - Гра зберігає 50 ваших найновіших звітів (не більше приблизно 768 МБ);
+     старіші видаляються самі, тож надсилайте звіти невдовзі після сесії.
    - У кожній папці звіту є свій report.txt, частково заповнений грою
      (версія, час, тип "general", "wheel" або "crash"; у звіті з L2 вказано
      й ваше кермо). Дайте відповіді на чотири питання в ньому і збережіть.
@@ -162,15 +189,28 @@ MCLA-R - ТЕСТОВА ЗБІРКА - ІНСТРУКЦІЯ ДЛЯ ТЕСТЕР�
      гру і продовжте з останнього автосейву.
    - Кермо може втратити силу центрування: натисніть L2 на кермі саме тоді.
    - Деякі вивіски показують однотонні прямокутники або смуги; F10 вітається.
-   - Steam Deck: звук може тріщати, коли гра навантажена (наприклад, швидка
-     їзда містом). Над цим працюємо; повідомляйте, лише якщо стало гірше.
+   - Steam Deck: тріск звуку мав би бути виправлений (музика має бути
+     чистою); інші звуки ще можуть дуже рідко тріщати, коли навколо багато
+     машин. Повідомляйте про будь-який тріск понад це.
+   - Вбудована графіка AMD Radeon (наприклад Radeon 860M): текстури світу
+     можуть на мить спалахувати білим (імовірно, драйвер). Якщо побачите це
+     на іншій відеокарті, F10 вітається.
+   - Машини трафіку поруч з вами можуть трохи тремтіти, також при 30 FPS.
+     Схоже, це поведінка самої гри; повідомляти не треба.
+   - О 06:00 у грі, коли ніч змінюється днем, дерева можуть блимнути раз чи
+     двічі. Відомо; повідомляти не треба.
+   - Раз за довгу сесію через увесь екран може промайнути один чорний кадр.
+     Ми не впевнені, що це наш баг: якщо побачите, одразу натисніть F10.
    - Після гонки на екрані результатів авто можуть зникати. Це звичайна
      поведінка гри; повідомляти не треба.
    - Мало б бути виправлено, повідомте, якщо побачите: зіпсоване перше фото
      у Photo Mode; геймпад, що перестав працювати після відключення; на
      Steam Deck повідомлення "storage device removed" під час збереження
      (збереження двічі поспіль тепер працює); голос у катсцені, що звучить
-     подвоєно або глухо; прев'ю слота альбому без щойно зробленого фото.
+     подвоєно або глухо; прев'ю слота альбому без щойно зробленого фото;
+     мерехтіння будинків, парканів чи вивісок уночі; тонка горизонтальна
+     лінія зіпсованих пікселів через екран при 1080p; машини трафіку, що
+     стрибають назад-вперед, коли частота кадрів падає.
 
 5. ЯКЩО ЛАУНЧЕР ПИШЕ
    - "This test build was withdrawn": візьміть актуальну збірку у власника.
