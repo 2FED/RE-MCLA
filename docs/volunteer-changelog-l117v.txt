@@ -1,0 +1,103 @@
+MCLA-R test build l117v - what changed since l81v
+
+New in this build
+- PC: much higher frame rate at 1080p. The game now always uses its HD
+  rendering path and the host skips a lot of copying it did before. On our
+  test PC (RTX 5060, 1080p, Unlocked FPS) driving went from about 48 to
+  about 66-69 FPS. 1440p gets faster too.
+- PC: smoother frame pacing and less input lag. On NVIDIA cards NVIDIA
+  Reflex and on AMD cards AMD Anti-Lag 2 are switched on automatically
+  (nothing to set; on Intel graphics and on the Steam Deck the game runs as
+  before).
+- PC, Unlocked FPS: the night flicker of buildings, fences and signs is
+  fixed.
+- PC, 1080p: the thin horizontal line of broken pixels a little below the
+  middle of the screen (very visible on road markings) is gone.
+- Traffic cars no longer jump back and forth along their path when the
+  frame rate drops for a moment.
+- Steam Deck: the crackling sound is fixed. Music is clean; other sounds
+  can still crackle very rarely when many cars are around.
+- Launcher: when you copy or create a profile, the destination folder is
+  filled in for you (the folder that already holds your profiles).
+- Bug reports (F10): the game now keeps your newest 50 reports (about
+  768 MB at most) instead of 10; older ones are removed automatically.
+
+Still known
+- Integrated AMD Radeon graphics (for example Radeon 860M): world textures
+  can flash white for a moment. Probably a driver issue; F10 is welcome if
+  you see it on another card.
+- Traffic cars close to you can "tremble" slightly, also at 30 FPS. This
+  looks like the game's own behaviour; no need to report it.
+- Once or twice in a long session a single black frame may flash across
+  the screen. We are not sure it is ours; if you see it, press F10 at once.
+- At 06:00 in the game, when night turns into day, trees can blink once or
+  twice. Known; no need to report it.
+- Red Light Driver: after losing and choosing Race Back the camera can stay
+  in the air (restart and continue from the autosave).
+- Steam Deck stays around 15 FPS in the city; more work is coming.
+- Cars can disappear on the results screen after a race: that is normal.
+
+What to report
+- Anything that looks wrong: wrong or flickering textures, missing or
+  stretched objects, wrong colours or lighting, a white or black flash.
+  Press F10 at that moment and write what you saw in report.txt.
+- Sound problems (crackle, doubled or hollow voices), freezes, crashes.
+- On the PC: your graphics card, resolution and frame rate setting, and
+  whether the game felt smoother or rougher than l81v.
+
+Older builds (l81v and before) stop starting once they check online; please
+switch to l117v. Your saves are not affected.
+
+-------------------------------------------------------------------------------
+
+MCLA-R тестова збірка l117v - що змінилося від l81v
+
+Нове в цій збірці
+- ПК: значно вища частота кадрів при 1080p. Гра тепер завжди використовує
+  свій HD-шлях рендерингу, а хост пропускає багато копіювань, які робив
+  раніше. На нашому тестовому ПК (RTX 5060, 1080p, Unlocked FPS) під час
+  їзди було близько 48 FPS, тепер близько 66-69 FPS. 1440p теж швидша.
+- ПК: рівніші кадри і менша затримка керування. На відеокартах NVIDIA
+  автоматично вмикається NVIDIA Reflex, на відеокартах AMD - AMD Anti-Lag 2
+  (налаштовувати нічого не треба; на графіці Intel і на Steam Deck гра
+  працює як раніше).
+- ПК, Unlocked FPS: нічне мерехтіння будинків, парканів і вивісок
+  виправлено.
+- ПК, 1080p: тонкої горизонтальної лінії зіпсованих пікселів трохи нижче
+  середини екрана (дуже помітної на дорожній розмітці) більше немає.
+- Машини трафіку більше не стрибають назад-вперед по своєму шляху, коли
+  частота кадрів на мить падає.
+- Steam Deck: тріск звуку виправлено. Музика чиста; інші звуки ще можуть
+  дуже рідко тріщати, коли навколо багато машин.
+- Лаунчер: коли ви копіюєте або створюєте профіль, папку призначення вже
+  заповнено (папка, де вже лежать ваші профілі).
+- Звіти про баги (F10): гра тепер зберігає 50 ваших найновіших звітів
+  (не більше приблизно 768 МБ) замість 10; старіші видаляються самі.
+
+Ще відомо
+- Вбудована графіка AMD Radeon (наприклад Radeon 860M): текстури світу
+  можуть на мить спалахувати білим. Імовірно, це драйвер; якщо побачите це
+  на іншій відеокарті, F10 вітається.
+- Машини трафіку поруч з вами можуть трохи "тремтіти", також при 30 FPS.
+  Схоже, це поведінка самої гри; повідомляти не треба.
+- Раз чи двічі за довгу сесію через увесь екран може промайнути один
+  чорний кадр. Ми не впевнені, що це наш баг; якщо побачите, одразу
+  натисніть F10.
+- О 06:00 у грі, коли ніч змінюється днем, дерева можуть блимнути раз чи
+  двічі. Відомо; повідомляти не треба.
+- Red Light Driver: після програшу і Race Back камера може лишитися в
+  повітрі (перезапустіть і продовжте з автозбереження).
+- Steam Deck у місті тримає близько 15 FPS; робота триває.
+- Машини можуть зникати на екрані результатів після гонки: це нормально.
+
+Що повідомляти
+- Усе, що виглядає неправильно: неправильні чи мерехтливі текстури, зниклі
+  чи розтягнуті об'єкти, неправильні кольори чи освітлення, білий чи чорний
+  спалах. Натисніть F10 саме в цей момент і опишіть у report.txt, що
+  бачили.
+- Проблеми зі звуком (тріск, подвоєні чи глухі голоси), зависання, вильоти.
+- На ПК: вашу відеокарту, роздільність і налаштування частоти кадрів, і чи
+  гра здавалася плавнішою чи гіршою, ніж l81v.
+
+Старі збірки (l81v і раніші) перестануть запускатися після онлайн-перевірки;
+переходьте на l117v. Ваших збережень це не стосується.
