@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 180, "one hundred and eighty whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 182, "one hundred and eighty-two whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2807,7 +2807,7 @@ void TestWhitelist() {
         Check(pair.first != k.key && pair.second != k.key, "the l117 keys are in no pair");
       }
     }
-    Check(index == mcla::dev_overrides::kKeyCount, "the l117 keys are the last six");
+    Check(index == static_cast<size_t>(Key::kRtMemo2), "the l117 keys come before the l118 key");
     Check(!FindKey("cb_reuse_on") && !FindKey("CB_REUSE") && !FindKey("ib_view_cache") &&
               !FindKey("d3d12_cb_reuse") && !FindKey("tex_outdated_narrow") &&
               !FindKey("tex_narrow_verify_on") && !FindKey("ib_cache_off"),
@@ -2831,6 +2831,66 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l117 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l118 key: the second level of the render-target update memo, true to its
+    // SDK bool; =false writes nothing; no pair; its verify is rt_memo_verify.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &info = Info(Key::kRtMemo2);
+    Check(FindKey("rt_memo2") == Key::kRtMemo2 && info.phase == Phase::kGraphicsPlugin &&
+              CvarName(info) == "d3d12_rt_update_memo2" && CvarText(info, true) == "true" &&
+              CvarText(info, false).empty() && info.true_source == TextSource::kLiteral &&
+              !info.overrides_user,
+          "l118 key: phase, cvar and text; false writes nothing");
+    Check(static_cast<size_t>(Key::kRtMemo2) == static_cast<size_t>(Key::kTexNarrowVerify) + 1 &&
+              static_cast<size_t>(Key::kVbSkipValidateOff) == static_cast<size_t>(Key::kRtMemo2) + 1 &&
+              static_cast<size_t>(Key::kVbSkipValidateOff) + 1 == mcla::dev_overrides::kKeyCount,
+          "the two l118 keys follow the l117 keys and are the last");
+    const auto &vb = Info(Key::kVbSkipValidateOff);
+    Check(FindKey("vb_skip_validate_off") == Key::kVbSkipValidateOff &&
+              vb.phase == Phase::kGraphicsPlugin && CvarName(vb) == "d3d12_vb_skip_validate" &&
+              CvarText(vb, true) == "false" && CvarText(vb, false).empty() &&
+              vb.true_source == TextSource::kLiteral && !vb.overrides_user,
+          "l118 control: false to d3d12_vb_skip_validate; =false writes nothing");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kVbSkipValidateOff && pair.second != Key::kVbSkipValidateOff,
+            "the l118 control is in no pair");
+    }
+    Check(!FindKey("vb_skip_validate") && !FindKey("vb_skip_validate_on") &&
+              !FindKey("VB_SKIP_VALIDATE_OFF") && !FindKey("d3d12_vb_skip_validate") &&
+              !FindKey("vb_old"),
+          "no variants of the l118 control");
+    const Parsed vb_old = Parse("vb_skip_validate_off=true\r\n");
+    Check(vb_old.ValueCount() == 1 && vb_old.issue_count == 0 &&
+              vb_old.Value(Key::kVbSkipValidateOff) == true,
+          "the l118 pc/vb-old body parses (CRLF)");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kRtMemo2 && pair.second != Key::kRtMemo2,
+            "the l118 key is in no pair");
+    }
+    Check(!FindKey("rt_memo2_verify") && !FindKey("RT_MEMO2") && !FindKey("rt_memo_2") &&
+              !FindKey("d3d12_rt_update_memo2") && !FindKey("rt_memo2_on") &&
+              !FindKey("guest_single_tile") && !FindKey("gpu_edram_extended"),
+          "no variants of the l118 key; no single-tile key (l118 fell back)");
+    const Parsed verify =
+        Parse("rt_memo2=true\r\nrt_memo_verify=true\r\n");
+    Check(verify.ValueCount() == 2 && verify.issue_count == 0 &&
+              verify.Value(Key::kRtMemo2) == true,
+          "the l118 pc/rt-memo2-verify body parses (CRLF): no conflict with rt_memo_verify");
+    const Parsed on = Parse("rt_memo2=true\n");
+    Check(on.ValueCount() == 1 && on.issue_count == 0 && on.Value(Key::kRtMemo2) == true,
+          "the l118 pc/rt-memo2 body parses");
+    const Parsed with_off = Parse("rt_memo2=true\nrt_memo_off=true\n");
+    Check(with_off.ValueCount() == 2 && with_off.issue_count == 0,
+          "rt_memo2 and rt_memo_off write different cvars: no pair (memo2 implies the memo)");
+    const Parsed bad = Parse("rt_memo2=1\nrt_memo2=true\nrt_memo2=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l118 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3335,7 +3395,8 @@ void TestWhitelist() {
                           key == Key::kLeadGuardLatchSession || key == Key::kLeadGuardSkipOff ||
                           key == Key::kCbReuse || key == Key::kCbReuseVerify ||
                           key == Key::kIbCache || key == Key::kIbCacheVerify ||
-                          key == Key::kTexNarrow || key == Key::kTexNarrowVerify;
+                          key == Key::kTexNarrow || key == Key::kTexNarrowVerify ||
+                          key == Key::kRtMemo2 || key == Key::kVbSkipValidateOff;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -4120,7 +4181,7 @@ void TestWhitelist() {
     // plus the six l109 keys (164 keys); l110: plus the two l110 keys (166);
     // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171); l114: plus the l114 key
     // (172); l116: plus the two l116 keys (174); l117: plus the six l117 keys
-    // (180).
+    // (180); l118: plus the two l118 keys (182).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -4224,7 +4285,9 @@ void TestWhitelist() {
                                   "ib_cache=false\n"
                                   "ib_cache_verify=false\n"
                                   "tex_narrow=false\n"
-                                  "tex_narrow_verify=false\n";
+                                  "tex_narrow_verify=false\n"
+                                  "rt_memo2=false\n"
+                                  "vb_skip_validate_off=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4832,7 +4895,7 @@ void TestRejectedFiles() {
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
     // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys; l116: 174
-    // keys; l117: 180 keys).
+    // keys; l117: 180 keys; l118: 182 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

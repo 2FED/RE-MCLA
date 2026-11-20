@@ -578,6 +578,17 @@
 //   bindings of outdated textures). Six cvars, no pairs (a verify and its
 //   lever may both be on: the SDK runs the verify). An SDK without the l117
 //   cvars logs every one of them as unavailable.
+// - l118 (docs/evidence/M11-l118-owner-build-20261120.md; default off, =false
+//   writes nothing): rt_memo2 writes true to the SDK bool
+//   d3d12_rt_update_memo2 (the second level of the render-target update memo:
+//   only the bits the update reads are compared; implies d3d12_rt_update_memo;
+//   util/rt_memo2.h in the SDK). Its verify is the existing rt_memo_verify key
+//   (no separate key). No pair. vb_skip_validate_off writes false to the SDK
+//   bool d3d12_vb_skip_validate (default TRUE since the l118 SDK: a vertex
+//   fetch slot skips its shared-memory request only while the range is still
+//   valid; the control restores the old skips for an A/B against KI-082; =false
+//   writes nothing; no pair: no key writes true). An SDK without the l118
+//   cvars logs them as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -804,8 +815,10 @@ enum class Key : uint8_t {
   kIbCacheVerify,            // l117 SDK: d3d12_ib_view_cache_verify=true
   kTexNarrow,                // l117 SDK: d3d12_tex_outdated_narrow=true
   kTexNarrowVerify,          // l117 SDK: d3d12_tex_outdated_narrow_verify=true
+  kRtMemo2,                  // l118 SDK: d3d12_rt_update_memo2=true
+  kVbSkipValidateOff,        // l118 SDK: d3d12_vb_skip_validate=false
 };
-inline constexpr size_t kKeyCount = 180;
+inline constexpr size_t kKeyCount = 182;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1238,6 +1251,13 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"tex_narrow", Phase::kGraphicsPlugin, "d3d12_tex_outdated_narrow", "true", ""},
     {"tex_narrow_verify", Phase::kGraphicsPlugin, "d3d12_tex_outdated_narrow_verify", "true",
      ""},
+    // l118: the second level of the render-target update memo (graphics
+    // plugin, hot, latched by the SDK at the next frame); default off, =false
+    // writes nothing.
+    {"rt_memo2", Phase::kGraphicsPlugin, "d3d12_rt_update_memo2", "true", ""},
+    // l118: the old vertex-slot skips without the validity check (the SDK
+    // default is the fix); =true only, =false writes nothing.
+    {"vb_skip_validate_off", Phase::kGraphicsPlugin, "d3d12_vb_skip_validate", "false", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them
