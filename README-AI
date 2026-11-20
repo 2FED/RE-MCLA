@@ -2560,7 +2560,7 @@ At task/experiment boundaries also replace stale entries in `docs/current-state.
 ## 17c. Milestone M11 (plan approved by the owner 2026-11-06; ACTIVE) — Deck saves, owner diagnostics, Deck and video-memory performance round 3
 
 **Status: ACTIVE since 2026-11-06** (owner approval: "план влаштовує, можем робить"). The plan as approved
-is kept below unchanged; the ledger after it records what was done (to 2026-11-12). Plan file:
+is kept below unchanged; the ledger after it records what was done (to 2026-11-12; the owner builds, SDK lineage and checkpoint log run to 2026-11-20). Plan file:
 `docs/M11-priorities.md` (dated entries carry the details).
 
 ### Plan (2026-11-06, as approved)
@@ -2669,7 +2669,7 @@ no owner confirmation of the shipped default; Mitigated = defect avoided, root c
 ### Owner builds
 
 All are owner-internal (V1 tickets) except l81v. Testers were on l70 (`DebugBundle` `31c806d`) until
-2026-11-10; since then on l81v (`DebugBundle` `138b0ef`, allowance list l81v only). "manifest" = the first 8
+2026-11-10; since then on l81v (`DebugBundle` `138b0ef`, allowance list l81v only). Since 2026-11-20 the allowance list is l117v only (`DebugBundle` `c020638`). "manifest" = the first 8
 hex digits of `build_manifest_sha256` in `private/lNN-internal/candidate-receipt.json` (present = signed).
 
 | Build | Host (main) | SDK | Carried | Owner result |
@@ -2699,6 +2699,30 @@ hex digits of `build_manifest_sha256` in `private/lNN-internal/candidate-receipt
 | l92 | `3693e01` (incl. KI-026 `4bf0f32`) | `e6d6bd3` | Read watch, age inject, occlusion-query counters, present stats and sync interval, Locked tearing switch; KI-026 stall-fix arm (98 keys) | lead-strict run clean by day and night; stall-fix and present-stats not run (manifest 103B9D6F) |
 | l93 | `5584799` | `e6d6bd3` | Always-on `MCLA_TOD` log and F10 block; Arcade-only clock controls (103 keys) | Dawn A/B on a copy profile: flicker at 06:00 on default, none with strict; owner decision: strict default on (manifest 0F3E2F19) |
 | l94 | `98cea8b` | `e6d6bd3` | KI-074 strict frame lead default on via host m10 defaults (Windows and Wine), control `frame_lead_strict_off`; dawn hunt arms (104 keys) | MAIN regression ~30 min clean (KI-078 one white flash, probably external); dawn hunt: tree blink = KI-079, independent of our settings; Deck, stall-fix, present-stats and dawn-off-fenced arms pending (manifest D82D1F3C) |
+| l95 | `f6cd281` | `f9f5178` | Low-latency sleep hook (NVIDIA Reflex / AMD Anti-Lag 2, default off; MIT vendor headers), FMA start-up benchmark key, brightness fields in `MCLA_TOD` and F10 (110 keys) | Not signed (no receipt); superseded by l96 (superset) |
+| l96 | `5360af5` | `ccac775` | Deck CP packet census, clock cost line, lever-1 switches (fence poll interval, draw-packet TSC, IM_LOAD memo with verify), all default off (114 keys) | PC: Reflex works; Reflex without strict: latency 36 -> 12.6 ms, +1.9 fps, no flicker. Deck: KI-060 fixed by the native filters (music perfect, about 1 % crackle at peak voices); lever 1 -2.7 ms/frame; IM_LOAD memo unsafe (131 mismatches); strict-off feels worse (manifest 277DB5EB) |
+| l97 | `584759b` | `6c5792d` | Reflex replaces the strict bound (same-frame fallback, lead-2 guard), default off; pc/auto arms (116 keys) | Not signed (no receipt); superseded by l98 |
+| l98 | `a1005c0` | `6c5792d` | Defaults on: KI-060 native audio filters, draw-packet TSC, fence poll interval 64; audio-off and lever1-off controls (119 keys) | PC pc/auto soak 44 min without artefacts, but the Reflex guard tripped after 5 min (strict for 90 % of the run); dawn-auto x10 clean; KI-080 catalogued; Deck default not reported (manifest B70FD8FE) |
+| l99 | `4ab1ee2` | `d3d7b6c` | `MCLA_HITCH` per-hitch attribution, texture churn fix (off), VRAM census, Reflex guard actions incl. observe-only (124 keys) | Not signed (no receipt); superseded by l100 (superset) |
+| l100 | `c12b85c` | `1e81149` | Deck register-write skip (off, with verify), constants-only draw verify, guest spin census and backoff (128 keys) | PC drops diagnosed: sustained CP-bound dips by draw count (6-8.7 k draws); Reflex-only +3.5 fps at about 7.2 k draws; auto-noguard soak clean (third clean Reflex-without-strict run); cp-reg verifier mismatches (later shown harmless) (manifest n/r) |
+| l101 | `3925194` | `a49e511` | Texture memo v2 and RT Update memo (off, with verify), cp-reg verifier split, `MCLA_DIP` (131 keys) | Not signed (no receipt); superseded by l102 / l103 |
+| l102 | `1906c33` | `a49e511` | F10 retention: unlimited in internal builds (2 GiB free-space floor), 50 packages / 768 MiB in volunteer builds (131 keys) | No owner run recorded; superseded by l103 (manifest n/r) |
+| l103 | `59c6c22` | `a49e511` | AMD Anti-Lag 2 guard and auto selection keys, `amd/*` arms (133 keys) | Radeon 860M: Anti-Lag 2 accepted, A-B-A positive by feel, fps unchanged, KI-081 filed; RTX 5060 verify-all 0 mismatches (25 M checks), fast2 CP per draw -8.4 %, frame GPU-bound; 720p vs 1080p GPU 9.0 vs 17.8 ms (manifest 082EBEA1) |
+| l104 | `095d77a` | `a49e511` | Owner-decided defaults: texture memo v2, RT Update memo, register-write skip; low latency auto (Reflex on NVIDIA replacing strict, with guard; Anti-Lag 2 on AMD with strict kept) (139 keys, 17 defaults) | Not signed (no receipt); superseded by l105 / l106 (same defaults) |
+| l105 | `79c12c8` | `13ef300` | `MCLA_GPU_CAT` GPU time by category, `MCLA_GPU_SURF` tiling audit, `MCLA_OUTPUT` / `MCLA_GPUCAPS`, presenter FXAA / CAS / FSR1 arms, aniso and upload-ahead arms (146 keys) | Not signed (no receipt); superseded by l106 |
+| l106 | `107a114` | `13ef300` (DLLs as l105; branch head `6a4b82e` not installed) | Guest MSAA-off arm (`guest_msaa_off`), 8 KiB override limit (147 keys) | Defaults proof clean (Reflex auto ok, memo hits 95.8 %); GPU 18.5 ms = scene 7.5 + transfers 5.65 + resolves 2.3 + loads/uploads/read-back 3; `guest_msaa_off` ineffective; KI-082 and KI-083 filed (manifest 6387BC1B) |
+| l107 | `29c02f9` | `cb92be8` | Root cause found (SD path at guest 960x540): `force_hidef`, guest scene MSAA arms at the tiled-rendering begin, seam and uniform-stencil keys, transfer census, traffic motion probe (156 keys) | `force_hidef`: one tile, draws and CP halved, KI-083 seam gone, GPU unchanged (transfers grew to 8.5 ms); uniform-stencil skip finds nothing; traffic probe hooked the wrong function (manifest F0378B8D) |
+| l108 | `4b74ee1` | `5e65c7a` | Ownership-transfer elision before a proven full overwrite, with verify; F10 capture retry (158 keys) | elide-verify: 37,794 proofs ok, 0 bad; yield small (colour plane only); KI-082 measured from the owner clip as frame pacing (manifest n/r) |
+| l109 | `92964b5` | `4a29e93` | Transfer refusal and trigger diagnostics, exact sample coverage, lazy-stencil count, `collector_2x`, fps caps 30/40/60 (164 keys) | Exact coverage: 19 rectangles per frame, 0 bad of 100,738; elision on: transfers 8.15 -> 7.11 ms; lazy stencil dead; KI-082 also at 30 and 40 fps (deferred) (manifest n/r) |
+| l110 | `2b7bdc3` | `c403f35` | Rectangle draw-extent bound for ownership transfers, with verify (166 keys) | Verify 103,904 ok, 0 bad; bound on: transfers 8.15 -> 2.32 ms, GPU 17.3 -> 11.2 ms, 66-69 against 48 fps; `collector_2x` ineffective; owner: make it a default (manifest 6C91CCA8) |
+| l111 | `650cb89` | `c403f35` | Defaults: forced HiDef (all platforms), transfer elision and draw-extent bound (Windows only) (169 keys, 20 defaults) | MAIN 1 h: play-only 71.4 fps, worst play second 51.4; REGRESSION KI-084 (minimap white square) isolated to the bound; Radeon 860M verify-gpu clean (manifest 48E59690) |
+| l112 | `6940515` | `3173c2e` | Bound off by default (KI-084); below-bound read audit (169 keys) | Race on clear: no flicker; extent-verify2: resolve reads below the bound 44-54 per minute = KI-084 mechanism; KI-085 first crash (TDR) in that verify arm (manifest n/r) |
+| l113 | `7208e7d` | `9595fc4` | Exact deferred claims, resolve audit table, verify query budget, `verify_every4` (171 keys) | Not signed (no receipt); superseded by l114 (the exact rule gives back the gain) |
+| l114 | `1ffdc91` | `389d3bd` | Resolve-only deferred-claim mode (SDK default), exact mode kept; bound still off (172 keys) | pc/extent-new in races: no minimap flicker, 46-907 claims per minute completed before resolves, GPU at the l111 level: KI-084 fix verified once (manifest 65CD02AB) |
+| l115 | `3228204` | `389d3bd` | Draw-extent bound back on by default on Windows (172 keys) | 92-min MAIN session: play-only 67 fps, nine races, minimap intact; KI-086 and KI-087 filed (manifest 5BFD7346) |
+| l116 | `6c39a1b` | `d889a16` | KI-087 guard fix (skips paused / unfocused / outlier frames, cool-down re-arm; focus and pause published to the SDK), `MCLA_THIN` / `MCLA_BLACK` probes (174 keys) | Alt-tab test: `guard_skip` lines, 0 trips, fps returns (KI-087 fix verified once); gpu-cat day/night: GPU 12.5-12.9 ms, daylight dips CP-bound (manifest DA88D447) |
+| l117 | `2ef5dc3` | `e6eeeb9` | CP levers `cb_reuse`, `ib_cache`, `tex_narrow` with verify, default off (180 keys) | cp-verify2: L1 0 mismatches but small (fetch part 0.03 %), L2 2.4 % negligible, L3 UNSAFE (140,535 mismatches: never enable); fast arms not run; PC performance work paused; Deck run pending (manifest 285BA6FC) |
+| l117v | `ecfc182` | `d889a16` (`v0.20.0.12`, FidelityFX presenter shaders off) | Volunteer build (V2 ticket, dev-override reader compiled out, F10 50 / 768 MiB, third-party notices in the tester guide) | Signed 2026-11-20; `DebugBundle` `c020638`, allowance list = l117v only (l81v withdrawn); owner pre-share check at 1440p, 39 min incl. pursuits: clean, 53.2 fps; re-staged with the updated guide; Deck not run (manifest 8BCFDD65) |
 
 ### SDK lineage (`2FED/rexglue-sdk`)
 
@@ -2730,6 +2754,27 @@ One linear chain from `v0.20.0.8`; the host submodule pin is still `c63895c` (ch
   watch, age inject, occlusion-query counters, present stats, Locked tearing switch, all off; 2230+4).
   The l94 strict default is written by the host m10 defaults; the SDK default stays 0.
 - The next publication after `v0.20.0.11` needs the owner's approval (2026-11-12 status).
+- Local branches since 2026-11-12 (`mcla/m11-l95` .. `mcla/m11-l117` in `private/l39-sdk-src`, one linear
+  first-parent chain on `e6d6bd3`; ctest counts as passed + 4 skipped): `f9f5178` (l95: Reflex / Anti-Lag 2
+  low-latency layer, off; 2237+4) -> `ccac775` (l96: Deck CP packet census, clock line, lever-1 switches,
+  off; 2253+4) -> `6c5792d` (l97: Reflex replaces strict with fallback and lead-2 guard, off; 2266+4) ->
+  `d3d7b6c` (l99: `MCLA_HITCH`, churn fix off, VRAM census, guard actions; 2284+4) -> `1e81149` (l100:
+  register-write skip off, constants-only draw verify; 2294+4) -> `a49e511` (l101: texture memo v2, RT
+  Update memo, verifier split, `MCLA_DIP`; 2313+4) -> `13ef300` (l105: GPU category timing, tiling audit,
+  FFX presenter option; 2323+4) -> `6a4b82e` (l106: Manifest test race fix only, not installed) ->
+  `87076c8` / `cb92be8` (l107: forced HiDef switch, transfer census, uniform stencil, seam switch; 2334+4)
+  -> `5e65c7a` (l108: transfer elision with verify; 2341+4) -> `4a29e93` (l109: refusal and trigger
+  diagnostics, exact coverage, lazy-stencil count; 2351+4) -> `c403f35` (l110: rectangle draw-extent bound
+  with verify; 2358+4) -> `3173c2e` (l112: below-bound read audit; 2362+4) -> `9595fc4` (l113: deferred
+  claims, resolve audit, verify query budget; 2372+4) -> `389d3bd` (l114: resolve-only deferred mode;
+  2376+4) -> `d889a16` (l116: lead-2 guard skips and cool-down, thin and black frame probes; 2394+4) ->
+  `e6eeeb9` (l117: `cb_reuse`, `ib_cache`, `tex_narrow` with verify, off; 2404+4). l98, l102-l104, l111
+  and l115 reuse the previous SDK unchanged. Every lever stays default off in the SDK; the host m10
+  defaults write the MCLA-R defaults.
+- Published 2026-11-20 on the owner's word: `d889a16` = **`v0.20.0.12`** on `mcla/mcla-r-hotfixes`
+  (fast-forward from `2aff82e` = `v0.20.0.11` over 22 commits, 0 merges; annotated tag object `3cd0ad0`;
+  source of the l117v SDK DLLs, built with the FidelityFX presenter shaders off). `e6eeeb9` (l117)
+  descends from `d889a16` and stays local. Host submodule pin still `c63895c` (checked 2026-11-20).
 
 ### Checkpoint log
 
@@ -2759,3 +2804,44 @@ One linear chain from `v0.20.0.8`; the host submodule pin is still `c63895c` (ch
   settings) and the read-back freshness theory is withdrawn. origin/main `0d4ca1e`. In progress
   overnight (results not known): l95 low-latency build, Deck CP analysis, KI-077 research. Pending owner:
   Deck strict-off and audio arms, KI-026 stall-fix, KI-076 present-stats. Health: `GREEN`.
+- 2026-11-13 — l95 (Reflex / Anti-Lag 2 layer, default off) superseded by l96. l96 PC: Reflex without
+  strict cuts latency 36 -> 12.6 ms (+1.9 fps, no flicker); l96 Deck: KI-060 fixed by the native filters,
+  lever 1 -2.7 ms/frame, IM_LOAD memo unsafe. l97 Reflex-replaces-strict arms; l98 defaults: native audio
+  filters, draw-packet TSC, fence poll interval 64. l98 pc/auto soak: the guard tripped (strict 90 %), so
+  strict stayed the default. Owner priority: hard frame drops on the PC; l99 `MCLA_HITCH`. Health: `GREEN`.
+- 2026-11-14 — l100: the PC drops are sustained CP-bound dips by draw count, not hitches; auto-noguard
+  soak = third clean Reflex-without-strict run. l101 per-draw levers (off, with verify); l102 F10
+  retention (unlimited internal, 50 / 768 MiB volunteer); l103 AMD Anti-Lag 2 guard and auto keys. Test
+  Temp leaks fixed. Process rule tightened: no agent file work while the owner plays. Health: `GREEN`.
+- 2026-11-15 — l103: Radeon 860M Anti-Lag 2 A-B-A positive (KI-081 filed); RTX 5060 verify-all clean,
+  fast2 CP per draw -8.4 %, frame GPU-bound. Owner decisions: the three per-draw levers default on;
+  Reflex default on NVIDIA (replacing strict while its sleep is fresh, with guard) and Anti-Lag 2 on AMD
+  with strict kept (l104, host `095d77a`). GPU research: the 1080p target is per-pixel bound (720p 9.0
+  against 1080p 17.8 ms GPU). l105 GPU category timing; l106 guest MSAA-off arm. Health: `GREEN`.
+- 2026-11-17 — l106 GPU split (18.5 ms, transfers 5.65); KI-082 and KI-083 filed; `guest_msaa_off`
+  ineffective. ROOT CAUSE of the 1080p GPU cost (own RE): the 1080p target is guest 960x540 and the SDK
+  reported HiDef only from 1280x720, so the game ran its SD path (scene forced to 4x MSAA in two tiles;
+  KI-083 seam). l107 `force_hidef`: one tile, draws and CP halved, seam gone, GPU unchanged (transfers
+  8.5 ms). l108 transfer elision (proofs sound, small yield); l109 exact coverage and trigger
+  diagnostics. private/ tidied (rounds 6-7). Health: `GREEN`.
+- 2026-11-18 — l109: the expensive depth/stencil transfers are triggered by clear rectangles that claim
+  the whole EDRAM extent. l110 rectangle draw-extent bound: transfers 8.15 -> 2.32 ms, GPU 17.3 -> 11.2
+  ms, 66-69 against 48 fps. Owner decision: forced HiDef, transfer elision and the bound as defaults
+  (l111, host `650cb89`; elision and bound Windows only). l111 pure defaults on MAIN 61-76 fps; Radeon
+  860M verify-gpu clean. KI-082 deferred (present at a true 30 fps). Health: `GREEN`.
+- 2026-11-19 — l111 one-hour MAIN session 71.4 fps play-only, but REGRESSION KI-084 (minimap white
+  square) isolated by the owner to the bound; l112 bound off by default with a below-bound audit:
+  intermittent resolve reads below the bound are the mechanism; KI-085 first crash (TDR in a heavy verify
+  arm, unexplained; heavy verify arms banned in races). l113 exact deferred claims (gives back the gain)
+  superseded by l114 resolve-only claims: no flicker in races, GPU at the l111 level; l115 bound default
+  on again: 92-min MAIN session 67 fps, minimap intact; KI-086 and KI-087 filed. l116 KI-087 guard fix
+  (skips paused / unfocused / outlier frames, cool-down re-arm), verified once by the alt-tab test;
+  gpu-cat day/night: daylight dips are CP-bound by draw count. l117 CP levers staged. Health: `GREEN`.
+- 2026-11-20 — l117 cp-verify2: the CP levers are unusable (L1 safe but small, L2 negligible, L3
+  `tex_narrow` UNSAFE: never enable). Owner: PC performance work pauses at l117; Deck and the volunteer
+  build next. Volunteer l117v (host `ecfc182` + SDK `d889a16`, FFX off) signed by the owner; allowance
+  list on `DebugBundle` `c020638` (l117v only, l81v withdrawn); owner pre-share check at 1440p incl.
+  pursuits clean (53.2 fps; the two-tile scene at guest 1280x720 is the next lever for the Deck and the
+  1280x720 targets); package re-staged with the updated guide; SDK `v0.20.0.12` = `d889a16` published on
+  the owner's word. origin/main `6c7b6c1`. Pending owner: Deck runs of l117 and l117v, AMD discrete,
+  hybrid-GPU laptops. Health: `GREEN`.
