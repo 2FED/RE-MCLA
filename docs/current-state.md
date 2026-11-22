@@ -12,7 +12,7 @@ volunteer builds use private SDK worktrees and installs (`private/l39-sdk-src` a
 
 Owner decision 2026-11-20: **PC performance work pauses at l117**; next are the Steam Deck and the
 volunteer build. Active: (1) l117v is published and may be sent to testers; (2) Steam Deck run of the
-signed l117 (`private/l117-DECK-CHECKLIST.txt`), not run yet; (3) owner checks of l117v in the coming
+signed l117 (`private/l120-DECK-CHECKLIST.txt (the l117 one is archived under private/_archive/misc)`), not run yet; (3) owner checks of l117v in the coming
 days (Deck, other hardware).
 
 ## 2. What is published
@@ -100,7 +100,7 @@ lead, bulk register writes, hot pages v2.
 
 No engineering blocker. **Owner:**
 1. Send the l117v package to testers when ready (owner 2026-11-20: it may be sent; not recorded as sent).
-2. Steam Deck on l117 per `private/l117-DECK-CHECKLIST.txt`: Run 1 deck/default, Run 2 deck/gpu-new
+2. Steam Deck on l117 per `private/l120-DECK-CHECKLIST.txt (the l117 one is archived under private/_archive/misc)`: Run 1 deck/default, Run 2 deck/gpu-new
    (elision + extent under Wine), optional Run 3 deck/levers-off. verify-gpu only in free roam.
 3. Deck run of l117v; optional AMD discrete (RX 6800 XT) and a hybrid-GPU laptop run.
 4. Open decisions: unbind F4/console for direct starts in volunteer builds (proposal in
@@ -153,3 +153,4 @@ stencil transfers 1.3 ms, texture loads 1.0 ms; (3) CP: shared-memory uploads + 
 - Deck ran signed l119 (archive D:	9, copy private/owner-deck-20261122): defaults fine; scene-1x = one tile, 16 -> 18.5-20.8 fps, CP 55.5 -> 41.9 ms, fences flicker (KI-089), first-use freezes; gpu-new no fps change; KI-088 LIVE (0.18-0.32 stale skips per frame prevented, slot 95); guest-memory protection costs 16-20 us per call under Wine (8.1 ms CP + 6.5 ms render thread per frame).
 - Current staged owner build: **l120** (unsigned; SDK c9c579c local): l119 + `shm_hot` compare-before-copy (off; verify first). Owner next on the Deck: `private/l120-DECK-CHECKLIST.txt` Run 1 deck/shm-hot-verify (need cmp_diff_valid=0), Run 2 deck/shm-hot, Run 3 deck/shm-hot-scene-1x. PC: `private/l120-CHECKLIST.txt` (pc/shm-hot-verify doubles as the owed census run; KI-082 A/B clear against pc/vb-old).
 - Volunteer hotfix l120v staged unsigned (KI-088 fix only on the published SDK; 7-day overlap list); owner: not urgent; publish only on the owner's word. l117v is with the testers.
+- 2026-11-22 later: PC l120: shm-hot verify and ON clean (neutral on the PC); KI-082 A/B: the KI-088 fix does not change the traffic tremble (KI-082 = traffic body pose, deferred). Storage round 8: l103, l106-l118 archived, build trees and old SDK worktrees deleted, C: 41 -> 57 GiB free; private root now holds l119, l120, l117v, l120v. Deck runs on l120 are the next owner step.
