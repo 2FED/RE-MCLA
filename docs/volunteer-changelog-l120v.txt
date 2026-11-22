@@ -1,0 +1,43 @@
+MCLA-R test build l120v - what changed since l117v
+
+l120v is a small fix-only update of l117v.
+
+Fixed
+- Some geometry could be drawn for a frame with outdated data, which could
+  look like a brief jump or a wrong shape of an object. The game now always
+  uses the current data.
+
+Nothing else changed: the frame rate, the settings, the sound and the known
+issues listed for l117v are the same.
+
+What to report
+- The same as for l117v: anything that looks wrong (press F10 at that
+  moment and write what you saw in report.txt), sound problems, freezes,
+  crashes.
+
+l117v keeps starting for about 7 more days after l120v is out, so you can
+switch when it suits you; after that only l120v starts. Your saves are not
+affected.
+
+-------------------------------------------------------------------------------
+
+MCLA-R тестова збірка l120v - що змінилося від l117v
+
+l120v - невелике оновлення l117v, лише з виправленням.
+
+Виправлено
+- Частина геометрії могла на один кадр малюватися із застарілими даними;
+  це могло виглядати як короткий стрибок чи неправильна форма об'єкта.
+  Тепер гра завжди бере поточні дані.
+
+Більше нічого не змінилося: частота кадрів, налаштування, звук і відомі
+проблеми, перелічені для l117v, ті самі.
+
+Що повідомляти
+- Те саме, що й для l117v: усе, що виглядає неправильно (натисніть F10
+  саме в цей момент і опишіть у report.txt, що бачили), проблеми зі
+  звуком, зависання, вильоти.
+
+l117v ще приблизно 7 днів після виходу l120v запускатиметься, тож можна
+перейти, коли зручно; після цього запускатиметься лише l120v. Ваших
+збережень це не стосується.

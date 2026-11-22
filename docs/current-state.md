@@ -147,3 +147,9 @@ stencil transfers 1.3 ms, texture loads 1.0 ms; (3) CP: shared-memory uploads + 
 - Findings filed: KI-088 (stale vertex data possible; in the published SDK and l117v; not yet observed), shared-memory study, predicated-tiling RE, one-tile 2x scene not feasible without Canary's extended EDRAM and shader sources.
 - Owner next (in order): Deck on l119 per `private/l119-DECK-CHECKLIST.txt` (deck/default, then deck/scene-1x: the main new run, then deck/gpu-new); PC `pc/shm-census` 10 minutes daylight incl. a race at 1080p then 5 minutes at 1440p; read `MCLA_VB vb_*_skip_invalid`: non-zero means KI-088 is live and a volunteer update should follow; KI-082 A/B clear against pc/vb-old next to moving traffic.
 - Agent next after those runs: build (a2)/(e1) if the census supports them; extent estimator only if 2x MSAA must be kept at 1280x720; upstream SDK report for KI-088 only with the owner's consent.
+
+## Addendum 2026-11-22
+
+- Deck ran signed l119 (archive D:	9, copy private/owner-deck-20261122): defaults fine; scene-1x = one tile, 16 -> 18.5-20.8 fps, CP 55.5 -> 41.9 ms, fences flicker (KI-089), first-use freezes; gpu-new no fps change; KI-088 LIVE (0.18-0.32 stale skips per frame prevented, slot 95); guest-memory protection costs 16-20 us per call under Wine (8.1 ms CP + 6.5 ms render thread per frame).
+- Current staged owner build: **l120** (unsigned; SDK c9c579c local): l119 + `shm_hot` compare-before-copy (off; verify first). Owner next on the Deck: `private/l120-DECK-CHECKLIST.txt` Run 1 deck/shm-hot-verify (need cmp_diff_valid=0), Run 2 deck/shm-hot, Run 3 deck/shm-hot-scene-1x. PC: `private/l120-CHECKLIST.txt` (pc/shm-hot-verify doubles as the owed census run; KI-082 A/B clear against pc/vb-old).
+- Volunteer hotfix l120v staged unsigned (KI-088 fix only on the published SDK; 7-day overlap list); owner: not urgent; publish only on the owner's word. l117v is with the testers.

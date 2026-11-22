@@ -601,6 +601,17 @@
 //   restores the old behaviour for an A/B). No pairs (different cvars; no key
 //   writes the opposite value). An SDK without the l119 cvars logs them as
 //   unavailable.
+// - l120 (docs/evidence/M11-l120-owner-build-20261122.md; graphics plugin,
+//   rexgpu cvars; =false writes nothing): shm_hot writes true to the SDK bool
+//   shared_memory_hot_compare (default off: the (a2) compare-before-copy for
+//   hot shared-memory pages; pages the CPU rewrites in 6 of 8 frames are no
+//   longer write-protected, each request compares the requested bytes with a
+//   shadow and copies only on a difference; hot, latched at the next frame
+//   end). shm_hot_verify writes true to the SDK bool
+//   shared_memory_hot_compare_verify (default off: the old path stays in force,
+//   classification, shadows and compares run in parallel and are checked
+//   against the protection; the SDK lets verify win when both are true, so
+//   there is no pair). An SDK without the l120 cvars logs them as unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -831,8 +842,10 @@ enum class Key : uint8_t {
   kVbSkipValidateOff,        // l118 SDK: d3d12_vb_skip_validate=false
   kShmCensus,                // l119 SDK: mcla_shm_census=true
   kInvalUnwatchedOff,        // l119 SDK: memory_invalidate_unwatched=false
+  kShmHot,                   // l120 SDK: shared_memory_hot_compare=true
+  kShmHotVerify,             // l120 SDK: shared_memory_hot_compare_verify=true
 };
-inline constexpr size_t kKeyCount = 184;
+inline constexpr size_t kKeyCount = 186;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1278,6 +1291,11 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     // l119: the unwatched invalidation of the Canary aed81ca9 port off (the
     // SDK default is on); =true only, =false writes nothing.
     {"inval_unwatched_off", Phase::kStartup, "memory_invalidate_unwatched", "false", ""},
+    // l120: the (a2) compare-before-copy for hot pages (rexgpu, hot, latched
+    // at the next frame end); =true only, =false writes nothing.
+    {"shm_hot", Phase::kGraphicsPlugin, "shared_memory_hot_compare", "true", ""},
+    // l120: its verify (wins over shm_hot in the SDK); =true only.
+    {"shm_hot_verify", Phase::kGraphicsPlugin, "shared_memory_hot_compare_verify", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them

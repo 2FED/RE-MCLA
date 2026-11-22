@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 184, "one hundred and eighty-four whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 186, "one hundred and eighty-six whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2912,8 +2912,8 @@ void TestWhitelist() {
               inval.true_source == TextSource::kLiteral && !inval.overrides_user,
           "l119 control: inval_unwatched_off writes false to memory_invalidate_unwatched");
     Check(static_cast<size_t>(Key::kInvalUnwatchedOff) == static_cast<size_t>(Key::kShmCensus) + 1 &&
-              static_cast<size_t>(Key::kInvalUnwatchedOff) + 1 == mcla::dev_overrides::kKeyCount,
-          "the two l119 keys follow the l118 keys and are the last");
+              static_cast<size_t>(Key::kShmHot) == static_cast<size_t>(Key::kInvalUnwatchedOff) + 1,
+          "the two l119 keys follow the l118 keys and come before the l120 keys");
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
       Check(pair.first != Key::kShmCensus && pair.second != Key::kShmCensus &&
                 pair.first != Key::kInvalUnwatchedOff && pair.second != Key::kInvalUnwatchedOff,
@@ -2941,6 +2941,57 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l119 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l120 keys: the (a2) hot-page compare and its verify (graphics plugin,
+    // rexgpu cvars); =false writes nothing; no pair (the SDK lets verify win).
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &hot = Info(Key::kShmHot);
+    Check(FindKey("shm_hot") == Key::kShmHot && hot.phase == Phase::kGraphicsPlugin &&
+              CvarName(hot) == "shared_memory_hot_compare" && CvarText(hot, true) == "true" &&
+              CvarText(hot, false).empty() && hot.true_source == TextSource::kLiteral &&
+              !hot.overrides_user,
+          "l120 key: shm_hot writes true to shared_memory_hot_compare; false writes nothing");
+    const auto &verify = Info(Key::kShmHotVerify);
+    Check(FindKey("shm_hot_verify") == Key::kShmHotVerify &&
+              verify.phase == Phase::kGraphicsPlugin &&
+              CvarName(verify) == "shared_memory_hot_compare_verify" &&
+              CvarText(verify, true) == "true" && CvarText(verify, false).empty() &&
+              verify.true_source == TextSource::kLiteral && !verify.overrides_user,
+          "l120 key: shm_hot_verify writes true to shared_memory_hot_compare_verify");
+    Check(static_cast<size_t>(Key::kShmHotVerify) == static_cast<size_t>(Key::kShmHot) + 1 &&
+              static_cast<size_t>(Key::kShmHotVerify) + 1 == mcla::dev_overrides::kKeyCount,
+          "the two l120 keys follow the l119 keys and are the last");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kShmHot && pair.second != Key::kShmHot &&
+                pair.first != Key::kShmHotVerify && pair.second != Key::kShmHotVerify,
+            "the l120 keys are in no pair");
+    }
+    Check(!FindKey("shm_hot_off") && !FindKey("SHM_HOT") && !FindKey("shm_hot_on") &&
+              !FindKey("shared_memory_hot_compare") && !FindKey("hot_compare") &&
+              !FindKey("hot_compare_verify") && !FindKey("shm_hot_k") &&
+              !FindKey("shm_hot_max_mb"),
+          "no variants of the l120 keys; no key for the k / exit / budget tunables");
+    const Parsed verify_arm = Parse("shm_hot_verify=true\r\nshm_census=true\r\n");
+    Check(verify_arm.ValueCount() == 2 && verify_arm.issue_count == 0 &&
+              verify_arm.Value(Key::kShmHotVerify) == true &&
+              verify_arm.Value(Key::kShmCensus) == true,
+          "the l120 shm-hot-verify body parses (CRLF): no conflict with the census");
+    const Parsed on_arm = Parse("shm_hot=true\n");
+    Check(on_arm.ValueCount() == 1 && on_arm.issue_count == 0 &&
+              on_arm.Value(Key::kShmHot) == true,
+          "the l120 shm-hot body parses");
+    const Parsed both = Parse("shm_hot=true\nshm_hot_verify=true\nguest_msaa_scene_1x=true\n");
+    Check(both.ValueCount() == 3 && both.issue_count == 0,
+          "shm_hot and shm_hot_verify write different cvars: no pair (verify wins in the SDK)");
+    const Parsed bad = Parse("shm_hot=1\nshm_hot=true\nshm_hot=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l120 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3447,7 +3498,8 @@ void TestWhitelist() {
                           key == Key::kIbCache || key == Key::kIbCacheVerify ||
                           key == Key::kTexNarrow || key == Key::kTexNarrowVerify ||
                           key == Key::kRtMemo2 || key == Key::kVbSkipValidateOff ||
-                          key == Key::kShmCensus || key == Key::kInvalUnwatchedOff;
+                          key == Key::kShmCensus || key == Key::kInvalUnwatchedOff ||
+                          key == Key::kShmHot || key == Key::kShmHotVerify;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -4233,7 +4285,7 @@ void TestWhitelist() {
     // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171); l114: plus the l114 key
     // (172); l116: plus the two l116 keys (174); l117: plus the six l117 keys
     // (180); l118: plus the two l118 keys (182); l119: plus the two l119 keys
-    // (184).
+    // (184); l120: plus the two l120 keys (186).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -4341,7 +4393,9 @@ void TestWhitelist() {
                                   "rt_memo2=false\n"
                                   "vb_skip_validate_off=false\n"
                                   "shm_census=false\n"
-                                  "inval_unwatched_off=false\n";
+                                  "inval_unwatched_off=false\n"
+                                  "shm_hot=false\n"
+                                  "shm_hot_verify=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -4949,7 +5003,7 @@ void TestRejectedFiles() {
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
     // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys; l116: 174
-    // keys; l117: 180 keys; l118: 182 keys; l119: 184 keys).
+    // keys; l117: 180 keys; l118: 182 keys; l119: 184 keys; l120: 186 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";
