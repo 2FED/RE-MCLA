@@ -612,6 +612,14 @@
 //   classification, shadows and compares run in parallel and are checked
 //   against the protection; the SDK lets verify win when both are true, so
 //   there is no pair). An SDK without the l120 cvars logs them as unavailable.
+// - l121 (docs/evidence/M11-l121-owner-build-20261122.md; graphics plugin,
+//   rexgpu cvar; =false writes nothing): shm_hot_span writes true to the SDK
+//   bool shared_memory_hot_compare_span (default off: the l121 lever compares
+//   the whole hot page and treats a difference as the write fault it
+//   replaces; true restores the l120 span-only compare, only for reproducing
+//   KI-090 in an A/B; it changes nothing unless shm_hot or shm_hot_verify is
+//   on). No pair (its own cvar). An SDK without the l121 cvar logs it as
+//   unavailable.
 // - Conflict rule (all groups): every key of a true-true kConflictPairs pair
 //   (evaluated on the file as read, so a group of three is resolved as a
 //   whole) loses its value; one kConflict issue is logged for each of those
@@ -844,8 +852,9 @@ enum class Key : uint8_t {
   kInvalUnwatchedOff,        // l119 SDK: memory_invalidate_unwatched=false
   kShmHot,                   // l120 SDK: shared_memory_hot_compare=true
   kShmHotVerify,             // l120 SDK: shared_memory_hot_compare_verify=true
+  kShmHotSpan,               // l121 SDK: shared_memory_hot_compare_span=true
 };
-inline constexpr size_t kKeyCount = 186;
+inline constexpr size_t kKeyCount = 187;
 
 // When the cvar can be written: host init-only cvars before the guest starts,
 // graphics-plugin cvars once the plugin has registered them. Launcher keys are
@@ -1296,6 +1305,9 @@ inline constexpr std::array<KeyInfo, kKeyCount> kKeys = {{
     {"shm_hot", Phase::kGraphicsPlugin, "shared_memory_hot_compare", "true", ""},
     // l120: its verify (wins over shm_hot in the SDK); =true only.
     {"shm_hot_verify", Phase::kGraphicsPlugin, "shared_memory_hot_compare_verify", "true", ""},
+    // l121: the l120 span-only compare of the hot-page lever (KI-090 A/B
+    // only; rexgpu, hot, latched at the next frame end); =true only.
+    {"shm_hot_span", Phase::kGraphicsPlugin, "shared_memory_hot_compare_span", "true", ""},
 }};
 
 // Key pairs that write different values to one cvar (integer, among them

@@ -30,7 +30,7 @@ bool NoValues(const Parsed &parsed) {
 }
 
 void TestWhitelist() {
-  Check(mcla::dev_overrides::kKeyCount == 186, "one hundred and eighty-six whitelisted names");
+  Check(mcla::dev_overrides::kKeyCount == 187, "one hundred and eighty-seven whitelisted names");
   {
     // l93 time-of-day keys: host init-only ints at startup; the rate keys
     // write mcla_tod_rate (10 / 30 / 0 = freeze), the start keys
@@ -2963,8 +2963,8 @@ void TestWhitelist() {
               verify.true_source == TextSource::kLiteral && !verify.overrides_user,
           "l120 key: shm_hot_verify writes true to shared_memory_hot_compare_verify");
     Check(static_cast<size_t>(Key::kShmHotVerify) == static_cast<size_t>(Key::kShmHot) + 1 &&
-              static_cast<size_t>(Key::kShmHotVerify) + 1 == mcla::dev_overrides::kKeyCount,
-          "the two l120 keys follow the l119 keys and are the last");
+              static_cast<size_t>(Key::kShmHotSpan) == static_cast<size_t>(Key::kShmHotVerify) + 1,
+          "the two l120 keys follow the l119 keys and come before the l121 key");
     for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
       Check(pair.first != Key::kShmHot && pair.second != Key::kShmHot &&
                 pair.first != Key::kShmHotVerify && pair.second != Key::kShmHotVerify,
@@ -2992,6 +2992,44 @@ void TestWhitelist() {
               bad.issues[0].issue == LineIssue::kMalformed &&
               bad.issues[1].issue == LineIssue::kDuplicate,
           "l120 near misses: an integer and a repeat are ignored");
+  }
+  {
+    // l121 key: the l120 span-only compare of the hot-page lever (graphics
+    // plugin, rexgpu cvar); =false writes nothing; no pair.
+    using mcla::dev_overrides::CvarName;
+    using mcla::dev_overrides::CvarText;
+    using mcla::dev_overrides::Info;
+    using mcla::dev_overrides::TextSource;
+    const auto &span = Info(Key::kShmHotSpan);
+    Check(FindKey("shm_hot_span") == Key::kShmHotSpan && span.phase == Phase::kGraphicsPlugin &&
+              CvarName(span) == "shared_memory_hot_compare_span" &&
+              CvarText(span, true) == "true" && CvarText(span, false).empty() &&
+              span.true_source == TextSource::kLiteral && !span.overrides_user,
+          "l121 key: shm_hot_span writes true to shared_memory_hot_compare_span; false writes "
+          "nothing");
+    Check(static_cast<size_t>(Key::kShmHotSpan) + 1 == mcla::dev_overrides::kKeyCount,
+          "the l121 key follows the l120 keys and is the last");
+    for (const auto &pair : mcla::dev_overrides::kConflictPairs) {
+      Check(pair.first != Key::kShmHotSpan && pair.second != Key::kShmHotSpan,
+            "the l121 key is in no pair");
+    }
+    Check(!FindKey("shm_hot_span_off") && !FindKey("SHM_HOT_SPAN") && !FindKey("shm_span") &&
+              !FindKey("shared_memory_hot_compare_span") && !FindKey("hot_compare_span") &&
+              !FindKey("shm_hot_page"),
+          "no variants of the l121 key");
+    const Parsed span_arm = Parse("shm_hot=true\r\nshm_hot_span=true\r\n");
+    Check(span_arm.ValueCount() == 2 && span_arm.issue_count == 0 &&
+              span_arm.Value(Key::kShmHot) == true && span_arm.Value(Key::kShmHotSpan) == true,
+          "the l121 shm-hot-span body parses (CRLF): no conflict with shm_hot");
+    const Parsed verify_span =
+        Parse("shm_hot_verify=true\nshm_census=true\nshm_hot_span=true\n");
+    Check(verify_span.ValueCount() == 3 && verify_span.issue_count == 0,
+          "shm_hot_span with the verify and the census: no conflict");
+    const Parsed bad = Parse("shm_hot_span=1\nshm_hot_span=true\nshm_hot_span=false\n");
+    Check(bad.ValueCount() == 1 && bad.ignored_lines == 2 &&
+              bad.issues[0].issue == LineIssue::kMalformed &&
+              bad.issues[1].issue == LineIssue::kDuplicate,
+          "l121 near misses: an integer and a repeat are ignored");
   }
   {
     // M11-007d keys: host init-only bools at startup, true/false written.
@@ -3499,7 +3537,8 @@ void TestWhitelist() {
                           key == Key::kTexNarrow || key == Key::kTexNarrowVerify ||
                           key == Key::kRtMemo2 || key == Key::kVbSkipValidateOff ||
                           key == Key::kShmCensus || key == Key::kInvalUnwatchedOff ||
-                          key == Key::kShmHot || key == Key::kShmHotVerify;
+                          key == Key::kShmHot || key == Key::kShmHotVerify ||
+                          key == Key::kShmHotSpan;
       if (!mapped) {
         Check(CvarName(info) == info.name && CvarText(info, true) == "true" &&
                   CvarText(info, false) == "false",
@@ -4285,7 +4324,7 @@ void TestWhitelist() {
     // l111: plus the three l111 controls (169); l113: plus the two l113 keys (171); l114: plus the l114 key
     // (172); l116: plus the two l116 keys (174); l117: plus the six l117 keys
     // (180); l118: plus the two l118 keys (182); l119: plus the two l119 keys
-    // (184); l120: plus the two l120 keys (186).
+    // (184); l120: plus the two l120 keys (186); l121: plus the l121 key (187).
     const std::string l83_false = "ambient_dt_probe=false\n"
                                   "ambient_dt_snapshot=false\n"
                                   "raw_timer_hitch_hold=false\n"
@@ -4395,7 +4434,8 @@ void TestWhitelist() {
                                   "shm_census=false\n"
                                   "inval_unwatched_off=false\n"
                                   "shm_hot=false\n"
-                                  "shm_hot_verify=false\n";
+                                  "shm_hot_verify=false\n"
+                                  "shm_hot_span=false\n";
     const std::string l82_false = "cp_bulk_regs=false\n" + l83_false;
     const std::string l81_false = "zero_delay_native=false\n"
                                   "guest_audio_prio_normal=false\n"
@@ -5003,7 +5043,8 @@ void TestRejectedFiles() {
     // 4 KB of room for comments and later keys under 8 KiB; l107: 156 keys,
     // above 4 KiB, still about 4 KB of room; l108: 158 keys; l109: 164 keys;
     // l110: 166 keys; l111: 169 keys; l113: 171 keys; l114: 172 keys; l116: 174
-    // keys; l117: 180 keys; l118: 182 keys; l119: 184 keys; l120: 186 keys).
+    // keys; l117: 180 keys; l118: 182 keys; l119: 184 keys; l120: 186 keys;
+    // l121: 187 keys).
     std::string full;
     for (size_t i = 0; i < mcla::dev_overrides::kKeyCount; ++i) {
       full += std::string(mcla::dev_overrides::kKeys[i].name) + "=false\r\n";

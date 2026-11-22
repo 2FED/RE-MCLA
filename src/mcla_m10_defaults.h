@@ -252,7 +252,7 @@ inline constexpr std::array<std::string_view, 2> kWindowsOnlyCvars = {
 // Cvars never written by this module (see above). The unit test checks that
 // none is in kDefaults and that every non-launcher override key writes either
 // a kDefaults cvar or one of these.
-inline constexpr std::array<std::string_view, 133> kNeverWrittenCvars = {
+inline constexpr std::array<std::string_view, 134> kNeverWrittenCvars = {
     "memory_watch_probes",
     "mcla_readback_sync_composite",
     "d3d12_readback_sync_composite",
@@ -538,6 +538,9 @@ inline constexpr std::array<std::string_view, 133> kNeverWrittenCvars = {
     // default off; owner keys shm_hot / shm_hot_verify only).
     "shared_memory_hot_compare",
     "shared_memory_hot_compare_verify",
+    // l121: the l120 span-only compare of the hot-page lever (SDK default off;
+    // owner key shm_hot_span only).
+    "shared_memory_hot_compare_span",
 };
 
 constexpr bool IsNeverWritten(std::string_view cvar) {
